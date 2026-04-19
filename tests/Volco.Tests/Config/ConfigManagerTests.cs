@@ -62,3 +62,61 @@ public class ConfigManagerTests
             Assert.Equal(i, config.Buttons[i].Index);
     }
 }
+
+public class ConfigManagerLoadSaveTests : IDisposable
+{
+    private readonly string _tempDir;
+    private readonly string _configPath;
+
+    public ConfigManagerLoadSaveTests()
+    {
+        _tempDir = Path.Combine(Path.GetTempPath(), $"volco-test-{Guid.NewGuid()}");
+        Directory.CreateDirectory(_tempDir);
+        _configPath = Path.Combine(_tempDir, "config.json");
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, true);
+    }
+
+    [Fact]
+    public void Load_WhenFileDoesNotExist_ReturnsDefaultConfig()
+    {
+        var manager = new ConfigManager(_configPath);
+        manager.Load();
+
+        Assert.Equal(5, manager.Config.Sliders.Count);
+        Assert.Equal(3, manager.Config.Buttons.Count);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_PreservesConfig()
+    {
+        var manager = new ConfigManager(_configPath);
+        manager.Load();
+        manager.Config.Connection.Type = ConnectionType.Udp;
+        manager.Config.OutputDevices.Device1 = "Speakers";
+        manager.Save();
+
+        var manager2 = new ConfigManager(_configPath);
+        manager2.Load();
+
+        Assert.Equal(ConnectionType.Udp, manager2.Config.Connection.Type);
+        Assert.Equal("Speakers", manager2.Config.OutputDevices.Device1);
+    }
+
+    [Fact]
+    public void Save_FiresConfigChangedEvent()
+    {
+        var manager = new ConfigManager(_configPath);
+        manager.Load();
+        bool eventFired = false;
+        manager.ConfigChanged += (_, _) => eventFired = true;
+
+        manager.Save();
+
+        Assert.True(eventFired);
+    }
+}
