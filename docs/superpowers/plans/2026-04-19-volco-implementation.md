@@ -8,11 +8,17 @@
 
 **Tech Stack:** C# / .NET 8 / WinUI 3 (Windows App SDK), NAudio, AudioSwitcher.AudioApi.CoreAudio, H.NotifyIcon.WinUI, System.IO.Ports, xUnit for tests.
 
+**Development Environment:** Development is done on Linux where `dotnet` SDK is not available. All project files (`.csproj`, `.sln`) and source code are written manually. Build and test verification happens via GitHub Actions CI (runs on `windows-latest`). The CI workflow builds, runs tests, and uploads a downloadable artifact.
+
+**Important for implementers:** Since we cannot run `dotnet build` or `dotnet test` locally, skip build/test verification steps. Write the files correctly and commit. CI will validate on push.
+
 ---
 
 ## File Structure
 
 ```
+.github/workflows/
+└── build.yml
 Volco.sln
 src/Volco/
 ├── Volco.csproj
@@ -73,45 +79,160 @@ tests/Volco.Tests/
 - Create: `src/Volco/App.xaml.cs`
 - Create: `tests/Volco.Tests/Volco.Tests.csproj`
 
-- [ ] **Step 1: Create the WinUI 3 project**
+**Note:** dotnet CLI is not available locally (Linux dev machine). Write all project files by hand.
 
-Run (from repo root):
-```bash
-dotnet new winui3 -n Volco -o src/Volco --framework net8.0-windows10.0.22621.0
+- [ ] **Step 1: Create the solution file**
+
+Create `Volco.sln`:
+
+```
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Volco", "src\Volco\Volco.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Volco.Tests", "tests\Volco.Tests\Volco.Tests.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x64.Build.0 = Debug|x64
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x64.ActiveCfg = Release|x64
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x64.Build.0 = Release|x64
+		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Debug|x64.ActiveCfg = Debug|x64
+		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Debug|x64.Build.0 = Debug|x64
+		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.ActiveCfg = Release|x64
+		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal
 ```
 
-- [ ] **Step 2: Create the test project**
+- [ ] **Step 2: Create the main project file**
 
-```bash
-dotnet new xunit -n Volco.Tests -o tests/Volco.Tests
+Create `src/Volco/Volco.csproj`:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <RootNamespace>Volco</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.*" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.*" />
+    <PackageReference Include="NAudio" Version="2.2.*" />
+    <PackageReference Include="AudioSwitcher.AudioApi.CoreAudio" Version="3.0.*" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.1.*" />
+    <PackageReference Include="System.IO.Ports" Version="8.0.*" />
+  </ItemGroup>
+</Project>
 ```
 
-- [ ] **Step 3: Create the solution and wire up projects**
+- [ ] **Step 3: Create the app manifest**
 
-```bash
-dotnet new sln -n Volco
-dotnet sln add src/Volco/Volco.csproj
-dotnet sln add tests/Volco.Tests/Volco.Tests.csproj
-dotnet add tests/Volco.Tests/Volco.Tests.csproj reference src/Volco/Volco.csproj
+Create `src/Volco/app.manifest`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="Volco.app"/>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>
 ```
 
-- [ ] **Step 4: Add NuGet packages to the main project**
+- [ ] **Step 4: Create placeholder App.xaml and App.xaml.cs**
 
-```bash
-dotnet add src/Volco/Volco.csproj package NAudio
-dotnet add src/Volco/Volco.csproj package AudioSwitcher.AudioApi.CoreAudio
-dotnet add src/Volco/Volco.csproj package H.NotifyIcon.WinUI
-dotnet add src/Volco/Volco.csproj package System.IO.Ports
+Create `src/Volco/App.xaml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="Volco.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+    </Application.Resources>
+</Application>
 ```
 
-- [ ] **Step 5: Verify the solution builds**
+Create `src/Volco/App.xaml.cs`:
 
-```bash
-dotnet build Volco.sln
+```csharp
+using Microsoft.UI.Xaml;
+
+namespace Volco;
+
+public partial class App : Application
+{
+    public App()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        // Will be replaced in Task 18 with full wiring
+    }
+}
 ```
-Expected: Build succeeded with 0 errors.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Create the test project file**
+
+Create `tests/Volco.Tests/Volco.Tests.csproj`:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <Platforms>x64</Platforms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.*" />
+    <PackageReference Include="xunit" Version="2.7.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Volco\Volco.csproj" />
+  </ItemGroup>
+</Project>
+```
+
+- [ ] **Step 6: Create .gitignore for .NET**
+
+Create `.gitignore`:
+
+```
+bin/
+obj/
+*.user
+*.suo
+.vs/
+publish/
+```
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -120,7 +241,70 @@ git commit -m "chore: scaffold WinUI 3 solution with test project and NuGet depe
 
 ---
 
-### Task 2: Configuration Data Model
+### Task 2: GitHub Actions CI — Build and Artifact
+
+**Files:**
+- Create: `.github/workflows/build.yml`
+
+- [ ] **Step 1: Create the GitHub Actions workflow**
+
+Create `.github/workflows/build.yml`:
+
+```yaml
+name: Build Volco
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Install Windows App SDK workload
+      run: dotnet workload install windowsdesktop
+
+    - name: Restore dependencies
+      run: dotnet restore Volco.sln
+
+    - name: Build
+      run: dotnet build Volco.sln --configuration Release --no-restore
+
+    - name: Test
+      run: dotnet test Volco.sln --configuration Release --no-build --verbosity normal
+
+    - name: Publish
+      run: dotnet publish src/Volco/Volco.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Volco-win-x64
+        path: ./publish/
+        retention-days: 30
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add .github/workflows/build.yml
+git commit -m "ci: add GitHub Actions workflow for build, test, and artifact"
+```
+
+---
+
+### Task 3: Configuration Data Model
 
 **Files:**
 - Create: `src/Volco/Config/AppConfig.cs`
@@ -311,7 +495,7 @@ git commit -m "feat: add configuration data model with JSON serialization"
 
 ---
 
-### Task 3: ConfigManager (Load/Save/Change Notification)
+### Task 4: ConfigManager (Load/Save/Change Notification)
 
 **Files:**
 - Create: `src/Volco/Config/ConfigManager.cs`
@@ -456,7 +640,7 @@ git commit -m "feat: add ConfigManager with JSON load/save and change notificati
 
 ---
 
-### Task 4: Wire Protocol — Message Types
+### Task 5: Wire Protocol — Message Types
 
 **Files:**
 - Create: `src/Volco/Communication/ControllerMessage.cs`
@@ -527,7 +711,7 @@ git commit -m "feat: add controller message types for slider and button events"
 
 ---
 
-### Task 5: Wire Protocol — ProtocolParser (TDD)
+### Task 6: Wire Protocol — ProtocolParser (TDD)
 
 **Files:**
 - Create: `src/Volco/Communication/ProtocolParser.cs`
@@ -753,7 +937,7 @@ git commit -m "feat: add ProtocolParser with framing, checksum validation, and m
 
 ---
 
-### Task 6: Communication Layer — Interface and Implementations
+### Task 7: Communication Layer — Interface and Implementations
 
 **Files:**
 - Create: `src/Volco/Communication/IControllerConnection.cs`
@@ -961,7 +1145,7 @@ git commit -m "feat: add IControllerConnection with Serial and UDP implementatio
 
 ---
 
-### Task 7: Button Press Detector (TDD)
+### Task 8: Button Press Detector (TDD)
 
 **Files:**
 - Create: `src/Volco/Input/ButtonPressDetector.cs`
@@ -1217,7 +1401,7 @@ git commit -m "feat: add ButtonPressDetector with single, double, and long press
 
 ---
 
-### Task 8: Audio Manager Interface and Implementation
+### Task 9: Audio Manager Interface and Implementation
 
 **Files:**
 - Create: `src/Volco/Audio/IAudioManager.cs`
@@ -1387,7 +1571,7 @@ git commit -m "feat: add AudioManager with volume, mute, and device switching vi
 
 ---
 
-### Task 9: Session Monitor
+### Task 10: Session Monitor
 
 **Files:**
 - Create: `src/Volco/Audio/SessionMonitor.cs`
@@ -1442,7 +1626,7 @@ git commit -m "feat: add SessionMonitor for periodic audio session enumeration"
 
 ---
 
-### Task 10: Action System
+### Task 11: Action System
 
 **Files:**
 - Create: `src/Volco/Input/Actions/IButtonAction.cs`
@@ -1691,7 +1875,7 @@ git commit -m "feat: add button action system with factory and all action implem
 
 ---
 
-### Task 11: Slider Processor (TDD)
+### Task 12: Slider Processor (TDD)
 
 **Files:**
 - Create: `src/Volco/Input/SliderProcessor.cs`
@@ -1866,7 +2050,7 @@ git commit -m "feat: add SliderProcessor with ADC mapping, inversion, and unmapp
 
 ---
 
-### Task 12: UI — Settings Window Shell
+### Task 13: UI — Settings Window Shell
 
 **Files:**
 - Create: `src/Volco/UI/SettingsWindow.xaml`
@@ -1971,7 +2155,7 @@ git commit -m "feat: add SettingsWindow with tabbed navigation shell"
 
 ---
 
-### Task 13: UI — Connection Tab
+### Task 14: UI — Connection Tab
 
 **Files:**
 - Create: `src/Volco/UI/ConnectionTab.xaml`
@@ -2165,7 +2349,7 @@ git commit -m "feat: add Connection settings tab with serial/UDP configuration"
 
 ---
 
-### Task 14: UI — Sliders Tab
+### Task 15: UI — Sliders Tab
 
 **Files:**
 - Create: `src/Volco/UI/SlidersTab.xaml`
@@ -2329,7 +2513,7 @@ git commit -m "feat: add Sliders configuration tab with mapping type, processes,
 
 ---
 
-### Task 15: UI — Buttons Tab
+### Task 16: UI — Buttons Tab
 
 **Files:**
 - Create: `src/Volco/UI/ButtonsTab.xaml`
@@ -2545,7 +2729,7 @@ git commit -m "feat: add Buttons configuration tab with action and device select
 
 ---
 
-### Task 16: UI — Output Devices Tab
+### Task 17: UI — Output Devices Tab
 
 **Files:**
 - Create: `src/Volco/UI/OutputDevicesTab.xaml`
@@ -2678,7 +2862,7 @@ git commit -m "feat: add Output Devices configuration tab"
 
 ---
 
-### Task 17: App Entry Point — Tray Icon and Wiring
+### Task 18: App Entry Point — Tray Icon and Wiring
 
 **Files:**
 - Modify: `src/Volco/App.xaml`
@@ -2879,32 +3063,27 @@ git commit -m "feat: wire up App entry point with tray icon, connection, and inp
 
 ---
 
-### Task 18: Run All Tests and Final Verification
+### Task 19: Final Verification via CI
 
-- [ ] **Step 1: Run the full test suite**
-
-```bash
-dotnet test Volco.sln -v n
-```
-Expected: All tests pass.
-
-- [ ] **Step 2: Verify clean build**
+- [ ] **Step 1: Push to GitHub**
 
 ```bash
-dotnet build Volco.sln --configuration Release
+git push origin main
 ```
-Expected: Build succeeded with 0 errors.
 
-- [ ] **Step 3: Commit any remaining changes**
+- [ ] **Step 2: Monitor GitHub Actions**
 
-```bash
-git status
-```
-If there are any uncommitted changes, stage and commit them.
+Check the Actions tab at https://github.com/ToMeRhh/volco/actions to verify:
+- Build succeeds
+- Tests pass
+- Artifact (Volco-win-x64) is uploaded and downloadable
 
-- [ ] **Step 4: Final commit**
+- [ ] **Step 3: Fix any CI failures**
 
-```bash
-git add -A
-git commit -m "chore: final build verification — all tests passing"
-```
+If CI fails, read the error logs and fix the issues. Common issues:
+- Missing `using` statements
+- NuGet package version mismatches
+- WinUI 3 XAML compilation errors
+- Test failures
+
+Commit fixes and push again until CI is green.
