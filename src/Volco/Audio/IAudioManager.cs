@@ -1,0 +1,19 @@
+namespace Volco.Audio;
+
+public class AudioDeviceInfo
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+}
+
+public interface IAudioManager
+{
+    void SetProcessVolume(string processName, float volume);
+    void SetDeviceVolume(float volume);
+    void ToggleMuteOutput(string? deviceId = null);
+    void ToggleMuteInput();
+    void SetDefaultOutputDevice(string deviceName);
+    List<AudioDeviceInfo> GetOutputDevices();
+    List<AudioDeviceInfo> GetInputDevices();
+    List<string> GetActiveProcessNames();
+}
