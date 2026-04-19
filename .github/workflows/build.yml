@@ -1,0 +1,42 @@
+name: Build Volco
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Install Windows App SDK workload
+      run: dotnet workload install windowsdesktop
+
+    - name: Restore dependencies
+      run: dotnet restore Volco.sln
+
+    - name: Build
+      run: dotnet build Volco.sln --configuration Release --no-restore
+
+    - name: Test
+      run: dotnet test Volco.sln --configuration Release --no-build --verbosity normal
+
+    - name: Publish
+      run: dotnet publish src/Volco/Volco.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Volco-win-x64
+        path: ./publish/
+        retention-days: 30
