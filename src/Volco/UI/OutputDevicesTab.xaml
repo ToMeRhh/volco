@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Volco.UI.OutputDevicesTab"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel Padding="24" Spacing="16">
+        <TextBlock Text="Output Device Toggle" Style="{StaticResource SubtitleTextBlockStyle}" />
+        <TextBlock Text="Configure the two devices to switch between when using the Toggle Output Device action."
+                   TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        <StackPanel Spacing="12">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Device 1" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <ComboBox x:Name="Device1Combo" Width="300" SelectionChanged="Device1_Changed" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="Device 2" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <ComboBox x:Name="Device2Combo" Width="300" SelectionChanged="Device2_Changed" />
+            </StackPanel>
+        </StackPanel>
+    </StackPanel>
+</Page>
