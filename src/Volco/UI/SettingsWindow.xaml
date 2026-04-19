@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Volco.UI.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Volco.UI"
+    Title="Volco Settings"
+    Width="600" Height="500">
+
+    <NavigationView x:Name="NavView"
+                    IsBackButtonVisible="Collapsed"
+                    IsSettingsVisible="False"
+                    SelectionChanged="NavView_SelectionChanged"
+                    PaneDisplayMode="Top">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Connection" Tag="connection" />
+            <NavigationViewItem Content="Sliders" Tag="sliders" />
+            <NavigationViewItem Content="Buttons" Tag="buttons" />
+            <NavigationViewItem Content="Output Devices" Tag="outputdevices" />
+        </NavigationView.MenuItems>
+
+        <Frame x:Name="ContentFrame" />
+    </NavigationView>
+</Window>

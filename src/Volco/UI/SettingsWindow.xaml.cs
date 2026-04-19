@@ -1,0 +1,45 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Volco.Audio;
+using Volco.Config;
+
+namespace Volco.UI;
+
+public sealed partial class SettingsWindow : Window
+{
+    private readonly ConfigManager _configManager;
+    private readonly IAudioManager _audioManager;
+
+    public SettingsWindow(ConfigManager configManager, IAudioManager audioManager)
+    {
+        InitializeComponent();
+        _configManager = configManager;
+        _audioManager = audioManager;
+
+        // Select first tab by default
+        NavView.SelectedItem = NavView.MenuItems[0];
+    }
+
+    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.SelectedItem is NavigationViewItem item)
+        {
+            var tag = item.Tag?.ToString();
+            switch (tag)
+            {
+                case "connection":
+                    ContentFrame.Navigate(typeof(ConnectionTab), _configManager);
+                    break;
+                case "sliders":
+                    ContentFrame.Navigate(typeof(SlidersTab), _configManager);
+                    break;
+                case "buttons":
+                    ContentFrame.Navigate(typeof(ButtonsTab), (_configManager, _audioManager));
+                    break;
+                case "outputdevices":
+                    ContentFrame.Navigate(typeof(OutputDevicesTab), (_configManager, _audioManager));
+                    break;
+            }
+        }
+    }
+}
