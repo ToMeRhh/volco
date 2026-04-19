@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Volco.UI.ButtonsTab"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="16">
+            <TextBlock Text="Button Actions" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+            <StackPanel x:Name="ButtonsPanel" Spacing="12" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>
