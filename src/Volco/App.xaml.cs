@@ -14,6 +14,7 @@ namespace Volco;
 
 public partial class App : Application
 {
+    private Window? _hiddenWindow;
     private TaskbarIcon? _trayIcon;
     private SettingsWindow? _settingsWindow;
     private ConfigManager _configManager = null!;
@@ -50,6 +51,10 @@ public partial class App : Application
         // Connection
         StartConnection();
 
+        // Hidden window to keep the WinUI message loop alive
+        _hiddenWindow = new Window();
+        _hiddenWindow.AppWindow.Hide();
+
         // Tray icon
         SetupTrayIcon();
     }
@@ -85,6 +90,7 @@ public partial class App : Application
 
         _trayIcon.ContextFlyout = menu;
         _trayIcon.LeftClickCommand = new RelayCommand(ShowSettings);
+        _trayIcon.ForceCreate();
     }
 
     private void ShowSettings()
