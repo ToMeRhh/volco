@@ -12,8 +12,8 @@ public class ProtocolParser
         foreach (var b in data)
         {
             _buffer.Add(b);
-            TryParse();
         }
+        TryParse();
     }
 
     private void TryParse()

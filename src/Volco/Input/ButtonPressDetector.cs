@@ -128,6 +128,7 @@ public class ButtonPressDetector
                 {
                     if (ct.IsCancellationRequested) return;
                     _longPressFired = true;
+                    _waitingForDoublePress = false;
                     _callback(_buttonIndex, PressType.Long);
                     _longPressCts?.Dispose();
                     _longPressCts = null;
