@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Volco.Communication;
 
 namespace Volco.Input;
@@ -20,7 +21,7 @@ public class ButtonPressDetector
 {
     private readonly int _longPressMs;
     private readonly int _doublePressWindowMs;
-    private readonly Dictionary<int, ButtonStateTracker> _trackers = new();
+    private readonly ConcurrentDictionary<int, ButtonStateTracker> _trackers = new();
 
     public event EventHandler<ButtonPressEventArgs>? PressDetected;
 
@@ -32,11 +33,8 @@ public class ButtonPressDetector
 
     public void HandleButtonEvent(int buttonIndex, ButtonState state)
     {
-        if (!_trackers.TryGetValue(buttonIndex, out var tracker))
-        {
-            tracker = new ButtonStateTracker(buttonIndex, _longPressMs, _doublePressWindowMs, OnPressDetected);
-            _trackers[buttonIndex] = tracker;
-        }
+        var tracker = _trackers.GetOrAdd(buttonIndex, index =>
+            new ButtonStateTracker(index, _longPressMs, _doublePressWindowMs, OnPressDetected));
 
         tracker.HandleState(state);
     }
@@ -52,6 +50,7 @@ public class ButtonPressDetector
         private readonly int _longPressMs;
         private readonly int _doublePressWindowMs;
         private readonly Action<int, PressType> _callback;
+        private readonly object _lock = new();
         private CancellationTokenSource? _longPressCts;
         private CancellationTokenSource? _singlePressCts;
         private bool _longPressFired;
@@ -67,10 +66,13 @@ public class ButtonPressDetector
 
         public void HandleState(ButtonState state)
         {
-            if (state == ButtonState.Pressed)
-                OnPressed();
-            else
-                OnReleased();
+            lock (_lock)
+            {
+                if (state == ButtonState.Pressed)
+                    OnPressed();
+                else
+                    OnReleased();
+            }
         }
 
         private void OnPressed()
@@ -111,8 +113,12 @@ public class ButtonPressDetector
             try
             {
                 await Task.Delay(_longPressMs, ct);
-                _longPressFired = true;
-                _callback(_buttonIndex, PressType.Long);
+                lock (_lock)
+                {
+                    if (ct.IsCancellationRequested) return;
+                    _longPressFired = true;
+                    _callback(_buttonIndex, PressType.Long);
+                }
             }
             catch (OperationCanceledException) { }
         }
@@ -122,8 +128,12 @@ public class ButtonPressDetector
             try
             {
                 await Task.Delay(_doublePressWindowMs, ct);
-                _waitingForDoublePress = false;
-                _callback(_buttonIndex, PressType.Single);
+                lock (_lock)
+                {
+                    if (ct.IsCancellationRequested) return;
+                    _waitingForDoublePress = false;
+                    _callback(_buttonIndex, PressType.Single);
+                }
             }
             catch (OperationCanceledException) { }
         }

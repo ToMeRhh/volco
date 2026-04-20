@@ -33,7 +33,7 @@ public class AudioManager : IAudioManager
 
     public void ToggleMuteOutput(string? deviceId = null)
     {
-        MMDevice device;
+        MMDevice? device;
         if (deviceId != null)
         {
             device = FindDeviceByName(DataFlow.Render, deviceId);
