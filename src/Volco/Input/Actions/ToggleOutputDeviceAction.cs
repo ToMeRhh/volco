@@ -7,7 +7,6 @@ public class ToggleOutputDeviceAction : IButtonAction
 {
     private readonly IAudioManager _audio;
     private readonly ConfigManager _configManager;
-    private bool _onDevice1 = true;
 
     public ToggleOutputDeviceAction(IAudioManager audio, ConfigManager configManager)
     {
@@ -18,8 +17,10 @@ public class ToggleOutputDeviceAction : IButtonAction
     public void Execute()
     {
         var devices = _configManager.Config.OutputDevices;
-        var target = _onDevice1 ? devices.Device2 : devices.Device1;
+        var currentDevice = _audio.GetDefaultOutputDeviceName();
+        var isOnDevice1 = currentDevice != null &&
+            currentDevice.Contains(devices.Device1, StringComparison.OrdinalIgnoreCase);
+        var target = isOnDevice1 ? devices.Device2 : devices.Device1;
         _audio.SetDefaultOutputDevice(target);
-        _onDevice1 = !_onDevice1;
     }
 }
