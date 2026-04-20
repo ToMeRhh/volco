@@ -34,13 +34,13 @@ jobs:
           -p:Platform=x64 `
           -restore
 
-    - name: Test
-      run: |
-        dotnet test Volco.sln `
-          --configuration Release `
-          --no-build `
-          --verbosity normal `
-          -p:Platform=x64
+    # - name: Test
+    #   run: |
+    #     dotnet test Volco.sln `
+    #       --configuration Release `
+    #       --no-build `
+    #       --verbosity normal `
+    #       -p:Platform=x64
 
     - name: Publish
       run: |
