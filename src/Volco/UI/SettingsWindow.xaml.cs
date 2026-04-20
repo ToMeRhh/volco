@@ -35,7 +35,7 @@ public sealed partial class SettingsWindow : Window
                     ContentFrame.Navigate(typeof(ConnectionTab), _configManager);
                     break;
                 case "sliders":
-                    ContentFrame.Navigate(typeof(SlidersTab), _configManager);
+                    ContentFrame.Navigate(typeof(SlidersTab), (_configManager, _audioManager));
                     break;
                 case "buttons":
                     ContentFrame.Navigate(typeof(ButtonsTab), (_configManager, _audioManager));

@@ -51,7 +51,7 @@ public class SliderProcessor
         switch (sliderConfig.Type)
         {
             case SliderMappingType.Device:
-                _audio.SetDeviceVolume(volume);
+                _audio.SetDeviceVolume(volume, sliderConfig.DeviceName);
                 break;
 
             case SliderMappingType.Processes:

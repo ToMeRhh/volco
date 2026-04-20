@@ -24,11 +24,23 @@ public class AudioManager : IAudioManager
         }
     }
 
-    public void SetDeviceVolume(float volume)
+    public void SetDeviceVolume(float volume, string? deviceName = null)
     {
         volume = Math.Clamp(volume, 0f, 1f);
-        var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
+        MMDevice? device;
+        if (!string.IsNullOrEmpty(deviceName))
+        {
+            device = FindDeviceByName(DataFlow.Render, deviceName);
+        }
+        else
+        {
+            device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        }
+
+        if (device != null)
+        {
+            device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
+        }
     }
 
     public void ToggleMuteOutput(string? deviceId = null)
