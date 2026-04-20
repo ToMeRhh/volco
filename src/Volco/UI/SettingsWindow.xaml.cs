@@ -42,7 +42,7 @@ public sealed partial class SettingsWindow : Window
             switch (tag)
             {
                 case "connection":
-                    ContentFrame.Navigate(typeof(ConnectionTab), _configManager);
+                    ContentFrame.Navigate(typeof(ConnectionTab), (_configManager, ((App)Application.Current).Connection));
                     break;
                 case "sliders":
                     ContentFrame.Navigate(typeof(SlidersTab), (_configManager, _audioManager));

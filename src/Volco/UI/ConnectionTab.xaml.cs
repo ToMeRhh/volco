@@ -1,7 +1,10 @@
 using System.IO.Ports;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Volco.Communication;
 using Volco.Config;
 
 namespace Volco.UI;
@@ -9,6 +12,7 @@ namespace Volco.UI;
 public sealed partial class ConnectionTab : Page
 {
     private ConfigManager? _configManager;
+    private IControllerConnection? _connection;
     private bool _isLoading = true;
 
     public ConnectionTab()
@@ -18,13 +22,80 @@ public sealed partial class ConnectionTab : Page
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
-        _configManager = e.Parameter as ConfigManager;
+        if (e.Parameter is (ConfigManager cm, IControllerConnection? conn))
+        {
+            _configManager = cm;
+            _connection = conn;
+        }
+        else if (e.Parameter is ConfigManager cmOnly)
+        {
+            _configManager = cmOnly;
+        }
+
         if (_configManager == null) return;
 
         _isLoading = true;
         LoadComPorts();
         LoadConfig();
         _isLoading = false;
+
+        _configManager.ConfigChanged += OnConfigChanged;
+        SubscribeToConnection();
+        UpdateStatusIndicator(_connection?.Status ?? ConnectionStatus.Disconnected);
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        UnsubscribeFromConnection();
+        if (_configManager != null)
+            _configManager.ConfigChanged -= OnConfigChanged;
+    }
+
+    private void OnConfigChanged(object? sender, EventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            UnsubscribeFromConnection();
+            _connection = ((App)Application.Current).Connection;
+            SubscribeToConnection();
+            UpdateStatusIndicator(_connection?.Status ?? ConnectionStatus.Disconnected);
+        });
+    }
+
+    private void SubscribeToConnection()
+    {
+        if (_connection != null)
+            _connection.StatusChanged += OnConnectionStatusChanged;
+    }
+
+    private void UnsubscribeFromConnection()
+    {
+        if (_connection != null)
+            _connection.StatusChanged -= OnConnectionStatusChanged;
+    }
+
+    private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
+    {
+        DispatcherQueue.TryEnqueue(() => UpdateStatusIndicator(status));
+    }
+
+    private void UpdateStatusIndicator(ConnectionStatus status)
+    {
+        switch (status)
+        {
+            case ConnectionStatus.Connected:
+                StatusIndicator.Fill = new SolidColorBrush(Colors.Green);
+                StatusText.Text = "Connected";
+                break;
+            case ConnectionStatus.Disconnected:
+                StatusIndicator.Fill = new SolidColorBrush(Colors.Gray);
+                StatusText.Text = "Disconnected";
+                break;
+            case ConnectionStatus.Error:
+                StatusIndicator.Fill = new SolidColorBrush(Colors.Red);
+                StatusText.Text = "Error";
+                break;
+        }
     }
 
     private void LoadComPorts()

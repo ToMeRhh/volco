@@ -15,6 +15,7 @@ namespace Volco;
 public partial class App : Application
 {
     public static bool IsExiting { get; private set; }
+    public IControllerConnection? Connection => _connection;
     private TaskbarIcon? _trayIcon;
     private SettingsWindow? _settingsWindow;
     private ConfigManager _configManager = null!;
