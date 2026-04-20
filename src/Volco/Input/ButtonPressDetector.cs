@@ -78,8 +78,14 @@ public class ButtonPressDetector
         private void OnPressed()
         {
             _longPressFired = false;
+
             _longPressCts?.Cancel();
+            _longPressCts?.Dispose();
+
             _singlePressCts?.Cancel();
+            _singlePressCts?.Dispose();
+            _singlePressCts = null;
+
             _longPressCts = new CancellationTokenSource();
             _ = LongPressTimerAsync(_longPressCts.Token);
         }
@@ -87,6 +93,8 @@ public class ButtonPressDetector
         private void OnReleased()
         {
             _longPressCts?.Cancel();
+            _longPressCts?.Dispose();
+            _longPressCts = null;
 
             if (_longPressFired)
             {
@@ -97,6 +105,8 @@ public class ButtonPressDetector
             if (_waitingForDoublePress)
             {
                 _singlePressCts?.Cancel();
+                _singlePressCts?.Dispose();
+                _singlePressCts = null;
                 _waitingForDoublePress = false;
                 _callback(_buttonIndex, PressType.Double);
                 return;
@@ -104,6 +114,7 @@ public class ButtonPressDetector
 
             _waitingForDoublePress = true;
             _singlePressCts?.Cancel();
+            _singlePressCts?.Dispose();
             _singlePressCts = new CancellationTokenSource();
             _ = SinglePressTimerAsync(_singlePressCts.Token);
         }
@@ -118,6 +129,8 @@ public class ButtonPressDetector
                     if (ct.IsCancellationRequested) return;
                     _longPressFired = true;
                     _callback(_buttonIndex, PressType.Long);
+                    _longPressCts?.Dispose();
+                    _longPressCts = null;
                 }
             }
             catch (OperationCanceledException) { }
@@ -133,6 +146,8 @@ public class ButtonPressDetector
                     if (ct.IsCancellationRequested) return;
                     _waitingForDoublePress = false;
                     _callback(_buttonIndex, PressType.Single);
+                    _singlePressCts?.Dispose();
+                    _singlePressCts = null;
                 }
             }
             catch (OperationCanceledException) { }
