@@ -27,15 +27,12 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Restore dependencies
-      run: dotnet restore Volco.sln -p:Platform=x64
-
-    - name: Build
+    - name: Restore and Build
       run: |
         msbuild Volco.sln `
           -p:Configuration=Release `
           -p:Platform=x64 `
-          -restore:false
+          -restore
 
     - name: Test
       run: |
