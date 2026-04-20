@@ -31,12 +31,24 @@ jobs:
     - name: Publish
       run: dotnet publish src/Volco/Volco.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64 -p:Platform=x64
 
-    - name: Show XamlCompiler errors
+    - name: Show XamlCompiler diagnostics
       if: failure()
       shell: pwsh
       run: |
-        $path = "src/Volco/obj/x64/Release/net8.0-windows10.0.22621.0/output.json"
-        if (Test-Path $path) { Get-Content $path } else { Write-Host "output.json not found at $path" }
+        $objDir = "src/Volco/obj/x64/Release/net8.0-windows10.0.22621.0"
+        Write-Host "=== input.json ==="
+        $inp = "$objDir/input.json"
+        if (Test-Path $inp) { Get-Content $inp } else { Write-Host "input.json not found" }
+        Write-Host "=== output.json ==="
+        $out = "$objDir/output.json"
+        if (Test-Path $out) { Get-Content $out } else { Write-Host "output.json not found" }
+        Write-Host "=== Run XamlCompiler directly ==="
+        $xamlc = (Get-ChildItem "C:\Users\runneradmin\.nuget\packages\microsoft.windowsappsdk" -Recurse -Filter "XamlCompiler.exe" | Where-Object { $_.FullName -match "net472" } | Select-Object -First 1).FullName
+        if ($xamlc -and (Test-Path $inp)) {
+          & $xamlc $inp $out 2>&1
+          Write-Host "XamlCompiler exit code: $LASTEXITCODE"
+          if (Test-Path $out) { Write-Host "=== output.json (after direct run) ==="; Get-Content $out }
+        } else { Write-Host "XamlCompiler or input.json not found: xamlc=$xamlc inp=$inp" }
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
