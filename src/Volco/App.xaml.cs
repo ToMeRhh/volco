@@ -1,5 +1,6 @@
 using H.NotifyIcon;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Volco.Audio;
 using Volco.Communication;
 using Volco.Config;
