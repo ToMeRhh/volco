@@ -35,7 +35,6 @@ jobs:
           --configuration Release `
           --no-restore `
           -p:Platform=x64 `
-          -p:IntermediateOutputPath=C:\b\ `
           -v diag
 
     - name: Test
@@ -44,8 +43,7 @@ jobs:
           --configuration Release `
           --no-build `
           --verbosity normal `
-          -p:Platform=x64 `
-          -p:IntermediateOutputPath=C:\b\
+          -p:Platform=x64
 
     - name: Publish
       run: |
@@ -54,8 +52,7 @@ jobs:
           --output ./publish `
           --self-contained true `
           --runtime win-x64 `
-          -p:Platform=x64 `
-          -p:IntermediateOutputPath=C:\b\p\
+          -p:Platform=x64
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
