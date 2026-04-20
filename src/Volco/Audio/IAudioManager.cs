@@ -9,6 +9,7 @@ public class AudioDeviceInfo
 public interface IAudioManager
 {
     void SetProcessVolume(string processName, float volume);
+    void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume);
     void SetDeviceVolume(float volume, string? deviceName = null);
     void ToggleMuteOutput(string? deviceId = null);
     void ToggleMuteInput();

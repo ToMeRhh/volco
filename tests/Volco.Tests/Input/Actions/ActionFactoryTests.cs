@@ -52,6 +52,7 @@ public class ActionFactoryTests
     private class FakeAudioManager : IAudioManager
     {
         public void SetProcessVolume(string processName, float volume) { }
+        public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume) { }
         public void SetDeviceVolume(float volume, string? deviceName = null) { }
         public void ToggleMuteOutput(string? deviceId = null) { }
         public void ToggleMuteInput() { }

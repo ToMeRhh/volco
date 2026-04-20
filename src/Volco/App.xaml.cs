@@ -95,6 +95,7 @@ public partial class App : Application
             AppLog.Info("Exit menu item clicked");
             IsExiting = true;
             _connection?.Dispose();
+            _sliderProcessor.Dispose();
             _sessionMonitor.Dispose();
             _trayIcon?.Dispose();
             Exit();
