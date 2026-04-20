@@ -14,7 +14,6 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.*" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.*" />
     <PackageReference Include="NAudio" Version="2.2.*" />
-    <PackageReference Include="AudioSwitcher.AudioApi.CoreAudio" Version="3.0.*" />
     <PackageReference Include="H.NotifyIcon.WinUI" Version="2.1.*" />
     <PackageReference Include="System.IO.Ports" Version="8.0.*" />
   </ItemGroup>

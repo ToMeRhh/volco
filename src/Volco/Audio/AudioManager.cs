@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 
 namespace Volco.Audio;
@@ -53,13 +54,12 @@ public class AudioManager : IAudioManager
 
     public void SetDefaultOutputDevice(string deviceName)
     {
-        // NAudio doesn't directly support changing the default device.
-        // Use the AudioSwitcher library for this.
-        var controller = new AudioSwitcher.AudioApi.CoreAudio.CoreAudioController();
-        var devices = controller.GetPlaybackDevices();
-        var target = devices.FirstOrDefault(d =>
-            d.FullName.Contains(deviceName, StringComparison.OrdinalIgnoreCase));
-        target?.SetAsDefault();
+        var device = FindDeviceByName(DataFlow.Render, deviceName);
+        if (device == null) return;
+
+        var policyConfig = (IPolicyConfig)new PolicyConfigClient();
+        policyConfig.SetDefaultEndpoint(device.ID, (int)Role.Multimedia);
+        policyConfig.SetDefaultEndpoint(device.ID, (int)Role.Communications);
     }
 
     public List<AudioDeviceInfo> GetOutputDevices()
@@ -111,5 +111,29 @@ public class AudioManager : IAudioManager
         {
             return "";
         }
+    }
+
+    // COM interop for setting default audio device (IPolicyConfig)
+    [ComImport]
+    [Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")]
+    private class PolicyConfigClient { }
+
+    [ComImport]
+    [Guid("F8679F50-850A-41CF-9C72-430F290290C8")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPolicyConfig
+    {
+        [PreserveSig] int GetMixFormat(string deviceId, IntPtr format);
+        [PreserveSig] int GetDeviceFormat(string deviceId, int flow, IntPtr format);
+        [PreserveSig] int ResetDeviceFormat(string deviceId);
+        [PreserveSig] int SetDeviceFormat(string deviceId, IntPtr endpointFormat, IntPtr mixFormat);
+        [PreserveSig] int GetProcessingPeriod(string deviceId, int flow, out long defaultPeriod, out long minPeriod);
+        [PreserveSig] int SetProcessingPeriod(string deviceId, long period);
+        [PreserveSig] int GetShareMode(string deviceId, IntPtr mode);
+        [PreserveSig] int SetShareMode(string deviceId, IntPtr mode);
+        [PreserveSig] int GetPropertyValue(string deviceId, int storeType, IntPtr key, IntPtr value);
+        [PreserveSig] int SetPropertyValue(string deviceId, int storeType, IntPtr key, IntPtr value);
+        [PreserveSig] int SetDefaultEndpoint(string deviceId, int role);
+        [PreserveSig] int SetEndpointVisibility(string deviceId, int visible);
     }
 }
