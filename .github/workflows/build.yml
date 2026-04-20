@@ -23,13 +23,13 @@ jobs:
       run: dotnet restore Volco.sln -p:Platform=x64
 
     - name: Build
-      run: dotnet build Volco.sln --configuration Release --no-restore -p:Platform=x64
+      run: dotnet build Volco.sln --configuration Release --no-restore -p:Platform=x64 -p:IntermediateOutputPath=C:\temp\
 
     - name: Test
       run: dotnet test Volco.sln --configuration Release --no-build --verbosity normal -p:Platform=x64
 
     - name: Publish
-      run: dotnet publish src/Volco/Volco.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64 -p:Platform=x64 -p:IntermediateOutputPath=C:\temp\
+      run: dotnet publish src/Volco/Volco.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64 -p:Platform=x64
 
     # - name: Show XamlCompiler diagnostics
     #   if: failure()
