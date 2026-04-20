@@ -51,12 +51,16 @@ public partial class App : Application
         // Connection
         StartConnection();
 
-        // Hidden window to keep the WinUI message loop alive
-        _hiddenWindow = new Window();
-        _hiddenWindow.AppWindow.Hide();
-
         // Tray icon
         SetupTrayIcon();
+
+        // Host the tray icon in a hidden window so it has XamlRoot context
+        // (required for menu positioning and event routing)
+        _hiddenWindow = new Window();
+        _hiddenWindow.Content = new Grid { Children = { _trayIcon! } };
+        _hiddenWindow.Activate();
+        _trayIcon!.ForceCreate();
+        _hiddenWindow.AppWindow.Hide();
     }
 
     private void SetupTrayIcon()
@@ -90,7 +94,6 @@ public partial class App : Application
 
         _trayIcon.ContextFlyout = menu;
         _trayIcon.LeftClickCommand = new RelayCommand(ShowSettings);
-        _trayIcon.ForceCreate();
     }
 
     private void ShowSettings()
