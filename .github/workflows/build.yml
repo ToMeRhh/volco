@@ -10,45 +10,51 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    
+    # Ensuring the runner has the right permissions for a private repo
+    permissions:
+      contents: read
+      packages: read
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
 
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
     - name: Restore dependencies
-      run: dotnet restore Volco.sln -p:Platform=x64
+      # Using MSBuild for restore to ensure WinUI targets are mapped correctly
+      run: msbuild Volco.sln -t:restore -p:Platform=x64
 
     - name: Build
-      run: dotnet build Volco.sln --configuration Release --no-restore -p:Platform=x64 -p:IntermediateOutputPath=C:\temp
+      # We redirect the intermediate output to C:\b\ to avoid long path errors
+      # This is the step that usually fixes the MSB3073 / XamlCompiler crash
+      run: |
+        msbuild Volco.sln `
+          -p:Configuration=Release `
+          -p:Platform=x64 `
+          -p:IntermediateOutputPath=C:\b\ `
+          -p:OutputPath=D:\a\volco\volco\bin\Release\
 
     - name: Test
       run: dotnet test Volco.sln --configuration Release --no-build --verbosity normal -p:Platform=x64
 
     - name: Publish
-      run: dotnet publish src/Volco/Volco.csproj --configuration Release --output ./publish --self-contained true --runtime win-x64 -p:Platform=x64
-
-    # - name: Show XamlCompiler diagnostics
-    #   if: failure()
-    #   shell: pwsh
-    #   run: |
-    #     $objDir = "src/Volco/obj/x64/Release/net8.0-windows10.0.22621.0"
-    #     Write-Host "=== input.json ==="
-    #     $inp = "$objDir/input.json"
-    #     if (Test-Path $inp) { Get-Content $inp } else { Write-Host "input.json not found" }
-    #     Write-Host "=== output.json ==="
-    #     $out = "$objDir/output.json"
-    #     if (Test-Path $out) { Get-Content $out } else { Write-Host "output.json not found" }
-    #     Write-Host "=== Run XamlCompiler directly ==="
-    #     $xamlc = (Get-ChildItem "C:\Users\runneradmin\.nuget\packages\microsoft.windowsappsdk" -Recurse -Filter "XamlCompiler.exe" | Where-Object { $_.FullName -match "net472" } | Select-Object -First 1).FullName
-    #     if ($xamlc -and (Test-Path $inp)) {
-    #       & $xamlc $inp $out 2>&1
-    #       Write-Host "XamlCompiler exit code: $LASTEXITCODE"
-    #       if (Test-Path $out) { Write-Host "=== output.json (after direct run) ==="; Get-Content $out }
-    #     } else { Write-Host "XamlCompiler or input.json not found: xamlc=$xamlc inp=$inp" }
+      # We use dotnet publish for the final step as it handles the trimming/packaging well
+      run: |
+        dotnet publish src/Volco/Volco.csproj `
+          --configuration Release `
+          --output ./publish `
+          --self-contained true `
+          --runtime win-x64 `
+          -p:Platform=x64 `
+          -p:IntermediateOutputPath=C:\b\p\
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
