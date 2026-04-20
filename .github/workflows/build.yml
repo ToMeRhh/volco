@@ -8,9 +8,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-latest
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        cache: true
+
+    - name: Test
+      run: |
+        dotnet test tests/Volco.Tests/Volco.Tests.csproj \
+          --configuration Release
+
+  build:
+    name: Build and Publish
+    runs-on: windows-latest
     permissions:
       contents: read
       packages: read
@@ -23,29 +41,17 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
+        cache: true
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
-
-    - name: Restore and Build
-      run: |
-        msbuild Volco.sln `
-          -p:Configuration=Release `
-          -p:Platform=x64 `
-          -restore
-
-    - name: Test
-      run: |
-        dotnet test Volco.sln `
-          --configuration Release `
-          --no-build `
-          --verbosity normal `
-          -p:Platform=x64
 
     - name: Publish
       run: |
         msbuild src/Volco/Volco.csproj `
           -t:Publish `
+          -m `
+          -restore `
           -p:Configuration=Release `
           -p:Platform=x64 `
           -p:PublishDir=../../publish/ `
