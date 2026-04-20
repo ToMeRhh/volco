@@ -10,6 +10,7 @@ public class WebSocketConnection : IControllerConnection
     private readonly ProtocolParser _parser = new();
     private HttpListener? _httpListener;
     private CancellationTokenSource? _cts;
+    private int _clientCount;
 
     public event EventHandler<ControllerMessage>? MessageReceived;
     public event EventHandler<ConnectionStatus>? StatusChanged;
@@ -29,15 +30,13 @@ public class WebSocketConnection : IControllerConnection
             _httpListener.Prefixes.Add($"http://localhost:{_config.Port}/");
             _httpListener.Start();
             _cts = new CancellationTokenSource();
-            Status = ConnectionStatus.Connected;
-            StatusChanged?.Invoke(this, Status);
+            // Server is listening but no client yet — remain Disconnected until a client connects
             _ = AcceptLoopAsync(_cts.Token);
         }
         catch (Exception ex)
         {
             AppLog.Error($"Failed to start WebSocket server on port {_config.Port}: {ex.Message}");
-            Status = ConnectionStatus.Error;
-            StatusChanged?.Invoke(this, Status);
+            SetStatus(ConnectionStatus.Error);
         }
     }
 
@@ -68,8 +67,7 @@ public class WebSocketConnection : IControllerConnection
                 if (!ct.IsCancellationRequested)
                 {
                     AppLog.Error($"Error in WebSocket accept loop: {ex.Message}");
-                    Status = ConnectionStatus.Error;
-                    StatusChanged?.Invoke(this, Status);
+                    SetStatus(ConnectionStatus.Error);
                 }
                 break;
             }
@@ -78,6 +76,9 @@ public class WebSocketConnection : IControllerConnection
 
     private async Task HandleClientAsync(WebSocket webSocket, CancellationToken ct)
     {
+        if (Interlocked.Increment(ref _clientCount) == 1)
+            SetStatus(ConnectionStatus.Connected);
+
         var buffer = new byte[1024];
         try
         {
@@ -98,7 +99,15 @@ public class WebSocketConnection : IControllerConnection
         finally
         {
             AppLog.Info("WebSocket connection closed");
+            if (Interlocked.Decrement(ref _clientCount) == 0 && !ct.IsCancellationRequested)
+                SetStatus(ConnectionStatus.Disconnected);
         }
+    }
+
+    private void SetStatus(ConnectionStatus status)
+    {
+        Status = status;
+        StatusChanged?.Invoke(this, status);
     }
 
     public void Disconnect()
@@ -115,8 +124,8 @@ public class WebSocketConnection : IControllerConnection
         _httpListener = null;
         _cts?.Dispose();
         _cts = null;
-        Status = ConnectionStatus.Disconnected;
-        StatusChanged?.Invoke(this, Status);
+        _clientCount = 0;
+        SetStatus(ConnectionStatus.Disconnected);
     }
 
     public void Dispose()
