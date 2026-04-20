@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Volco.Config;
+using Xunit;
 
 namespace Volco.Tests.Config;
 

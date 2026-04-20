@@ -1,4 +1,5 @@
 using Volco.Communication;
+using Xunit;
 
 namespace Volco.Tests.Communication;
 
