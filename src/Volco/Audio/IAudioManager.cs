@@ -14,6 +14,7 @@ public interface IAudioManager
     void ToggleMuteOutput(string? deviceId = null);
     void ToggleMuteInput();
     void SetDefaultOutputDevice(string deviceName);
+    string? GetDefaultOutputDeviceName();
     List<AudioDeviceInfo> GetOutputDevices();
     List<AudioDeviceInfo> GetInputDevices();
     List<string> GetActiveProcessNames();

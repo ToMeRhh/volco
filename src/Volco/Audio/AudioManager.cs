@@ -101,6 +101,19 @@ public class AudioManager : IAudioManager
         policyConfig.SetDefaultEndpoint(device.ID, (int)Role.Communications);
     }
 
+    public string? GetDefaultOutputDeviceName()
+    {
+        try
+        {
+            var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            return device.FriendlyName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public List<AudioDeviceInfo> GetOutputDevices()
     {
         return _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)

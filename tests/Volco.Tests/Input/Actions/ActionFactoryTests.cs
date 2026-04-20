@@ -57,6 +57,7 @@ public class ActionFactoryTests
         public void ToggleMuteOutput(string? deviceId = null) { }
         public void ToggleMuteInput() { }
         public void SetDefaultOutputDevice(string deviceName) { }
+        public string? GetDefaultOutputDeviceName() => null;
         public List<AudioDeviceInfo> GetOutputDevices() => new();
         public List<AudioDeviceInfo> GetInputDevices() => new();
         public List<string> GetActiveProcessNames() => new();
