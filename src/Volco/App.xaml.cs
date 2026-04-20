@@ -27,10 +27,17 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        UnhandledException += (_, e) =>
+        {
+            AppLog.Error($"Unhandled exception: {e.Exception}");
+            e.Handled = true;
+        };
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        AppLog.Info("App launching");
+
         // Config
         var configPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -51,33 +58,39 @@ public partial class App : Application
         // Connection
         StartConnection();
 
+        // Hidden window — must be activated for WinUI message loop
+        _hiddenWindow = new Window();
+        _hiddenWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(0, 0));
+        _hiddenWindow.Activate();
+        _hiddenWindow.AppWindow.Hide();
+        AppLog.Info("Hidden window created and activated");
+
         // Tray icon
         SetupTrayIcon();
-
-        // Host the tray icon in a hidden window so it has XamlRoot context
-        // (required for menu positioning and event routing)
-        _hiddenWindow = new Window();
-        _hiddenWindow.Content = new Grid { Children = { _trayIcon! } };
-        _hiddenWindow.Activate();
-        _trayIcon!.ForceCreate();
-        _hiddenWindow.AppWindow.Hide();
+        AppLog.Info("App launch complete");
     }
 
     private void SetupTrayIcon()
     {
-        _trayIcon = new TaskbarIcon();
-        _trayIcon.IconSource = new GeneratedIconSource
+        _trayIcon = new TaskbarIcon
         {
-            Text = "V",
-            Background = new SolidColorBrush(ColorHelper.FromArgb(255, 30, 100, 200)),
-            Foreground = new SolidColorBrush(Colors.White),
+            IconSource = new GeneratedIconSource
+            {
+                Text = "V",
+                Background = new SolidColorBrush(ColorHelper.FromArgb(255, 30, 100, 200)),
+                Foreground = new SolidColorBrush(Colors.White),
+            },
+            ToolTipText = "Volco",
         };
-        _trayIcon.ToolTipText = "Volco";
 
         var menu = new MenuFlyout();
 
         var openItem = new MenuFlyoutItem { Text = "Open Settings" };
-        openItem.Click += (_, _) => ShowSettings();
+        openItem.Click += (_, _) =>
+        {
+            AppLog.Info("Open Settings menu item clicked");
+            ShowSettings();
+        };
         menu.Items.Add(openItem);
 
         menu.Items.Add(new MenuFlyoutSeparator());
@@ -85,6 +98,7 @@ public partial class App : Application
         var exitItem = new MenuFlyoutItem { Text = "Exit" };
         exitItem.Click += (_, _) =>
         {
+            AppLog.Info("Exit menu item clicked");
             _connection?.Dispose();
             _sessionMonitor.Dispose();
             _trayIcon?.Dispose();
@@ -93,17 +107,34 @@ public partial class App : Application
         menu.Items.Add(exitItem);
 
         _trayIcon.ContextFlyout = menu;
-        _trayIcon.LeftClickCommand = new RelayCommand(ShowSettings);
+        _trayIcon.LeftClickCommand = new RelayCommand(() =>
+        {
+            AppLog.Info("Tray icon left-clicked");
+            ShowSettings();
+        });
+
+        _trayIcon.ForceCreate();
+        AppLog.Info("Tray icon created");
     }
 
     private void ShowSettings()
     {
-        if (_settingsWindow == null)
+        AppLog.Info("ShowSettings called");
+        try
         {
-            _settingsWindow = new SettingsWindow(_configManager, _audioManager);
-            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            if (_settingsWindow == null)
+            {
+                _settingsWindow = new SettingsWindow(_configManager, _audioManager);
+                _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+                AppLog.Info("SettingsWindow created");
+            }
+            _settingsWindow.Activate();
+            AppLog.Info("SettingsWindow activated");
         }
-        _settingsWindow.Activate();
+        catch (Exception ex)
+        {
+            AppLog.Error($"ShowSettings failed: {ex}");
+        }
     }
 
     private void StartConnection()
