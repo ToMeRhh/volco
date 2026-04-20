@@ -7,8 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .slider-vertical {
-            writing-mode: bt-lr; /* Firefox */
-            -webkit-appearance: slider-vertical; /* WebKit */
+            appearance: slider-vertical;
             width: 8px;
             height: 200px;
             padding: 0 5px;
@@ -76,6 +75,25 @@
         const sliderTemplate = document.getElementById('sliderTemplate');
         const buttonTemplate = document.getElementById('buttonTemplate');
 
+        // Throttle helper — sends at most once per interval, always sends final value
+        function throttle(fn, ms) {
+            let lastCall = 0;
+            let pending = null;
+            return function(...args) {
+                const now = Date.now();
+                if (now - lastCall >= ms) {
+                    lastCall = now;
+                    fn(...args);
+                } else {
+                    clearTimeout(pending);
+                    pending = setTimeout(() => {
+                        lastCall = Date.now();
+                        fn(...args);
+                    }, ms - (now - lastCall));
+                }
+            };
+        }
+
         // Create 5 sliders
         for (let i = 0; i < 5; i++) {
             const clone = sliderTemplate.content.cloneNode(true);
@@ -86,10 +104,12 @@
             label.textContent = `S${i}`;
             slider.dataset.index = i;
 
+            const throttledSend = throttle((val) => sendSlider(i, val), 20);
+
             slider.addEventListener('input', (e) => {
                 const val = parseInt(e.target.value);
                 display.textContent = val;
-                sendSlider(i, val);
+                throttledSend(val);
             });
 
             slidersContainer.appendChild(clone);
@@ -101,9 +121,14 @@
             const btn = clone.querySelector('button');
             btn.textContent = `Button ${i}`;
 
-            btn.addEventListener('mousedown', () => sendButton(i, 1));
-            btn.addEventListener('mouseup', () => sendButton(i, 0));
-            btn.addEventListener('mouseleave', () => sendButton(i, 0));
+            btn.addEventListener('pointerdown', () => { btn.dataset.pressed = '1'; sendButton(i, 1); });
+            btn.addEventListener('pointerup', () => { btn.dataset.pressed = '0'; sendButton(i, 0); });
+            btn.addEventListener('pointerleave', () => {
+                if (btn.dataset.pressed === '1') {
+                    btn.dataset.pressed = '0';
+                    sendButton(i, 0);
+                }
+            });
 
             buttonsContainer.appendChild(clone);
         }
