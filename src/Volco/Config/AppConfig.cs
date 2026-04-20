@@ -48,6 +48,7 @@ public class SliderConfig
     public int Index { get; set; }
     public SliderMappingType Type { get; set; } = SliderMappingType.Device;
     public List<string> Processes { get; set; } = new();
+    public string DeviceName { get; set; } = "";
     public bool Invert { get; set; }
 }
 
