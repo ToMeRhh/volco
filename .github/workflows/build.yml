@@ -24,9 +24,6 @@ jobs:
       with:
         dotnet-version: '8.0.304'  # Use a stable, older version
 
-    - name: Install Windows Desktop workload
-      run: dotnet workload install wasi-sdk
-
     - name: Clean NuGet Cache
       run: dotnet nuget locals all --clear
 
