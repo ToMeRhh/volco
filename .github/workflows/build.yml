@@ -25,8 +25,7 @@ jobs:
         dotnet-version: '8.0.x'
 
     - name: Restore dependencies
-      # We use -p:Platform to ensure the correct WinUI runtime is targeted during restore
-      run: dotnet restore Volco.sln -p:Platform=x64
+      run: dotnet restore Volco.sln -p:Platform=x64 --force
 
     - name: Build
       # Added /v:diag for deep debugging
