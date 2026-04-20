@@ -1,6 +1,8 @@
 using H.NotifyIcon;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Volco.Audio;
 using Volco.Communication;
 using Volco.Config;
@@ -55,6 +57,12 @@ public partial class App : Application
     private void SetupTrayIcon()
     {
         _trayIcon = new TaskbarIcon();
+        _trayIcon.IconSource = new GeneratedIconSource
+        {
+            Text = "V",
+            Background = new SolidColorBrush(ColorHelper.FromArgb(255, 30, 100, 200)),
+            Foreground = new SolidColorBrush(Colors.White),
+        };
         _trayIcon.ToolTipText = "Volco";
 
         var menu = new MenuFlyout();
