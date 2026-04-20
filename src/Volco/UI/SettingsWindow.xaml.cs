@@ -19,9 +19,16 @@ public sealed partial class SettingsWindow : Window
         // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow
         var appWindow = this.AppWindow;
         appWindow.Resize(new Windows.Graphics.SizeInt32(600, 500));
+        appWindow.Closing += AppWindow_Closing;
 
         // Select first tab by default
         NavView.SelectedItem = NavView.MenuItems[0];
+    }
+
+    private void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        args.Cancel = true;
+        sender.Hide();
     }
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
