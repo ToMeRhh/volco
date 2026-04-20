@@ -11,7 +11,6 @@ jobs:
   build:
     runs-on: windows-latest
     
-    # Ensuring the runner has the right permissions for a private repo
     permissions:
       contents: read
       packages: read
@@ -25,28 +24,31 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-
     - name: Restore dependencies
-      # Using MSBuild for restore to ensure WinUI targets are mapped correctly
-      run: msbuild Volco.sln -t:restore -p:Platform=x64
+      # We use -p:Platform to ensure the correct WinUI runtime is targeted during restore
+      run: dotnet restore Volco.sln -p:Platform=x64
 
     - name: Build
-      # We redirect the intermediate output to C:\b\ to avoid long path errors
-      # This is the step that usually fixes the MSB3073 / XamlCompiler crash
+      # Added /v:diag for deep debugging
+      # Added IntermediateOutputPath to prevent long-path crashes
       run: |
-        msbuild Volco.sln `
-          -p:Configuration=Release `
+        dotnet build Volco.sln `
+          --configuration Release `
+          --no-restore `
           -p:Platform=x64 `
           -p:IntermediateOutputPath=C:\b\ `
-          -p:OutputPath=D:\a\volco\volco\bin\Release\
+          -v diag
 
     - name: Test
-      run: dotnet test Volco.sln --configuration Release --no-build --verbosity normal -p:Platform=x64
+      run: |
+        dotnet test Volco.sln `
+          --configuration Release `
+          --no-build `
+          --verbosity normal `
+          -p:Platform=x64 `
+          -p:IntermediateOutputPath=C:\b\
 
     - name: Publish
-      # We use dotnet publish for the final step as it handles the trimming/packaging well
       run: |
         dotnet publish src/Volco/Volco.csproj `
           --configuration Release `
