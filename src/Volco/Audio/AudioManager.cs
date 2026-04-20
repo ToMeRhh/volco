@@ -43,7 +43,9 @@ public class AudioManager : IAudioManager
         {
             device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         }
-        device.AudioEndpointVolume.Mute = !device.AudioEndpointVolume.Mute;
+
+        if (device != null)
+            device.AudioEndpointVolume.Mute = !device.AudioEndpointVolume.Mute;
     }
 
     public void ToggleMuteInput()
