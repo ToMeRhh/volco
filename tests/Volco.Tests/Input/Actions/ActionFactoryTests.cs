@@ -1,6 +1,7 @@
 using Volco.Audio;
 using Volco.Config;
 using Volco.Input.Actions;
+using Xunit;
 
 namespace Volco.Tests.Input.Actions;
 

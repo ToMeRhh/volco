@@ -1,5 +1,6 @@
 using Volco.Communication;
 using Volco.Input;
+using Xunit;
 
 namespace Volco.Tests.Input;
 
