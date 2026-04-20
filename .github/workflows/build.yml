@@ -44,12 +44,13 @@ jobs:
 
     - name: Publish
       run: |
-        dotnet publish src/Volco/Volco.csproj `
-          --configuration Release `
-          --output ./publish `
-          --self-contained true `
-          --runtime win-x64 `
-          -p:Platform=x64
+        msbuild src/Volco/Volco.csproj `
+          -t:Publish `
+          -p:Configuration=Release `
+          -p:Platform=x64 `
+          -p:PublishDir=../../publish/ `
+          -p:RuntimeIdentifier=win-x64 `
+          -p:SelfContained=true
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
