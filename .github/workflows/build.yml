@@ -24,15 +24,18 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
     - name: Restore dependencies
       run: dotnet restore Volco.sln -p:Platform=x64
 
     - name: Build
       run: |
-        dotnet build Volco.sln `
-          --configuration Release `
-          --no-restore `
-          -p:Platform=x64
+        msbuild Volco.sln `
+          -p:Configuration=Release `
+          -p:Platform=x64 `
+          -restore:false
 
     - name: Test
       run: |
