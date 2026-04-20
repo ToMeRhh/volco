@@ -33,8 +33,9 @@ public class WebSocketConnection : IControllerConnection
             StatusChanged?.Invoke(this, Status);
             _ = AcceptLoopAsync(_cts.Token);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            AppLog.Error($"Failed to start WebSocket server on port {_config.Port}: {ex.Message}");
             Status = ConnectionStatus.Error;
             StatusChanged?.Invoke(this, Status);
         }
@@ -55,16 +56,18 @@ public class WebSocketConnection : IControllerConnection
                 }
 
                 var wsContext = await context.AcceptWebSocketAsync(null);
+                AppLog.Info("New WebSocket connection accepted");
                 _ = HandleClientAsync(wsContext.WebSocket, ct);
             }
             catch (OperationCanceledException)
             {
                 break;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 if (!ct.IsCancellationRequested)
                 {
+                    AppLog.Error($"Error in WebSocket accept loop: {ex.Message}");
                     Status = ConnectionStatus.Error;
                     StatusChanged?.Invoke(this, Status);
                 }
@@ -88,7 +91,14 @@ public class WebSocketConnection : IControllerConnection
             }
         }
         catch (OperationCanceledException) { }
-        catch (WebSocketException) { }
+        catch (WebSocketException ex)
+        {
+            AppLog.Error($"WebSocket connection error: {ex.Message}");
+        }
+        finally
+        {
+            AppLog.Info("WebSocket connection closed");
+        }
     }
 
     public void Disconnect()

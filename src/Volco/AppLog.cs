@@ -15,6 +15,7 @@ internal static class AppLog
     }
 
     public static void Info(string message) => Write("INFO", message);
+    public static void Debug(string message) => Write("DEBUG", message);
     public static void Error(string message) => Write("ERROR", message);
 
     private static void Write(string level, string message)

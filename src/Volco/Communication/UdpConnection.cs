@@ -31,8 +31,9 @@ public class UdpConnection : IControllerConnection
             StatusChanged?.Invoke(this, Status);
             _ = ReceiveLoopAsync(_cts.Token);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            AppLog.Error($"Failed to start UDP listener on port {_config.ListenPort}: {ex.Message}");
             Status = ConnectionStatus.Error;
             StatusChanged?.Invoke(this, Status);
         }
@@ -51,8 +52,9 @@ public class UdpConnection : IControllerConnection
             {
                 break;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                AppLog.Error($"Error in UDP receive loop: {ex.Message}");
                 Status = ConnectionStatus.Error;
                 StatusChanged?.Invoke(this, Status);
                 break;
