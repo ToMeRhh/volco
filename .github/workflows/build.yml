@@ -22,7 +22,8 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x'
+        dotnet-version: '8.0.304'  # Use a stable, older version
+
 
     - name: Clean NuGet Cache
       run: dotnet nuget locals all --clear
