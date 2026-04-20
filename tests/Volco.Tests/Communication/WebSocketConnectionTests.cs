@@ -57,13 +57,29 @@ public class WebSocketConnectionTests : IDisposable
         Assert.Contains(ConnectionStatus.Disconnected, _statusChanges);
     }
 
+    private async Task ConnectWithRetryAsync(ClientWebSocket client, Uri uri, int maxRetries = 5)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                await client.ConnectAsync(uri, CancellationToken.None);
+                return;
+            }
+            catch (Exception) when (i < maxRetries - 1)
+            {
+                await Task.Delay(50 * (i + 1));
+            }
+        }
+    }
+
     [Fact]
     public async Task ReceivesBinaryMessage()
     {
         _connection.Connect();
 
         using var client = new ClientWebSocket();
-        await client.ConnectAsync(new Uri($"ws://localhost:{_port}/"), CancellationToken.None);
+        await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
 
         var frame = FramePayload(new byte[] { 0x01, 0x00, 0x02, 0x00 }); // slider 0, value 512
         await client.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None);
@@ -83,7 +99,7 @@ public class WebSocketConnectionTests : IDisposable
         _connection.Connect();
 
         using var client = new ClientWebSocket();
-        await client.ConnectAsync(new Uri($"ws://localhost:{_port}/"), CancellationToken.None);
+        await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
 
         var frame1 = FramePayload(new byte[] { 0x01, 0x01, 0x01, 0x00 }); // slider 1, value 256
         var frame2 = FramePayload(new byte[] { 0x02, 0x02, 0x01 });       // button 2, pressed

@@ -104,7 +104,13 @@ public class WebSocketConnection : IControllerConnection
     public void Disconnect()
     {
         _cts?.Cancel();
-        _httpListener?.Stop();
+        try
+        {
+            _httpListener?.Stop();
+        }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
+
         _httpListener?.Close();
         _httpListener = null;
         _cts?.Dispose();
