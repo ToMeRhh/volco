@@ -22,10 +22,10 @@ public sealed partial class ConnectionTab : Page
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
-        if (e.Parameter is (ConfigManager cm, IControllerConnection? conn))
+        if (e.Parameter is ValueTuple<ConfigManager, IControllerConnection?> tuple)
         {
-            _configManager = cm;
-            _connection = conn;
+            _configManager = tuple.Item1;
+            _connection = tuple.Item2;
         }
         else if (e.Parameter is ConfigManager cmOnly)
         {
