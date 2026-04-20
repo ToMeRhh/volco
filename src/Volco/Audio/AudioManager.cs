@@ -6,6 +6,8 @@ namespace Volco.Audio;
 public class AudioManager : IAudioManager
 {
     private readonly MMDeviceEnumerator _enumerator = new();
+    private readonly Dictionary<uint, (string Name, DateTime CachedAt)> _processNameCache = new();
+    private static readonly TimeSpan ProcessCacheTtl = TimeSpan.FromSeconds(5);
 
     public void SetProcessVolume(string processName, float volume)
     {
@@ -20,6 +22,29 @@ public class AudioManager : IAudioManager
             if (string.Equals(sessionProcessName, processName, StringComparison.OrdinalIgnoreCase))
             {
                 session.SimpleAudioVolume.Volume = volume;
+            }
+        }
+    }
+
+    public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume)
+    {
+        volume = Math.Clamp(volume, 0f, 1f);
+        var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        var sessions = device.AudioSessionManager.Sessions;
+
+        for (int i = 0; i < sessions.Count; i++)
+        {
+            var session = sessions[i];
+            var sessionProcessName = GetProcessName(session);
+            if (string.IsNullOrEmpty(sessionProcessName)) continue;
+
+            foreach (var processName in processNames)
+            {
+                if (string.Equals(sessionProcessName, processName, StringComparison.OrdinalIgnoreCase))
+                {
+                    session.SimpleAudioVolume.Volume = volume;
+                    break;
+                }
             }
         }
     }
@@ -112,14 +137,21 @@ public class AudioManager : IAudioManager
             .FirstOrDefault(d => d.FriendlyName.Contains(name, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string GetProcessName(AudioSessionControl session)
+    private string GetProcessName(AudioSessionControl session)
     {
         try
         {
-            var pid = (int)session.GetProcessID;
+            var pid = (uint)session.GetProcessID;
             if (pid == 0) return "";
-            var process = System.Diagnostics.Process.GetProcessById(pid);
-            return process.ProcessName + ".exe";
+
+            var now = DateTime.UtcNow;
+            if (_processNameCache.TryGetValue(pid, out var cached) && now - cached.CachedAt < ProcessCacheTtl)
+                return cached.Name;
+
+            var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            var name = process.ProcessName + ".exe";
+            _processNameCache[pid] = (name, now);
+            return name;
         }
         catch
         {

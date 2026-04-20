@@ -3,17 +3,21 @@ using Volco.Config;
 
 namespace Volco.Input;
 
-public class SliderProcessor
+public class SliderProcessor : IDisposable
 {
     private readonly IAudioManager _audio;
     private readonly ConfigManager _configManager;
     private readonly SessionMonitor _sessionMonitor;
+    private readonly ushort?[] _pendingValues = new ushort?[16];
+    private readonly Timer _coalesceTimer;
+    private readonly object _lock = new();
 
     public SliderProcessor(IAudioManager audio, ConfigManager configManager, SessionMonitor sessionMonitor)
     {
         _audio = audio;
         _configManager = configManager;
         _sessionMonitor = sessionMonitor;
+        _coalesceTimer = new Timer(_ => ProcessPending(), null, 20, 20);
     }
 
     public static float MapAdcToVolume(ushort adcValue, bool invert)
@@ -41,29 +45,55 @@ public class SliderProcessor
 
     public void HandleSliderEvent(int sliderIndex, ushort adcValue)
     {
-        var config = _configManager.Config;
-        if (sliderIndex < 0 || sliderIndex >= config.Sliders.Count)
+        if (sliderIndex < 0 || sliderIndex >= _pendingValues.Length)
             return;
 
-        var sliderConfig = config.Sliders[sliderIndex];
-        var volume = MapAdcToVolume(adcValue, sliderConfig.Invert);
-
-        switch (sliderConfig.Type)
+        lock (_lock)
         {
-            case SliderMappingType.Device:
-                _audio.SetDeviceVolume(volume, sliderConfig.DeviceName);
-                break;
-
-            case SliderMappingType.Processes:
-                foreach (var processName in sliderConfig.Processes)
-                    _audio.SetProcessVolume(processName, volume);
-                break;
-
-            case SliderMappingType.Unmapped:
-                var unmapped = GetUnmappedProcesses(config, _sessionMonitor.ActiveProcesses);
-                foreach (var processName in unmapped)
-                    _audio.SetProcessVolume(processName, volume);
-                break;
+            _pendingValues[sliderIndex] = adcValue;
         }
+    }
+
+    private void ProcessPending()
+    {
+        var config = _configManager.Config;
+
+        for (int sliderIndex = 0; sliderIndex < _pendingValues.Length; sliderIndex++)
+        {
+            ushort? value;
+            lock (_lock)
+            {
+                value = _pendingValues[sliderIndex];
+                if (value == null) continue;
+                _pendingValues[sliderIndex] = null;
+            }
+
+            if (sliderIndex >= config.Sliders.Count)
+                continue;
+
+            var sliderConfig = config.Sliders[sliderIndex];
+            var volume = MapAdcToVolume(value.Value, sliderConfig.Invert);
+
+            switch (sliderConfig.Type)
+            {
+                case SliderMappingType.Device:
+                    _audio.SetDeviceVolume(volume, sliderConfig.DeviceName);
+                    break;
+
+                case SliderMappingType.Processes:
+                    _audio.SetProcessVolumes(sliderConfig.Processes, volume);
+                    break;
+
+                case SliderMappingType.Unmapped:
+                    var unmapped = GetUnmappedProcesses(config, _sessionMonitor.ActiveProcesses);
+                    _audio.SetProcessVolumes(unmapped, volume);
+                    break;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        _coalesceTimer.Dispose();
     }
 }
