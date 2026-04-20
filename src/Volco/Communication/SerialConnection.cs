@@ -29,8 +29,9 @@ public class SerialConnection : IControllerConnection
             Status = ConnectionStatus.Connected;
             StatusChanged?.Invoke(this, Status);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            AppLog.Error($"Failed to open serial port {_config.ComPort}: {ex.Message}");
             Status = ConnectionStatus.Error;
             StatusChanged?.Invoke(this, Status);
         }

@@ -137,6 +137,7 @@ public partial class App : Application
     {
         _connection?.Dispose();
         var config = _configManager.Config.Connection;
+        AppLog.Info($"Starting connection: {config.Type}");
         _connection = config.Type switch
         {
             ConnectionType.Serial => new SerialConnection(config.Serial),
@@ -148,7 +149,13 @@ public partial class App : Application
         if (_connection == null) return;
 
         _connection.MessageReceived += OnMessageReceived;
+        _connection.StatusChanged += OnConnectionStatusChanged;
         _connection.Connect();
+    }
+
+    private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
+    {
+        AppLog.Info($"Connection status changed: {status}");
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
@@ -156,9 +163,11 @@ public partial class App : Application
         switch (msg)
         {
             case SliderMessage slider:
+                AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
                 _sliderProcessor.HandleSliderEvent(slider.SliderIndex, slider.Value);
                 break;
             case ButtonMessage button:
+                AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
                 _buttonPressDetector.HandleButtonEvent(button.ButtonIndex, button.State);
                 break;
         }
@@ -166,6 +175,7 @@ public partial class App : Application
 
     private void OnButtonPressDetected(object? sender, ButtonPressEventArgs e)
     {
+        AppLog.Info($"Button press detected: Index={e.ButtonIndex}, Type={e.PressType}");
         var config = _configManager.Config;
         if (e.ButtonIndex < 0 || e.ButtonIndex >= config.Buttons.Count) return;
 
@@ -185,6 +195,7 @@ public partial class App : Application
 
     private void OnConfigChanged(object? sender, EventArgs e)
     {
+        AppLog.Info("Configuration changed, restarting connection");
         // Restart connection if connection config might have changed
         StartConnection();
     }

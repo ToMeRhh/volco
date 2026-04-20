@@ -23,17 +23,20 @@ public class ConfigManager
     {
         if (File.Exists(_configPath))
         {
+            AppLog.Info($"Loading config from {_configPath}");
             var json = File.ReadAllText(_configPath);
             Config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? AppConfig.CreateDefault();
         }
         else
         {
+            AppLog.Info("Config file not found, using default config");
             Config = AppConfig.CreateDefault();
         }
     }
 
     public void Save()
     {
+        AppLog.Info($"Saving config to {_configPath}");
         var dir = Path.GetDirectoryName(_configPath);
         if (dir != null && !Directory.Exists(dir))
             Directory.CreateDirectory(dir);
