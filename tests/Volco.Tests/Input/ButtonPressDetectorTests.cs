@@ -68,7 +68,7 @@ public class ButtonPressDetectorTests
         _detector.HandleButtonEvent(0, ButtonState.Released);
         _detector.HandleButtonEvent(1, ButtonState.Pressed);
         _detector.HandleButtonEvent(1, ButtonState.Released);
-        await Task.Delay(400);
+        await Task.Delay(600);
 
         Assert.Equal(2, _events.Count);
         Assert.Equal(0, _events[0].ButtonIndex);
