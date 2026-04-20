@@ -77,6 +77,7 @@ public class ButtonPressDetector
         {
             _longPressFired = false;
             _longPressCts?.Cancel();
+            _singlePressCts?.Cancel();
             _longPressCts = new CancellationTokenSource();
             _ = LongPressTimerAsync(_longPressCts.Token);
         }
