@@ -16,6 +16,7 @@
     <WindowsAppSDKVerifyLibraryIsLoaded>false</WindowsAppSDKVerifyLibraryIsLoaded>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
   </PropertyGroup>
 
   <PropertyGroup Condition="!$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))">
