@@ -14,7 +14,6 @@ namespace Volco;
 
 public partial class App : Application
 {
-    private Window? _hiddenWindow;
     private TaskbarIcon? _trayIcon;
     private SettingsWindow? _settingsWindow;
     private ConfigManager _configManager = null!;
@@ -57,13 +56,6 @@ public partial class App : Application
 
         // Connection
         StartConnection();
-
-        // Hidden window — must be activated for WinUI message loop
-        _hiddenWindow = new Window();
-        _hiddenWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(0, 0));
-        _hiddenWindow.Activate();
-        _hiddenWindow.AppWindow.Hide();
-        AppLog.Info("Hidden window created and activated");
 
         // Tray icon
         SetupTrayIcon();
