@@ -14,6 +14,7 @@ namespace Volco;
 
 public partial class App : Application
 {
+    public static bool IsExiting { get; private set; }
     private TaskbarIcon? _trayIcon;
     private SettingsWindow? _settingsWindow;
     private ConfigManager _configManager = null!;
@@ -91,6 +92,7 @@ public partial class App : Application
         exitItem.Click += (_, _) =>
         {
             AppLog.Info("Exit menu item clicked");
+            IsExiting = true;
             _connection?.Dispose();
             _sessionMonitor.Dispose();
             _trayIcon?.Dispose();
@@ -99,6 +101,7 @@ public partial class App : Application
         menu.Items.Add(exitItem);
 
         _trayIcon.ContextFlyout = menu;
+        _trayIcon.ContextMenuMode = ContextMenuMode.SecondWindow;
         _trayIcon.LeftClickCommand = new RelayCommand(() =>
         {
             AppLog.Info("Tray icon left-clicked");

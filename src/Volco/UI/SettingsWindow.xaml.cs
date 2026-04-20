@@ -27,8 +27,11 @@ public sealed partial class SettingsWindow : Window
 
     private void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
-        args.Cancel = true;
-        sender.Hide();
+        if (!App.IsExiting)
+        {
+            args.Cancel = true;
+            sender.Hide();
+        }
     }
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
