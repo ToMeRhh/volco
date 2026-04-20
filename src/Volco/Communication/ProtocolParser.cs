@@ -64,13 +64,19 @@ public class ProtocolParser
             }
 
             // Parse payload directly from Span slice (zero-allocation)
+            // NOTE: ParsePayload must be called before RemoveRange below;
+            // payloadSlice is a span into _buffer and is invalidated by the mutation.
             var message = ParsePayload(payloadSlice);
 
             // Remove the processed frame from the buffer
             _buffer.RemoveRange(0, frameLength);
 
             if (message != null)
+            {
+                // Warning: MessageParsed is invoked while TryParse holds a span view of _buffer.
+                // Handlers must not call FeedBytes.
                 MessageParsed?.Invoke(this, message);
+            }
         }
     }
 
