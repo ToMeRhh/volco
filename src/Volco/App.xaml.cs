@@ -150,6 +150,8 @@ public partial class App : Application
         public RelayCommand(Action execute) => _execute = execute;
         public bool CanExecute(object? parameter) => true;
         public void Execute(object? parameter) => _execute();
+#pragma warning disable 67
         public event EventHandler? CanExecuteChanged;
+#pragma warning restore 67
     }
 }

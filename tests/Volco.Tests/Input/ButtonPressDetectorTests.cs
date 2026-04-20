@@ -8,6 +8,7 @@ public class ButtonPressDetectorTests
 {
     private readonly ButtonPressDetector _detector;
     private readonly List<(int ButtonIndex, PressType PressType)> _events = new();
+    private readonly object _eventsLock = new();
 
     public ButtonPressDetectorTests()
     {
@@ -15,7 +16,13 @@ public class ButtonPressDetectorTests
             longPressMs: 500,
             doublePressWindowMs: 300
         );
-        _detector.PressDetected += (_, e) => _events.Add((e.ButtonIndex, e.PressType));
+        _detector.PressDetected += (_, e) =>
+        {
+            lock (_eventsLock)
+            {
+                _events.Add((e.ButtonIndex, e.PressType));
+            }
+        };
     }
 
     [Fact]
@@ -71,8 +78,9 @@ public class ButtonPressDetectorTests
         await Task.Delay(600);
 
         Assert.Equal(2, _events.Count);
-        Assert.Equal(0, _events[0].ButtonIndex);
-        Assert.Equal(1, _events[1].ButtonIndex);
+        var orderedEvents = _events.OrderBy(e => e.ButtonIndex).ToList();
+        Assert.Equal(0, orderedEvents[0].ButtonIndex);
+        Assert.Equal(1, orderedEvents[1].ButtonIndex);
         Assert.All(_events, e => Assert.Equal(PressType.Single, e.PressType));
     }
 }
