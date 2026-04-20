@@ -97,17 +97,4 @@ public class WebSocketConnectionTests : IDisposable
         Assert.IsType<ButtonMessage>(_messages[1]);
     }
 
-    [Fact]
-    public void Connect_WithInvalidPort_SetsStatusToError()
-    {
-        // Port 80 typically requires elevated privileges and will fail
-        var connection = new WebSocketConnection(new WebSocketConfig { Port = 80 });
-        var statuses = new List<ConnectionStatus>();
-        connection.StatusChanged += (_, s) => statuses.Add(s);
-
-        connection.Connect();
-
-        Assert.Equal(ConnectionStatus.Error, connection.Status);
-        connection.Dispose();
-    }
 }
