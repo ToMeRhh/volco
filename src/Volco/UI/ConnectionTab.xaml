@@ -13,6 +13,7 @@
             <RadioButtons x:Name="ConnectionTypeRadio" SelectionChanged="ConnectionType_Changed">
                 <RadioButton Content="Serial (USB)" Tag="Serial" />
                 <RadioButton Content="UDP (Wireless)" Tag="Udp" />
+                <RadioButton Content="WebSocket" Tag="WebSocket" />
             </RadioButtons>
         </StackPanel>
 
@@ -44,6 +45,16 @@
                 <TextBlock Text="Listen Port" />
                 <NumberBox x:Name="UdpPortBox" Minimum="1024" Maximum="65535"
                            SpinButtonPlacementMode="Compact" ValueChanged="UdpPort_Changed" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- WebSocket Settings -->
+        <StackPanel x:Name="WebSocketPanel" Spacing="8" Visibility="Collapsed">
+            <TextBlock Text="WebSocket Settings" Style="{StaticResource BodyStrongTextBlockStyle}" />
+            <StackPanel Spacing="4">
+                <TextBlock Text="Port" />
+                <NumberBox x:Name="WebSocketPortBox" Minimum="1024" Maximum="65535"
+                           SpinButtonPlacementMode="Compact" ValueChanged="WebSocketPort_Changed" />
             </StackPanel>
         </StackPanel>
 

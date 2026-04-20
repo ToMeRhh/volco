@@ -137,6 +137,7 @@ public partial class App : Application
         {
             ConnectionType.Serial => new SerialConnection(config.Serial),
             ConnectionType.Udp => new UdpConnection(config.Udp),
+            ConnectionType.WebSocket => new WebSocketConnection(config.WebSocket),
             _ => null
         };
 

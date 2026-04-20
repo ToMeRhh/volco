@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Volco.Config;
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum ConnectionType { Serial, Udp }
+public enum ConnectionType { Serial, Udp, WebSocket }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SliderMappingType { Processes, Device, Unmapped }
@@ -30,11 +30,17 @@ public class UdpConfig
     public int ListenPort { get; set; } = 12345;
 }
 
+public class WebSocketConfig
+{
+    public int Port { get; set; } = 8765;
+}
+
 public class ConnectionConfig
 {
     public ConnectionType Type { get; set; } = ConnectionType.Serial;
     public SerialConfig Serial { get; set; } = new();
     public UdpConfig Udp { get; set; } = new();
+    public WebSocketConfig WebSocket { get; set; } = new();
 }
 
 public class SliderConfig

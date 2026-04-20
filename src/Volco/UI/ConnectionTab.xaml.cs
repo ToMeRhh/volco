@@ -41,7 +41,13 @@ public sealed partial class ConnectionTab : Page
         var config = _configManager!.Config.Connection;
 
         // Set connection type radio
-        ConnectionTypeRadio.SelectedIndex = config.Type == ConnectionType.Serial ? 0 : 1;
+        ConnectionTypeRadio.SelectedIndex = config.Type switch
+        {
+            ConnectionType.Serial => 0,
+            ConnectionType.Udp => 1,
+            ConnectionType.WebSocket => 2,
+            _ => 0
+        };
 
         // Set COM port
         for (int i = 0; i < ComPortCombo.Items.Count; i++)
@@ -64,23 +70,30 @@ public sealed partial class ConnectionTab : Page
         }
 
         UdpPortBox.Value = config.Udp.ListenPort;
+        WebSocketPortBox.Value = config.WebSocket.Port;
         UpdatePanelVisibility();
     }
 
     private void ConnectionType_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_isLoading || _configManager == null) return;
-        var selected = ConnectionTypeRadio.SelectedIndex;
-        _configManager.Config.Connection.Type = selected == 0 ? ConnectionType.Serial : ConnectionType.Udp;
+        _configManager.Config.Connection.Type = ConnectionTypeRadio.SelectedIndex switch
+        {
+            0 => ConnectionType.Serial,
+            1 => ConnectionType.Udp,
+            2 => ConnectionType.WebSocket,
+            _ => ConnectionType.Serial
+        };
         UpdatePanelVisibility();
         _configManager.Save();
     }
 
     private void UpdatePanelVisibility()
     {
-        var isSerial = _configManager?.Config.Connection.Type == ConnectionType.Serial;
-        SerialPanel.Visibility = isSerial ? Visibility.Visible : Visibility.Collapsed;
-        UdpPanel.Visibility = isSerial ? Visibility.Collapsed : Visibility.Visible;
+        var type = _configManager?.Config.Connection.Type;
+        SerialPanel.Visibility = type == ConnectionType.Serial ? Visibility.Visible : Visibility.Collapsed;
+        UdpPanel.Visibility = type == ConnectionType.Udp ? Visibility.Visible : Visibility.Collapsed;
+        WebSocketPanel.Visibility = type == ConnectionType.WebSocket ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void SerialSetting_Changed(object sender, SelectionChangedEventArgs e)
@@ -97,6 +110,13 @@ public sealed partial class ConnectionTab : Page
     {
         if (_isLoading || _configManager == null) return;
         _configManager.Config.Connection.Udp.ListenPort = (int)args.NewValue;
+        _configManager.Save();
+    }
+
+    private void WebSocketPort_Changed(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_isLoading || _configManager == null) return;
+        _configManager.Config.Connection.WebSocket.Port = (int)args.NewValue;
         _configManager.Save();
     }
 }
