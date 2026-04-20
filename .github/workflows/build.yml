@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    
+
     permissions:
       contents: read
       packages: read
@@ -22,23 +22,17 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.304'  # Use a stable, older version
-
-    - name: Clean NuGet Cache
-      run: dotnet nuget locals all --clear
+        dotnet-version: '8.0.x'
 
     - name: Restore dependencies
-      run: dotnet restore Volco.sln -p:Platform=x64 --force --no-cache
+      run: dotnet restore Volco.sln -p:Platform=x64
 
     - name: Build
-      # Added /v:diag for deep debugging
-      # Added IntermediateOutputPath to prevent long-path crashes
       run: |
         dotnet build Volco.sln `
           --configuration Release `
           --no-restore `
-          -p:Platform=x64 `
-          -v diag
+          -p:Platform=x64
 
     - name: Test
       run: |

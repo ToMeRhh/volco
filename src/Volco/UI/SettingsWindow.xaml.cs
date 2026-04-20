@@ -16,6 +16,10 @@ public sealed partial class SettingsWindow : Window
         _configManager = configManager;
         _audioManager = audioManager;
 
+        // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow
+        var appWindow = this.AppWindow;
+        appWindow.Resize(new Windows.Graphics.SizeInt32(600, 500));
+
         // Select first tab by default
         NavView.SelectedItem = NavView.MenuItems[0];
     }
