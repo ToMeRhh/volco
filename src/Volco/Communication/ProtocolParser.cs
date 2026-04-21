@@ -1,5 +1,11 @@
+using System.Runtime.InteropServices;
+
 namespace Volco.Communication;
 
+/// <summary>
+/// Parses incoming bytes from the controller into <see cref="ControllerMessage"/> objects.
+/// Optimized for performance by minimizing allocations and using vectorized searches.
+/// </summary>
 public class ProtocolParser
 {
     private const byte StartMarker = 0xAA;
@@ -9,10 +15,8 @@ public class ProtocolParser
 
     public void FeedBytes(ReadOnlySpan<byte> data)
     {
-        foreach (var b in data)
-        {
-            _buffer.Add(b);
-        }
+        // Use optimized AddRange for ReadOnlySpan (available in .NET 8)
+        _buffer.AddRange(data);
         TryParse();
     }
 
@@ -20,49 +24,63 @@ public class ProtocolParser
     {
         while (true)
         {
-            // Find start marker
-            var startIndex = _buffer.IndexOf(StartMarker);
+            var bufferSpan = CollectionsMarshal.AsSpan(_buffer);
+
+            // Find start marker using vectorized search
+            var startIndex = bufferSpan.IndexOf(StartMarker);
             if (startIndex < 0)
             {
                 _buffer.Clear();
                 return;
             }
+
             if (startIndex > 0)
+            {
                 _buffer.RemoveRange(0, startIndex);
+                bufferSpan = CollectionsMarshal.AsSpan(_buffer);
+            }
 
             // Need at least: marker + length
-            if (_buffer.Count < 2)
+            if (bufferSpan.Length < 2)
                 return;
 
-            int payloadLength = _buffer[1];
+            int payloadLength = bufferSpan[1];
             int frameLength = 2 + payloadLength + 1; // marker + length + payload + checksum
 
-            if (_buffer.Count < frameLength)
+            if (bufferSpan.Length < frameLength)
                 return;
 
-            // Validate checksum
+            // Validate checksum using Span slice to avoid allocations
             byte checksum = 0;
-            for (int i = 2; i < 2 + payloadLength; i++)
-                checksum ^= _buffer[i];
+            var payloadSlice = bufferSpan.Slice(2, payloadLength);
+            foreach (var b in payloadSlice)
+                checksum ^= b;
 
-            if (checksum != _buffer[2 + payloadLength])
+            if (checksum != bufferSpan[2 + payloadLength])
             {
                 // Bad checksum — skip this start marker and try next
                 _buffer.RemoveAt(0);
                 continue;
             }
 
-            // Extract payload and parse
-            var payload = _buffer.GetRange(2, payloadLength).ToArray();
+            // Parse payload directly from Span slice (zero-allocation)
+            // NOTE: ParsePayload must be called before RemoveRange below;
+            // payloadSlice is a span into _buffer and is invalidated by the mutation.
+            var message = ParsePayload(payloadSlice);
+
+            // Remove the processed frame from the buffer
             _buffer.RemoveRange(0, frameLength);
 
-            var message = ParsePayload(payload);
             if (message != null)
+            {
+                // Warning: MessageParsed is invoked while TryParse holds a span view of _buffer.
+                // Handlers must not call FeedBytes.
                 MessageParsed?.Invoke(this, message);
+            }
         }
     }
 
-    private static ControllerMessage? ParsePayload(byte[] payload)
+    private static ControllerMessage? ParsePayload(ReadOnlySpan<byte> payload)
     {
         if (payload.Length < 3)
             return null;

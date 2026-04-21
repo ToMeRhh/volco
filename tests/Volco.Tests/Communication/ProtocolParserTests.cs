@@ -101,4 +101,18 @@ public class ProtocolParserTests
         Assert.Single(_received);
         Assert.IsType<ButtonMessage>(_received[0]);
     }
+
+    [Fact]
+    public void ParsesFrameWithEmbeddedStartMarkerInPayload()
+    {
+        // Payload: { messageType=0x02, 0xAA, value=0x01 }
+        // Checksum: 0x02 ^ 0xAA ^ 0x01 = 0xA9
+        var frame = new byte[] { 0xAA, 0x03, 0x02, 0xAA, 0x01, 0xA9 };
+        _parser.FeedBytes(frame);
+
+        Assert.Single(_received);
+        var msg = Assert.IsType<ButtonMessage>(_received[0]);
+        Assert.Equal(0xAA, (int)msg.ButtonIndex);
+        Assert.Equal(ButtonState.Pressed, msg.State);
+    }
 }
