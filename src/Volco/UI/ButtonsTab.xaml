@@ -5,10 +5,13 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer>
-        <StackPanel Padding="24" Spacing="16">
-            <TextBlock Text="Button Actions" Style="{StaticResource SubtitleTextBlockStyle}" />
+        <StackPanel Padding="24"
+                Spacing="16">
+            <TextBlock Text="Button Actions"
+                    Style="{StaticResource SubtitleTextBlockStyle}"/>
 
-            <StackPanel x:Name="ButtonsPanel" Spacing="12" />
+            <StackPanel x:Name="ButtonsPanel"
+                    Spacing="12"/>
         </StackPanel>
     </ScrollViewer>
 </Page>
