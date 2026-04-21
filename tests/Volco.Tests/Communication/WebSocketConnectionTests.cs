@@ -39,12 +39,41 @@ public class WebSocketConnectionTests : IDisposable
     }
 
     [Fact]
-    public void Connect_SetsStatusToConnected()
+    public void Connect_StatusRemainsDisconnectedUntilClientConnects()
     {
         _connection.Connect();
 
+        // Server is listening but no client yet — status should be Disconnected
+        Assert.Equal(ConnectionStatus.Disconnected, _connection.Status);
+        Assert.DoesNotContain(ConnectionStatus.Connected, _statusChanges);
+    }
+
+    [Fact]
+    public async Task ClientConnect_SetsStatusToConnected()
+    {
+        _connection.Connect();
+
+        using var client = new ClientWebSocket();
+        await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
+        await Task.Delay(50);
+
         Assert.Equal(ConnectionStatus.Connected, _connection.Status);
         Assert.Contains(ConnectionStatus.Connected, _statusChanges);
+    }
+
+    [Fact]
+    public async Task ClientDisconnect_SetsStatusToDisconnected()
+    {
+        _connection.Connect();
+
+        using var client = new ClientWebSocket();
+        await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
+        await Task.Delay(50);
+
+        await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+        await Task.Delay(100);
+
+        Assert.Equal(ConnectionStatus.Disconnected, _connection.Status);
     }
 
     [Fact]
