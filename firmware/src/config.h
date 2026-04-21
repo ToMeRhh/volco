@@ -6,6 +6,7 @@
 #define TRANSPORT_SERIAL
 // #define TRANSPORT_WEBSOCKET
 // #define TRANSPORT_UDP
+// #define TRANSPORT_LOCAL_DEBUG  // No host needed. Verbose serial logging only.
 
 // ============================================================
 // WiFi — only used for TRANSPORT_WEBSOCKET and TRANSPORT_UDP

@@ -189,9 +189,30 @@ void transport_reconnect() {
   }
 }
 
+#elif defined(TRANSPORT_LOCAL_DEBUG)
+
+void transport_init() { Serial.begin(SERIAL_BAUD); }
+
+bool transport_connected() { return true; }
+
+void transport_send(const uint8_t* data, size_t len) {
+  // No host — discard outbound frames silently
+  (void)data;
+  (void)len;
+}
+
+int transport_receive(uint8_t* buf, size_t maxLen) {
+  // No host — nothing to receive
+  (void)buf;
+  (void)maxLen;
+  return 0;
+}
+
+void transport_reconnect() {}
+
 #else
 #error \
-    "Define exactly one of TRANSPORT_SERIAL, TRANSPORT_WEBSOCKET, or TRANSPORT_UDP in config.h"
+    "Define exactly one of TRANSPORT_SERIAL, TRANSPORT_WEBSOCKET, TRANSPORT_UDP, or TRANSPORT_LOCAL_DEBUG in config.h"
 #endif
 
 // ============================================================
@@ -324,6 +345,9 @@ void setup() {
   }
 
   transport_init();
+#if defined(TRANSPORT_LOCAL_DEBUG)
+  DEBUG_LOG("[DBG] *** LOCAL DEBUG MODE — no host connection, verbose event logging ***");
+#endif
   DEBUG_LOG("[DBG] Setup complete");
 }
 
@@ -343,6 +367,14 @@ void loop() {
       if (abs(delta) > SLIDER_DEADBAND) {
         lastSliderValues[i] = value;
         sendSlider(i, value);
+#if defined(TRANSPORT_LOCAL_DEBUG)
+        Serial.print("[SLIDER] idx=");
+        Serial.print(i);
+        Serial.print("  raw=");
+        Serial.print(value);
+        Serial.print("  delta=");
+        Serial.println(delta);
+#endif
       }
     }
   }
@@ -362,7 +394,13 @@ void loop() {
         (buttonRawStates[i] != buttonReportedStates[i])) {
       buttonReportedStates[i] = buttonRawStates[i];
       // INPUT_PULLUP: LOW = pressed, HIGH = released
-      sendButton(i, buttonReportedStates[i] == LOW ? 0x01 : 0x00);
+      bool pressed = (buttonReportedStates[i] == LOW);
+      sendButton(i, pressed ? 0x01 : 0x00);
+#if defined(TRANSPORT_LOCAL_DEBUG)
+      Serial.print("[BUTTON] idx=");
+      Serial.print(i);
+      Serial.println(pressed ? "  state=PRESSED" : "  state=RELEASED");
+#endif
     }
   }
 
