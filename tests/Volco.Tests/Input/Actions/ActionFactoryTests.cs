@@ -61,5 +61,7 @@ public class ActionFactoryTests
         public List<AudioDeviceInfo> GetOutputDevices() => new();
         public List<AudioDeviceInfo> GetInputDevices() => new();
         public List<string> GetActiveProcessNames() => new();
+        public bool IsOutputMuted(string? deviceId = null) => false;
+        public bool IsInputMuted() => false;
     }
 }
