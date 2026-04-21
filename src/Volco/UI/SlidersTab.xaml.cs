@@ -141,7 +141,11 @@ public sealed partial class SlidersTab : Page
         }
 
         SliderRepeater.ItemsSource = _viewModels;
-        _isLoading = false;
+        // Defer clearing the loading flag until after ItemsRepeater's deferred render pass
+        // completes. Without this, Loaded/SelectionChanged events from Device_Loaded and
+        // MappingType_Loaded fire with _isLoading=false and trigger spurious saves.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+            () => _isLoading = false);
     }
 
     private void MappingType_Changed(object sender, SelectionChangedEventArgs e)
@@ -208,6 +212,21 @@ public sealed partial class SlidersTab : Page
         {
             vm.IsUnmapped = cb.IsChecked == true;
             SaveSliderConfig(vm);
+        }
+    }
+
+    private void MappingType_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is ComboBox combo && combo.DataContext is SliderViewModel vm)
+        {
+            foreach (ComboBoxItem item in combo.Items)
+            {
+                if (item.Tag is string tag && tag == vm.TypeTag)
+                {
+                    combo.SelectedItem = item;
+                    break;
+                }
+            }
         }
     }
 
