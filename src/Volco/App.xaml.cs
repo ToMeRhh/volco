@@ -157,6 +157,8 @@ public partial class App : Application
     private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
     {
         AppLog.Info($"Connection status changed: {status}");
+        if (status == ConnectionStatus.Connected)
+            PushControllerState();
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
@@ -192,6 +194,51 @@ public partial class App : Application
         if (actionConfig == null) return;
         var action = ActionFactory.Create(actionConfig, _audioManager, _configManager);
         action?.Execute();
+
+        // Push updated state to controller after action changes audio state
+        PushControllerState();
+    }
+
+    private void PushControllerState()
+    {
+        if (_connection?.Status != ConnectionStatus.Connected) return;
+
+        var config = _configManager.Config;
+
+        // Push mute state for mute buttons (indices 0 and 1)
+        for (int i = 0; i < Math.Min(2, config.Buttons.Count); i++)
+        {
+            var isMuted = GetMuteStateForButton(config.Buttons[i]);
+            if (isMuted.HasValue)
+                _connection.Send(ProtocolEncoder.EncodeMuteState(i, isMuted.Value));
+        }
+
+        // Push active device
+        var currentDevice = _audioManager.GetDefaultOutputDeviceName();
+        if (currentDevice != null)
+        {
+            var devices = config.OutputDevices;
+            int activeIndex = currentDevice.Contains(devices.Device1, StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+            _connection.Send(ProtocolEncoder.EncodeActiveDevice(activeIndex));
+        }
+    }
+
+    private bool? GetMuteStateForButton(ButtonConfig buttonConfig)
+    {
+        // Scan all press types for the first mute-related action
+        foreach (var actionConfig in new[] { buttonConfig.SinglePress, buttonConfig.DoublePress, buttonConfig.LongPress })
+        {
+            switch (actionConfig.Action)
+            {
+                case ButtonActionType.MuteCurrentOutput:
+                    return _audioManager.IsOutputMuted();
+                case ButtonActionType.MuteSpecificDevice:
+                    return _audioManager.IsOutputMuted(actionConfig.DeviceId);
+                case ButtonActionType.MuteCurrentInput:
+                    return _audioManager.IsInputMuted();
+            }
+        }
+        return null;
     }
 
     private void OnConfigChanged(object? sender, EventArgs e)

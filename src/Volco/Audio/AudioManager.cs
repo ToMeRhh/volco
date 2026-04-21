@@ -144,6 +144,41 @@ public class AudioManager : IAudioManager
         return names.ToList();
     }
 
+    public bool IsOutputMuted(string? deviceId = null)
+    {
+        try
+        {
+            MMDevice? device;
+            if (deviceId != null)
+            {
+                device = FindDeviceByName(DataFlow.Render, deviceId);
+                if (device == null) return false;
+            }
+            else
+            {
+                device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            }
+            return device.AudioEndpointVolume.Mute;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public bool IsInputMuted()
+    {
+        try
+        {
+            var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+            return device.AudioEndpointVolume.Mute;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private MMDevice? FindDeviceByName(DataFlow flow, string name)
     {
         return _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active)

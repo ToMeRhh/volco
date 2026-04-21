@@ -13,6 +13,7 @@ public class UdpConnection : IControllerConnection
     private UdpClient? _udpClient;
     private CancellationTokenSource? _cts;
     private System.Threading.Timer? _inactivityTimer;
+    private IPEndPoint? _remoteEndPoint;
 
     public event EventHandler<ControllerMessage>? MessageReceived;
     public event EventHandler<ConnectionStatus>? StatusChanged;
@@ -47,6 +48,7 @@ public class UdpConnection : IControllerConnection
             try
             {
                 var result = await _udpClient.ReceiveAsync(ct);
+                _remoteEndPoint = result.RemoteEndPoint;
                 OnPacketReceived();
                 _parser.FeedBytes(result.Buffer);
             }
@@ -81,6 +83,12 @@ public class UdpConnection : IControllerConnection
         StatusChanged?.Invoke(this, status);
     }
 
+    public void Send(byte[] data)
+    {
+        if (_udpClient != null && _remoteEndPoint != null)
+            _udpClient.Send(data, data.Length, _remoteEndPoint);
+    }
+
     public void Disconnect()
     {
         _cts?.Cancel();
@@ -90,6 +98,7 @@ public class UdpConnection : IControllerConnection
         _udpClient = null;
         _cts?.Dispose();
         _cts = null;
+        _remoteEndPoint = null;
         SetStatus(ConnectionStatus.Disconnected);
     }
 

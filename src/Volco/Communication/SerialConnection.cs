@@ -48,6 +48,12 @@ public class SerialConnection : IControllerConnection
         _parser.FeedBytes(buffer);
     }
 
+    public void Send(byte[] data)
+    {
+        if (_serialPort is { IsOpen: true })
+            _serialPort.Write(data, 0, data.Length);
+    }
+
     public void Disconnect()
     {
         if (_serialPort is { IsOpen: true })

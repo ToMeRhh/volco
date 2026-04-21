@@ -22,7 +22,7 @@ public enum ButtonActionType
 public class SerialConfig
 {
     public string ComPort { get; set; } = "COM3";
-    public int BaudRate { get; set; } = 9600;
+    public int BaudRate { get; set; } = 115200;
 }
 
 public class UdpConfig

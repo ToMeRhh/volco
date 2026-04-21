@@ -42,14 +42,24 @@ Controller (hardware)
 
 ### Wire Protocol
 
-The controller sends framed binary messages:
+The controller and server exchange framed binary messages:
 
 | Byte | Field |
 |------|-------|
 | 0 | Start marker `0xAA` |
 | 1 | Payload length |
-| 2..N | Payload (slider: type + index + 16-bit value, button: type + index + state) |
-| N+1 | XOR checksum |
+| 2..N | Payload |
+| N+1 | XOR checksum (XOR of all payload bytes) |
+
+#### Controller → Server
+
+**Slider** (payload: 4 bytes): `0x01 | index | value_high | value_low`
+- Index: 0–4
+- Value: 12-bit ADC (0–4095) as 16-bit big-endian
+
+**Button** (payload: 3 bytes): `0x02 | index | state`
+- Index: 0–2
+- State: `0x01` pressed, `0x00` released
 
 ### Button Press Detection
 
@@ -57,6 +67,17 @@ Raw pressed/released events are classified on the PC side:
 - **Single press** — release, then 300ms timeout with no second press
 - **Double press** — two press-release cycles within 300ms
 - **Long press** — held for 500ms, fires immediately
+
+#### Server → Controller
+
+**Mute state** (payload: 3 bytes): `0x03 | button_index | mute_state`
+- Button index: 0–1 (mute buttons)
+- Mute state: `0x01` muted (LED on), `0x00` unmuted (LED off)
+
+**Active device** (payload: 2 bytes): `0x04 | device_index`
+- Device index: `0` or `1`
+
+The server pushes state on controller connect (initial sync) and whenever mute or active device changes.
 
 ### Configurable Button Actions
 

@@ -16,4 +16,5 @@ public interface IControllerConnection : IDisposable
     ConnectionStatus Status { get; }
     void Connect();
     void Disconnect();
+    void Send(byte[] data);
 }

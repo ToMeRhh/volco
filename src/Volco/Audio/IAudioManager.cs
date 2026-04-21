@@ -18,4 +18,6 @@ public interface IAudioManager
     List<AudioDeviceInfo> GetOutputDevices();
     List<AudioDeviceInfo> GetInputDevices();
     List<string> GetActiveProcessNames();
+    bool IsOutputMuted(string? deviceId = null);
+    bool IsInputMuted();
 }

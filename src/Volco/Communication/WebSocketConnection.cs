@@ -11,6 +11,7 @@ public class WebSocketConnection : IControllerConnection
     private HttpListener? _httpListener;
     private CancellationTokenSource? _cts;
     private int _clientCount;
+    private WebSocket? _activeClient;
 
     public event EventHandler<ControllerMessage>? MessageReceived;
     public event EventHandler<ConnectionStatus>? StatusChanged;
@@ -79,6 +80,8 @@ public class WebSocketConnection : IControllerConnection
         if (Interlocked.Increment(ref _clientCount) == 1)
             SetStatus(ConnectionStatus.Connected);
 
+        _activeClient = webSocket;
+
         var buffer = new byte[1024];
         try
         {
@@ -104,7 +107,16 @@ public class WebSocketConnection : IControllerConnection
             AppLog.Info("WebSocket connection closed");
             if (Interlocked.Decrement(ref _clientCount) == 0 && !ct.IsCancellationRequested)
                 SetStatus(ConnectionStatus.Disconnected);
+            if (_activeClient == webSocket)
+                _activeClient = null;
         }
+    }
+
+    public void Send(byte[] data)
+    {
+        var ws = _activeClient;
+        if (ws?.State == WebSocketState.Open)
+            _ = ws.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary, true, CancellationToken.None);
     }
 
     private void SetStatus(ConnectionStatus status)
