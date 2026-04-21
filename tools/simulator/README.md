@@ -12,12 +12,21 @@ A minimalistic web-based simulator to test the Volco application without physica
 6.  Click **Connect** in the simulator.
 7.  Move the sliders and click the buttons to see Volco react!
 
+## Features
+
+- 5 vertical sliders (12-bit ADC range, 0–4095)
+- 3 buttons: 2 mute buttons with LED indicators, 1 device selector with 2 LED indicators
+- LED state feedback — mute LEDs and device selector LEDs update in response to server messages
+- Auto-reconnect option with 3-second interval
+
 ## Protocol Implementation
 
-The simulator implements the Volco binary protocol:
+The simulator implements the full bidirectional Volco binary protocol:
 - **Framing**: `0xAA` [Length] [Payload] [XOR Checksum]
-- **Slider Payload**: `0x01` [Index] [Value High Byte] [Value Low Byte]
-- **Button Payload**: `0x02` [Index] [State (0 or 1)]
+- **Slider** (outbound): `0x01` [Index] [Value High] [Value Low] — 12-bit (0–4095)
+- **Button** (outbound): `0x02` [Index] [State (0 or 1)]
+- **Mute State** (inbound): `0x03` [Button Index] [Muted (0 or 1)]
+- **Active Device** (inbound): `0x04` [Device Index]
 
 ## Troubleshooting
 
