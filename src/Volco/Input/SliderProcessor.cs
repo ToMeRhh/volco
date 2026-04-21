@@ -22,7 +22,7 @@ public class SliderProcessor : IDisposable
 
     public static float MapAdcToVolume(ushort adcValue, bool invert)
     {
-        float volume = adcValue / 1023f;
+        float volume = adcValue / 4095f;
         return invert ? 1f - volume : volume;
     }
 

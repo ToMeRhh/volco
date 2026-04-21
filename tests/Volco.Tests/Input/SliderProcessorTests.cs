@@ -16,13 +16,13 @@ public class SliderProcessorTests
     [Fact]
     public void MapAdcToVolume_MaxReturnsOne()
     {
-        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(1023, invert: false), 3);
+        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095, invert: false), 3);
     }
 
     [Fact]
     public void MapAdcToVolume_MidReturnsHalf()
     {
-        Assert.Equal(0.5f, SliderProcessor.MapAdcToVolume(512, invert: false), 1);
+        Assert.Equal(0.5f, SliderProcessor.MapAdcToVolume(2048, invert: false), 1);
     }
 
     [Fact]
