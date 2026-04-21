@@ -6,59 +6,72 @@
     xmlns:local="using:Volco.UI">
 
     <ScrollViewer>
-        <StackPanel Padding="24" Spacing="16">
-            <TextBlock Text="Slider Mappings" Style="{StaticResource SubtitleTextBlockStyle}" />
+        <StackPanel Padding="24"
+                Spacing="16">
+            <TextBlock Text="Slider Mappings"
+                    Style="{StaticResource SubtitleTextBlockStyle}"/>
 
             <ItemsRepeater x:Name="SliderRepeater">
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="local:SliderViewModel">
-                        <Border Padding="12" Margin="0,0,0,8"
+                        <Border Padding="12"
+                                Margin="0,0,0,8"
                                 CornerRadius="8"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1">
                             <StackPanel Spacing="8">
                                 <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}">
-                                    <Run Text="Slider " /><Run Text="{Binding Index}" />
+                                    <Run Text="Slider "/><Run Text="{Binding Index}"/>
                                 </TextBlock>
-                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                <StackPanel Orientation="Horizontal"
+                                        Spacing="16">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="Mapping Type" />
+                                        <TextBlock Text="Mapping Type"/>
                                         <ComboBox Width="150"
                                                   SelectionChanged="MappingType_Changed">
-                                            <ComboBoxItem Content="Processes" Tag="Processes" IsSelected="{Binding IsProcessesSelected, Mode=OneWay}" />
-                                            <ComboBoxItem Content="Output Device" Tag="Device" IsSelected="{Binding IsDeviceSelected, Mode=OneWay}" />
+                                            <ComboBoxItem Content="Processes"
+                                                    Tag="Processes"
+                                                    IsSelected="{Binding IsProcessesSelected, Mode=OneWay}"/>
+                                            <ComboBoxItem Content="Output Device"
+                                                    Tag="Device"
+                                                    IsSelected="{Binding IsDeviceSelected, Mode=OneWay}"/>
                                         </ComboBox>
                                     </StackPanel>
 
                                     <!-- Processes Config -->
-                                    <StackPanel Spacing="4" Visibility="{Binding IsProcessesVisible}">
-                                        <TextBlock Text="Processes (comma-separated)" />
+                                    <StackPanel Spacing="4"
+                                            Visibility="{Binding IsProcessesVisible}">
+                                        <TextBlock Text="Processes (comma-separated)"/>
                                         <StackPanel Spacing="4">
                                             <AutoSuggestBox Width="250"
                                                             PlaceholderText="e.g. spotify.exe, chrome.exe"
                                                             Text="{Binding ProcessesText, Mode=TwoWay}"
                                                             IsEnabled="{Binding IsProcessesInputEnabled}"
                                                             TextChanged="Processes_TextChanged"
-                                                            SuggestionChosen="Processes_SuggestionChosen" />
+                                                            SuggestionChosen="Processes_SuggestionChosen"/>
                                             <CheckBox Content="All Non-Mapped"
                                                       IsChecked="{Binding IsUnmapped, Mode=TwoWay}"
-                                                      Checked="Unmapped_Changed" Unchecked="Unmapped_Changed" />
+                                                      Checked="Unmapped_Changed"
+                                                    Unchecked="Unmapped_Changed"/>
                                         </StackPanel>
                                     </StackPanel>
 
                                     <!-- Device Config -->
-                                    <StackPanel Spacing="4" Visibility="{Binding IsDeviceVisible}">
-                                        <TextBlock Text="Output Device" />
+                                    <StackPanel Spacing="4"
+                                            Visibility="{Binding IsDeviceVisible}">
+                                        <TextBlock Text="Output Device"/>
                                         <ComboBox Width="250"
                                                   Loaded="Device_Loaded"
-                                                  SelectionChanged="Device_Changed" />
+                                                  SelectionChanged="Device_Changed"/>
                                     </StackPanel>
 
                                     <CheckBox Content="Invert"
                                               IsChecked="{Binding Invert, Mode=TwoWay}"
-                                              Checked="Invert_Changed" Unchecked="Invert_Changed"
-                                              VerticalAlignment="Top" Margin="0,24,0,0" />
+                                              Checked="Invert_Changed"
+                                            Unchecked="Invert_Changed"
+                                              VerticalAlignment="Top"
+                                            Margin="0,24,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
