@@ -25,9 +25,10 @@
                                     <StackPanel Spacing="4">
                                         <TextBlock Text="Mapping Type" />
                                         <ComboBox Width="150"
+                                                  Loaded="MappingType_Loaded"
                                                   SelectionChanged="MappingType_Changed">
-                                            <ComboBoxItem Content="Processes" Tag="Processes" IsSelected="{Binding IsProcessesSelected, Mode=OneWay}" />
-                                            <ComboBoxItem Content="Output Device" Tag="Device" IsSelected="{Binding IsDeviceSelected, Mode=OneWay}" />
+                                            <ComboBoxItem Content="Processes" Tag="Processes" />
+                                            <ComboBoxItem Content="Output Device" Tag="Device" />
                                         </ComboBox>
                                     </StackPanel>
 
