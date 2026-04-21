@@ -86,7 +86,10 @@ public class WebSocketConnection : IControllerConnection
             {
                 var result = await webSocket.ReceiveAsync(buffer, ct);
                 if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, ct);
                     break;
+                }
                 if (result.MessageType == WebSocketMessageType.Binary)
                     _parser.FeedBytes(buffer.AsSpan(0, result.Count));
             }
