@@ -11,6 +11,7 @@ internal static class AppLog
     private static readonly ConcurrentQueue<string> Queue = new();
     private static readonly Timer FlushTimer;
 
+
     static AppLog()
     {
         var dir = Path.GetDirectoryName(LogPath)!;
@@ -25,6 +26,7 @@ internal static class AppLog
     private static void Enqueue(string level, string message)
     {
         var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
+        System.Diagnostics.Debug.WriteLine(line);
         Queue.Enqueue(line);
     }
 
