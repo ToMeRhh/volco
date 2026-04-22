@@ -15,8 +15,8 @@ public class AudioManager : IAudioManager
     {
         volume = Math.Clamp(volume, 0f, 1f);
         using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        // MMDevice and SessionCollection must be disposed to avoid COM resource leaks
-        using var sessions = device.AudioSessionManager.Sessions;
+        // MMDevice must be disposed to avoid COM resource leaks
+        var sessions = device.AudioSessionManager.Sessions;
 
         for (int i = 0; i < sessions.Count; i++)
         {
@@ -33,8 +33,8 @@ public class AudioManager : IAudioManager
     {
         volume = Math.Clamp(volume, 0f, 1f);
         using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        // MMDevice and SessionCollection must be disposed to avoid COM resource leaks
-        using var sessions = device.AudioSessionManager.Sessions;
+        // MMDevice must be disposed to avoid COM resource leaks
+        var sessions = device.AudioSessionManager.Sessions;
 
         for (int i = 0; i < sessions.Count; i++)
         {
@@ -133,8 +133,8 @@ public class AudioManager : IAudioManager
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        // MMDevice and SessionCollection must be disposed to avoid COM resource leaks
-        using var sessions = device.AudioSessionManager.Sessions;
+        // MMDevice must be disposed to avoid COM resource leaks
+        var sessions = device.AudioSessionManager.Sessions;
 
         for (int i = 0; i < sessions.Count; i++)
         {
