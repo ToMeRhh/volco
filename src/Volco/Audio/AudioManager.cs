@@ -7,17 +7,20 @@ public class AudioManager : IAudioManager
 {
     private readonly MMDeviceEnumerator _enumerator = new();
     private readonly Dictionary<uint, (string Name, DateTime CachedAt)> _processNameCache = new();
+    private readonly Dictionary<(DataFlow, string), (string Id, DateTime CachedAt)> _deviceIdCache = new();
     private static readonly TimeSpan ProcessCacheTtl = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DeviceCacheTtl = TimeSpan.FromSeconds(30);
 
     public void SetProcessVolume(string processName, float volume)
     {
         volume = Math.Clamp(volume, 0f, 1f);
-        var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        var sessions = device.AudioSessionManager.Sessions;
+        using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        // MMDevice and SessionCollection must be disposed to avoid COM resource leaks
+        using var sessions = device.AudioSessionManager.Sessions;
 
         for (int i = 0; i < sessions.Count; i++)
         {
-            var session = sessions[i];
+            using var session = sessions[i];
             var sessionProcessName = GetProcessName(session);
             if (string.Equals(sessionProcessName, processName, StringComparison.OrdinalIgnoreCase))
             {
@@ -29,12 +32,13 @@ public class AudioManager : IAudioManager
     public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume)
     {
         volume = Math.Clamp(volume, 0f, 1f);
-        var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        var sessions = device.AudioSessionManager.Sessions;
+        using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        // MMDevice and SessionCollection must be disposed to avoid COM resource leaks
+        using var sessions = device.AudioSessionManager.Sessions;
 
         for (int i = 0; i < sessions.Count; i++)
         {
-            var session = sessions[i];
+            using var session = sessions[i];
             var sessionProcessName = GetProcessName(session);
             if (string.IsNullOrEmpty(sessionProcessName)) continue;
 
@@ -52,15 +56,9 @@ public class AudioManager : IAudioManager
     public void SetDeviceVolume(float volume, string? deviceName = null)
     {
         volume = Math.Clamp(volume, 0f, 1f);
-        MMDevice? device;
-        if (!string.IsNullOrEmpty(deviceName))
-        {
-            device = FindDeviceByName(DataFlow.Render, deviceName);
-        }
-        else
-        {
-            device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        }
+        using var device = !string.IsNullOrEmpty(deviceName)
+            ? FindDeviceByName(DataFlow.Render, deviceName)
+            : _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
 
         if (device != null)
         {
@@ -70,16 +68,9 @@ public class AudioManager : IAudioManager
 
     public void ToggleMuteOutput(string? deviceId = null)
     {
-        MMDevice? device;
-        if (deviceId != null)
-        {
-            device = FindDeviceByName(DataFlow.Render, deviceId);
-            if (device == null) return;
-        }
-        else
-        {
-            device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        }
+        using var device = deviceId != null
+            ? FindDeviceByName(DataFlow.Render, deviceId)
+            : _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
 
         if (device != null)
             device.AudioEndpointVolume.Mute = !device.AudioEndpointVolume.Mute;
@@ -87,13 +78,13 @@ public class AudioManager : IAudioManager
 
     public void ToggleMuteInput()
     {
-        var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+        using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
         device.AudioEndpointVolume.Mute = !device.AudioEndpointVolume.Mute;
     }
 
     public void SetDefaultOutputDevice(string deviceName)
     {
-        var device = FindDeviceByName(DataFlow.Render, deviceName);
+        using var device = FindDeviceByName(DataFlow.Render, deviceName);
         if (device == null) return;
 
         var policyConfig = (IPolicyConfig)new PolicyConfigClient();
@@ -105,7 +96,7 @@ public class AudioManager : IAudioManager
     {
         try
         {
-            var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
             return device.FriendlyName;
         }
         catch
@@ -116,27 +107,39 @@ public class AudioManager : IAudioManager
 
     public List<AudioDeviceInfo> GetOutputDevices()
     {
-        return _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-            .Select(d => new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName })
-            .ToList();
+        var devices = _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+        var result = new List<AudioDeviceInfo>();
+        foreach (var d in devices)
+        {
+            result.Add(new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName });
+            d.Dispose();
+        }
+        return result;
     }
 
     public List<AudioDeviceInfo> GetInputDevices()
     {
-        return _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .Select(d => new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName })
-            .ToList();
+        var devices = _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
+        var result = new List<AudioDeviceInfo>();
+        foreach (var d in devices)
+        {
+            result.Add(new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName });
+            d.Dispose();
+        }
+        return result;
     }
 
     public List<string> GetActiveProcessNames()
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        var sessions = device.AudioSessionManager.Sessions;
+        using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        // MMDevice and SessionCollection must be disposed to avoid COM resource leaks
+        using var sessions = device.AudioSessionManager.Sessions;
 
         for (int i = 0; i < sessions.Count; i++)
         {
-            var name = GetProcessName(sessions[i]);
+            using var session = sessions[i];
+            var name = GetProcessName(session);
             if (!string.IsNullOrEmpty(name))
                 names.Add(name);
         }
@@ -148,17 +151,11 @@ public class AudioManager : IAudioManager
     {
         try
         {
-            MMDevice? device;
-            if (deviceId != null)
-            {
-                device = FindDeviceByName(DataFlow.Render, deviceId);
-                if (device == null) return false;
-            }
-            else
-            {
-                device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            }
-            return device.AudioEndpointVolume.Mute;
+            using var device = deviceId != null
+                ? FindDeviceByName(DataFlow.Render, deviceId)
+                : _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+
+            return device?.AudioEndpointVolume.Mute ?? false;
         }
         catch
         {
@@ -170,7 +167,7 @@ public class AudioManager : IAudioManager
     {
         try
         {
-            var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+            using var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
             return device.AudioEndpointVolume.Mute;
         }
         catch
@@ -181,8 +178,37 @@ public class AudioManager : IAudioManager
 
     private MMDevice? FindDeviceByName(DataFlow flow, string name)
     {
-        return _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active)
-            .FirstOrDefault(d => d.FriendlyName.Contains(name, StringComparison.OrdinalIgnoreCase));
+        var now = DateTime.UtcNow;
+        // Optimization: Use cached device ID to avoid expensive COM enumeration
+        if (_deviceIdCache.TryGetValue((flow, name), out var cached) && now - cached.CachedAt < DeviceCacheTtl)
+        {
+            try
+            {
+                return _enumerator.GetDevice(cached.Id);
+            }
+            catch
+            {
+                _deviceIdCache.Remove((flow, name));
+            }
+        }
+
+        // COM Enumeration is O(N) and expensive; manually dispose non-matches to avoid leaks
+        var devices = _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active);
+        MMDevice? foundDevice = null;
+        foreach (var device in devices)
+        {
+            if (foundDevice == null && device.FriendlyName.Contains(name, StringComparison.OrdinalIgnoreCase))
+            {
+                foundDevice = device;
+                _deviceIdCache[(flow, name)] = (device.ID, now);
+            }
+            else
+            {
+                device.Dispose();
+            }
+        }
+
+        return foundDevice;
     }
 
     private string GetProcessName(AudioSessionControl session)
@@ -196,7 +222,7 @@ public class AudioManager : IAudioManager
             if (_processNameCache.TryGetValue(pid, out var cached) && now - cached.CachedAt < ProcessCacheTtl)
                 return cached.Name;
 
-            var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
             var name = process.ProcessName + ".exe";
             _processNameCache[pid] = (name, now);
             return name;
