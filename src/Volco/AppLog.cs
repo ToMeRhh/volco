@@ -25,7 +25,7 @@ internal static class AppLog
 
     private static void Enqueue(string level, string message)
     {
-        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
+        var line = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
         System.Diagnostics.Debug.WriteLine(line);
         Queue.Enqueue(line);
     }
