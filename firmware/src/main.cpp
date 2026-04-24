@@ -49,6 +49,7 @@ static const uint8_t muteLedPins[NUM_MUTE_BUTTONS] = {MUTE_BTN_0_LED_PIN,
 // Sliders
 static uint16_t lastSliderValues[NUM_SLIDERS];
 static unsigned long lastSliderReadTime = 0;
+static float smoothedValues[NUM_SLIDERS] = {0};
 
 // Buttons (debounce)
 static bool buttonRawStates[3];            // last raw reading per button
@@ -364,18 +365,28 @@ void loop() {
   if (now - lastSliderReadTime >= SLIDER_READ_INTERVAL_MS) {
     lastSliderReadTime = now;
     for (int i = 0; i < NUM_SLIDERS; i++) {
-      uint16_t value = analogRead(sliderPins[i]);
-      int16_t delta = (int16_t)value - (int16_t)lastSliderValues[i];
+      // 1. Get raw reading
+      uint16_t rawValue = analogRead(sliderPins[i]);
+
+      // 2. Exponential Moving Average (EMA) - Non-blocking smoothing
+      // Formula: Smooth = (Current * Weight) + (Previous * (1 - Weight))
+      smoothedValues[i] = (rawValue * FILTER_WEIGHT) +
+                          (smoothedValues[i] * (1.0 - FILTER_WEIGHT));
+
+      // 3. Cast to integer for comparison
+      uint16_t currentFilteredValue = (uint16_t)smoothedValues[i];
+
+      // 4. Deadband check using the smoothed value
+      int16_t delta =
+          (int16_t)currentFilteredValue - (int16_t)lastSliderValues[i];
+
       if (abs(delta) > SLIDER_DEADBAND) {
-        lastSliderValues[i] = value;
-        sendSlider(i, value);
+        lastSliderValues[i] = currentFilteredValue;
+        sendSlider(i, currentFilteredValue);
+
 #if defined(TRANSPORT_LOCAL_DEBUG)
-        Serial.print("[SLIDER] idx=");
-        Serial.print(i);
-        Serial.print("  raw=");
-        Serial.print(value);
-        Serial.print("  delta=");
-        Serial.println(delta);
+        Serial.printf("[SLIDER] idx=%d  filtered=%d  delta=%d\n", i,
+                      currentFilteredValue, delta);
 #endif
       }
     }

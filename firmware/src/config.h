@@ -3,19 +3,19 @@
 // ============================================================
 // Transport — uncomment exactly one
 // ============================================================
-#define TRANSPORT_SERIAL
+// #define TRANSPORT_SERIAL
 // #define TRANSPORT_WEBSOCKET
-// #define TRANSPORT_UDP
+#define TRANSPORT_UDP
 // #define TRANSPORT_LOCAL_DEBUG  // No host needed. Verbose serial logging
 // only.
 
 // ============================================================
 // WiFi — only used for TRANSPORT_WEBSOCKET and TRANSPORT_UDP
 // ============================================================
-#define WIFI_SSID "MyNetwork"
-#define WIFI_PASSWORD "MyPassword"
-#define SERVER_IP "192.168.1.100"
-#define SERVER_PORT 8765      // WebSocket port or UDP port
+#define WIFI_SSID "SSID"
+#define WIFI_PASSWORD "PASSWORD"
+#define SERVER_IP "192.168.1.10"
+#define SERVER_PORT 12345     // WebSocket port or UDP port
 #define UDP_LOCAL_PORT 12346  // Local port for receiving UDP from server
 
 // ============================================================
@@ -51,6 +51,11 @@
 #define NUM_SLIDERS 5
 #define NUM_MUTE_BUTTONS 2
 #define DEBOUNCE_MS 30
-#define SLIDER_DEADBAND 20  // ADC units — ignore changes smaller than this
-#define SLIDER_READ_INTERVAL_MS 5   // How often to sample sliders (ms)
+#define SLIDER_DEADBAND 25  // ADC units — ignore changes smaller than this
+#define SLIDER_READ_INTERVAL_MS 10  // How often to sample sliders (ms)
 #define RECONNECT_INTERVAL_MS 3000  // How often to check connection (ms)
+
+#define SLIDER_DEADBAND \
+  25  // Slightly higher to account for smoothed fluctuations
+#define FILTER_WEIGHT \
+  0.2  // Smoothing factor (0.0 to 1.0). Lower = smoother but slower.
