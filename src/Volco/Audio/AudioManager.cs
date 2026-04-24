@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 
@@ -12,9 +13,12 @@ public class AudioManager : IAudioManager
     public void SetProcessVolume(string processName, float volume)
     {
         volume = Math.Clamp(volume, 0f, 1f);
+        var sw = Stopwatch.StartNew();
         var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         var sessions = device.AudioSessionManager.Sessions;
+        AppLog.Debug($"[Audio] SetProcessVolume({processName}, {volume:F3}): GetDefaultAudioEndpoint+Sessions in {sw.ElapsedMilliseconds}ms, sessionCount={sessions.Count}");
 
+        int matched = 0;
         for (int i = 0; i < sessions.Count; i++)
         {
             var session = sessions[i];
@@ -22,16 +26,21 @@ public class AudioManager : IAudioManager
             if (string.Equals(sessionProcessName, processName, StringComparison.OrdinalIgnoreCase))
             {
                 session.SimpleAudioVolume.Volume = volume;
+                matched++;
             }
         }
+        AppLog.Debug($"[Audio] SetProcessVolume({processName}): matched={matched}, total={sw.ElapsedMilliseconds}ms");
     }
 
     public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume)
     {
         volume = Math.Clamp(volume, 0f, 1f);
+        var sw = Stopwatch.StartNew();
         var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         var sessions = device.AudioSessionManager.Sessions;
+        AppLog.Debug($"[Audio] SetProcessVolumes([{string.Join(",", processNames)}], {volume:F3}): GetDefaultAudioEndpoint+Sessions in {sw.ElapsedMilliseconds}ms, sessionCount={sessions.Count}");
 
+        int matched = 0;
         for (int i = 0; i < sessions.Count; i++)
         {
             var session = sessions[i];
@@ -43,15 +52,18 @@ public class AudioManager : IAudioManager
                 if (string.Equals(sessionProcessName, processName, StringComparison.OrdinalIgnoreCase))
                 {
                     session.SimpleAudioVolume.Volume = volume;
+                    matched++;
                     break;
                 }
             }
         }
+        AppLog.Debug($"[Audio] SetProcessVolumes: matched={matched}, total={sw.ElapsedMilliseconds}ms");
     }
 
     public void SetDeviceVolume(float volume, string? deviceName = null)
     {
         volume = Math.Clamp(volume, 0f, 1f);
+        var sw = Stopwatch.StartNew();
         MMDevice? device;
         if (!string.IsNullOrEmpty(deviceName))
         {
@@ -61,11 +73,13 @@ public class AudioManager : IAudioManager
         {
             device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         }
+        AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}, {volume:F3}): device lookup in {sw.ElapsedMilliseconds}ms, found={device != null}");
 
         if (device != null)
         {
             device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
         }
+        AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}): total={sw.ElapsedMilliseconds}ms");
     }
 
     public void ToggleMuteOutput(string? deviceId = null)
@@ -196,9 +210,11 @@ public class AudioManager : IAudioManager
             if (_processNameCache.TryGetValue(pid, out var cached) && now - cached.CachedAt < ProcessCacheTtl)
                 return cached.Name;
 
+            var sw = Stopwatch.StartNew();
             var process = System.Diagnostics.Process.GetProcessById((int)pid);
             var name = process.ProcessName + ".exe";
             _processNameCache[pid] = (name, now);
+            AppLog.Debug($"[Audio] GetProcessName cache miss: pid={pid} -> {name} in {sw.ElapsedMilliseconds}ms");
             return name;
         }
         catch

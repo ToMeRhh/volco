@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Volco.Audio;
 using Volco.Config;
 
@@ -73,22 +74,28 @@ public class SliderProcessor : IDisposable
 
             var sliderConfig = config.Sliders[sliderIndex];
             var volume = MapAdcToVolume(value.Value, sliderConfig.Invert);
+            var sw = Stopwatch.StartNew();
 
             switch (sliderConfig.Type)
             {
                 case SliderMappingType.Device:
+                    AppLog.Debug($"[Slider] index={sliderIndex} type=Device device={sliderConfig.DeviceName} adc={value} vol={volume:F3}");
                     _audio.SetDeviceVolume(volume, sliderConfig.DeviceName);
                     break;
 
                 case SliderMappingType.Processes:
+                    AppLog.Debug($"[Slider] index={sliderIndex} type=Processes procs=[{string.Join(",", sliderConfig.Processes)}] adc={value} vol={volume:F3}");
                     _audio.SetProcessVolumes(sliderConfig.Processes, volume);
                     break;
 
                 case SliderMappingType.Unmapped:
                     var unmapped = GetUnmappedProcesses(config, _sessionMonitor.ActiveProcesses);
+                    AppLog.Debug($"[Slider] index={sliderIndex} type=Unmapped unmappedCount={unmapped.Count} adc={value} vol={volume:F3}");
                     _audio.SetProcessVolumes(unmapped, volume);
                     break;
             }
+
+            AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
         }
     }
 
