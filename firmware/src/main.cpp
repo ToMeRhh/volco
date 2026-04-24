@@ -346,7 +346,9 @@ void setup() {
 
   transport_init();
 #if defined(TRANSPORT_LOCAL_DEBUG)
-  DEBUG_LOG("[DBG] *** LOCAL DEBUG MODE — no host connection, verbose event logging ***");
+  DEBUG_LOG(
+      "[DBG] *** LOCAL DEBUG MODE — no host connection, verbose event logging "
+      "***");
 #endif
   DEBUG_LOG("[DBG] Setup complete");
 }
