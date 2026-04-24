@@ -255,7 +255,7 @@ static void handleParsedMessage(const uint8_t* payload, uint8_t len) {
     uint8_t btnIndex = payload[1];
     bool muted = payload[2] != 0;
     if (btnIndex < NUM_MUTE_BUTTONS) {
-      digitalWrite(muteLedPins[btnIndex], muted ? HIGH : LOW);
+      digitalWrite(muteLedPins[btnIndex], muted ? LOW : HIGH);
       DEBUG_LOG("[DBG] Mute btn " + String(btnIndex) + " = " +
                 (muted ? "ON" : "OFF"));
     }
