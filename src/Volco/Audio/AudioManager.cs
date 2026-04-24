@@ -69,7 +69,7 @@ public class AudioManager : IAudioManager
         {
             device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
         }
-        catch (COMException)
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
         {
             InvalidateDeviceCache();
             device = !string.IsNullOrEmpty(deviceName)
@@ -99,7 +99,7 @@ public class AudioManager : IAudioManager
         {
             device.AudioEndpointVolume.Mute = !device.AudioEndpointVolume.Mute;
         }
-        catch (COMException)
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
         {
             InvalidateDeviceCache();
         }
@@ -180,7 +180,7 @@ public class AudioManager : IAudioManager
             }
             return device.AudioEndpointVolume.Mute;
         }
-        catch (COMException)
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
         {
             InvalidateDeviceCache();
             return false;
