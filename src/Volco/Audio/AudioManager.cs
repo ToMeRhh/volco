@@ -130,9 +130,30 @@ public class AudioManager : IAudioManager
         var device = FindDeviceByName(DataFlow.Render, deviceName);
         if (device == null) return;
 
-        var policyConfig = (IPolicyConfig)new PolicyConfigClient();
-        policyConfig.SetDefaultEndpoint(device.ID, (int)Role.Multimedia);
-        policyConfig.SetDefaultEndpoint(device.ID, (int)Role.Communications);
+        // PolicyConfigClient COM object requires STA. Button press callbacks arrive
+        // on thread pool threads (MTA) via Task.Delay continuations, so marshal to
+        // a dedicated STA thread.
+        var deviceId = device.ID;
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var policyConfig = (IPolicyConfig)new PolicyConfigClient();
+                policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Multimedia);
+                policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Communications);
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (error != null)
+            AppLog.Error($"[Audio] SetDefaultOutputDevice failed: {error.Message}");
     }
 
     public string? GetDefaultOutputDeviceName()
