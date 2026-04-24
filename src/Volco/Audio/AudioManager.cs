@@ -8,6 +8,7 @@ public class AudioManager : IAudioManager
 {
     private readonly MMDeviceEnumerator _enumerator = new();
     private readonly Dictionary<uint, (string Name, DateTime CachedAt)> _processNameCache = new();
+    private readonly Dictionary<string, MMDevice> _deviceCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly TimeSpan ProcessCacheTtl = TimeSpan.FromSeconds(5);
 
     public void SetProcessVolume(string processName, float volume)
@@ -75,9 +76,20 @@ public class AudioManager : IAudioManager
         }
         AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}, {volume:F3}): device lookup in {sw.ElapsedMilliseconds}ms, found={device != null}");
 
-        if (device != null)
+        if (device == null) return;
+
+        try
         {
             device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
+        }
+        catch (COMException)
+        {
+            InvalidateDeviceCache();
+            device = !string.IsNullOrEmpty(deviceName)
+                ? FindDeviceByName(DataFlow.Render, deviceName)
+                : _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            if (device != null)
+                device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
         }
         AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}): total={sw.ElapsedMilliseconds}ms");
     }
@@ -95,8 +107,16 @@ public class AudioManager : IAudioManager
             device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         }
 
-        if (device != null)
+        if (device == null) return;
+
+        try
+        {
             device.AudioEndpointVolume.Mute = !device.AudioEndpointVolume.Mute;
+        }
+        catch (COMException)
+        {
+            InvalidateDeviceCache();
+        }
     }
 
     public void ToggleMuteInput()
@@ -174,6 +194,11 @@ public class AudioManager : IAudioManager
             }
             return device.AudioEndpointVolume.Mute;
         }
+        catch (COMException)
+        {
+            InvalidateDeviceCache();
+            return false;
+        }
         catch
         {
             return false;
@@ -195,8 +220,22 @@ public class AudioManager : IAudioManager
 
     private MMDevice? FindDeviceByName(DataFlow flow, string name)
     {
-        return _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active)
+        var cacheKey = $"{flow}:{name}";
+        if (_deviceCache.TryGetValue(cacheKey, out var cached))
+            return cached;
+
+        var device = _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active)
             .FirstOrDefault(d => d.FriendlyName.Contains(name, StringComparison.OrdinalIgnoreCase));
+
+        if (device != null)
+            _deviceCache[cacheKey] = device;
+
+        return device;
+    }
+
+    private void InvalidateDeviceCache()
+    {
+        _deviceCache.Clear();
     }
 
     private string GetProcessName(AudioSessionControl session)
