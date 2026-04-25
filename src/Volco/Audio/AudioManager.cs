@@ -127,21 +127,30 @@ public class AudioManager : IAudioManager
 
     public void SetDefaultOutputDevice(string deviceName)
     {
+        AppLog.Info($"[Audio] SetDefaultOutputDevice called: deviceName='{deviceName}'");
         var device = FindDeviceByName(DataFlow.Render, deviceName);
-        if (device == null) return;
+        if (device == null)
+        {
+            AppLog.Error($"[Audio] SetDefaultOutputDevice: device not found for '{deviceName}'");
+            return;
+        }
 
         // PolicyConfigClient COM object requires STA. Button press callbacks arrive
         // on thread pool threads (MTA) via Task.Delay continuations, so marshal to
         // a dedicated STA thread.
         var deviceId = device.ID;
+        var deviceFriendlyName = device.FriendlyName;
+        AppLog.Info($"[Audio] SetDefaultOutputDevice: resolved to '{deviceFriendlyName}', id={deviceId}");
+
         Exception? error = null;
+        int hrMultimedia = 0, hrCommunications = 0;
         var thread = new Thread(() =>
         {
             try
             {
                 var policyConfig = (IPolicyConfig)new PolicyConfigClient();
-                policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Multimedia);
-                policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Communications);
+                hrMultimedia = policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Multimedia);
+                hrCommunications = policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Communications);
             }
             catch (Exception ex)
             {
@@ -153,7 +162,17 @@ public class AudioManager : IAudioManager
         thread.Join();
 
         if (error != null)
-            AppLog.Error($"[Audio] SetDefaultOutputDevice failed: {error.Message}");
+        {
+            AppLog.Error($"[Audio] SetDefaultOutputDevice exception: {error.GetType().Name}: {error.Message}");
+        }
+        else if (hrMultimedia != 0 || hrCommunications != 0)
+        {
+            AppLog.Error($"[Audio] SetDefaultOutputDevice HRESULT failure: multimedia=0x{hrMultimedia:X8}, communications=0x{hrCommunications:X8}");
+        }
+        else
+        {
+            AppLog.Info($"[Audio] SetDefaultOutputDevice succeeded: '{deviceFriendlyName}'");
+        }
     }
 
     public string? GetDefaultOutputDeviceName()
@@ -243,13 +262,27 @@ public class AudioManager : IAudioManager
     {
         var cacheKey = $"{flow}:{name}";
         if (_deviceCache.TryGetValue(cacheKey, out var cached))
+        {
+            AppLog.Debug($"[Audio] FindDeviceByName: cache hit for '{name}' -> '{cached.FriendlyName}' (id={cached.ID})");
             return cached;
+        }
 
-        var device = _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active)
+        var allDevices = _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active);
+        var deviceNames = allDevices.Select(d => d.FriendlyName).ToList();
+        AppLog.Debug($"[Audio] FindDeviceByName: searching for '{name}' in [{string.Join(", ", deviceNames)}]");
+
+        var device = allDevices
             .FirstOrDefault(d => d.FriendlyName.Contains(name, StringComparison.OrdinalIgnoreCase));
 
         if (device != null)
+        {
             _deviceCache[cacheKey] = device;
+            AppLog.Debug($"[Audio] FindDeviceByName: found '{device.FriendlyName}' (id={device.ID})");
+        }
+        else
+        {
+            AppLog.Error($"[Audio] FindDeviceByName: no device matched '{name}'");
+        }
 
         return device;
     }

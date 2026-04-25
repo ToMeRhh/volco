@@ -21,6 +21,7 @@ public class ToggleOutputDeviceAction : IButtonAction
         var isOnDevice1 = currentDevice != null &&
             currentDevice.Contains(devices.Device1, StringComparison.OrdinalIgnoreCase);
         var target = isOnDevice1 ? devices.Device2 : devices.Device1;
+        AppLog.Info($"[ToggleOutput] current='{currentDevice}', device1='{devices.Device1}', device2='{devices.Device2}', isOnDevice1={isOnDevice1}, target='{target}'");
         _audio.SetDefaultOutputDevice(target);
     }
 }
