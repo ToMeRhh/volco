@@ -20,6 +20,8 @@
                     Tag="buttons"/>
             <NavigationViewItem Content="Output Devices"
                     Tag="outputdevices"/>
+            <NavigationViewItem Content="General"
+                    Tag="general"/>
         </NavigationView.MenuItems>
 
         <Frame x:Name="ContentFrame"/>
