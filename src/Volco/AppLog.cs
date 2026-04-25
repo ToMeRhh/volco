@@ -19,8 +19,10 @@ internal static class AppLog
         FlushTimer = new Timer(_ => Flush(), null, 500, 500);
     }
 
+    public static bool IsDebugEnabled { get; set; } = false;
+
     public static void Info(string message) => Enqueue("INFO", message);
-    public static void Debug(string message) => Enqueue("DEBUG", message);
+    public static void Debug(string message) { if (IsDebugEnabled) Enqueue("DEBUG", message); }
     public static void Error(string message) => Enqueue("ERROR", message);
 
     private static void Enqueue(string level, string message)
