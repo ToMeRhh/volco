@@ -78,6 +78,7 @@ public class AppConfig
     public List<SliderConfig> Sliders { get; set; } = new();
     public List<ButtonConfig> Buttons { get; set; } = new();
     public OutputDevicesConfig OutputDevices { get; set; } = new();
+    public bool DebugLogging { get; set; } = false;
 
     public static AppConfig CreateDefault()
     {

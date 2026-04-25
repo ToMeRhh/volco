@@ -53,6 +53,9 @@ public sealed partial class SettingsWindow : Window
                 case "outputdevices":
                     ContentFrame.Navigate(typeof(OutputDevicesTab), (_configManager, _audioManager));
                     break;
+                case "general":
+                    ContentFrame.Navigate(typeof(GeneralTab), _configManager);
+                    break;
             }
         }
     }

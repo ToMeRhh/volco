@@ -32,6 +32,7 @@ public class ConfigManager
             AppLog.Info("Config file not found, using default config");
             Config = AppConfig.CreateDefault();
         }
+        AppLog.IsDebugEnabled = Config.DebugLogging;
     }
 
     public void Save()
