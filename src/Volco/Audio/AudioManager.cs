@@ -159,7 +159,7 @@ public class AudioManager : IAudioManager
         try
         {
             var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            return device.FriendlyName;
+            return device.DeviceFriendlyName;
         }
         catch
         {
@@ -170,14 +170,14 @@ public class AudioManager : IAudioManager
     public List<AudioDeviceInfo> GetOutputDevices()
     {
         return _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-            .Select(d => new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName })
+            .Select(d => new AudioDeviceInfo { Id = d.ID, Name = d.DeviceFriendlyName })
             .ToList();
     }
 
     public List<AudioDeviceInfo> GetInputDevices()
     {
         return _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .Select(d => new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName })
+            .Select(d => new AudioDeviceInfo { Id = d.ID, Name = d.DeviceFriendlyName })
             .ToList();
     }
 
@@ -244,7 +244,7 @@ public class AudioManager : IAudioManager
             return cached;
 
         var device = _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active)
-            .FirstOrDefault(d => d.FriendlyName.Contains(name, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(d => d.DeviceFriendlyName.Contains(name, StringComparison.OrdinalIgnoreCase));
 
         if (device != null)
             _deviceCache[cacheKey] = device;
@@ -272,7 +272,7 @@ public class AudioManager : IAudioManager
             var process = System.Diagnostics.Process.GetProcessById((int)pid);
             var name = process.ProcessName + ".exe";
             _processNameCache[pid] = (name, now);
-            AppLog.Debug($"[Audio] GetProcessName cache miss: pid={pid} -> {name} in {sw.ElapsedMilliseconds}ms");
+            // AppLog.Debug($"[Audio] GetProcessName cache miss: pid={pid} -> {name} in {sw.ElapsedMilliseconds}ms");
             return name;
         }
         catch
