@@ -127,33 +127,31 @@ public class AudioManager : IAudioManager
 
     public void SetDefaultOutputDevice(string deviceName)
     {
-        var device = FindDeviceByName(DataFlow.Render, deviceName);
-        if (device == null) return;
-
-        // PolicyConfigClient COM object requires STA. Button press callbacks arrive
-        // on thread pool threads (MTA) via Task.Delay continuations, so marshal to
-        // a dedicated STA thread.
-        var deviceId = device.ID;
-        Exception? error = null;
-        var thread = new Thread(() =>
+        var svclPath = Path.Combine(AppContext.BaseDirectory, "Tools", "svcl.exe");
+        var sw = Stopwatch.StartNew();
+        try
         {
-            try
+            var process = Process.Start(new ProcessStartInfo
             {
-                var policyConfig = (IPolicyConfig)new PolicyConfigClient();
-                policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Multimedia);
-                policyConfig.SetDefaultEndpoint(deviceId, (int)Role.Communications);
-            }
-            catch (Exception ex)
+                FileName = svclPath,
+                Arguments = $"/SetDefault \"{deviceName}\" all",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+            });
+            process?.WaitForExit(5000);
+            var exitCode = process?.ExitCode;
+            AppLog.Debug($"[Audio] SetDefaultOutputDevice({deviceName}): svcl exited {exitCode} in {sw.ElapsedMilliseconds}ms");
+            if (exitCode != 0)
             {
-                error = ex;
+                var stderr = process?.StandardError.ReadToEnd();
+                AppLog.Error($"[Audio] SetDefaultOutputDevice failed: svcl exit {exitCode}, stderr={stderr}");
             }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (error != null)
-            AppLog.Error($"[Audio] SetDefaultOutputDevice failed: {error.Message}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"[Audio] SetDefaultOutputDevice failed: {ex.Message}");
+        }
     }
 
     public string? GetDefaultOutputDeviceName()
@@ -283,27 +281,4 @@ public class AudioManager : IAudioManager
         }
     }
 
-    // COM interop for setting default audio device (IPolicyConfig)
-    [ComImport]
-    [Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")]
-    private class PolicyConfigClient { }
-
-    [ComImport]
-    [Guid("F8679F50-850A-41CF-9C72-430F290290C8")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IPolicyConfig
-    {
-        [PreserveSig] int GetMixFormat(string deviceId, IntPtr format);
-        [PreserveSig] int GetDeviceFormat(string deviceId, int flow, IntPtr format);
-        [PreserveSig] int ResetDeviceFormat(string deviceId);
-        [PreserveSig] int SetDeviceFormat(string deviceId, IntPtr endpointFormat, IntPtr mixFormat);
-        [PreserveSig] int GetProcessingPeriod(string deviceId, int flow, out long defaultPeriod, out long minPeriod);
-        [PreserveSig] int SetProcessingPeriod(string deviceId, long period);
-        [PreserveSig] int GetShareMode(string deviceId, IntPtr mode);
-        [PreserveSig] int SetShareMode(string deviceId, IntPtr mode);
-        [PreserveSig] int GetPropertyValue(string deviceId, int storeType, IntPtr key, IntPtr value);
-        [PreserveSig] int SetPropertyValue(string deviceId, int storeType, IntPtr key, IntPtr value);
-        [PreserveSig] int SetDefaultEndpoint(string deviceId, int role);
-        [PreserveSig] int SetEndpointVisibility(string deviceId, int visible);
-    }
 }
