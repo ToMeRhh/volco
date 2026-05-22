@@ -74,7 +74,10 @@ public class SliderProcessor : IDisposable
 
             var sliderConfig = config.Sliders[sliderIndex];
             var volume = MapAdcToVolume(value.Value, sliderConfig.Invert);
-            var sw = Stopwatch.StartNew();
+
+            // Optimization: Avoid allocation by using Stopwatch.GetTimestamp() and GetElapsedTime()
+            // only when debug logging is enabled.
+            long startTime = AppLog.IsDebugEnabled ? Stopwatch.GetTimestamp() : 0;
 
             switch (sliderConfig.Type)
             {
@@ -95,7 +98,11 @@ public class SliderProcessor : IDisposable
                     break;
             }
 
-            AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
+            if (AppLog.IsDebugEnabled)
+            {
+                var elapsed = Stopwatch.GetElapsedTime(startTime);
+                AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {elapsed.TotalMilliseconds:F2}ms");
+            }
         }
     }
 

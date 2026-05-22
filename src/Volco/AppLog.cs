@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace Volco;
 
@@ -22,12 +23,26 @@ internal static class AppLog
     public static bool IsDebugEnabled { get; set; } = false;
 
     public static void Info(string message) => Enqueue("INFO", message);
-    public static void Debug(string message) { if (IsDebugEnabled) Enqueue("DEBUG", message); }
+
+    public static void Debug(string message)
+    {
+        if (IsDebugEnabled) Enqueue("DEBUG", message);
+    }
+
+    /// <summary>
+    /// Optimized debug logging that avoids string interpolation and argument evaluation when debug logging is disabled.
+    /// </summary>
+    public static void Debug(ref DebugLogHandler handler)
+    {
+        if (IsDebugEnabled) Enqueue("DEBUG", handler.ToStringAndClear());
+    }
+
     public static void Error(string message) => Enqueue("ERROR", message);
 
     private static void Enqueue(string level, string message)
     {
-        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
+        // Use UtcNow for faster timestamp generation in high-frequency logging paths
+        var line = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z [{level}] {message}";
         System.Diagnostics.Debug.WriteLine(line);
         Queue.Enqueue(line);
     }
@@ -48,5 +63,29 @@ internal static class AppLog
             }
             catch { }
         }
+    }
+
+    [InterpolatedStringHandler]
+    public ref struct DebugLogHandler
+    {
+        private DefaultInterpolatedStringHandler _innerHandler;
+        private readonly bool _enabled;
+
+        public DebugLogHandler(int literalLength, int formattedCount, out bool shouldAppend)
+        {
+            _enabled = IsDebugEnabled;
+            shouldAppend = _enabled;
+            if (_enabled)
+                _innerHandler = new DefaultInterpolatedStringHandler(literalLength, formattedCount);
+            else
+                _innerHandler = default;
+        }
+
+        public void AppendLiteral(string value) => _innerHandler.AppendLiteral(value);
+        public void AppendFormatted<T>(T value) => _innerHandler.AppendFormatted(value);
+        public void AppendFormatted<T>(T value, string? format) => _innerHandler.AppendFormatted(value, format);
+        public void AppendFormatted(object? value, int alignment = 0, string? format = null) => _innerHandler.AppendFormatted(value, alignment, format);
+
+        internal string ToStringAndClear() => _innerHandler.ToStringAndClear();
     }
 }

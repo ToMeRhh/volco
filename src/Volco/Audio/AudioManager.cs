@@ -14,10 +14,18 @@ public class AudioManager : IAudioManager
     public void SetProcessVolume(string processName, float volume)
     {
         volume = Math.Clamp(volume, 0f, 1f);
-        var sw = Stopwatch.StartNew();
+
+        // Optimization: Use Stopwatch.GetTimestamp/GetElapsedTime and wrap in Debug check to avoid overhead
+        long startTime = AppLog.IsDebugEnabled ? Stopwatch.GetTimestamp() : 0;
+
         var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         var sessions = device.AudioSessionManager.Sessions;
-        AppLog.Debug($"[Audio] SetProcessVolume({processName}, {volume:F3}): GetDefaultAudioEndpoint+Sessions in {sw.ElapsedMilliseconds}ms, sessionCount={sessions.Count}");
+
+        if (AppLog.IsDebugEnabled)
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTime);
+            AppLog.Debug($"[Audio] SetProcessVolume({processName}, {volume:F3}): GetDefaultAudioEndpoint+Sessions in {elapsed.TotalMilliseconds:F2}ms, sessionCount={sessions.Count}");
+        }
 
         int matched = 0;
         for (int i = 0; i < sessions.Count; i++)
@@ -30,16 +38,28 @@ public class AudioManager : IAudioManager
                 matched++;
             }
         }
-        AppLog.Debug($"[Audio] SetProcessVolume({processName}): matched={matched}, total={sw.ElapsedMilliseconds}ms");
+
+        if (AppLog.IsDebugEnabled)
+        {
+            var totalElapsed = Stopwatch.GetElapsedTime(startTime);
+            AppLog.Debug($"[Audio] SetProcessVolume({processName}): matched={matched}, total={totalElapsed.TotalMilliseconds:F2}ms");
+        }
     }
 
     public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume)
     {
         volume = Math.Clamp(volume, 0f, 1f);
-        var sw = Stopwatch.StartNew();
+
+        long startTime = AppLog.IsDebugEnabled ? Stopwatch.GetTimestamp() : 0;
+
         var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         var sessions = device.AudioSessionManager.Sessions;
-        AppLog.Debug($"[Audio] SetProcessVolumes([{string.Join(",", processNames)}], {volume:F3}): GetDefaultAudioEndpoint+Sessions in {sw.ElapsedMilliseconds}ms, sessionCount={sessions.Count}");
+
+        if (AppLog.IsDebugEnabled)
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTime);
+            AppLog.Debug($"[Audio] SetProcessVolumes([{string.Join(",", processNames)}], {volume:F3}): GetDefaultAudioEndpoint+Sessions in {elapsed.TotalMilliseconds:F2}ms, sessionCount={sessions.Count}");
+        }
 
         int matched = 0;
         for (int i = 0; i < sessions.Count; i++)
@@ -58,13 +78,20 @@ public class AudioManager : IAudioManager
                 }
             }
         }
-        AppLog.Debug($"[Audio] SetProcessVolumes: matched={matched}, total={sw.ElapsedMilliseconds}ms");
+
+        if (AppLog.IsDebugEnabled)
+        {
+            var totalElapsed = Stopwatch.GetElapsedTime(startTime);
+            AppLog.Debug($"[Audio] SetProcessVolumes: matched={matched}, total={totalElapsed.TotalMilliseconds:F2}ms");
+        }
     }
 
     public void SetDeviceVolume(float volume, string? deviceName = null)
     {
         volume = Math.Clamp(volume, 0f, 1f);
-        var sw = Stopwatch.StartNew();
+
+        long startTime = AppLog.IsDebugEnabled ? Stopwatch.GetTimestamp() : 0;
+
         MMDevice? device;
         if (!string.IsNullOrEmpty(deviceName))
         {
@@ -74,7 +101,12 @@ public class AudioManager : IAudioManager
         {
             device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         }
-        AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}, {volume:F3}): device lookup in {sw.ElapsedMilliseconds}ms, found={device != null}");
+
+        if (AppLog.IsDebugEnabled)
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTime);
+            AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}, {volume:F3}): device lookup in {elapsed.TotalMilliseconds:F2}ms, found={device != null}");
+        }
 
         if (device == null) return;
 
@@ -91,7 +123,12 @@ public class AudioManager : IAudioManager
             if (device != null)
                 device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
         }
-        AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}): total={sw.ElapsedMilliseconds}ms");
+
+        if (AppLog.IsDebugEnabled)
+        {
+            var totalElapsed = Stopwatch.GetElapsedTime(startTime);
+            AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}): total={totalElapsed.TotalMilliseconds:F2}ms");
+        }
     }
 
     public void ToggleMuteOutput(string? deviceId = null)
@@ -128,7 +165,7 @@ public class AudioManager : IAudioManager
     public void SetDefaultOutputDevice(string deviceName)
     {
         var svclPath = Path.Combine(AppContext.BaseDirectory, "Tools", "svcl.exe");
-        var sw = Stopwatch.StartNew();
+        long startTime = AppLog.IsDebugEnabled ? Stopwatch.GetTimestamp() : 0;
         try
         {
             var process = Process.Start(new ProcessStartInfo
@@ -141,7 +178,13 @@ public class AudioManager : IAudioManager
             });
             process?.WaitForExit(5000);
             var exitCode = process?.ExitCode;
-            AppLog.Debug($"[Audio] SetDefaultOutputDevice({deviceName}): svcl exited {exitCode} in {sw.ElapsedMilliseconds}ms");
+
+            if (AppLog.IsDebugEnabled)
+            {
+                var elapsed = Stopwatch.GetElapsedTime(startTime);
+                AppLog.Debug($"[Audio] SetDefaultOutputDevice({deviceName}): svcl exited {exitCode} in {elapsed.TotalMilliseconds:F2}ms");
+            }
+
             if (exitCode != 0)
             {
                 var stderr = process?.StandardError.ReadToEnd();
@@ -268,11 +311,9 @@ public class AudioManager : IAudioManager
             if (_processNameCache.TryGetValue(pid, out var cached) && now - cached.CachedAt < ProcessCacheTtl)
                 return cached.Name;
 
-            var sw = Stopwatch.StartNew();
             var process = System.Diagnostics.Process.GetProcessById((int)pid);
             var name = process.ProcessName + ".exe";
             _processNameCache[pid] = (name, now);
-            // AppLog.Debug($"[Audio] GetProcessName cache miss: pid={pid} -> {name} in {sw.ElapsedMilliseconds}ms");
             return name;
         }
         catch
