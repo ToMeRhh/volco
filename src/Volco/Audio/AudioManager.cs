@@ -21,7 +21,7 @@ public class AudioManager : IAudioManager
         var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         var sessions = device.AudioSessionManager.Sessions;
 
-        if (AppLog.IsDebugEnabled)
+        if (startTime > 0 && AppLog.IsDebugEnabled)
         {
             var elapsed = Stopwatch.GetElapsedTime(startTime);
             AppLog.Debug($"[Audio] SetProcessVolume({processName}, {volume:F3}): GetDefaultAudioEndpoint+Sessions in {elapsed.TotalMilliseconds:F2}ms, sessionCount={sessions.Count}");
@@ -39,7 +39,7 @@ public class AudioManager : IAudioManager
             }
         }
 
-        if (AppLog.IsDebugEnabled)
+        if (startTime > 0 && AppLog.IsDebugEnabled)
         {
             var totalElapsed = Stopwatch.GetElapsedTime(startTime);
             AppLog.Debug($"[Audio] SetProcessVolume({processName}): matched={matched}, total={totalElapsed.TotalMilliseconds:F2}ms");
@@ -55,7 +55,7 @@ public class AudioManager : IAudioManager
         var device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         var sessions = device.AudioSessionManager.Sessions;
 
-        if (AppLog.IsDebugEnabled)
+        if (startTime > 0 && AppLog.IsDebugEnabled)
         {
             var elapsed = Stopwatch.GetElapsedTime(startTime);
             AppLog.Debug($"[Audio] SetProcessVolumes([{string.Join(",", processNames)}], {volume:F3}): GetDefaultAudioEndpoint+Sessions in {elapsed.TotalMilliseconds:F2}ms, sessionCount={sessions.Count}");
@@ -79,7 +79,7 @@ public class AudioManager : IAudioManager
             }
         }
 
-        if (AppLog.IsDebugEnabled)
+        if (startTime > 0 && AppLog.IsDebugEnabled)
         {
             var totalElapsed = Stopwatch.GetElapsedTime(startTime);
             AppLog.Debug($"[Audio] SetProcessVolumes: matched={matched}, total={totalElapsed.TotalMilliseconds:F2}ms");
@@ -102,7 +102,7 @@ public class AudioManager : IAudioManager
             device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         }
 
-        if (AppLog.IsDebugEnabled)
+        if (startTime > 0 && AppLog.IsDebugEnabled)
         {
             var elapsed = Stopwatch.GetElapsedTime(startTime);
             AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}, {volume:F3}): device lookup in {elapsed.TotalMilliseconds:F2}ms, found={device != null}");
@@ -124,7 +124,7 @@ public class AudioManager : IAudioManager
                 device.AudioEndpointVolume.MasterVolumeLevelScalar = volume;
         }
 
-        if (AppLog.IsDebugEnabled)
+        if (startTime > 0 && AppLog.IsDebugEnabled)
         {
             var totalElapsed = Stopwatch.GetElapsedTime(startTime);
             AppLog.Debug($"[Audio] SetDeviceVolume({deviceName ?? "default"}): total={totalElapsed.TotalMilliseconds:F2}ms");
@@ -179,7 +179,7 @@ public class AudioManager : IAudioManager
             process?.WaitForExit(5000);
             var exitCode = process?.ExitCode;
 
-            if (AppLog.IsDebugEnabled)
+            if (startTime > 0 && AppLog.IsDebugEnabled)
             {
                 var elapsed = Stopwatch.GetElapsedTime(startTime);
                 AppLog.Debug($"[Audio] SetDefaultOutputDevice({deviceName}): svcl exited {exitCode} in {elapsed.TotalMilliseconds:F2}ms");

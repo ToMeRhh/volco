@@ -34,7 +34,7 @@ internal static class AppLog
     /// </summary>
     public static void Debug(ref DebugLogHandler handler)
     {
-        if (IsDebugEnabled) Enqueue("DEBUG", handler.ToStringAndClear());
+        if (handler.IsEnabled) Enqueue("DEBUG", handler.ToStringAndClear());
     }
 
     public static void Error(string message) => Enqueue("ERROR", message);
@@ -69,13 +69,13 @@ internal static class AppLog
     public ref struct DebugLogHandler
     {
         private DefaultInterpolatedStringHandler _innerHandler;
-        private readonly bool _enabled;
+        public readonly bool IsEnabled;
 
         public DebugLogHandler(int literalLength, int formattedCount, out bool shouldAppend)
         {
-            _enabled = IsDebugEnabled;
-            shouldAppend = _enabled;
-            if (_enabled)
+            IsEnabled = IsDebugEnabled;
+            shouldAppend = IsEnabled;
+            if (IsEnabled)
                 _innerHandler = new DefaultInterpolatedStringHandler(literalLength, formattedCount);
             else
                 _innerHandler = default;

@@ -98,7 +98,7 @@ public class SliderProcessor : IDisposable
                     break;
             }
 
-            if (AppLog.IsDebugEnabled)
+            if (startTime > 0 && AppLog.IsDebugEnabled)
             {
                 var elapsed = Stopwatch.GetElapsedTime(startTime);
                 AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {elapsed.TotalMilliseconds:F2}ms");
