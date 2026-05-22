@@ -41,8 +41,7 @@ internal static class AppLog
 
     private static void Enqueue(string level, string message)
     {
-        // Use UtcNow for faster timestamp generation in high-frequency logging paths
-        var line = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z [{level}] {message}";
+        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
         System.Diagnostics.Debug.WriteLine(line);
         Queue.Enqueue(line);
     }
