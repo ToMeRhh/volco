@@ -61,4 +61,61 @@ public class SliderProcessorTests
         Assert.DoesNotContain("chrome.exe", unmapped);
         Assert.DoesNotContain("spotify.exe", unmapped);
     }
+
+    [Fact]
+    public void BuildSliderLabel_DeviceWithEmptyName_UsesCurrentOutput()
+    {
+        var slider = new SliderConfig { Type = SliderMappingType.Device, DeviceName = "" };
+        Assert.Equal("Speakers (Realtek)", SliderProcessor.BuildSliderLabel(slider, "Speakers (Realtek)"));
+    }
+
+    [Fact]
+    public void BuildSliderLabel_DeviceWithEmptyNameAndNoCurrentOutput_FallsBack()
+    {
+        var slider = new SliderConfig { Type = SliderMappingType.Device, DeviceName = "" };
+        Assert.Equal("Output", SliderProcessor.BuildSliderLabel(slider, null));
+    }
+
+    [Fact]
+    public void BuildSliderLabel_DeviceWithName_UsesDeviceName()
+    {
+        var slider = new SliderConfig { Type = SliderMappingType.Device, DeviceName = "Headphones" };
+        Assert.Equal("Headphones", SliderProcessor.BuildSliderLabel(slider, "Speakers"));
+    }
+
+    [Fact]
+    public void BuildSliderLabel_SingleProcess_StripsExeAndCapitalizes()
+    {
+        var slider = new SliderConfig
+        {
+            Type = SliderMappingType.Processes,
+            Processes = new List<string> { "spotify.exe" }
+        };
+        Assert.Equal("Spotify", SliderProcessor.BuildSliderLabel(slider, null));
+    }
+
+    [Fact]
+    public void BuildSliderLabel_MultipleProcesses_JoinsWithComma()
+    {
+        var slider = new SliderConfig
+        {
+            Type = SliderMappingType.Processes,
+            Processes = new List<string> { "chrome.exe", "spotify.exe" }
+        };
+        Assert.Equal("Chrome, Spotify", SliderProcessor.BuildSliderLabel(slider, null));
+    }
+
+    [Fact]
+    public void BuildSliderLabel_EmptyProcessList_UsesAppsFallback()
+    {
+        var slider = new SliderConfig { Type = SliderMappingType.Processes, Processes = new List<string>() };
+        Assert.Equal("Apps", SliderProcessor.BuildSliderLabel(slider, null));
+    }
+
+    [Fact]
+    public void BuildSliderLabel_Unmapped_UsesOtherApps()
+    {
+        var slider = new SliderConfig { Type = SliderMappingType.Unmapped };
+        Assert.Equal("Other apps", SliderProcessor.BuildSliderLabel(slider, null));
+    }
 }
