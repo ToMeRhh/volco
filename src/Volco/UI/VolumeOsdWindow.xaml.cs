@@ -17,9 +17,10 @@ namespace Volco.UI;
 /// </summary>
 public sealed partial class VolumeOsdWindow : Window
 {
-    private const int WindowWidth = 340;
-    private const int WindowHeight = 56;
-    private const int BottomMargin = 80;
+    // Logical (DIP) sizes; converted to physical pixels per the display scale.
+    private const double LogicalWidth = 360;
+    private const double LogicalHeight = 56;
+    private const double LogicalBottomMargin = 80;
     private static readonly TimeSpan VisibleDuration = TimeSpan.FromMilliseconds(1500);
 
     // Volume / muted glyphs from Segoe Fluent Icons.
@@ -31,6 +32,7 @@ public sealed partial class VolumeOsdWindow : Window
     private readonly AppWindow _appWindow;
     private readonly nint _hwnd;
     private Storyboard? _fadeOut;
+    private bool _isVisible;
 
     public VolumeOsdWindow()
     {
@@ -90,11 +92,18 @@ public sealed partial class VolumeOsdWindow : Window
 
         LevelBar.Value = Math.Clamp(n.Level * 100, 0, 100);
 
-        Reposition();
-
+        // Keep opacity solid; stopping any in-flight fade is cheap and flicker-free.
         _fadeOut?.Stop();
         Root.Opacity = 1.0;
-        _appWindow.Show(activateWindow: false);
+
+        // Only show + reposition on the hidden->visible transition. Re-showing or
+        // repositioning on every slider tick causes the window to flash.
+        if (!_isVisible)
+        {
+            Reposition();
+            _appWindow.Show(activateWindow: false);
+            _isVisible = true;
+        }
 
         _hideTimer.Stop();
         _hideTimer.Start();
@@ -102,11 +111,16 @@ public sealed partial class VolumeOsdWindow : Window
 
     private void Reposition()
     {
+        double scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
+        int w = (int)Math.Round(LogicalWidth * scale);
+        int h = (int)Math.Round(LogicalHeight * scale);
+        int margin = (int)Math.Round(LogicalBottomMargin * scale);
+
         var area = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Nearest);
         var work = area.WorkArea;
-        int x = work.X + (work.Width - WindowWidth) / 2;
-        int y = work.Y + work.Height - WindowHeight - BottomMargin;
-        _appWindow.MoveAndResize(new RectInt32(x, y, WindowWidth, WindowHeight));
+        int x = work.X + (work.Width - w) / 2;
+        int y = work.Y + work.Height - h - margin;
+        _appWindow.MoveAndResize(new RectInt32(x, y, w, h));
     }
 
     private void BeginHide()
@@ -121,7 +135,11 @@ public sealed partial class VolumeOsdWindow : Window
         Storyboard.SetTarget(fade, Root);
         Storyboard.SetTargetProperty(fade, "Opacity");
         _fadeOut.Children.Add(fade);
-        _fadeOut.Completed += (_, _) => _appWindow.Hide();
+        _fadeOut.Completed += (_, _) =>
+        {
+            _appWindow.Hide();
+            _isVisible = false;
+        };
         _fadeOut.Begin();
     }
 
@@ -136,7 +154,7 @@ public sealed partial class VolumeOsdWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
         _appWindow.IsShownInSwitchers = false;
-        _appWindow.Resize(new SizeInt32(WindowWidth, WindowHeight));
+        // Actual size/position is set per-show in Reposition (DPI-aware).
 
         // No-activate + click-through so the flyout never steals focus or blocks input.
         const int GWL_EXSTYLE = -20;
