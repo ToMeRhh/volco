@@ -24,6 +24,7 @@ public partial class App : Application
     private ButtonPressDetector _buttonPressDetector = null!;
     private SliderProcessor _sliderProcessor = null!;
     private SessionMonitor _sessionMonitor = null!;
+    private VolumeOsdWindow _osd = null!;
 
     public App()
     {
@@ -55,6 +56,10 @@ public partial class App : Application
         _buttonPressDetector = new ButtonPressDetector();
         _buttonPressDetector.PressDetected += OnButtonPressDetected;
         _sliderProcessor = new SliderProcessor(_audioManager, _configManager, _sessionMonitor);
+
+        // Volume OSD flyout
+        _osd = new VolumeOsdWindow();
+        _sliderProcessor.VolumeChanged += (_, n) => _osd.Show(n);
 
         // Connection
         StartConnection();
@@ -97,6 +102,7 @@ public partial class App : Application
             _connection?.Dispose();
             _sliderProcessor.Dispose();
             _sessionMonitor.Dispose();
+            _osd?.Close();
             _trayIcon?.Dispose();
             Exit();
         };
@@ -195,8 +201,35 @@ public partial class App : Application
         var action = ActionFactory.Create(actionConfig, _audioManager, _configManager);
         action?.Execute();
 
+        ShowMuteOsd(actionConfig);
+
         // Push updated state to controller after action changes audio state
         PushControllerState();
+    }
+
+    private void ShowMuteOsd(ButtonActionConfig actionConfig)
+    {
+        string? label;
+        bool muted;
+        switch (actionConfig.Action)
+        {
+            case ButtonActionType.MuteCurrentOutput:
+                label = _audioManager.GetDefaultOutputDeviceName() ?? "Output";
+                muted = _audioManager.IsOutputMuted();
+                break;
+            case ButtonActionType.MuteSpecificDevice:
+                label = actionConfig.DeviceId ?? "Output";
+                muted = _audioManager.IsOutputMuted(actionConfig.DeviceId);
+                break;
+            case ButtonActionType.MuteCurrentInput:
+                label = "Microphone";
+                muted = _audioManager.IsInputMuted();
+                break;
+            default:
+                return; // non-mute actions don't show the OSD
+        }
+
+        _osd.Show(new VolumeChangeNotification(label, muted ? 0f : 1f, muted, OsdKind.Mute));
     }
 
     private void PushControllerState()

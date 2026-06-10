@@ -13,6 +13,9 @@ public class SliderProcessor : IDisposable
     private readonly Timer _coalesceTimer;
     private readonly object _lock = new();
 
+    /// <summary>Raised after a slider changes volume, so the UI can show an OSD flyout.</summary>
+    public event EventHandler<VolumeChangeNotification>? VolumeChanged;
+
     public SliderProcessor(IAudioManager audio, ConfigManager configManager, SessionMonitor sessionMonitor)
     {
         _audio = audio;
@@ -42,6 +45,43 @@ public class SliderProcessor : IDisposable
         return activeProcesses
             .Where(p => !mappedProcesses.Contains(p))
             .ToList();
+    }
+
+    /// <summary>
+    /// Builds the human-readable label shown on the OSD for a slider.
+    /// <paramref name="currentOutputName"/> is only used for Device sliders with
+    /// an empty DeviceName (i.e. the "current output device").
+    /// </summary>
+    public static string BuildSliderLabel(SliderConfig slider, string? currentOutputName)
+    {
+        switch (slider.Type)
+        {
+            case SliderMappingType.Device:
+                if (!string.IsNullOrEmpty(slider.DeviceName))
+                    return slider.DeviceName;
+                return string.IsNullOrEmpty(currentOutputName) ? "Output" : currentOutputName;
+
+            case SliderMappingType.Processes:
+                if (slider.Processes.Count == 0)
+                    return "Apps";
+                return string.Join(", ", slider.Processes.Select(FriendlyProcessName));
+
+            case SliderMappingType.Unmapped:
+                return "Other apps";
+
+            default:
+                return "Volume";
+        }
+    }
+
+    private static string FriendlyProcessName(string processName)
+    {
+        var name = processName;
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            name = name[..^4];
+        if (name.Length == 0)
+            return name;
+        return char.ToUpperInvariant(name[0]) + name[1..];
     }
 
     public void HandleSliderEvent(int sliderIndex, ushort adcValue)
@@ -96,6 +136,16 @@ public class SliderProcessor : IDisposable
             }
 
             AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
+
+            if (VolumeChanged != null)
+            {
+                var currentOutput = sliderConfig.Type == SliderMappingType.Device
+                                    && string.IsNullOrEmpty(sliderConfig.DeviceName)
+                    ? _audio.GetDefaultOutputDeviceName()
+                    : null;
+                var label = BuildSliderLabel(sliderConfig, currentOutput);
+                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, Muted: false, OsdKind.Volume));
+            }
         }
     }
 
