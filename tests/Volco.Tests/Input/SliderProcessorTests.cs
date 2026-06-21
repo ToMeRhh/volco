@@ -118,4 +118,38 @@ public class SliderProcessorTests
         var slider = new SliderConfig { Type = SliderMappingType.Unmapped };
         Assert.Equal("Other apps", SliderProcessor.BuildSliderLabel(slider, null));
     }
+
+    [Fact]
+    public void MapAdcToVolume_DeadZone_ClampsLowEndToZero()
+    {
+        // 10% dead zone: anything below 10% of range maps to 0
+        var v = SliderProcessor.MapAdcToVolume(200, invert: false, ResponseCurve.Linear, 0.1);
+        Assert.Equal(0f, v, 3);
+    }
+
+    [Fact]
+    public void MapAdcToVolume_DeadZone_RescalesAboveThreshold()
+    {
+        // just above dead zone -> just above 0; full stays 1
+        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095, false, ResponseCurve.Linear, 0.1), 3);
+        Assert.True(SliderProcessor.MapAdcToVolume(2048, false, ResponseCurve.Linear, 0.1) < 0.5f);
+    }
+
+    [Fact]
+    public void MapAdcToVolume_Logarithmic_BoostsLowEnd()
+    {
+        var lin = SliderProcessor.MapAdcToVolume(2048, false, ResponseCurve.Linear, 0);
+        var log = SliderProcessor.MapAdcToVolume(2048, false, ResponseCurve.Logarithmic, 0);
+        Assert.True(log > lin);
+    }
+
+    [Fact]
+    public void MapAdcToVolume_Curves_PreserveEndpoints()
+    {
+        foreach (var c in Enum.GetValues<ResponseCurve>())
+        {
+            Assert.Equal(0f, SliderProcessor.MapAdcToVolume(0, false, c, 0), 3);
+            Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095, false, c, 0), 3);
+        }
+    }
 }
