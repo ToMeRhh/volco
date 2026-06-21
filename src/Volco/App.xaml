@@ -7,7 +7,14 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- WinUI controls must be first -->
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls"/>
+                <!-- Design-system resource dictionaries (order matters: Tokens → Colors → Brushes → Typography → Controls) -->
+                <ResourceDictionary Source="ms-appx:///UI/Styles/Tokens.xaml"/>
+                <ResourceDictionary Source="ms-appx:///UI/Styles/Colors.xaml"/>
+                <ResourceDictionary Source="ms-appx:///UI/Styles/Brushes.xaml"/>
+                <ResourceDictionary Source="ms-appx:///UI/Styles/Typography.xaml"/>
+                <ResourceDictionary Source="ms-appx:///UI/Styles/Controls.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

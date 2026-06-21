@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Brushes.xaml — semantic SolidColorBrush resources.
+
+    Theming approach:
+    Brushes that must change with the theme are defined inside
+    ThemeDictionaries here, referencing the matching Color keys via
+    {StaticResource}. Because both Colors.xaml and Brushes.xaml are
+    merged into App.xaml, the WinUI theme engine resolves each
+    dictionary's ThemeDictionary independently — so {StaticResource AccentColor}
+    inside Default/Light/HighContrast refers to the key in *that same*
+    theme scope, which is exactly what we want.
+
+    AccentBrush is the same in all themes (brand blue stays fixed), so
+    it is defined once at the top level using {ThemeResource AccentColor}
+    to still participate in theme changes (e.g. HighContrast override).
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="AccentBrush"         Color="{StaticResource AccentColor}"/>
+            <SolidColorBrush x:Key="SurfaceBrush"        Color="{StaticResource SurfaceColor}"/>
+            <SolidColorBrush x:Key="SurfaceCardBrush"    Color="{StaticResource SurfaceCardColor}"/>
+            <SolidColorBrush x:Key="SurfaceStrokeBrush"  Color="{StaticResource SurfaceStrokeColor}"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush"    Color="{StaticResource TextPrimaryColor}"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush"  Color="{StaticResource TextSecondaryColor}"/>
+            <SolidColorBrush x:Key="IconAccentBrush"     Color="{StaticResource IconAccentColor}"/>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="AccentBrush"         Color="{StaticResource AccentColor}"/>
+            <SolidColorBrush x:Key="SurfaceBrush"        Color="{StaticResource SurfaceColor}"/>
+            <SolidColorBrush x:Key="SurfaceCardBrush"    Color="{StaticResource SurfaceCardColor}"/>
+            <SolidColorBrush x:Key="SurfaceStrokeBrush"  Color="{StaticResource SurfaceStrokeColor}"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush"    Color="{StaticResource TextPrimaryColor}"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush"  Color="{StaticResource TextSecondaryColor}"/>
+            <SolidColorBrush x:Key="IconAccentBrush"     Color="{StaticResource IconAccentColor}"/>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="AccentBrush"         Color="{StaticResource AccentColor}"/>
+            <SolidColorBrush x:Key="SurfaceBrush"        Color="{StaticResource SurfaceColor}"/>
+            <SolidColorBrush x:Key="SurfaceCardBrush"    Color="{StaticResource SurfaceCardColor}"/>
+            <SolidColorBrush x:Key="SurfaceStrokeBrush"  Color="{StaticResource SurfaceStrokeColor}"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush"    Color="{StaticResource TextPrimaryColor}"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush"  Color="{StaticResource TextSecondaryColor}"/>
+            <SolidColorBrush x:Key="IconAccentBrush"     Color="{StaticResource IconAccentColor}"/>
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+
+</ResourceDictionary>
