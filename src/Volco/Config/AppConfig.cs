@@ -6,6 +6,9 @@ namespace Volco.Config;
 public enum ConnectionType { Serial, Udp, WebSocket }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ResponseCurve { Linear, Logarithmic, Exponential, SCurve }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SliderMappingType { Processes, Device, Unmapped }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -50,6 +53,9 @@ public class SliderConfig
     public List<string> Processes { get; set; } = new();
     public string DeviceName { get; set; } = "";
     public bool Invert { get; set; }
+    public ResponseCurve Curve { get; set; } = ResponseCurve.Linear;
+    public double DeadZonePercent { get; set; } = 0;   // 0..0.2
+    public double SmoothingFactor { get; set; } = 0;    // 0..1 (0 = off)
 }
 
 public class ButtonActionConfig
@@ -64,6 +70,8 @@ public class ButtonConfig
     public ButtonActionConfig SinglePress { get; set; } = new();
     public ButtonActionConfig DoublePress { get; set; } = new();
     public ButtonActionConfig LongPress { get; set; } = new();
+    public int LongPressMs { get; set; } = 500;
+    public int DoublePressWindowMs { get; set; } = 300;
 }
 
 public class OutputDevicesConfig
