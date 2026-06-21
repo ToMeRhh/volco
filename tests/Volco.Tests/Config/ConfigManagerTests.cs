@@ -120,4 +120,35 @@ public class ConfigManagerLoadSaveTests : IDisposable
 
         Assert.True(eventFired);
     }
+
+    [Fact]
+    public async Task RequestSave_CoalescesMultipleCallsIntoOneWrite()
+    {
+        var manager = new ConfigManager(_configPath);
+        manager.Load();
+        int writes = 0;
+        manager.ConfigChanged += (_, _) => writes++;
+
+        for (int i = 0; i < 10; i++) manager.RequestSave();
+        await Task.Delay(700); // past the ~400ms debounce window
+
+        Assert.Equal(1, writes);
+        Assert.True(File.Exists(_configPath));
+    }
+
+    [Fact]
+    public async Task RequestSave_ConnectionChanged_RaisesConnectionEventOnly()
+    {
+        var manager = new ConfigManager(_configPath);
+        manager.Load();
+        bool conn = false, general = false;
+        manager.ConnectionConfigChanged += (_, _) => conn = true;
+        manager.ConfigChanged += (_, _) => general = true;
+
+        manager.RequestSave(connectionChanged: true);
+        await Task.Delay(700);
+
+        Assert.True(conn);
+        Assert.False(general);
+    }
 }
