@@ -62,7 +62,21 @@ public class ConfigManager
             connChanged = _pendingConnectionChange;
             _pendingConnectionChange = false;
         }
-        WriteToDisk();
+
+        try
+        {
+            WriteToDisk();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Debounced config save failed: {ex}");
+            return;
+        }
+
+        // A connection-config save raises ONLY ConnectionConfigChanged (which App.xaml.cs
+        // listens to in order to restart the hardware connection). All other saves raise
+        // ConfigChanged. The two events are intentionally mutually exclusive: conflating
+        // them would cause unnecessary connection restarts on unrelated config changes.
         if (connChanged) ConnectionConfigChanged?.Invoke(this, EventArgs.Empty);
         else ConfigChanged?.Invoke(this, EventArgs.Empty);
     }
