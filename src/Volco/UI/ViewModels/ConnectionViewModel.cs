@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO.Ports;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using Volco.Communication;
 using Volco.Config;
 
@@ -18,6 +19,10 @@ public partial class ConnectionViewModel : ObservableObject
     private readonly ConfigManager _config;
     private IControllerConnection? _connection;
 
+    // Captured on construction (UI thread) so StatusChanged callbacks can marshal
+    // back to the UI thread via TryEnqueue.
+    private readonly DispatcherQueue? _dispatcher;
+
     // ── Connection type ────────────────────────────────────────────────────────
 
     [ObservableProperty]
@@ -27,6 +32,56 @@ public partial class ConnectionViewModel : ObservableObject
     public bool IsSerial    => ConnectionType == ConnectionType.Serial;
     public bool IsUdp       => ConnectionType == ConnectionType.Udp;
     public bool IsWebSocket => ConnectionType == ConnectionType.WebSocket;
+
+    // ── ComboBox index helpers (x:Bind two-way to ComboBox.SelectedIndex) ─────
+
+    /// <summary>
+    /// Zero-based index mapping: 0 = Serial, 1 = UDP, 2 = WebSocket.
+    /// Used by the connection-type ComboBox in ConnectionTab.xaml.
+    /// </summary>
+    public int ConnectionTypeIndex
+    {
+        get => ConnectionType switch
+        {
+            ConnectionType.Serial    => 0,
+            ConnectionType.Udp       => 1,
+            ConnectionType.WebSocket => 2,
+            _                        => 0,
+        };
+        set => ConnectionType = value switch
+        {
+            0 => ConnectionType.Serial,
+            1 => ConnectionType.Udp,
+            2 => ConnectionType.WebSocket,
+            _ => ConnectionType.Serial,
+        };
+    }
+
+    /// <summary>
+    /// Zero-based index into the baud-rate list: 9600=0, 19200=1, 38400=2, 57600=3, 115200=4.
+    /// Used by the baud-rate ComboBox in ConnectionTab.xaml.
+    /// </summary>
+    public int BaudRateIndex
+    {
+        get => BaudRate switch
+        {
+            9600   => 0,
+            19200  => 1,
+            38400  => 2,
+            57600  => 3,
+            115200 => 4,
+            _      => 4, // default to 115200
+        };
+        set => BaudRate = value switch
+        {
+            0 => 9600,
+            1 => 19200,
+            2 => 38400,
+            3 => 57600,
+            4 => 115200,
+            _ => 115200,
+        };
+    }
 
     // ── Serial settings ────────────────────────────────────────────────────────
 
@@ -62,6 +117,10 @@ public partial class ConnectionViewModel : ObservableObject
     {
         _config = config;
         _connection = connection;
+
+        // Capture the UI-thread dispatcher so background StatusChanged events
+        // can be marshalled safely (DispatcherQueue is not a XAML visual type).
+        _dispatcher = DispatcherQueue.GetForCurrentThread();
 
         var cfg = config.Config.Connection;
         _connectionType  = cfg.Type;
@@ -100,7 +159,13 @@ public partial class ConnectionViewModel : ObservableObject
     }
 
     private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
-        => UpdateStatus(status);
+    {
+        // StatusChanged may fire on a background thread; marshal to UI thread.
+        if (_dispatcher != null)
+            _dispatcher.TryEnqueue(() => UpdateStatus(status));
+        else
+            UpdateStatus(status);
+    }
 
     private void UpdateStatus(ConnectionStatus status)
     {
@@ -134,6 +199,7 @@ public partial class ConnectionViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSerial));
         OnPropertyChanged(nameof(IsUdp));
         OnPropertyChanged(nameof(IsWebSocket));
+        OnPropertyChanged(nameof(ConnectionTypeIndex));
         Persist();
     }
 
@@ -146,6 +212,7 @@ public partial class ConnectionViewModel : ObservableObject
     partial void OnBaudRateChanged(int value)
     {
         _config.Config.Connection.Serial.BaudRate = value;
+        OnPropertyChanged(nameof(BaudRateIndex));
         Persist();
     }
 
