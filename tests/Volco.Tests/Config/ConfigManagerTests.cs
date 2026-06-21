@@ -51,6 +51,24 @@ public class ConfigManagerTests
     }
 
     [Fact]
+    public void AppConfig_OldJsonWithoutTuningFields_UsesDefaults()
+    {
+        // JSON predating tuning fields
+        var json = """
+        { "sliders": [ { "index": 0, "type": "Device" } ],
+          "buttons": [ { "index": 0 } ] }
+        """;
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var cfg = JsonSerializer.Deserialize<AppConfig>(json, options)!;
+
+        Assert.Equal(ResponseCurve.Linear, cfg.Sliders[0].Curve);
+        Assert.Equal(0d, cfg.Sliders[0].DeadZonePercent);
+        Assert.Equal(0d, cfg.Sliders[0].SmoothingFactor);
+        Assert.Equal(500, cfg.Buttons[0].LongPressMs);
+        Assert.Equal(300, cfg.Buttons[0].DoublePressWindowMs);
+    }
+
+    [Fact]
     public void AppConfig_DefaultConfig_HasFiveSlidersAndThreeButtons()
     {
         var config = AppConfig.CreateDefault();
