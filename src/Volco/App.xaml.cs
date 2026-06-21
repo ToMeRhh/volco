@@ -177,7 +177,9 @@ public partial class App : Application
                 break;
             case ButtonMessage button:
                 AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
-                _buttonPressDetector.HandleButtonEvent(button.ButtonIndex, button.State);
+                var bcfg = _configManager.Config.Buttons.ElementAtOrDefault(button.ButtonIndex);
+                _buttonPressDetector.HandleButtonEvent(button.ButtonIndex, button.State,
+                    bcfg?.LongPressMs ?? 500, bcfg?.DoublePressWindowMs ?? 300);
                 break;
         }
     }

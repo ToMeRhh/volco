@@ -32,10 +32,12 @@ public class ButtonPressDetector
     }
 
     public void HandleButtonEvent(int buttonIndex, ButtonState state)
-    {
-        var tracker = _trackers.GetOrAdd(buttonIndex, index =>
-            new ButtonStateTracker(index, _longPressMs, _doublePressWindowMs, OnPressDetected));
+        => HandleButtonEvent(buttonIndex, state, _longPressMs, _doublePressWindowMs);
 
+    public void HandleButtonEvent(int buttonIndex, ButtonState state, int longPressMs, int doublePressWindowMs)
+    {
+        var tracker = _trackers.GetOrAdd(buttonIndex,
+            idx => new ButtonStateTracker(idx, longPressMs, doublePressWindowMs, OnPressDetected));
         tracker.HandleState(state);
     }
 
