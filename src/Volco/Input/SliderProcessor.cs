@@ -25,10 +25,28 @@ public class SliderProcessor : IDisposable
     }
 
     public static float MapAdcToVolume(ushort adcValue, bool invert)
+        => MapAdcToVolume(adcValue, invert, ResponseCurve.Linear, 0);
+
+    public static float MapAdcToVolume(ushort adcValue, bool invert, ResponseCurve curve, double deadZonePercent)
     {
-        float volume = adcValue / 4095f;
-        return invert ? 1f - volume : volume;
+        float raw = adcValue / 4095f;
+        if (invert) raw = 1f - raw;
+
+        var dz = (float)Math.Clamp(deadZonePercent, 0, 0.45);
+        if (dz > 0)
+            raw = raw <= dz ? 0f : (raw - dz) / (1f - dz);
+
+        return ApplyCurve(raw, curve);
     }
+
+    private static float ApplyCurve(float x, ResponseCurve curve) => curve switch
+    {
+        ResponseCurve.Linear      => x,
+        ResponseCurve.Logarithmic => x <= 0 ? 0 : MathF.Pow(x, 0.5f),
+        ResponseCurve.Exponential => MathF.Pow(x, 2f),
+        ResponseCurve.SCurve      => x * x * (3f - 2f * x), // smoothstep
+        _                         => x
+    };
 
     public static List<string> GetUnmappedProcesses(AppConfig config, IReadOnlySet<string> activeProcesses)
     {
@@ -113,7 +131,7 @@ public class SliderProcessor : IDisposable
                 continue;
 
             var sliderConfig = config.Sliders[sliderIndex];
-            var volume = MapAdcToVolume(value.Value, sliderConfig.Invert);
+            var volume = MapAdcToVolume(value.Value, sliderConfig.Invert, sliderConfig.Curve, sliderConfig.DeadZonePercent);
             var sw = Stopwatch.StartNew();
 
             switch (sliderConfig.Type)
