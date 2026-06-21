@@ -4,6 +4,22 @@ using Volco.Config;
 
 namespace Volco.Input;
 
+/// <summary>
+/// Event args for <see cref="SliderProcessor.SliderLevelChanged"/>.
+/// Carries the slider index and the final (post-curve, post-smoothing) volume in [0,1].
+/// </summary>
+public sealed class SliderLevelEventArgs : EventArgs
+{
+    public int SliderIndex { get; }
+    public float Level { get; }
+
+    public SliderLevelEventArgs(int sliderIndex, float level)
+    {
+        SliderIndex = sliderIndex;
+        Level = level;
+    }
+}
+
 public class SliderProcessor : IDisposable
 {
     private readonly IAudioManager _audio;
@@ -16,6 +32,13 @@ public class SliderProcessor : IDisposable
 
     /// <summary>Raised after a slider changes volume, so the UI can show an OSD flyout.</summary>
     public event EventHandler<VolumeChangeNotification>? VolumeChanged;
+
+    /// <summary>
+    /// Raised after each slider's final (post-curve, post-smoothing) volume is computed.
+    /// Carries the slider index and level in [0,1]. Additive — does not replace VolumeChanged.
+    /// Task 14 wires this to SlidersViewModel.UpdateLiveLevel on the UI thread.
+    /// </summary>
+    public event EventHandler<SliderLevelEventArgs>? SliderLevelChanged;
 
     public SliderProcessor(IAudioManager audio, ConfigManager configManager, SessionMonitor sessionMonitor)
     {
@@ -166,6 +189,8 @@ public class SliderProcessor : IDisposable
             }
 
             AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
+
+            SliderLevelChanged?.Invoke(this, new SliderLevelEventArgs(sliderIndex, volume));
 
             if (VolumeChanged != null)
             {

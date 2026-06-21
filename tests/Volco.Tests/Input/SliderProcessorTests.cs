@@ -7,6 +7,74 @@ namespace Volco.Tests.Input;
 
 public class SliderProcessorTests
 {
+    // ── SliderLevelChanged integration test ──────────────────────────────────
+
+    [Fact]
+    public async Task SliderLevelChanged_FiresWithCorrectIndexAndLevelInRange()
+    {
+        // Arrange: build a minimal config with one Device slider at index 0.
+        var tempPath = Path.Combine(Path.GetTempPath(), $"volco-slidertest-{Guid.NewGuid()}", "config.json");
+        var configManager = new ConfigManager(tempPath);
+        configManager.Load();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            DeviceName = "",
+            Invert = false,
+            Curve = ResponseCurve.Linear,
+            DeadZonePercent = 0,
+            SmoothingFactor = 0
+        });
+
+        var audio = new NoOpAudioManager();
+        var sessionMonitor = new SessionMonitor(audio, pollIntervalMs: 60000); // no-op poll
+
+        SliderLevelEventArgs? receivedArgs = null;
+        var tcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var processor = new SliderProcessor(audio, configManager, sessionMonitor);
+        processor.SliderLevelChanged += (_, e) =>
+        {
+            if (!tcs.Task.IsCompleted)
+                tcs.TrySetResult(e);
+        };
+
+        // Act: send mid-range ADC value (2048 ≈ 0.5 volume).
+        processor.HandleSliderEvent(sliderIndex: 0, adcValue: 2048);
+
+        // Wait up to 500ms for the 20ms coalesce timer to fire.
+        var timeout = Task.Delay(500);
+        var completed = await Task.WhenAny(tcs.Task, timeout);
+
+        // Assert
+        Assert.True(completed == tcs.Task, "SliderLevelChanged did not fire within 500ms");
+        receivedArgs = tcs.Task.Result;
+        Assert.Equal(0, receivedArgs.SliderIndex);
+        Assert.InRange(receivedArgs.Level, 0f, 1f);
+
+        sessionMonitor.Dispose();
+    }
+
+    /// <summary>Minimal IAudioManager that does nothing — avoids any Windows audio calls.</summary>
+    private sealed class NoOpAudioManager : IAudioManager
+    {
+        public void SetProcessVolume(string processName, float volume) { }
+        public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume) { }
+        public void SetDeviceVolume(float volume, string? deviceName = null) { }
+        public void ToggleMuteOutput(string? deviceId = null) { }
+        public void ToggleMuteInput() { }
+        public void SetDefaultOutputDevice(string deviceName) { }
+        public string? GetDefaultOutputDeviceName() => null;
+        public List<AudioDeviceInfo> GetOutputDevices() => new();
+        public List<AudioDeviceInfo> GetInputDevices() => new();
+        public List<string> GetActiveProcessNames() => new();
+        public bool IsOutputMuted(string? deviceId = null) => false;
+        public bool IsInputMuted() => false;
+    }
+
+
     [Fact]
     public void MapAdcToVolume_ZeroReturnsZero()
     {

@@ -44,6 +44,54 @@ public partial class SliderItemViewModel : ObservableObject
     [ObservableProperty]
     private double _liveLevel;
 
+    // ── ComboBox index helpers (x:Bind TwoWay to SelectedIndex) ─────────────
+
+    /// <summary>
+    /// Zero-based index for the MappingType ComboBox.
+    /// Order matches XAML items: 0=Processes, 1=Device, 2=Unmapped.
+    /// </summary>
+    public int MappingTypeIndex
+    {
+        get => MappingType switch
+        {
+            SliderMappingType.Processes => 0,
+            SliderMappingType.Device    => 1,
+            SliderMappingType.Unmapped  => 2,
+            _                           => 1,
+        };
+        set => MappingType = value switch
+        {
+            0 => SliderMappingType.Processes,
+            1 => SliderMappingType.Device,
+            2 => SliderMappingType.Unmapped,
+            _ => SliderMappingType.Device,
+        };
+    }
+
+    /// <summary>
+    /// Zero-based index for the ResponseCurve ComboBox.
+    /// Order matches XAML items: 0=Linear, 1=Logarithmic, 2=Exponential, 3=S-Curve.
+    /// </summary>
+    public int CurveIndex
+    {
+        get => Curve switch
+        {
+            ResponseCurve.Linear      => 0,
+            ResponseCurve.Logarithmic => 1,
+            ResponseCurve.Exponential => 2,
+            ResponseCurve.SCurve      => 3,
+            _                         => 0,
+        };
+        set => Curve = value switch
+        {
+            0 => ResponseCurve.Linear,
+            1 => ResponseCurve.Logarithmic,
+            2 => ResponseCurve.Exponential,
+            3 => ResponseCurve.SCurve,
+            _ => ResponseCurve.Linear,
+        };
+    }
+
     // ── Read-only ─────────────────────────────────────────────────────────────
 
     public int Index { get; }
@@ -58,6 +106,13 @@ public partial class SliderItemViewModel : ObservableObject
     /// Available output devices; populated from IAudioManager when the VM is constructed.
     /// </summary>
     public ObservableCollection<AudioDeviceInfo> OutputDevices { get; } = new();
+
+    /// <summary>
+    /// Output device names for binding to ComboBox.ItemsSource (string list).
+    /// Mirrors <see cref="OutputDevices"/> as plain strings so SelectedItem can
+    /// bind directly to <see cref="DeviceName"/>.
+    /// </summary>
+    public List<string> OutputDeviceNames { get; private set; } = new();
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -78,7 +133,10 @@ public partial class SliderItemViewModel : ObservableObject
         _smoothingFactor = cfg.SmoothingFactor;
 
         foreach (var d in audio.GetOutputDevices())
+        {
             OutputDevices.Add(d);
+        }
+        OutputDeviceNames = OutputDevices.Select(d => d.Name).ToList();
     }
 
     // ── Generated partial hooks — write back to cfg and save ──────────────────
@@ -89,6 +147,7 @@ public partial class SliderItemViewModel : ObservableObject
         OnPropertyChanged(nameof(IsProcessesVisible));
         OnPropertyChanged(nameof(IsDeviceVisible));
         OnPropertyChanged(nameof(IsUnmapped));
+        OnPropertyChanged(nameof(MappingTypeIndex));
         Persist();
     }
 
@@ -115,6 +174,7 @@ public partial class SliderItemViewModel : ObservableObject
     partial void OnCurveChanged(ResponseCurve value)
     {
         _cfg.Curve = value;
+        OnPropertyChanged(nameof(CurveIndex));
         Persist();
     }
 

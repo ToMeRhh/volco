@@ -43,4 +43,15 @@ public partial class SlidersViewModel : ObservableObject
     /// </summary>
     public List<string> GetActiveProcessNames() =>
         _audio.GetActiveProcessNames();
+
+    /// <summary>
+    /// Updates the live level bar for a specific slider.
+    /// Called by Task 14 on the UI thread after marshalling from SliderProcessor.SliderLevelChanged.
+    /// </summary>
+    public void UpdateLiveLevel(int sliderIndex, float level)
+    {
+        var item = Items.FirstOrDefault(i => i.Index == sliderIndex);
+        if (item != null)
+            item.LiveLevel = Math.Clamp(level, 0f, 1f);
+    }
 }
