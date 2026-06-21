@@ -10,6 +10,7 @@ public class SliderProcessor : IDisposable
     private readonly ConfigManager _configManager;
     private readonly SessionMonitor _sessionMonitor;
     private readonly ushort?[] _pendingValues = new ushort?[16];
+    private readonly float?[] _lastVolume = new float?[16];
     private readonly Timer _coalesceTimer;
     private readonly object _lock = new();
 
@@ -37,6 +38,12 @@ public class SliderProcessor : IDisposable
             raw = raw <= dz ? 0f : (raw - dz) / (1f - dz);
 
         return ApplyCurve(raw, curve);
+    }
+
+    public static float ApplySmoothing(float previous, float target, double smoothingFactor)
+    {
+        var a = (float)Math.Clamp(smoothingFactor, 0, 0.95);
+        return previous + (target - previous) * (1f - a);
     }
 
     private static float ApplyCurve(float x, ResponseCurve curve) => curve switch
@@ -132,6 +139,11 @@ public class SliderProcessor : IDisposable
 
             var sliderConfig = config.Sliders[sliderIndex];
             var volume = MapAdcToVolume(value.Value, sliderConfig.Invert, sliderConfig.Curve, sliderConfig.DeadZonePercent);
+
+            if (sliderConfig.SmoothingFactor > 0 && _lastVolume[sliderIndex] is { } prev)
+                volume = ApplySmoothing(prev, volume, sliderConfig.SmoothingFactor);
+            _lastVolume[sliderIndex] = volume;
+
             var sw = Stopwatch.StartNew();
 
             switch (sliderConfig.Type)
