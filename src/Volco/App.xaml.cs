@@ -46,7 +46,7 @@ public partial class App : Application
             "Volco", "config.json");
         _configManager = new ConfigManager(configPath);
         _configManager.Load();
-        _configManager.ConfigChanged += OnConfigChanged;
+        _configManager.ConnectionConfigChanged += OnConfigChanged;
 
         // Audio
         _audioManager = new AudioManager();
@@ -276,8 +276,8 @@ public partial class App : Application
 
     private void OnConfigChanged(object? sender, EventArgs e)
     {
-        AppLog.Info("Configuration changed, restarting connection");
-        // Restart connection if connection config might have changed
+        AppLog.Info("Connection configuration changed, restarting connection");
+        // Handler is invoked only when connection config changes
         StartConnection();
     }
 
