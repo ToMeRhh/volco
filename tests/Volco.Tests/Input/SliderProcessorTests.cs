@@ -152,4 +152,15 @@ public class SliderProcessorTests
             Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095, false, c, 0), 3);
         }
     }
+
+    [Fact]
+    public void ApplySmoothing_Zero_ReturnsTarget()
+        => Assert.Equal(0.8f, SliderProcessor.ApplySmoothing(0.2f, 0.8f, 0), 3);
+
+    [Fact]
+    public void ApplySmoothing_MovesPartwayTowardTarget()
+    {
+        var r = SliderProcessor.ApplySmoothing(0f, 1f, 0.5);
+        Assert.True(r > 0f && r < 1f);
+    }
 }
