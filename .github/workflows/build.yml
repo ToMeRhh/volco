@@ -2,10 +2,15 @@ name: Build Volco
 
 on:
   push:
-    branches: [ main ]
+    branches: [ '**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      run_build:
+        description: 'Also run the Build and Publish job'
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -29,6 +34,7 @@ jobs:
 
   build:
     name: Build and Publish
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_build == true)
     runs-on: windows-latest
     permissions:
       contents: read

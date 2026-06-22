@@ -7,12 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Do not run dotnet commands locally** — this dev machine doesn't have the right setup. Push to a branch and use GitHub Actions CI instead:
 
 ```bash
-# Trigger CI manually on any branch
+# Run tests only on any branch (default — use this)
 gh workflow run build.yml --ref <branch-name>
 
 # Check CI status
 gh run list --branch <branch-name> --limit 3
 ```
+
+**IMPORTANT — build job rules:**
+- Pushing to `main` automatically triggers both tests and the build/publish job.
+- Pushing to any other branch automatically triggers tests only.
+- `gh workflow run` (workflow_dispatch) triggers tests only by default. **Never trigger the build on a branch unless the user explicitly asks.** If they do ask, use:
+  ```bash
+  gh workflow run build.yml --ref <branch-name> --field run_build=true
+  ```
 
 CI runs tests on Ubuntu (net8.0) and builds/publishes on Windows (net8.0-windows10.0.22621.0, x64). Tests use xUnit.
 
