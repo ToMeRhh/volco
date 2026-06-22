@@ -5,9 +5,10 @@ using System.Text.Json;
 namespace Volco.Updates;
 
 /// <summary>
-/// Queries the GitHub REST API for available updates — either the latest published Release
-/// (no auth required) or the artifact of the most recent successful CI build (requires a token,
-/// because the Actions artifact API is authenticated even for public repositories).
+/// Queries the GitHub REST API for available updates — either the latest published Release or the
+/// artifact of the most recent successful CI build. Both paths take a token: Volco is a private
+/// repo, so reading releases and downloading assets require auth, and the Actions artifact API is
+/// authenticated even for public repos.
 /// </summary>
 public class GitHubUpdater
 {
