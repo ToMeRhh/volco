@@ -1,10 +1,17 @@
 name: Release Volco
 
-# Push a semver tag (e.g. v1.2.3) to build a stamped release build and publish a GitHub Release
-# with the single-file Volco.exe attached. The in-app updater discovers builds via this Release.
+# Publish a stamped release build with the single-file Volco.exe attached. The in-app updater
+# discovers builds via this Release. Trigger it either by pushing a semver tag (e.g. v1.2.3) or by
+# running the workflow manually from the Actions tab and supplying a version (creates the tag too).
 on:
   push:
     tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 0.1.0 or v0.1.0)'
+        required: true
+        type: string
 
 jobs:
   release:
@@ -17,10 +24,18 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v7
 
-    - name: Derive version from tag
+    - name: Resolve version and tag
       id: ver
       shell: bash
-      run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          raw="${{ github.event.inputs.version }}"
+        else
+          raw="${GITHUB_REF_NAME}"
+        fi
+        version="${raw#v}"          # build version, no leading v (e.g. 0.1.0)
+        echo "version=${version}" >> "$GITHUB_OUTPUT"
+        echo "tag=v${version}" >> "$GITHUB_OUTPUT"
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -54,7 +69,9 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       shell: bash
       run: |
-        gh release create "$GITHUB_REF_NAME" \
-          --title "Volco $GITHUB_REF_NAME" \
+        # For a tag push the tag already exists; for a manual run gh creates it at --target.
+        gh release create "${{ steps.ver.outputs.tag }}" \
+          --title "Volco ${{ steps.ver.outputs.tag }}" \
+          --target "${{ github.sha }}" \
           --generate-notes \
           ./publish/Volco.exe
