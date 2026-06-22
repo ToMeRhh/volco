@@ -17,6 +17,7 @@ public sealed partial class SlidersTab : Page
     public SlidersTab()
     {
         InitializeComponent();
+        NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)

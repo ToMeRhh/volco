@@ -11,6 +11,7 @@ public sealed partial class GeneralTab : Page
     public GeneralTab()
     {
         InitializeComponent();
+        NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)

@@ -11,6 +11,7 @@ public sealed partial class OutputDevicesTab : Page
     public OutputDevicesTab()
     {
         InitializeComponent();
+        NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)

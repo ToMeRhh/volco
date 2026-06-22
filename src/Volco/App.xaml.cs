@@ -127,7 +127,7 @@ public partial class App : Application
         {
             if (_settingsWindow == null)
             {
-                _settingsWindow = new SettingsWindow(_configManager, _audioManager);
+                _settingsWindow = new SettingsWindow(_configManager, _audioManager, _connection, _sliderProcessor);
                 _settingsWindow.Closed += (_, _) => _settingsWindow = null;
                 AppLog.Info("SettingsWindow created");
             }
@@ -158,6 +158,8 @@ public partial class App : Application
         _connection.MessageReceived += OnMessageReceived;
         _connection.StatusChanged += OnConnectionStatusChanged;
         _connection.Connect();
+
+        _settingsWindow?.UpdateConnection(_connection);
     }
 
     private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)

@@ -11,6 +11,7 @@ public sealed partial class ButtonsTab : Page
     public ButtonsTab()
     {
         InitializeComponent();
+        NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
