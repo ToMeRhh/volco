@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
+[assembly: InternalsVisibleTo("Volco.Tests")]
+
 namespace Volco;
 
-public static class AppLog
+internal static class AppLog
 {
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -56,8 +58,10 @@ public static class AppLog
         if (IsDebugEnabled) Enqueue("DEBUG", message);
     }
 
-    public static void Debug(ref DebugLogHandler handler)
+    public static void Debug(DebugLogHandler handler)
     {
+        // Must re-check IsDebugEnabled because if it was false when the handler was created,
+        // ToStringAndClear() will return an empty string and we don't want to log empty lines.
         if (IsDebugEnabled)
             Enqueue("DEBUG", handler.ToStringAndClear());
     }

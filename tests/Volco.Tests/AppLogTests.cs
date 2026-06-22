@@ -15,28 +15,44 @@ public class AppLogTests
     [Fact]
     public void Debug_InterpolatedString_SkipsEvaluationWhenDisabled()
     {
-        // Arrange
-        AppLog.IsDebugEnabled = false;
-        _counter = 0;
+        var original = AppLog.IsDebugEnabled;
+        try
+        {
+            // Arrange
+            AppLog.IsDebugEnabled = false;
+            _counter = 0;
 
-        // Act
-        AppLog.Debug($"Counter: {GetValue()}");
+            // Act
+            AppLog.Debug($"Counter: {GetValue()}");
 
-        // Assert
-        Assert.Equal(0, _counter);
+            // Assert
+            Assert.Equal(0, _counter);
+        }
+        finally
+        {
+            AppLog.IsDebugEnabled = original;
+        }
     }
 
     [Fact]
     public void Debug_InterpolatedString_EvaluatesWhenEnabled()
     {
-        // Arrange
-        AppLog.IsDebugEnabled = true;
-        _counter = 0;
+        var original = AppLog.IsDebugEnabled;
+        try
+        {
+            // Arrange
+            AppLog.IsDebugEnabled = true;
+            _counter = 0;
 
-        // Act
-        AppLog.Debug($"Counter: {GetValue()}");
+            // Act
+            AppLog.Debug($"Counter: {GetValue()}");
 
-        // Assert
-        Assert.Equal(1, _counter);
+            // Assert
+            Assert.Equal(1, _counter);
+        }
+        finally
+        {
+            AppLog.IsDebugEnabled = original;
+        }
     }
 }
