@@ -46,7 +46,7 @@ public partial class App : Application
             "Volco", "config.json");
         _configManager = new ConfigManager(configPath);
         _configManager.Load();
-        _configManager.ConfigChanged += OnConfigChanged;
+        _configManager.ConnectionConfigChanged += OnConfigChanged;
 
         // Audio
         _audioManager = new AudioManager();
@@ -127,7 +127,7 @@ public partial class App : Application
         {
             if (_settingsWindow == null)
             {
-                _settingsWindow = new SettingsWindow(_configManager, _audioManager);
+                _settingsWindow = new SettingsWindow(_configManager, _audioManager, _connection, _sliderProcessor);
                 _settingsWindow.Closed += (_, _) => _settingsWindow = null;
                 AppLog.Info("SettingsWindow created");
             }
@@ -158,6 +158,8 @@ public partial class App : Application
         _connection.MessageReceived += OnMessageReceived;
         _connection.StatusChanged += OnConnectionStatusChanged;
         _connection.Connect();
+
+        _settingsWindow?.UpdateConnection(_connection);
     }
 
     private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
@@ -177,7 +179,9 @@ public partial class App : Application
                 break;
             case ButtonMessage button:
                 AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
-                _buttonPressDetector.HandleButtonEvent(button.ButtonIndex, button.State);
+                var bcfg = _configManager.Config.Buttons.ElementAtOrDefault(button.ButtonIndex);
+                _buttonPressDetector.HandleButtonEvent(button.ButtonIndex, button.State,
+                    bcfg?.LongPressMs ?? 500, bcfg?.DoublePressWindowMs ?? 300);
                 break;
         }
     }
@@ -276,8 +280,8 @@ public partial class App : Application
 
     private void OnConfigChanged(object? sender, EventArgs e)
     {
-        AppLog.Info("Configuration changed, restarting connection");
-        // Restart connection if connection config might have changed
+        AppLog.Info("Connection configuration changed, restarting connection");
+        // Handler is invoked only when connection config changes
         StartConnection();
     }
 

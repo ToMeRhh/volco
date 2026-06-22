@@ -4,17 +4,41 @@ using Volco.Config;
 
 namespace Volco.Input;
 
+/// <summary>
+/// Event args for <see cref="SliderProcessor.SliderLevelChanged"/>.
+/// Carries the slider index and the final (post-curve, post-smoothing) volume in [0,1].
+/// </summary>
+public sealed class SliderLevelEventArgs : EventArgs
+{
+    public int SliderIndex { get; }
+    public float Level { get; }
+
+    public SliderLevelEventArgs(int sliderIndex, float level)
+    {
+        SliderIndex = sliderIndex;
+        Level = level;
+    }
+}
+
 public class SliderProcessor : IDisposable
 {
     private readonly IAudioManager _audio;
     private readonly ConfigManager _configManager;
     private readonly SessionMonitor _sessionMonitor;
     private readonly ushort?[] _pendingValues = new ushort?[16];
+    private readonly float?[] _lastVolume = new float?[16];
     private readonly Timer _coalesceTimer;
     private readonly object _lock = new();
 
     /// <summary>Raised after a slider changes volume, so the UI can show an OSD flyout.</summary>
     public event EventHandler<VolumeChangeNotification>? VolumeChanged;
+
+    /// <summary>
+    /// Raised after each slider's final (post-curve, post-smoothing) volume is computed.
+    /// Carries the slider index and level in [0,1]. Additive — does not replace VolumeChanged.
+    /// Task 14 wires this to SlidersViewModel.UpdateLiveLevel on the UI thread.
+    /// </summary>
+    public event EventHandler<SliderLevelEventArgs>? SliderLevelChanged;
 
     public SliderProcessor(IAudioManager audio, ConfigManager configManager, SessionMonitor sessionMonitor)
     {
@@ -25,10 +49,34 @@ public class SliderProcessor : IDisposable
     }
 
     public static float MapAdcToVolume(ushort adcValue, bool invert)
+        => MapAdcToVolume(adcValue, invert, ResponseCurve.Linear, 0);
+
+    public static float MapAdcToVolume(ushort adcValue, bool invert, ResponseCurve curve, double deadZonePercent)
     {
-        float volume = adcValue / 4095f;
-        return invert ? 1f - volume : volume;
+        float raw = adcValue / 4095f;
+        if (invert) raw = 1f - raw;
+
+        var dz = (float)Math.Clamp(deadZonePercent, 0, 0.45);
+        if (dz > 0)
+            raw = raw <= dz ? 0f : (raw - dz) / (1f - dz);
+
+        return ApplyCurve(raw, curve);
     }
+
+    public static float ApplySmoothing(float previous, float target, double smoothingFactor)
+    {
+        var a = (float)Math.Clamp(smoothingFactor, 0, 0.95);
+        return previous + (target - previous) * (1f - a);
+    }
+
+    private static float ApplyCurve(float x, ResponseCurve curve) => curve switch
+    {
+        ResponseCurve.Linear      => x,
+        ResponseCurve.Logarithmic => x <= 0 ? 0 : MathF.Pow(x, 0.5f),
+        ResponseCurve.Exponential => MathF.Pow(x, 2f),
+        ResponseCurve.SCurve      => x * x * (3f - 2f * x), // smoothstep
+        _                         => x
+    };
 
     public static List<string> GetUnmappedProcesses(AppConfig config, IReadOnlySet<string> activeProcesses)
     {
@@ -113,7 +161,12 @@ public class SliderProcessor : IDisposable
                 continue;
 
             var sliderConfig = config.Sliders[sliderIndex];
-            var volume = MapAdcToVolume(value.Value, sliderConfig.Invert);
+            var volume = MapAdcToVolume(value.Value, sliderConfig.Invert, sliderConfig.Curve, sliderConfig.DeadZonePercent);
+
+            if (sliderConfig.SmoothingFactor > 0 && _lastVolume[sliderIndex] is { } prev)
+                volume = ApplySmoothing(prev, volume, sliderConfig.SmoothingFactor);
+            _lastVolume[sliderIndex] = volume;
+
             var sw = Stopwatch.StartNew();
 
             switch (sliderConfig.Type)
@@ -136,6 +189,8 @@ public class SliderProcessor : IDisposable
             }
 
             AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
+
+            SliderLevelChanged?.Invoke(this, new SliderLevelEventArgs(sliderIndex, volume));
 
             if (VolumeChanged != null)
             {

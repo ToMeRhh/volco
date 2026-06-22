@@ -117,4 +117,17 @@ public class ButtonPressDetectorTests
             Assert.All(_events, e => Assert.Equal(PressType.Single, e.PressType));
         }
     }
+
+    [Fact]
+    public async Task PerButtonThresholds_ShortLongPress_FiresSooner()
+    {
+        _detector.HandleButtonEvent(3, ButtonState.Pressed, longPressMs: 120, doublePressWindowMs: 300);
+        await WaitForEventsAsync(1, timeoutMs: 400);
+        lock (_eventsLock)
+        {
+            Assert.Single(_events);
+            Assert.Equal(PressType.Long, _events[0].PressType);
+        }
+        _detector.HandleButtonEvent(3, ButtonState.Released, 120, 300);
+    }
 }
