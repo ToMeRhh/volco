@@ -6,6 +6,22 @@
     <Platforms>x64</Platforms>
   </PropertyGroup>
 
+  <!--
+    Build stamping for the in-app updater. The release CI workflow passes /p:VolcoVersion and
+    /p:VolcoReleaseChannel=release; local/dev builds fall back to 0.0.0 on the "local" channel so
+    BuildInfo.IsRelease is false and the updater UI stays hidden.
+  -->
+  <PropertyGroup>
+    <VolcoVersion Condition="'$(VolcoVersion)' == ''">0.0.0</VolcoVersion>
+    <VolcoReleaseChannel Condition="'$(VolcoReleaseChannel)' == ''">local</VolcoReleaseChannel>
+    <Version>$(VolcoVersion)</Version>
+    <InformationalVersion>$(VolcoVersion)</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="ReleaseChannel" Value="$(VolcoReleaseChannel)" />
+  </ItemGroup>
+
   <PropertyGroup Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))">
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>

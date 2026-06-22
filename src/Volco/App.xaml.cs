@@ -9,6 +9,7 @@ using Volco.Config;
 using Volco.Input;
 using Volco.Input.Actions;
 using Volco.UI;
+using Volco.Updates;
 
 namespace Volco;
 
@@ -16,8 +17,10 @@ public partial class App : Application
 {
     public static bool IsExiting { get; private set; }
     public IControllerConnection? Connection => _connection;
+    private static App _instance = null!;
     private TaskbarIcon? _trayIcon;
     private SettingsWindow? _settingsWindow;
+    private UpdateWindow? _updateWindow;
     private ConfigManager _configManager = null!;
     private IAudioManager _audioManager = null!;
     private IControllerConnection? _connection;
@@ -28,6 +31,7 @@ public partial class App : Application
 
     public App()
     {
+        _instance = this;
         InitializeComponent();
         UnhandledException += (_, e) =>
         {
@@ -92,19 +96,26 @@ public partial class App : Application
         };
         menu.Items.Add(openItem);
 
+        // The in-app updater only makes sense for official release builds — a local/dev build
+        // shouldn't overwrite the developer's working copy.
+        if (BuildInfo.IsRelease)
+        {
+            var updateItem = new MenuFlyoutItem { Text = "Check for Updates…" };
+            updateItem.Click += (_, _) =>
+            {
+                AppLog.Info("Check for Updates menu item clicked");
+                ShowUpdates();
+            };
+            menu.Items.Add(updateItem);
+        }
+
         menu.Items.Add(new MenuFlyoutSeparator());
 
         var exitItem = new MenuFlyoutItem { Text = "Exit" };
         exitItem.Click += (_, _) =>
         {
             AppLog.Info("Exit menu item clicked");
-            IsExiting = true;
-            _connection?.Dispose();
-            _sliderProcessor.Dispose();
-            _sessionMonitor.Dispose();
-            _osd?.Close();
-            _trayIcon?.Dispose();
-            Exit();
+            Shutdown();
         };
         menu.Items.Add(exitItem);
 
@@ -118,6 +129,44 @@ public partial class App : Application
 
         _trayIcon.ForceCreate();
         AppLog.Info("Tray icon created");
+    }
+
+    /// <summary>
+    /// Requested by the updater after it has staged a new build and launched the swap helper.
+    /// Tears the app down cleanly so the helper can replace the exe and relaunch.
+    /// </summary>
+    public static void RequestExit() => _instance.Shutdown();
+
+    private void Shutdown()
+    {
+        AppLog.Info("Shutting down");
+        IsExiting = true;
+        _connection?.Dispose();
+        _sliderProcessor.Dispose();
+        _sessionMonitor.Dispose();
+        _osd?.Close();
+        _updateWindow?.Close();
+        _trayIcon?.Dispose();
+        Exit();
+    }
+
+    private void ShowUpdates()
+    {
+        AppLog.Info("ShowUpdates called");
+        try
+        {
+            if (_updateWindow == null)
+            {
+                _updateWindow = new UpdateWindow(_configManager);
+                _updateWindow.Closed += (_, _) => _updateWindow = null;
+                AppLog.Info("UpdateWindow created");
+            }
+            _updateWindow.Activate();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"ShowUpdates failed: {ex}");
+        }
     }
 
     private void ShowSettings()

@@ -112,6 +112,29 @@ msbuild Volco.sln -p:Configuration=Release -p:Platform=x64 -restore
 
 Or use the GitHub Actions CI workflow which builds, tests, and produces a downloadable artifact on every push to `main`.
 
+## Releases & In-App Updates
+
+Release builds are stamped with a version and a `release` channel; local/dev builds use the
+`local` channel. Only release builds expose the **Check for Updates…** item in the tray menu.
+
+**Cutting a release:** push a semver tag and the `release.yml` workflow builds a stamped
+single-file `Volco.exe` and publishes a GitHub Release with it attached:
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+**Updating:** right-click the tray icon → **Check for Updates…**. The app compares the running
+version against the latest GitHub Release and, if newer, downloads `Volco.exe` and relaunches into
+it. A small helper script performs the in-place swap once the app exits.
+
+The dialog also offers an advanced option to update from the **latest CI build artifact** (the
+`Volco-win-x64` artifact of the most recent successful `main` build) instead of a published
+release. This path requires a GitHub Personal Access Token with `actions:read` scope, since the
+Actions artifact API is authenticated even for public repos. The token is stored in your local
+`config.json`.
+
 ## Project Structure
 
 ```
