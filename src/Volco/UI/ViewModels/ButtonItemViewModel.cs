@@ -8,17 +8,14 @@ using Volco.Input.Actions;
 namespace Volco.UI.ViewModels;
 
 /// <summary>
-/// Identifies which of the three press kinds to operate on.
-/// </summary>
-public enum PressKind { Single, Double, Long }
-
-/// <summary>
 /// Lightweight model for a single press-action slot (single/double/long).
 /// </summary>
 public partial class PressActionViewModel : ObservableObject
 {
     private readonly ButtonActionConfig _cfg;
     private readonly Action _save;
+    private readonly IAudioManager _audio;
+    private readonly ConfigManager _config;
 
     [ObservableProperty]
     private ButtonActionType _actionType;
@@ -32,18 +29,51 @@ public partial class PressActionViewModel : ObservableObject
     public bool NeedsDevice =>
         ActionType is ButtonActionType.MuteSpecificDevice or ButtonActionType.SetOutputDevice;
 
-    public PressActionViewModel(ButtonActionConfig cfg, Action save)
+    /// <summary>
+    /// Zero-based index for the action type ComboBox (TwoWay x:Bind to SelectedIndex).
+    /// Order matches XAML items and ButtonActionType enum declaration order:
+    /// 0=None, 1=MuteSpecificDevice, 2=MuteCurrentOutput, 3=MuteCurrentInput,
+    /// 4=ToggleOutputDevice, 5=SetOutputDevice.
+    /// </summary>
+    public int ActionTypeIndex
     {
-        _cfg = cfg;
-        _save = save;
+        get => ActionType switch
+        {
+            ButtonActionType.None               => 0,
+            ButtonActionType.MuteSpecificDevice => 1,
+            ButtonActionType.MuteCurrentOutput  => 2,
+            ButtonActionType.MuteCurrentInput   => 3,
+            ButtonActionType.ToggleOutputDevice => 4,
+            ButtonActionType.SetOutputDevice    => 5,
+            _                                   => 0,
+        };
+        set => ActionType = value switch
+        {
+            0 => ButtonActionType.None,
+            1 => ButtonActionType.MuteSpecificDevice,
+            2 => ButtonActionType.MuteCurrentOutput,
+            3 => ButtonActionType.MuteCurrentInput,
+            4 => ButtonActionType.ToggleOutputDevice,
+            5 => ButtonActionType.SetOutputDevice,
+            _ => ButtonActionType.None,
+        };
+    }
+
+    public PressActionViewModel(ButtonActionConfig cfg, Action save, IAudioManager audio, ConfigManager config)
+    {
+        _cfg    = cfg;
+        _save   = save;
+        _audio  = audio;
+        _config = config;
         _actionType = cfg.Action;
-        _deviceId = cfg.DeviceId ?? "";
+        _deviceId   = cfg.DeviceId ?? "";
     }
 
     partial void OnActionTypeChanged(ButtonActionType value)
     {
         _cfg.Action = value;
         OnPropertyChanged(nameof(NeedsDevice));
+        OnPropertyChanged(nameof(ActionTypeIndex));
         _save();
     }
 
@@ -52,25 +82,32 @@ public partial class PressActionViewModel : ObservableObject
         _cfg.DeviceId = string.IsNullOrEmpty(value) ? null : value;
         _save();
     }
+
+    /// <summary>
+    /// Builds and immediately executes the action for this press slot.
+    /// No-ops when the action is None.
+    /// </summary>
+    [RelayCommand]
+    private void Test()
+    {
+        ActionFactory.Create(_cfg, _audio, _config)?.Execute();
+    }
 }
 
 /// <summary>
 /// ViewModel for a single button entry in the Buttons settings tab.
-/// Exposes the three press actions, timing parameters, available output devices,
-/// and a Test command that executes the selected action via <see cref="ActionFactory"/>.
+/// Exposes the three press actions, timing parameters, and available output devices.
 /// </summary>
 public partial class ButtonItemViewModel : ObservableObject
 {
     private readonly ButtonConfig _cfg;
-    private readonly IAudioManager _audio;
-    private readonly ConfigManager _config;
     private readonly Action _save;
 
     // ── Press action slots ─────────────────────────────────────────────────────
 
     public PressActionViewModel SinglePress { get; }
     public PressActionViewModel DoublePress { get; }
-    public PressActionViewModel LongPress { get; }
+    public PressActionViewModel LongPress   { get; }
 
     // ── Timing parameters ─────────────────────────────────────────────────────
 
@@ -87,31 +124,36 @@ public partial class ButtonItemViewModel : ObservableObject
     /// <summary>Available output devices for device-picker combos.</summary>
     public ObservableCollection<AudioDeviceInfo> OutputDevices { get; } = new();
 
+    /// <summary>
+    /// Output device names for binding to ComboBox.ItemsSource (string list).
+    /// Mirrors <see cref="OutputDevices"/> as plain strings so SelectedItem can
+    /// bind directly to <see cref="PressActionViewModel.DeviceId"/>.
+    /// </summary>
+    public List<string> OutputDeviceNames { get; private set; } = new();
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public ButtonItemViewModel(ButtonConfig cfg, IAudioManager audio, ConfigManager config, Action save)
     {
-        _cfg = cfg;
-        _audio = audio;
-        _config = config;
+        _cfg  = cfg;
         _save = save;
 
-        Index = cfg.Index;
-        _longPressMs = cfg.LongPressMs;
+        Index             = cfg.Index;
+        _longPressMs      = cfg.LongPressMs;
         _doublePressWindowMs = cfg.DoublePressWindowMs;
 
-        SinglePress = new PressActionViewModel(cfg.SinglePress, save);
-        DoublePress = new PressActionViewModel(cfg.DoublePress, save);
-        LongPress  = new PressActionViewModel(cfg.LongPress,  save);
+        SinglePress = new PressActionViewModel(cfg.SinglePress, save, audio, config);
+        DoublePress = new PressActionViewModel(cfg.DoublePress, save, audio, config);
+        LongPress   = new PressActionViewModel(cfg.LongPress,  save, audio, config);
 
         foreach (var d in audio.GetOutputDevices())
             OutputDevices.Add(d);
+
+        OutputDeviceNames = OutputDevices.Select(d => d.Name).ToList();
     }
 
     // ── Timing change hooks ───────────────────────────────────────────────────
 
-    // CommunityToolkit generates the partial hook named after the property:
-    // field _longPressMs → property LongPressMs → hook OnLongPressMsChanged
     partial void OnLongPressMsChanged(int value)
     {
         _cfg.LongPressMs = value;
@@ -122,26 +164,5 @@ public partial class ButtonItemViewModel : ObservableObject
     {
         _cfg.DoublePressWindowMs = value;
         _save();
-    }
-
-    // ── Test command ──────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Builds and immediately executes the action for the given press kind.
-    /// Safe to call from the UI; no-ops when the action is None.
-    /// </summary>
-    [RelayCommand]
-    private void TestPress(PressKind pressKind)
-    {
-        var actionCfg = pressKind switch
-        {
-            PressKind.Single => _cfg.SinglePress,
-            PressKind.Double => _cfg.DoublePress,
-            PressKind.Long   => _cfg.LongPress,
-            _                => _cfg.SinglePress
-        };
-
-        var action = ActionFactory.Create(actionCfg, _audio, _config);
-        action?.Execute();
     }
 }
