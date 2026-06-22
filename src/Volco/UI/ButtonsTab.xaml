@@ -13,7 +13,7 @@
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="{StaticResource SpaceXl}"
+        <StackPanel Padding="{StaticResource PagePadding}"
                     Spacing="{StaticResource SpaceL}"
                     MaxWidth="{StaticResource SettingsCardMaxWidth}"
                     HorizontalAlignment="Left">
@@ -28,7 +28,7 @@
             <ItemsRepeater ItemsSource="{x:Bind ViewModel.Items}">
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="vm:ButtonItemViewModel">
-                        <Border Padding="{StaticResource SpaceM}"
+                        <Border Padding="{StaticResource CardPadding}"
                                 Margin="0,0,0,8"
                                 CornerRadius="{StaticResource CardCornerRadius}"
                                 Background="{StaticResource SurfaceCardBrush}"

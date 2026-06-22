@@ -14,7 +14,7 @@
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="{StaticResource SpaceXl}"
+        <StackPanel Padding="{StaticResource PagePadding}"
                     Spacing="{StaticResource SpaceL}"
                     MaxWidth="{StaticResource SettingsCardMaxWidth}"
                     HorizontalAlignment="Left">
