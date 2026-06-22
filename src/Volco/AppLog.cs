@@ -1,4 +1,7 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Volco.Tests")]
 
 namespace Volco;
 
@@ -21,8 +24,48 @@ internal static class AppLog
 
     public static bool IsDebugEnabled { get; set; } = false;
 
+    [InterpolatedStringHandler]
+    public ref struct DebugLogHandler
+    {
+        private DefaultInterpolatedStringHandler _innerHandler;
+
+        public DebugLogHandler(int literalLength, int formattedCount, out bool isEnabled)
+        {
+            isEnabled = IsDebugEnabled;
+            if (isEnabled)
+            {
+                _innerHandler = new DefaultInterpolatedStringHandler(literalLength, formattedCount);
+            }
+            else
+            {
+                _innerHandler = default;
+            }
+        }
+
+        public void AppendLiteral(string s) => _innerHandler.AppendLiteral(s);
+        public void AppendFormatted<T>(T value) => _innerHandler.AppendFormatted(value);
+        public void AppendFormatted<T>(T value, string? format) => _innerHandler.AppendFormatted(value, format);
+        public void AppendFormatted<T>(T value, int alignment) => _innerHandler.AppendFormatted(value, alignment);
+        public void AppendFormatted<T>(T value, int alignment, string? format) => _innerHandler.AppendFormatted(value, alignment, format);
+
+        internal string ToStringAndClear() => _innerHandler.ToStringAndClear();
+    }
+
     public static void Info(string message) => Enqueue("INFO", message);
-    public static void Debug(string message) { if (IsDebugEnabled) Enqueue("DEBUG", message); }
+
+    public static void Debug(string message)
+    {
+        if (IsDebugEnabled) Enqueue("DEBUG", message);
+    }
+
+    public static void Debug(DebugLogHandler handler)
+    {
+        // Must re-check IsDebugEnabled because if it was false when the handler was created,
+        // ToStringAndClear() will return an empty string and we don't want to log empty lines.
+        if (IsDebugEnabled)
+            Enqueue("DEBUG", handler.ToStringAndClear());
+    }
+
     public static void Error(string message) => Enqueue("ERROR", message);
 
     private static void Enqueue(string level, string message)
