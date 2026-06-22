@@ -1,13 +1,12 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using Volco.Config;
+using Volco.UI.ViewModels;
 
 namespace Volco.UI;
 
 public sealed partial class GeneralTab : Page
 {
-    private ConfigManager? _configManager;
-    private bool _isLoading = true;
+    public GeneralViewModel? ViewModel { get; private set; }
 
     public GeneralTab()
     {
@@ -16,22 +15,10 @@ public sealed partial class GeneralTab : Page
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
-        if (e.Parameter is ConfigManager configManager)
-            _configManager = configManager;
+        if (e.Parameter is not SettingsViewModel settingsVm)
+            return;
 
-        if (_configManager == null) return;
-
-        _isLoading = true;
-        DebugLoggingCheckBox.IsChecked = _configManager.Config.DebugLogging;
-        _isLoading = false;
-    }
-
-    private void DebugLogging_Changed(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-    {
-        if (_isLoading || _configManager == null) return;
-        var enabled = DebugLoggingCheckBox.IsChecked == true;
-        _configManager.Config.DebugLogging = enabled;
-        AppLog.IsDebugEnabled = enabled;
-        _configManager.Save();
+        ViewModel = settingsVm.General;
+        Bindings.Update();
     }
 }
