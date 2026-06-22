@@ -23,6 +23,14 @@ public sealed partial class SettingsWindow : Window
         // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow
         var appWindow = this.AppWindow;
         appWindow.Resize(new Windows.Graphics.SizeInt32(720, 600));
+        if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+        {
+            presenter.IsResizable = true;
+            presenter.IsMaximizable = true;
+        }
+        // NOTE: WinUI 3 has no built-in minimum-window-size API; enforcing a hard minimum
+        // (~680x560) requires a WM_GETMINMAXINFO window-subclass hook. Deferred — the window
+        // is freely resizable with a sensible 720x600 default.
         appWindow.Closing += AppWindow_Closing;
 
         // Subscribe to live slider level updates; marshal to UI thread

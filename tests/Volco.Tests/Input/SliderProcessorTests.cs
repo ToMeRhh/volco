@@ -50,7 +50,7 @@ public class SliderProcessorTests
 
         // Assert
         Assert.True(completed == tcs.Task, "SliderLevelChanged did not fire within 500ms");
-        receivedArgs = tcs.Task.Result;
+        receivedArgs = await tcs.Task;
         Assert.Equal(0, receivedArgs.SliderIndex);
         Assert.InRange(receivedArgs.Level, 0f, 1f);
 
