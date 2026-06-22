@@ -36,116 +36,143 @@
                                 BorderThickness="1">
                             <StackPanel Spacing="{StaticResource SpaceS}">
 
-                                <!-- Title: "Button N" -->
-                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}"
-                                           Foreground="{StaticResource TextPrimaryBrush}">
-                                    <Run Text="Button "/>
-                                    <Run Text="{x:Bind Index}"/>
-                                </TextBlock>
+                                <!-- Title row: "Button N" + collapse chevron -->
+                                <Button Command="{x:Bind ToggleExpandedCommand}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   VerticalAlignment="Center">
+                                            <Run Text="Button "/>
+                                            <Run Text="{x:Bind Index}"/>
+                                        </TextBlock>
+                                        <Grid Grid.Column="1" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE70D;" FontSize="12"
+                                                      Visibility="{x:Bind IsExpanded, Converter={StaticResource BoolToVisibility}}"/>
+                                            <FontIcon Glyph="&#xE76C;" FontSize="12"
+                                                      Visibility="{x:Bind IsExpanded, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}"/>
+                                        </Grid>
+                                    </Grid>
+                                </Button>
 
-                                <!-- ── Single Press row ─────────────────── -->
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="{StaticResource SpaceS}"
-                                            VerticalAlignment="Center">
-                                    <TextBlock Text="Single Press"
-                                               Width="120"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ComboBox SelectedIndex="{x:Bind SinglePress.ActionTypeIndex, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}">
-                                        <ComboBoxItem Content="None"/>
-                                        <ComboBoxItem Content="Mute Specific Device"/>
-                                        <ComboBoxItem Content="Mute Current Output"/>
-                                        <ComboBoxItem Content="Mute Current Input"/>
-                                        <ComboBoxItem Content="Toggle Output Device"/>
-                                        <ComboBoxItem Content="Set Output Device"/>
-                                    </ComboBox>
-                                    <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
-                                              SelectedItem="{x:Bind SinglePress.DeviceId, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}"
-                                              PlaceholderText="Select device…"
-                                              Visibility="{x:Bind SinglePress.NeedsDevice, Converter={StaticResource BoolToVisibility}}"/>
-                                    <Button Command="{x:Bind SinglePress.TestCommand}"
-                                            Content="Test"
-                                            ToolTipService.ToolTip="Execute this press action now"/>
-                                </StackPanel>
+                                <!-- Collapsible body -->
+                                <StackPanel Spacing="{StaticResource SpaceS}"
+                                            Visibility="{x:Bind IsExpanded, Converter={StaticResource BoolToVisibility}}">
 
-                                <!-- ── Double Press row ─────────────────── -->
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="{StaticResource SpaceS}"
-                                            VerticalAlignment="Center">
-                                    <TextBlock Text="Double Press"
-                                               Width="120"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ComboBox SelectedIndex="{x:Bind DoublePress.ActionTypeIndex, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}">
-                                        <ComboBoxItem Content="None"/>
-                                        <ComboBoxItem Content="Mute Specific Device"/>
-                                        <ComboBoxItem Content="Mute Current Output"/>
-                                        <ComboBoxItem Content="Mute Current Input"/>
-                                        <ComboBoxItem Content="Toggle Output Device"/>
-                                        <ComboBoxItem Content="Set Output Device"/>
-                                    </ComboBox>
-                                    <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
-                                              SelectedItem="{x:Bind DoublePress.DeviceId, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}"
-                                              PlaceholderText="Select device…"
-                                              Visibility="{x:Bind DoublePress.NeedsDevice, Converter={StaticResource BoolToVisibility}}"/>
-                                    <Button Command="{x:Bind DoublePress.TestCommand}"
-                                            Content="Test"
-                                            ToolTipService.ToolTip="Execute this press action now"/>
-                                </StackPanel>
-
-                                <!-- ── Long Press row ──────────────────── -->
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="{StaticResource SpaceS}"
-                                            VerticalAlignment="Center">
-                                    <TextBlock Text="Long Press"
-                                               Width="120"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ComboBox SelectedIndex="{x:Bind LongPress.ActionTypeIndex, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}">
-                                        <ComboBoxItem Content="None"/>
-                                        <ComboBoxItem Content="Mute Specific Device"/>
-                                        <ComboBoxItem Content="Mute Current Output"/>
-                                        <ComboBoxItem Content="Mute Current Input"/>
-                                        <ComboBoxItem Content="Toggle Output Device"/>
-                                        <ComboBoxItem Content="Set Output Device"/>
-                                    </ComboBox>
-                                    <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
-                                              SelectedItem="{x:Bind LongPress.DeviceId, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}"
-                                              PlaceholderText="Select device…"
-                                              Visibility="{x:Bind LongPress.NeedsDevice, Converter={StaticResource BoolToVisibility}}"/>
-                                    <Button Command="{x:Bind LongPress.TestCommand}"
-                                            Content="Test"
-                                            ToolTipService.ToolTip="Execute this press action now"/>
-                                </StackPanel>
-
-                                <!-- ── Threshold NumberBoxes ────────────── -->
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="{StaticResource SpaceM}"
-                                            Margin="0,4,0,0">
-                                    <StackPanel Spacing="{StaticResource SpaceXs}">
-                                        <TextBlock Text="Long press (ms)"
+                                    <!-- ── Single Press row ─────────────────── -->
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="{StaticResource SpaceS}"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="Single Press"
+                                                   Width="120"
+                                                   VerticalAlignment="Center"
                                                    Foreground="{StaticResource TextSecondaryBrush}"/>
-                                        <NumberBox Value="{x:Bind LongPressMs, Mode=TwoWay, Converter={StaticResource IntToDouble}}"
-                                                   Minimum="100"
-                                                   Maximum="5000"
-                                                   SpinButtonPlacementMode="Compact"
-                                                   Width="160"/>
+                                        <ComboBox SelectedIndex="{x:Bind SinglePress.ActionTypeIndex, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}">
+                                            <ComboBoxItem Content="None"/>
+                                            <ComboBoxItem Content="Mute Specific Device"/>
+                                            <ComboBoxItem Content="Mute Current Output"/>
+                                            <ComboBoxItem Content="Mute Current Input"/>
+                                            <ComboBoxItem Content="Toggle Output Device"/>
+                                            <ComboBoxItem Content="Set Output Device"/>
+                                        </ComboBox>
+                                        <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
+                                                  SelectedItem="{x:Bind SinglePress.DeviceId, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}"
+                                                  PlaceholderText="Select device…"
+                                                  Visibility="{x:Bind SinglePress.NeedsDevice, Converter={StaticResource BoolToVisibility}}"/>
+                                        <Button Command="{x:Bind SinglePress.TestCommand}"
+                                                Content="Test"
+                                                ToolTipService.ToolTip="Execute this press action now"/>
                                     </StackPanel>
-                                    <StackPanel Spacing="{StaticResource SpaceXs}">
-                                        <TextBlock Text="Double-press window (ms)"
+
+                                    <!-- ── Double Press row ─────────────────── -->
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="{StaticResource SpaceS}"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="Double Press"
+                                                   Width="120"
+                                                   VerticalAlignment="Center"
                                                    Foreground="{StaticResource TextSecondaryBrush}"/>
-                                        <NumberBox Value="{x:Bind DoublePressWindowMs, Mode=TwoWay, Converter={StaticResource IntToDouble}}"
-                                                   Minimum="50"
-                                                   Maximum="2000"
-                                                   SpinButtonPlacementMode="Compact"
-                                                   Width="160"/>
+                                        <ComboBox SelectedIndex="{x:Bind DoublePress.ActionTypeIndex, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}">
+                                            <ComboBoxItem Content="None"/>
+                                            <ComboBoxItem Content="Mute Specific Device"/>
+                                            <ComboBoxItem Content="Mute Current Output"/>
+                                            <ComboBoxItem Content="Mute Current Input"/>
+                                            <ComboBoxItem Content="Toggle Output Device"/>
+                                            <ComboBoxItem Content="Set Output Device"/>
+                                        </ComboBox>
+                                        <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
+                                                  SelectedItem="{x:Bind DoublePress.DeviceId, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}"
+                                                  PlaceholderText="Select device…"
+                                                  Visibility="{x:Bind DoublePress.NeedsDevice, Converter={StaticResource BoolToVisibility}}"/>
+                                        <Button Command="{x:Bind DoublePress.TestCommand}"
+                                                Content="Test"
+                                                ToolTipService.ToolTip="Execute this press action now"/>
                                     </StackPanel>
+
+                                    <!-- ── Long Press row ──────────────────── -->
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="{StaticResource SpaceS}"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="Long Press"
+                                                   Width="120"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <ComboBox SelectedIndex="{x:Bind LongPress.ActionTypeIndex, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}">
+                                            <ComboBoxItem Content="None"/>
+                                            <ComboBoxItem Content="Mute Specific Device"/>
+                                            <ComboBoxItem Content="Mute Current Output"/>
+                                            <ComboBoxItem Content="Mute Current Input"/>
+                                            <ComboBoxItem Content="Toggle Output Device"/>
+                                            <ComboBoxItem Content="Set Output Device"/>
+                                        </ComboBox>
+                                        <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
+                                                  SelectedItem="{x:Bind LongPress.DeviceId, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}"
+                                                  PlaceholderText="Select device…"
+                                                  Visibility="{x:Bind LongPress.NeedsDevice, Converter={StaticResource BoolToVisibility}}"/>
+                                        <Button Command="{x:Bind LongPress.TestCommand}"
+                                                Content="Test"
+                                                ToolTipService.ToolTip="Execute this press action now"/>
+                                    </StackPanel>
+
+                                    <!-- ── Threshold NumberBoxes ────────────── -->
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="{StaticResource SpaceM}"
+                                                Margin="0,4,0,0">
+                                        <StackPanel Spacing="{StaticResource SpaceXs}">
+                                            <TextBlock Text="Long press (ms)"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <NumberBox Value="{x:Bind LongPressMs, Mode=TwoWay, Converter={StaticResource IntToDouble}}"
+                                                       Minimum="100"
+                                                       Maximum="5000"
+                                                       SpinButtonPlacementMode="Compact"
+                                                       Width="160"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="{StaticResource SpaceXs}">
+                                            <TextBlock Text="Double-press window (ms)"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <NumberBox Value="{x:Bind DoublePressWindowMs, Mode=TwoWay, Converter={StaticResource IntToDouble}}"
+                                                       Minimum="50"
+                                                       Maximum="2000"
+                                                       SpinButtonPlacementMode="Compact"
+                                                       Width="160"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
                                 </StackPanel>
 
                             </StackPanel>

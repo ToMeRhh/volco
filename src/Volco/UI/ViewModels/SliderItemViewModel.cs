@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Volco.Audio;
 using Volco.Config;
 
@@ -43,6 +44,12 @@ public partial class SliderItemViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private double _liveLevel;
+
+    [ObservableProperty]
+    private bool _isExpanded = true;
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     // ── ComboBox index helpers (x:Bind TwoWay to SelectedIndex) ─────────────
 

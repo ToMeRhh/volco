@@ -36,109 +36,136 @@
                                 BorderThickness="1">
                             <StackPanel Spacing="{StaticResource SpaceS}">
 
-                                <!-- Title row: "Slider N" -->
-                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}"
-                                           Foreground="{StaticResource TextPrimaryBrush}">
-                                    <Run Text="Slider "/>
-                                    <Run Text="{x:Bind Index}"/>
-                                </TextBlock>
+                                <!-- Title row: "Slider N" + collapse chevron -->
+                                <Button Command="{x:Bind ToggleExpandedCommand}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   VerticalAlignment="Center">
+                                            <Run Text="Slider "/>
+                                            <Run Text="{x:Bind Index}"/>
+                                        </TextBlock>
+                                        <Grid Grid.Column="1" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE70D;" FontSize="12"
+                                                      Visibility="{x:Bind IsExpanded, Converter={StaticResource BoolToVisibility}}"/>
+                                            <FontIcon Glyph="&#xE76C;" FontSize="12"
+                                                      Visibility="{x:Bind IsExpanded, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}"/>
+                                        </Grid>
+                                    </Grid>
+                                </Button>
 
-                                <!-- Live level bar -->
-                                <StackPanel Spacing="{StaticResource SpaceXs}">
-                                    <TextBlock Text="Live Level"
+                                <!-- Collapsible body -->
+                                <StackPanel Spacing="{StaticResource SpaceS}"
+                                            Visibility="{x:Bind IsExpanded, Converter={StaticResource BoolToVisibility}}">
+
+                                    <!-- Live level bar -->
+                                    <StackPanel Spacing="{StaticResource SpaceXs}">
+                                        <TextBlock Text="Live Level"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <ProgressBar Minimum="0"
+                                                     Maximum="1"
+                                                     Value="{x:Bind LiveLevel, Mode=OneWay}"
+                                                     Height="6"
+                                                     HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+
+                                    <!-- Mapping type selector -->
+                                    <StackPanel Spacing="{StaticResource SpaceXs}">
+                                        <TextBlock Text="Mapping Type"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <ComboBox SelectedIndex="{x:Bind MappingTypeIndex, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}">
+                                            <ComboBoxItem Content="Processes"/>
+                                            <ComboBoxItem Content="Output Device"/>
+                                            <ComboBoxItem Content="Unmapped"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <!-- Process input (visible when IsProcessesVisible) -->
+                                    <StackPanel Spacing="{StaticResource SpaceXs}"
+                                                Visibility="{x:Bind IsProcessesVisible, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Processes (comma-separated)"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <AutoSuggestBox Width="300"
+                                                        PlaceholderText="e.g. spotify.exe, chrome.exe"
+                                                        Text="{x:Bind ProcessesText, Mode=TwoWay}"
+                                                        TextChanged="ProcessBox_TextChanged"
+                                                        SuggestionChosen="ProcessBox_SuggestionChosen"/>
+                                    </StackPanel>
+
+                                    <!-- Device picker (visible when IsDeviceVisible) -->
+                                    <StackPanel Spacing="{StaticResource SpaceXs}"
+                                                Visibility="{x:Bind IsDeviceVisible, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Output Device"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
+                                                  SelectedItem="{x:Bind DeviceName, Mode=TwoWay}"
+                                                  Width="300"
+                                                  PlaceholderText="Select device…"/>
+                                    </StackPanel>
+
+                                    <!-- Invert toggle -->
+                                    <CheckBox Content="Invert"
+                                              IsChecked="{x:Bind Invert, Mode=TwoWay}"/>
+
+                                    <!-- ── Tuning controls ──────────────────── -->
+                                    <TextBlock Text="Tuning"
                                                Style="{StaticResource CaptionTextBlockStyle}"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ProgressBar Minimum="0"
-                                                 Maximum="1"
-                                                 Value="{x:Bind LiveLevel, Mode=OneWay}"
-                                                 Height="6"
-                                                 HorizontalAlignment="Stretch"/>
-                                </StackPanel>
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,4,0,0"/>
 
-                                <!-- Mapping type selector -->
-                                <StackPanel Spacing="{StaticResource SpaceXs}">
-                                    <TextBlock Text="Mapping Type"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ComboBox SelectedIndex="{x:Bind MappingTypeIndex, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}">
-                                        <ComboBoxItem Content="Processes"/>
-                                        <ComboBoxItem Content="Output Device"/>
-                                        <ComboBoxItem Content="Unmapped"/>
-                                    </ComboBox>
-                                </StackPanel>
+                                    <!-- Response curve -->
+                                    <StackPanel Spacing="{StaticResource SpaceXs}">
+                                        <TextBlock Text="Response Curve"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <ComboBox SelectedIndex="{x:Bind CurveIndex, Mode=TwoWay}"
+                                                  Width="{StaticResource ComboBoxStandardWidth}">
+                                            <ComboBoxItem Content="Linear"/>
+                                            <ComboBoxItem Content="Logarithmic"/>
+                                            <ComboBoxItem Content="Exponential"/>
+                                            <ComboBoxItem Content="S-Curve"/>
+                                        </ComboBox>
+                                    </StackPanel>
 
-                                <!-- Process input (visible when IsProcessesVisible) -->
-                                <StackPanel Spacing="{StaticResource SpaceXs}"
-                                            Visibility="{x:Bind IsProcessesVisible, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="Processes (comma-separated)"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <AutoSuggestBox Width="300"
-                                                    PlaceholderText="e.g. spotify.exe, chrome.exe"
-                                                    Text="{x:Bind ProcessesText, Mode=TwoWay}"
-                                                    TextChanged="ProcessBox_TextChanged"
-                                                    SuggestionChosen="ProcessBox_SuggestionChosen"/>
-                                </StackPanel>
+                                    <!-- Dead zone -->
+                                    <StackPanel Spacing="{StaticResource SpaceXs}">
+                                        <TextBlock Text="Dead Zone"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <Slider Minimum="0"
+                                                Maximum="0.45"
+                                                Value="{x:Bind DeadZonePercent, Mode=TwoWay}"
+                                                Width="{StaticResource SliderStandardWidth}"
+                                                HorizontalAlignment="Left"
+                                                StepFrequency="0.01"
+                                                TickFrequency="0.05"
+                                                TickPlacement="Outside"/>
+                                    </StackPanel>
 
-                                <!-- Device picker (visible when IsDeviceVisible) -->
-                                <StackPanel Spacing="{StaticResource SpaceXs}"
-                                            Visibility="{x:Bind IsDeviceVisible, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="Output Device"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ComboBox ItemsSource="{x:Bind OutputDeviceNames}"
-                                              SelectedItem="{x:Bind DeviceName, Mode=TwoWay}"
-                                              Width="300"
-                                              PlaceholderText="Select device…"/>
-                                </StackPanel>
+                                    <!-- Smoothing -->
+                                    <StackPanel Spacing="{StaticResource SpaceXs}">
+                                        <TextBlock Text="Smoothing"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <Slider Minimum="0"
+                                                Maximum="0.95"
+                                                Value="{x:Bind SmoothingFactor, Mode=TwoWay}"
+                                                Width="{StaticResource SliderStandardWidth}"
+                                                HorizontalAlignment="Left"
+                                                StepFrequency="0.01"
+                                                TickFrequency="0.1"
+                                                TickPlacement="Outside"/>
+                                    </StackPanel>
 
-                                <!-- Invert toggle -->
-                                <CheckBox Content="Invert"
-                                          IsChecked="{x:Bind Invert, Mode=TwoWay}"/>
-
-                                <!-- ── Tuning controls ──────────────────── -->
-                                <TextBlock Text="Tuning"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           Margin="0,4,0,0"/>
-
-                                <!-- Response curve -->
-                                <StackPanel Spacing="{StaticResource SpaceXs}">
-                                    <TextBlock Text="Response Curve"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ComboBox SelectedIndex="{x:Bind CurveIndex, Mode=TwoWay}"
-                                              Width="{StaticResource ComboBoxStandardWidth}">
-                                        <ComboBoxItem Content="Linear"/>
-                                        <ComboBoxItem Content="Logarithmic"/>
-                                        <ComboBoxItem Content="Exponential"/>
-                                        <ComboBoxItem Content="S-Curve"/>
-                                    </ComboBox>
-                                </StackPanel>
-
-                                <!-- Dead zone -->
-                                <StackPanel Spacing="{StaticResource SpaceXs}">
-                                    <TextBlock Text="Dead Zone"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <Slider Minimum="0"
-                                            Maximum="0.45"
-                                            Value="{x:Bind DeadZonePercent, Mode=TwoWay}"
-                                            Width="{StaticResource SliderStandardWidth}"
-                                            HorizontalAlignment="Left"
-                                            StepFrequency="0.01"
-                                            TickFrequency="0.05"
-                                            TickPlacement="Outside"/>
-                                </StackPanel>
-
-                                <!-- Smoothing -->
-                                <StackPanel Spacing="{StaticResource SpaceXs}">
-                                    <TextBlock Text="Smoothing"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <Slider Minimum="0"
-                                            Maximum="0.95"
-                                            Value="{x:Bind SmoothingFactor, Mode=TwoWay}"
-                                            Width="{StaticResource SliderStandardWidth}"
-                                            HorizontalAlignment="Left"
-                                            StepFrequency="0.01"
-                                            TickFrequency="0.1"
-                                            TickPlacement="Outside"/>
                                 </StackPanel>
 
                             </StackPanel>

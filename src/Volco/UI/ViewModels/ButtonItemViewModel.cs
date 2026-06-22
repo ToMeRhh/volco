@@ -121,6 +121,12 @@ public partial class ButtonItemViewModel : ObservableObject
 
     public int Index { get; }
 
+    [ObservableProperty]
+    private bool _isExpanded = true;
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
     /// <summary>Available output devices for device-picker combos.</summary>
     public ObservableCollection<AudioDeviceInfo> OutputDevices { get; } = new();
 
