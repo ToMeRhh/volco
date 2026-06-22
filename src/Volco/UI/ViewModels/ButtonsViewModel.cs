@@ -26,9 +26,10 @@ public partial class ButtonsViewModel : ObservableObject
     private void BuildItems()
     {
         Items.Clear();
+        var devices = _audio.GetOutputDevices();
         foreach (var buttonCfg in _config.Config.Buttons)
         {
-            Items.Add(new ButtonItemViewModel(buttonCfg, _audio, _config, () => _config.RequestSave()));
+            Items.Add(new ButtonItemViewModel(buttonCfg, _audio, devices, _config, () => _config.RequestSave()));
         }
     }
 

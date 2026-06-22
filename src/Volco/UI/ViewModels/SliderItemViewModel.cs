@@ -116,7 +116,7 @@ public partial class SliderItemViewModel : ObservableObject
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public SliderItemViewModel(SliderConfig cfg, IAudioManager audio, Action save)
+    public SliderItemViewModel(SliderConfig cfg, IAudioManager audio, IReadOnlyList<AudioDeviceInfo> outputDevices, Action save)
     {
         _cfg = cfg;
         _audio = audio;
@@ -132,10 +132,8 @@ public partial class SliderItemViewModel : ObservableObject
         _deadZonePercent = cfg.DeadZonePercent;
         _smoothingFactor = cfg.SmoothingFactor;
 
-        foreach (var d in audio.GetOutputDevices())
-        {
+        foreach (var d in outputDevices)
             OutputDevices.Add(d);
-        }
         OutputDeviceNames = OutputDevices.Select(d => d.Name).ToList();
     }
 

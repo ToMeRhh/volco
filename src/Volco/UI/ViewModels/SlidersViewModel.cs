@@ -26,9 +26,10 @@ public partial class SlidersViewModel : ObservableObject
     private void BuildItems()
     {
         Items.Clear();
+        var devices = _audio.GetOutputDevices();
         foreach (var sliderCfg in _config.Config.Sliders)
         {
-            Items.Add(new SliderItemViewModel(sliderCfg, _audio, () => _config.RequestSave()));
+            Items.Add(new SliderItemViewModel(sliderCfg, _audio, devices, () => _config.RequestSave()));
         }
     }
 

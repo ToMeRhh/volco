@@ -133,7 +133,7 @@ public partial class ButtonItemViewModel : ObservableObject
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public ButtonItemViewModel(ButtonConfig cfg, IAudioManager audio, ConfigManager config, Action save)
+    public ButtonItemViewModel(ButtonConfig cfg, IAudioManager audio, IReadOnlyList<AudioDeviceInfo> outputDevices, ConfigManager config, Action save)
     {
         _cfg  = cfg;
         _save = save;
@@ -146,7 +146,7 @@ public partial class ButtonItemViewModel : ObservableObject
         DoublePress = new PressActionViewModel(cfg.DoublePress, save, audio, config);
         LongPress   = new PressActionViewModel(cfg.LongPress,  save, audio, config);
 
-        foreach (var d in audio.GetOutputDevices())
+        foreach (var d in outputDevices)
             OutputDevices.Add(d);
 
         OutputDeviceNames = OutputDevices.Select(d => d.Name).ToList();
