@@ -36,8 +36,8 @@ public class UpdateTests
           "tag_name": "v1.5.0",
           "body": "Release notes here",
           "assets": [
-            { "name": "checksums.txt", "browser_download_url": "https://example/checksums.txt" },
-            { "name": "Volco.exe", "browser_download_url": "https://example/Volco.exe" }
+            { "name": "checksums.txt", "url": "https://api/checksums", "browser_download_url": "https://example/checksums.txt" },
+            { "name": "Volco.exe", "url": "https://api/assets/123", "browser_download_url": "https://example/Volco.exe" }
           ]
         }
         """;
@@ -47,7 +47,8 @@ public class UpdateTests
         Assert.NotNull(info);
         Assert.Equal(UpdateSource.Release, info!.Source);
         Assert.Equal("v1.5.0", info.DisplayName);
-        Assert.Equal("https://example/Volco.exe", info.DownloadUrl);
+        // Uses the asset API URL (works on private repos with octet-stream + token).
+        Assert.Equal("https://api/assets/123", info.DownloadUrl);
         Assert.Equal(new Version(1, 5, 0), info.Version);
         Assert.False(info.RequiresExtraction);
         Assert.Equal("Release notes here", info.Notes);

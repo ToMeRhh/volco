@@ -30,10 +30,13 @@ public class GitHubUpdater
         _repo = repo;
     }
 
-    /// <summary>Fetch the latest published release. Returns null when no usable asset is found.</summary>
-    public async Task<UpdateInfo?> GetLatestReleaseAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Fetch the latest published release. Returns null when no usable asset is found. A token is
+    /// required for private repositories (both the API call and the eventual asset download).
+    /// </summary>
+    public async Task<UpdateInfo?> GetLatestReleaseAsync(string token, CancellationToken ct = default)
     {
-        var json = await _http.GetStringAsync($"{ApiBase}/repos/{_owner}/{_repo}/releases/latest", ct);
+        var json = await GetAuthorizedAsync($"{ApiBase}/repos/{_owner}/{_repo}/releases/latest", token, ct);
         return ParseLatestRelease(json);
     }
 
@@ -53,7 +56,9 @@ public class GitHubUpdater
                 var name = a.TryGetProperty("name", out var n) ? n.GetString() : null;
                 if (string.Equals(name, AssetName, StringComparison.OrdinalIgnoreCase))
                 {
-                    url = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                    // Use the asset API URL (not browser_download_url) so the download works on
+                    // private repos when fetched with Accept: application/octet-stream + a token.
+                    url = a.TryGetProperty("url", out var u) ? u.GetString() : null;
                     break;
                 }
             }
@@ -89,7 +94,8 @@ public class GitHubUpdater
     private async Task<string> GetAuthorizedAsync(string url, string token, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (!string.IsNullOrWhiteSpace(token))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var resp = await _http.SendAsync(req, ct);
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadAsStringAsync(ct);

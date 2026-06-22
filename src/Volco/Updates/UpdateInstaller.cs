@@ -36,8 +36,12 @@ public class UpdateInstaller
         var downloadPath = Path.Combine(StagingDir, info.RequiresExtraction ? "payload.zip" : "Volco.exe");
 
         using var req = new HttpRequestMessage(HttpMethod.Get, info.DownloadUrl);
-        if (info.Source == UpdateSource.CiArtifact && !string.IsNullOrWhiteSpace(token))
+        if (!string.IsNullOrWhiteSpace(token))
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        // Release downloads hit the asset API URL, which returns the binary only when asked for
+        // octet-stream (otherwise it returns JSON metadata). CI artifact URLs redirect to a zip.
+        if (info.Source == UpdateSource.Release)
+            req.Headers.Accept.TryParseAdd("application/octet-stream");
 
         using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         resp.EnsureSuccessStatusCode();

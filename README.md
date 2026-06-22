@@ -131,9 +131,12 @@ it. A small helper script performs the in-place swap once the app exits.
 
 The dialog also offers an advanced option to update from the **latest CI build artifact** (the
 `Volco-win-x64` artifact of the most recent successful `main` build) instead of a published
-release. This path requires a GitHub Personal Access Token with `actions:read` scope, since the
-Actions artifact API is authenticated even for public repos. The token is stored in your local
-`config.json`.
+release.
+
+**Authentication:** Volco is a private repository, so the updater requires a GitHub Personal
+Access Token to query the API and download binaries (for both the release and CI-artifact paths).
+The token needs `repo` (read) scope, plus `actions:read` for the CI-artifact option. It is entered
+in the update dialog and stored in your local `config.json`.
 
 ## Project Structure
 

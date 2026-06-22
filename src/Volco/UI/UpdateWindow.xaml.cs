@@ -35,13 +35,10 @@ public sealed partial class UpdateWindow : Window
         var cfg = _configManager.Config.Updates;
         UseCiCheckBox.IsChecked = cfg.UseCiArtifact;
         TokenBox.Password = cfg.GitHubToken ?? "";
-        TokenPanel.Visibility = cfg.UseCiArtifact ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnUseCiChanged(object sender, RoutedEventArgs e)
     {
-        var useCi = UseCiCheckBox.IsChecked == true;
-        TokenPanel.Visibility = useCi ? Visibility.Visible : Visibility.Collapsed;
         // A previously-found update no longer matches the selected source.
         _available = null;
         UpdateButton.IsEnabled = false;
@@ -49,6 +46,12 @@ public sealed partial class UpdateWindow : Window
 
     private async void OnCheckClicked(object sender, RoutedEventArgs e)
     {
+        if (string.IsNullOrWhiteSpace(TokenBox.Password))
+        {
+            StatusText.Text = "Enter a GitHub token to check for updates.";
+            return;
+        }
+
         PersistPreferences();
         SetBusy(true, "Checking for updates…");
         NotesText.Visibility = Visibility.Collapsed;
@@ -60,7 +63,7 @@ public sealed partial class UpdateWindow : Window
             var useCi = UseCiCheckBox.IsChecked == true;
             UpdateInfo? info = useCi
                 ? await _updater.GetLatestCiArtifactAsync(TokenBox.Password)
-                : await _updater.GetLatestReleaseAsync();
+                : await _updater.GetLatestReleaseAsync(TokenBox.Password);
 
             if (info == null)
             {
@@ -109,7 +112,7 @@ public sealed partial class UpdateWindow : Window
 
         try
         {
-            var token = UseCiCheckBox.IsChecked == true ? TokenBox.Password : null;
+            var token = TokenBox.Password;
             var progress = new Progress<double>(p =>
                 DispatcherQueue.TryEnqueue(() => Progress.Value = p));
 
