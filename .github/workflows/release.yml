@@ -1,0 +1,60 @@
+name: Release Volco
+
+# Push a semver tag (e.g. v1.2.3) to build a stamped release build and publish a GitHub Release
+# with the single-file Volco.exe attached. The in-app updater discovers builds via this Release.
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  release:
+    name: Build and Publish Release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
+
+    - name: Derive version from tag
+      id: ver
+      shell: bash
+      run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: '8.0.x'
+        cache: true
+        cache-dependency-path: Volco.sln
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v3
+
+    - name: Publish
+      run: |
+        msbuild src/Volco/Volco.csproj `
+          -t:Publish `
+          -m `
+          -restore `
+          -p:Configuration=Release `
+          -p:Platform=x64 `
+          -p:PublishDir=../../publish/ `
+          -p:RuntimeIdentifier=win-x64 `
+          -p:SelfContained=true `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true `
+          -p:VolcoVersion=${{ steps.ver.outputs.version }} `
+          -p:VolcoReleaseChannel=release
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
+      run: |
+        gh release create "$GITHUB_REF_NAME" \
+          --title "Volco $GITHUB_REF_NAME" \
+          --generate-notes \
+          ./publish/Volco.exe

@@ -80,12 +80,25 @@ public class OutputDevicesConfig
     public string Device2 { get; set; } = "";
 }
 
+public class UpdateConfig
+{
+    /// <summary>
+    /// Optional GitHub Personal Access Token (needs <c>actions:read</c>) used to download CI
+    /// build artifacts. Not required for updating from published releases.
+    /// </summary>
+    public string? GitHubToken { get; set; }
+
+    /// <summary>Remembers whether the user prefers updating from the latest CI artifact.</summary>
+    public bool UseCiArtifact { get; set; }
+}
+
 public class AppConfig
 {
     public ConnectionConfig Connection { get; set; } = new();
     public List<SliderConfig> Sliders { get; set; } = new();
     public List<ButtonConfig> Buttons { get; set; } = new();
     public OutputDevicesConfig OutputDevices { get; set; } = new();
+    public UpdateConfig Updates { get; set; } = new();
     public bool DebugLogging { get; set; } = false;
 
     public static AppConfig CreateDefault()
