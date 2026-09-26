@@ -171,9 +171,19 @@ public class SliderProcessor : IDisposable
             var sliderConfig = config.Sliders[sliderIndex];
             var volume = MapAdcToVolume(value.Value, sliderConfig.Invert, sliderConfig.Curve, sliderConfig.DeadZonePercent);
 
-            if (sliderConfig.SmoothingFactor > 0 && _lastVolume[sliderIndex] is { } prev)
+            float? prevVolume;
+            lock (_lock)
+            {
+                prevVolume = _lastVolume[sliderIndex];
+            }
+
+            if (sliderConfig.SmoothingFactor > 0 && prevVolume is { } prev)
                 volume = ApplySmoothing(prev, volume, sliderConfig.SmoothingFactor);
-            _lastVolume[sliderIndex] = volume;
+
+            lock (_lock)
+            {
+                _lastVolume[sliderIndex] = volume;
+            }
 
             var sw = Stopwatch.StartNew();
 
@@ -222,25 +232,41 @@ public class SliderProcessor : IDisposable
         if (e.Kind != SessionChangeKind.Created) return;
 
         var config = _configManager.Config;
+
+        // Pass 1: does any Processes slider CLAIM this image name? A claim is decided purely
+        // by slider.Processes membership, independent of whether that slider has moved yet —
+        // otherwise an unmoved-but-mapped slider would let the Unmapped slider (pass 2) steal
+        // its process, which is exactly the bug this two-pass split prevents.
         for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
         {
             var slider = config.Sliders[i];
-            if (_lastVolume[i] is not { } level) continue;
+            if (slider.Type != SliderMappingType.Processes) continue;
+            if (!slider.Processes.Any(p => string.Equals(p, e.Session.ImageName, StringComparison.OrdinalIgnoreCase)))
+                continue;
 
-            if (slider.Type == SliderMappingType.Processes &&
-                slider.Processes.Any(p => string.Equals(p, e.Session.ImageName, StringComparison.OrdinalIgnoreCase)))
+            float? level;
+            lock (_lock)
             {
-                _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), level);
-                return;
+                level = _lastVolume[i];
             }
+            if (level is { } lvl)
+                _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), lvl);
+            return; // claimed either way — must NOT fall through to the Unmapped pass.
         }
 
-        // Not claimed by any Processes slider — an Unmapped slider owns it, if one exists.
+        // Pass 2: genuinely unclaimed — an Unmapped slider owns it, if one exists and has moved.
         for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
         {
-            if (config.Sliders[i].Type == SliderMappingType.Unmapped && _lastVolume[i] is { } level)
+            if (config.Sliders[i].Type != SliderMappingType.Unmapped) continue;
+
+            float? level;
+            lock (_lock)
             {
-                _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), level);
+                level = _lastVolume[i];
+            }
+            if (level is { } lvl)
+            {
+                _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), lvl);
                 return;
             }
         }

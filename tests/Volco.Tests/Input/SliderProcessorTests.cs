@@ -151,6 +151,36 @@ public class SliderProcessorTests
         Assert.InRange(last.Level, 0.2f, 0.3f);
     }
 
+    [Fact]
+    public async Task NewSessionForClaimedProcessWithNoLevelYet_DoesNotFallThroughToUnmappedSlider()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        // Claims spotify.exe but is never moved -> no level yet.
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0, Type = SliderMappingType.Processes,
+            Processes = new List<string> { "spotify.exe" },
+        });
+        // Has been moved -> does have a level.
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 1, Type = SliderMappingType.Unmapped });
+
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        processor.HandleSliderEvent(1, 1024);
+        await WaitForAsync(() => audio.SessionVolumeCalls.Count >= 1);
+        var before = audio.SessionVolumeCalls.Count;
+
+        // FakeAudioEngine raises this synchronously, so OnSessionsChanged has already run
+        // by the time this call returns — no polling needed.
+        audio.RaiseSessionCreated(new AudioSessionInfo("inst-1", 5, "spotify.exe", "dev-1", false));
+
+        Assert.Equal(before, audio.SessionVolumeCalls.Count);
+        Assert.DoesNotContain(audio.SessionVolumeCalls, c =>
+            c.Filter is SessionFilter.ByImageNames byNames && byNames.Names.Contains("spotify.exe"));
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static ConfigManager NewConfigManager()
