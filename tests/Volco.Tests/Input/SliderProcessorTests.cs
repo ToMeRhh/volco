@@ -1,6 +1,7 @@
 using Volco.Audio;
 using Volco.Config;
 using Volco.Input;
+using Volco.Tests.Audio;
 using Xunit;
 
 namespace Volco.Tests.Input;
@@ -13,9 +14,7 @@ public class SliderProcessorTests
     public async Task SliderLevelChanged_FiresWithCorrectIndexAndLevelInRange()
     {
         // Arrange: build a minimal config with one Device slider at index 0.
-        var tempPath = Path.Combine(Path.GetTempPath(), $"volco-slidertest-{Guid.NewGuid()}", "config.json");
-        var configManager = new ConfigManager(tempPath);
-        configManager.Load();
+        var configManager = NewConfigManager();
         configManager.Config.Sliders.Clear();
         configManager.Config.Sliders.Add(new SliderConfig
         {
@@ -28,13 +27,12 @@ public class SliderProcessorTests
             SmoothingFactor = 0
         });
 
-        var audio = new NoOpAudioManager();
-        var sessionMonitor = new SessionMonitor(audio, pollIntervalMs: 60000); // no-op poll
+        using var audio = new FakeAudioEngine();
 
         SliderLevelEventArgs? receivedArgs = null;
         var tcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        using var processor = new SliderProcessor(audio, configManager, sessionMonitor);
+        using var processor = new SliderProcessor(audio, configManager);
         processor.SliderLevelChanged += (_, e) =>
         {
             if (!tcs.Task.IsCompleted)
@@ -53,27 +51,127 @@ public class SliderProcessorTests
         receivedArgs = await tcs.Task;
         Assert.Equal(0, receivedArgs.SliderIndex);
         Assert.InRange(receivedArgs.Level, 0f, 1f);
-
-        sessionMonitor.Dispose();
     }
 
-    /// <summary>Minimal IAudioManager that does nothing — avoids any Windows audio calls.</summary>
-    private sealed class NoOpAudioManager : IAudioManager
+    [Fact]
+    public async Task DeviceSlider_IssuesExactlyOneEngineCallPerTick()
     {
-        public void SetProcessVolume(string processName, float volume) { }
-        public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume) { }
-        public void SetDeviceVolume(float volume, string? deviceName = null) { }
-        public void ToggleMuteOutput(string? deviceId = null) { }
-        public void ToggleMuteInput() { }
-        public void SetDefaultOutputDevice(string deviceName) { }
-        public string? GetDefaultOutputDeviceName() => null;
-        public List<AudioDeviceInfo> GetOutputDevices() => new();
-        public List<AudioDeviceInfo> GetInputDevices() => new();
-        public List<string> GetActiveProcessNames() => new();
-        public bool IsOutputMuted(string? deviceId = null) => false;
-        public bool IsInputMuted() => false;
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = null,                     // null => current default output
+        });
+
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        processor.HandleSliderEvent(sliderIndex: 0, adcValue: 2048);
+        await WaitForAsync(() => audio.DeviceVolumeCalls.Count >= 1);
+
+        var (device, level) = Assert.Single(audio.DeviceVolumeCalls);
+        Assert.Equal(DeviceRefKind.Default, device.Kind);
+        Assert.InRange(level, 0.4f, 0.6f);
     }
 
+    [Fact]
+    public async Task ProcessSlider_SendsByImageNamesFilter()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Processes,
+            Processes = new List<string> { "spotify.exe" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        processor.HandleSliderEvent(0, 4095);
+        await WaitForAsync(() => audio.SessionVolumeCalls.Count >= 1);
+
+        var (filter, level) = Assert.Single(audio.SessionVolumeCalls);
+        var byNames = Assert.IsType<SessionFilter.ByImageNames>(filter);
+        Assert.Equal(new[] { "spotify.exe" }, byNames.Names);
+        Assert.Equal(1f, level, 2);
+    }
+
+    [Fact]
+    public async Task UnmappedSlider_SendsUnmappedFilterCarryingMappedNames()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0, Type = SliderMappingType.Processes,
+            Processes = new List<string> { "spotify.exe" },
+        });
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 1, Type = SliderMappingType.Unmapped });
+
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        processor.HandleSliderEvent(1, 1024);
+        await WaitForAsync(() => audio.SessionVolumeCalls.Any(c => c.Filter is SessionFilter.Unmapped));
+
+        var call = audio.SessionVolumeCalls.First(c => c.Filter is SessionFilter.Unmapped);
+        var unmapped = Assert.IsType<SessionFilter.Unmapped>(call.Filter);
+        Assert.Contains("spotify.exe", unmapped.MappedNames);
+    }
+
+    [Fact]
+    public async Task NewSessionForMappedProcess_ImmediatelyAppliesThatSlidersLevel()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0, Type = SliderMappingType.Processes,
+            Processes = new List<string> { "spotify.exe" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        // Establish a level, then let the coalesce tick flush it.
+        processor.HandleSliderEvent(0, 1024);
+        await WaitForAsync(() => audio.SessionVolumeCalls.Count >= 1);
+        var before = audio.SessionVolumeCalls.Count;
+
+        audio.RaiseSessionCreated(new AudioSessionInfo("inst-9", 7, "spotify.exe", "dev-1", false));
+        await WaitForAsync(() => audio.SessionVolumeCalls.Count > before);
+
+        var last = audio.SessionVolumeCalls[^1];
+        var byNames = Assert.IsType<SessionFilter.ByImageNames>(last.Filter);
+        Assert.Contains("spotify.exe", byNames.Names);
+        Assert.InRange(last.Level, 0.2f, 0.3f);
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    private static ConfigManager NewConfigManager()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"volco-slidertest-{Guid.NewGuid()}", "config.json");
+        var cm = new ConfigManager(tempPath);
+        cm.Load();
+        return cm;
+    }
+
+    /// <summary>Polls until <paramref name="condition"/> holds or the timeout expires.</summary>
+    private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 1000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition()) return;
+            await Task.Delay(10);
+        }
+        Assert.Fail($"Condition not met within {timeoutMs}ms");
+    }
 
     [Fact]
     public void MapAdcToVolume_ZeroReturnsZero()
