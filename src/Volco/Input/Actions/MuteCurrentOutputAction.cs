@@ -4,7 +4,8 @@ namespace Volco.Input.Actions;
 
 public class MuteCurrentOutputAction : IButtonAction
 {
-    private readonly IAudioManager _audio;
-    public MuteCurrentOutputAction(IAudioManager audio) => _audio = audio;
-    public void Execute() => _audio.ToggleMuteOutput();
+    private readonly IAudioEngine _audio;
+    public MuteCurrentOutputAction(IAudioEngine audio) => _audio = audio;
+    public void Execute()
+        => _audio.ToggleDeviceMute(DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia));
 }

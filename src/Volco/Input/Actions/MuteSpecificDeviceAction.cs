@@ -1,17 +1,22 @@
 using Volco.Audio;
+using Volco.Config;
 
 namespace Volco.Input.Actions;
 
 public class MuteSpecificDeviceAction : IButtonAction
 {
-    private readonly IAudioManager _audio;
-    private readonly string _deviceId;
+    private readonly IAudioEngine _audio;
+    private readonly DeviceRef? _device;
 
-    public MuteSpecificDeviceAction(IAudioManager audio, string deviceId)
+    public MuteSpecificDeviceAction(IAudioEngine audio, DeviceRefConfig? device)
     {
         _audio = audio;
-        _deviceId = deviceId;
+        _device = ActionFactory.Resolve(device);
     }
 
-    public void Execute() => _audio.ToggleMuteOutput(_deviceId);
+    public void Execute()
+    {
+        if (_device is not { } device) return;   // unconfigured -> no-op
+        _audio.ToggleDeviceMute(device);
+    }
 }

@@ -1,17 +1,23 @@
 using Volco.Audio;
+using Volco.Config;
 
 namespace Volco.Input.Actions;
 
 public class SetOutputDeviceAction : IButtonAction
 {
-    private readonly IAudioManager _audio;
-    private readonly string _deviceId;
+    private readonly IAudioEngine _audio;
+    private readonly DeviceRefConfig? _device;
 
-    public SetOutputDeviceAction(IAudioManager audio, string deviceId)
+    public SetOutputDeviceAction(IAudioEngine audio, DeviceRefConfig? device)
     {
         _audio = audio;
-        _deviceId = deviceId;
+        _device = device;
     }
 
-    public void Execute() => _audio.SetDefaultOutputDevice(_deviceId);
+    public void Execute()
+    {
+        var id = _device?.Id;
+        if (string.IsNullOrEmpty(id)) return;    // unconfigured -> no-op
+        _audio.SetDefaultDevice(id, AudioFlow.Render);
+    }
 }
