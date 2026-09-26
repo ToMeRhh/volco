@@ -169,4 +169,59 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.True(conn);
         Assert.False(general);
     }
+
+    [Fact]
+    public void Load_CorruptJson_FallsBackToDefaultsInsteadOfThrowing()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"volco-corrupt-{Guid.NewGuid()}");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "config.json");
+        File.WriteAllText(path, "{ \"connection\": { \"type\": ");   // truncated mid-write
+
+        var cm = new ConfigManager(path);
+        var ex = Record.Exception(() => cm.Load());
+
+        Assert.Null(ex);
+        Assert.Equal(5, cm.Config.Sliders.Count);
+        Assert.Equal(3, cm.Config.Buttons.Count);
+    }
+
+    [Fact]
+    public void Load_EmptyFile_FallsBackToDefaults()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"volco-empty-{Guid.NewGuid()}");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "config.json");
+        File.WriteAllText(path, "");
+
+        var cm = new ConfigManager(path);
+        cm.Load();
+
+        Assert.Equal(5, cm.Config.Sliders.Count);
+    }
+
+    [Fact]
+    public void CreateDefault_StampsCurrentSchemaVersion()
+    {
+        Assert.Equal(AppConfig.CurrentSchemaVersion, AppConfig.CreateDefault().SchemaVersion);
+    }
+
+    [Fact]
+    public void DeviceRefConfig_RoundTripsThroughJson()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"volco-roundtrip-{Guid.NewGuid()}");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "config.json");
+
+        var cm = new ConfigManager(path);
+        cm.Load();
+        cm.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
+        cm.Save();
+
+        var reloaded = new ConfigManager(path);
+        reloaded.Load();
+
+        Assert.Equal("dev-1", reloaded.Config.OutputDevices.Device1.Id);
+        Assert.Equal("Speakers", reloaded.Config.OutputDevices.Device1.FriendlyName);
+    }
 }
