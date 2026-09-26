@@ -228,4 +228,86 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal("dev-1", reloaded.Config.OutputDevices.Device1.Id);
         Assert.Equal("Speakers", reloaded.Config.OutputDevices.Device1.FriendlyName);
     }
+
+    [Fact]
+    public void Load_V1ShapedConfig_LoadsLosslessly_AndSchemaVersionIsZero()
+    {
+        // A realistic schema-v1 config.json: no "schemaVersion" key, and outputDevices'
+        // device1/device2 are bare strings (the type that changed under DeviceRefConfig).
+        var json = """
+        {
+            "connection": { "type": "Udp", "udp": { "listenPort": 55555 } },
+            "sliders": [
+                { "index": 0, "type": "Processes", "processes": [ "spotify.exe" ], "deviceName": "" },
+                { "index": 1, "type": "Device", "deviceName": "Speakers" }
+            ],
+            "buttons": [
+                {
+                    "index": 0,
+                    "singlePress": { "action": "MuteSpecificDevice", "deviceId": "Speakers" },
+                    "doublePress": { "action": "ToggleOutputDevice" },
+                    "longPress": { "action": "None" }
+                }
+            ],
+            "outputDevices": { "device1": "Speakers", "device2": "Headphones" },
+            "debugLogging": true
+        }
+        """;
+        File.WriteAllText(_configPath, json);
+
+        var cm = new ConfigManager(_configPath);
+        var ex = Record.Exception(() => cm.Load());
+
+        Assert.Null(ex);
+
+        // A pre-v2 file has no schemaVersion key, so it must deserialize to 0, not
+        // CurrentSchemaVersion — that's what lets ConfigMigrator detect it.
+        Assert.Equal(0, cm.Config.SchemaVersion);
+
+        // The device string was read losslessly into the id-less v2 shape.
+        Assert.Equal("Speakers", cm.Config.OutputDevices.Device1.FriendlyName);
+        Assert.Equal("", cm.Config.OutputDevices.Device1.Id);
+        Assert.Equal("Headphones", cm.Config.OutputDevices.Device2.FriendlyName);
+
+        // Regression guard: everything else in the real config must survive — the old
+        // blanket catch used to replace the WHOLE config with CreateDefault() here.
+        Assert.Equal(ConnectionType.Udp, cm.Config.Connection.Type);
+        Assert.Equal(55555, cm.Config.Connection.Udp.ListenPort);
+        Assert.True(cm.Config.DebugLogging);
+
+        Assert.Equal(2, cm.Config.Sliders.Count);
+        Assert.Equal(SliderMappingType.Processes, cm.Config.Sliders[0].Type);
+        Assert.Equal(new List<string> { "spotify.exe" }, cm.Config.Sliders[0].Processes);
+        Assert.Equal(SliderMappingType.Device, cm.Config.Sliders[1].Type);
+
+        Assert.Single(cm.Config.Buttons);
+        Assert.Equal(ButtonActionType.MuteSpecificDevice, cm.Config.Buttons[0].SinglePress.Action);
+        Assert.Equal(ButtonActionType.ToggleOutputDevice, cm.Config.Buttons[0].DoublePress.Action);
+        Assert.Equal(ButtonActionType.None, cm.Config.Buttons[0].LongPress.Action);
+    }
+
+    [Fact]
+    public void DeviceRefConfig_WrittenAsObject_ReadsBackAsObject()
+    {
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var config = new OutputDevicesConfig
+        {
+            Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" }
+        };
+
+        var json = JsonSerializer.Serialize(config, options);
+
+        // Written as a v2 object (id + friendlyName), never as a bare string.
+        using (var doc = JsonDocument.Parse(json))
+        {
+            var device1 = doc.RootElement.GetProperty("device1");
+            Assert.Equal(JsonValueKind.Object, device1.ValueKind);
+            Assert.Equal("dev-1", device1.GetProperty("id").GetString());
+            Assert.Equal("Speakers", device1.GetProperty("friendlyName").GetString());
+        }
+
+        var roundTripped = JsonSerializer.Deserialize<OutputDevicesConfig>(json, options)!;
+        Assert.Equal("dev-1", roundTripped.Device1.Id);
+        Assert.Equal("Speakers", roundTripped.Device1.FriendlyName);
+    }
 }

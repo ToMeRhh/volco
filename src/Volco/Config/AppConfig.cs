@@ -103,8 +103,14 @@ public class AppConfig
 {
     public const int CurrentSchemaVersion = 2;
 
-    /// <summary>Absent or 0 means schema v1 (device references stored as bare names).</summary>
-    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+    /// <summary>
+    /// Absent or 0 means schema v1 (device references stored as bare names). Defaults to 0
+    /// rather than <see cref="CurrentSchemaVersion"/> so that deserializing a real v1
+    /// config.json (which has no "schemaVersion" key) is distinguishable from an
+    /// already-migrated one. <see cref="CreateDefault"/> stamps the current version explicitly
+    /// for brand-new configs.
+    /// </summary>
+    public int SchemaVersion { get; set; } = 0;
 
     public ConnectionConfig Connection { get; set; } = new();
     public List<SliderConfig> Sliders { get; set; } = new();
