@@ -1,13 +1,14 @@
 using Volco.Audio;
 using Volco.Config;
 using Volco.Input.Actions;
+using Volco.Tests.Audio;
 using Xunit;
 
 namespace Volco.Tests.Input.Actions;
 
 public class ActionFactoryTests
 {
-    private readonly FakeAudioManager _audio = new();
+    private readonly FakeAudioEngine _audio = new();
     private readonly ConfigManager _configManager;
 
     public ActionFactoryTests()
@@ -49,19 +50,89 @@ public class ActionFactoryTests
         Assert.IsType<ToggleOutputDeviceAction>(action);
     }
 
-    private class FakeAudioManager : IAudioManager
+    [Fact]
+    public void MuteSpecificDevice_WithEmptyDeviceRef_DoesNothing()
     {
-        public void SetProcessVolume(string processName, float volume) { }
-        public void SetProcessVolumes(IReadOnlyCollection<string> processNames, float volume) { }
-        public void SetDeviceVolume(float volume, string? deviceName = null) { }
-        public void ToggleMuteOutput(string? deviceId = null) { }
-        public void ToggleMuteInput() { }
-        public void SetDefaultOutputDevice(string deviceName) { }
-        public string? GetDefaultOutputDeviceName() => null;
-        public List<AudioDeviceInfo> GetOutputDevices() => new();
-        public List<AudioDeviceInfo> GetInputDevices() => new();
-        public List<string> GetActiveProcessNames() => new();
-        public bool IsOutputMuted(string? deviceId = null) => false;
-        public bool IsInputMuted() => false;
+        var audio = new FakeAudioEngine();
+        var config = new ButtonActionConfig
+        {
+            Action = ButtonActionType.MuteSpecificDevice,
+            Device = new DeviceRefConfig()          // both Id and FriendlyName empty
+        };
+
+        ActionFactory.Create(config, audio, _configManager)?.Execute();
+
+        Assert.Empty(audio.ToggleMuteCalls);
+    }
+
+    [Fact]
+    public void MuteSpecificDevice_WithNullDeviceRef_DoesNothing()
+    {
+        var audio = new FakeAudioEngine();
+        var config = new ButtonActionConfig { Action = ButtonActionType.MuteSpecificDevice, Device = null };
+
+        ActionFactory.Create(config, audio, _configManager)?.Execute();
+
+        Assert.Empty(audio.ToggleMuteCalls);
+    }
+
+    [Fact]
+    public void SetOutputDevice_WithEmptyDeviceRef_DoesNothing()
+    {
+        var audio = new FakeAudioEngine();
+        var config = new ButtonActionConfig { Action = ButtonActionType.SetOutputDevice, Device = new DeviceRefConfig() };
+
+        ActionFactory.Create(config, audio, _configManager)?.Execute();
+
+        Assert.Empty(audio.SetDefaultCalls);
+    }
+
+    [Fact]
+    public void MuteSpecificDevice_WithId_TogglesThatDevice()
+    {
+        var audio = new FakeAudioEngine();
+        var config = new ButtonActionConfig
+        {
+            Action = ButtonActionType.MuteSpecificDevice,
+            Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Headphones" }
+        };
+
+        ActionFactory.Create(config, audio, _configManager)!.Execute();
+
+        Assert.Equal(DeviceRef.ById("dev-1"), Assert.Single(audio.ToggleMuteCalls));
+    }
+
+    [Fact]
+    public void ToggleOutputDevice_WhenOnDevice1_SwitchesToDevice2()
+    {
+        var audio = new FakeAudioEngine
+        {
+            DefaultRender = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true, true, true)
+        };
+        _configManager.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
+        _configManager.Config.OutputDevices.Device2 = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };
+
+        var config = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice };
+        ActionFactory.Create(config, audio, _configManager)!.Execute();
+
+        var (endpointId, flow) = Assert.Single(audio.SetDefaultCalls);
+        Assert.Equal("dev-2", endpointId);
+        Assert.Equal(AudioFlow.Render, flow);
+    }
+
+    [Fact]
+    public void ToggleOutputDevice_WhenOnNeitherDevice_SwitchesToDevice1()
+    {
+        var audio = new FakeAudioEngine
+        {
+            DefaultRender = new AudioDevice("dev-99", "Monitor", AudioFlow.Render, true, true, true)
+        };
+        _configManager.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
+        _configManager.Config.OutputDevices.Device2 = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };
+
+        ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice },
+                             audio, _configManager)!.Execute();
+
+        Assert.Equal("dev-1", Assert.Single(audio.SetDefaultCalls).EndpointId);
     }
 }
