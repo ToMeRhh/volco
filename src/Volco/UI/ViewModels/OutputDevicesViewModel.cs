@@ -4,6 +4,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.Audio;
 using Volco.Config;
+using static Volco.UI.ViewModels.DeviceRefLookup;
 
 namespace Volco.UI.ViewModels;
 
@@ -32,8 +33,8 @@ public partial class OutputDevicesViewModel : ObservableObject
         _config = config;
 
         var cfg = config.Config.OutputDevices;
-        _device1 = cfg.Device1;
-        _device2 = cfg.Device2;
+        _device1 = cfg.Device1.FriendlyName;
+        _device2 = cfg.Device2.FriendlyName;
 
         foreach (var d in audio.GetOutputDevices())
             OutputDevices.Add(d);
@@ -43,13 +44,13 @@ public partial class OutputDevicesViewModel : ObservableObject
 
     partial void OnDevice1Changed(string value)
     {
-        _config.Config.OutputDevices.Device1 = value;
+        _config.Config.OutputDevices.Device1 = DeviceRefFromName(value) ?? new DeviceRefConfig();
         Persist();
     }
 
     partial void OnDevice2Changed(string value)
     {
-        _config.Config.OutputDevices.Device2 = value;
+        _config.Config.OutputDevices.Device2 = DeviceRefFromName(value) ?? new DeviceRefConfig();
         Persist();
     }
 

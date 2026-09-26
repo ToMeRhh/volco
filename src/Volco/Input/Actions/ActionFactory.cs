@@ -11,9 +11,9 @@ public static class ActionFactory
         {
             ButtonActionType.MuteCurrentOutput => new MuteCurrentOutputAction(audio),
             ButtonActionType.MuteCurrentInput => new MuteCurrentInputAction(audio),
-            ButtonActionType.MuteSpecificDevice => new MuteSpecificDeviceAction(audio, config.DeviceId ?? ""),
+            ButtonActionType.MuteSpecificDevice => new MuteSpecificDeviceAction(audio, config.Device?.FriendlyName ?? ""),
             ButtonActionType.ToggleOutputDevice => new ToggleOutputDeviceAction(audio, configManager),
-            ButtonActionType.SetOutputDevice => new SetOutputDeviceAction(audio, config.DeviceId ?? ""),
+            ButtonActionType.SetOutputDevice => new SetOutputDeviceAction(audio, config.Device?.FriendlyName ?? ""),
             ButtonActionType.None => null,
             _ => null
         };

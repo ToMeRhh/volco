@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Volco.Audio;
 using Volco.Config;
 using Volco.Input.Actions;
+using static Volco.UI.ViewModels.DeviceRefLookup;
 
 namespace Volco.UI.ViewModels;
 
@@ -66,7 +67,7 @@ public partial class PressActionViewModel : ObservableObject
         _audio  = audio;
         _config = config;
         _actionType = cfg.Action;
-        _deviceId   = cfg.DeviceId ?? "";
+        _deviceId   = cfg.Device?.FriendlyName ?? "";
     }
 
     partial void OnActionTypeChanged(ButtonActionType value)
@@ -79,7 +80,7 @@ public partial class PressActionViewModel : ObservableObject
 
     partial void OnDeviceIdChanged(string value)
     {
-        _cfg.DeviceId = string.IsNullOrEmpty(value) ? null : value;
+        _cfg.Device = DeviceRefFromName(value);
         _save();
     }
 

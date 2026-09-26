@@ -33,7 +33,11 @@ public class ConfigManagerTests
                     LongPress = new ButtonActionConfig { Action = ButtonActionType.None }
                 }
             },
-            OutputDevices = new OutputDevicesConfig { Device1 = "Speakers", Device2 = "Headphones" }
+            OutputDevices = new OutputDevicesConfig
+            {
+                Device1 = new DeviceRefConfig { FriendlyName = "Speakers" },
+                Device2 = new DeviceRefConfig { FriendlyName = "Headphones" }
+            }
         };
 
         var options = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -47,7 +51,7 @@ public class ConfigManagerTests
         Assert.Equal(SliderMappingType.Unmapped, deserialized.Sliders[2].Type);
         Assert.True(deserialized.Sliders[2].Invert);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, deserialized.Buttons[0].SinglePress.Action);
-        Assert.Equal("Headphones", deserialized.OutputDevices.Device2);
+        Assert.Equal("Headphones", deserialized.OutputDevices.Device2.FriendlyName);
     }
 
     [Fact]
@@ -116,14 +120,14 @@ public class ConfigManagerLoadSaveTests : IDisposable
         var manager = new ConfigManager(_configPath);
         manager.Load();
         manager.Config.Connection.Type = ConnectionType.Udp;
-        manager.Config.OutputDevices.Device1 = "Speakers";
+        manager.Config.OutputDevices.Device1 = new DeviceRefConfig { FriendlyName = "Speakers" };
         manager.Save();
 
         var manager2 = new ConfigManager(_configPath);
         manager2.Load();
 
         Assert.Equal(ConnectionType.Udp, manager2.Config.Connection.Type);
-        Assert.Equal("Speakers", manager2.Config.OutputDevices.Device1);
+        Assert.Equal("Speakers", manager2.Config.OutputDevices.Device1.FriendlyName);
     }
 
     [Fact]

@@ -19,8 +19,8 @@ public class ToggleOutputDeviceAction : IButtonAction
         var devices = _configManager.Config.OutputDevices;
         var currentDevice = _audio.GetDefaultOutputDeviceName();
         var isOnDevice1 = currentDevice != null &&
-            currentDevice.Contains(devices.Device1, StringComparison.OrdinalIgnoreCase);
-        var target = isOnDevice1 ? devices.Device2 : devices.Device1;
+            currentDevice.Contains(devices.Device1.FriendlyName, StringComparison.OrdinalIgnoreCase);
+        var target = isOnDevice1 ? devices.Device2.FriendlyName : devices.Device1.FriendlyName;
         _audio.SetDefaultOutputDevice(target);
     }
 }

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Audio;
 using Volco.Config;
+using static Volco.UI.ViewModels.DeviceRefLookup;
 
 namespace Volco.UI.ViewModels;
 
@@ -133,7 +134,7 @@ public partial class SliderItemViewModel : ObservableObject
         _mappingType = cfg.Type;
         // Processes stored as List<string>; display as comma-separated.
         _processesText = string.Join(", ", cfg.Processes);
-        _deviceName = cfg.DeviceName;
+        _deviceName = cfg.Device?.FriendlyName ?? "";
         _invert = cfg.Invert;
         _curve = cfg.Curve;
         _deadZonePercent = cfg.DeadZonePercent;
@@ -166,7 +167,7 @@ public partial class SliderItemViewModel : ObservableObject
 
     partial void OnDeviceNameChanged(string value)
     {
-        _cfg.DeviceName = value;
+        _cfg.Device = DeviceRefFromName(value);
         Persist();
     }
 

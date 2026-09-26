@@ -31,14 +31,28 @@ public class ConfigManager
         if (File.Exists(_configPath))
         {
             AppLog.Info($"Loading config from {_configPath}");
-            var json = File.ReadAllText(_configPath);
-            Config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? AppConfig.CreateDefault();
+            try
+            {
+                var json = File.ReadAllText(_configPath);
+                Config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? AppConfig.CreateDefault();
+            }
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+            {
+                // A truncated or hand-edited config must not stop the app from starting.
+                AppLog.Error($"Config at {_configPath} could not be read ({ex.GetType().Name}: {ex.Message}); using defaults");
+                Config = AppConfig.CreateDefault();
+            }
         }
         else
         {
             AppLog.Info("Config file not found, using default config");
             Config = AppConfig.CreateDefault();
         }
+
+        // Defensive: a valid-but-sparse config (hand-edited) must still have entries to index.
+        while (Config.Sliders.Count < 5) Config.Sliders.Add(new SliderConfig { Index = Config.Sliders.Count });
+        while (Config.Buttons.Count < 3) Config.Buttons.Add(new ButtonConfig { Index = Config.Buttons.Count });
+
         AppLog.IsDebugEnabled = Config.DebugLogging;
     }
 

@@ -21,7 +21,7 @@ public class SliderProcessorTests
         {
             Index = 0,
             Type = SliderMappingType.Device,
-            DeviceName = "",
+            Device = null,
             Invert = false,
             Curve = ResponseCurve.Linear,
             DeadZonePercent = 0,
@@ -133,21 +133,21 @@ public class SliderProcessorTests
     [Fact]
     public void BuildSliderLabel_DeviceWithEmptyName_UsesCurrentOutput()
     {
-        var slider = new SliderConfig { Type = SliderMappingType.Device, DeviceName = "" };
+        var slider = new SliderConfig { Type = SliderMappingType.Device, Device = null };
         Assert.Equal("Speakers (Realtek)", SliderProcessor.BuildSliderLabel(slider, "Speakers (Realtek)"));
     }
 
     [Fact]
     public void BuildSliderLabel_DeviceWithEmptyNameAndNoCurrentOutput_FallsBack()
     {
-        var slider = new SliderConfig { Type = SliderMappingType.Device, DeviceName = "" };
+        var slider = new SliderConfig { Type = SliderMappingType.Device, Device = null };
         Assert.Equal("Output", SliderProcessor.BuildSliderLabel(slider, null));
     }
 
     [Fact]
     public void BuildSliderLabel_DeviceWithName_UsesDeviceName()
     {
-        var slider = new SliderConfig { Type = SliderMappingType.Device, DeviceName = "Headphones" };
+        var slider = new SliderConfig { Type = SliderMappingType.Device, Device = new DeviceRefConfig { FriendlyName = "Headphones" } };
         Assert.Equal("Headphones", SliderProcessor.BuildSliderLabel(slider, "Speakers"));
     }
 

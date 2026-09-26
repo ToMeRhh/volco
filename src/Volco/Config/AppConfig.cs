@@ -46,22 +46,29 @@ public class ConnectionConfig
     public WebSocketConfig WebSocket { get; set; } = new();
 }
 
-public class SliderConfig
+public partial class SliderConfig
 {
     public int Index { get; set; }
     public SliderMappingType Type { get; set; } = SliderMappingType.Device;
     public List<string> Processes { get; set; } = new();
-    public string DeviceName { get; set; } = "";
+
+    /// <summary>null means "the current default output device".</summary>
+    public DeviceRefConfig? Device { get; set; }
+
     public bool Invert { get; set; }
     public ResponseCurve Curve { get; set; } = ResponseCurve.Linear;
     public double DeadZonePercent { get; set; } = 0;   // 0..0.2
     public double SmoothingFactor { get; set; } = 0;    // 0..1 (0 = off)
+
+    /// <summary>Display name for the configured device; "" means the current default output.</summary>
+    [JsonIgnore]
+    public string DeviceName => Device?.FriendlyName ?? "";
 }
 
 public class ButtonActionConfig
 {
     public ButtonActionType Action { get; set; } = ButtonActionType.None;
-    public string? DeviceId { get; set; }
+    public DeviceRefConfig? Device { get; set; }
 }
 
 public class ButtonConfig
@@ -76,8 +83,8 @@ public class ButtonConfig
 
 public class OutputDevicesConfig
 {
-    public string Device1 { get; set; } = "";
-    public string Device2 { get; set; } = "";
+    public DeviceRefConfig Device1 { get; set; } = new();
+    public DeviceRefConfig Device2 { get; set; } = new();
 }
 
 public class UpdateConfig
@@ -94,6 +101,11 @@ public class UpdateConfig
 
 public class AppConfig
 {
+    public const int CurrentSchemaVersion = 2;
+
+    /// <summary>Absent or 0 means schema v1 (device references stored as bare names).</summary>
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
     public ConnectionConfig Connection { get; set; } = new();
     public List<SliderConfig> Sliders { get; set; } = new();
     public List<ButtonConfig> Buttons { get; set; } = new();
@@ -103,7 +115,7 @@ public class AppConfig
 
     public static AppConfig CreateDefault()
     {
-        var config = new AppConfig();
+        var config = new AppConfig { SchemaVersion = CurrentSchemaVersion };
         for (int i = 0; i < 5; i++)
             config.Sliders.Add(new SliderConfig { Index = i });
         for (int i = 0; i < 3; i++)

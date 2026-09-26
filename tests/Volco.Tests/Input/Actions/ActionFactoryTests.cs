@@ -28,7 +28,7 @@ public class ActionFactoryTests
     [Fact]
     public void Create_MuteSpecificDevice_ReturnsCorrectType()
     {
-        var config = new ButtonActionConfig { Action = ButtonActionType.MuteSpecificDevice, DeviceId = "Speakers" };
+        var config = new ButtonActionConfig { Action = ButtonActionType.MuteSpecificDevice, Device = new DeviceRefConfig { FriendlyName = "Speakers" } };
         var action = ActionFactory.Create(config, _audio, _configManager);
         Assert.IsType<MuteSpecificDeviceAction>(action);
     }
