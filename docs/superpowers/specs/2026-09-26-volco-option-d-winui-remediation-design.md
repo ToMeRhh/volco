@@ -49,6 +49,48 @@ State these plainly when comparing results, so the comparison is honest:
 - **The build still needs MSBuild / VS Build Tools**, so it still cannot be built
   on the Linux dev machine — the CI-only workflow in `CLAUDE.md` stays as-is.
 
+### 1.2 The existing non-Windows build is a test harness, not a Linux app
+
+This trips people up, so it is stated explicitly. `src/Volco/Volco.csproj`
+already compiles a *different binary from the same repo* per target:
+
+```xml
+<PropertyGroup Condition="IsOSPlatform(Windows)">
+  <OutputType>WinExe</OutputType>
+  <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+</PropertyGroup>
+<PropertyGroup Condition="!IsOSPlatform(Windows)">
+  <TargetFramework>net8.0</TargetFramework>
+</PropertyGroup>
+
+<ItemGroup Condition="!IsOSPlatform(Windows)">
+  <Compile Remove="UI/**/*.cs" />
+  <Compile Remove="App.xaml.cs" />
+  <Compile Remove="Audio/AudioManager.cs" />
+</ItemGroup>
+```
+
+Do **not** read that as a half-finished Linux port. Note what the non-Windows
+output actually is: no `OutputType`, so it is a **class library** — no entry
+point, no UI, no audio implementation. It exists for exactly one reason, so
+`tests/Volco.Tests` can run on `ubuntu-latest` in CI. Nothing in that output can
+play a sound or draw a window.
+
+Option D keeps this arrangement unchanged. Shipping on Linux from this branch
+would require a Linux `IAudioEngine` (the easy part, over PipeWire) **and a
+second complete UI in a different framework**, maintained in parallel with the
+WinUI one forever — because WinUI 3 cannot run on Linux, with no shim or compat
+layer. That is not "compile a different binary"; that is two frontends. And once
+a cross-platform UI exists, the WinUI one is redundant, which is Option A's work
+plus a Windows-only codebase kept alive beside it.
+
+Option D is not portability-*negative*, though. It moves real things onto the
+platform-neutral side of the `<Compile Remove>` boundary — `IAudioEngine`
+becomes a neutral interface, and `ConfigMigrator` (§2.2) and
+`ControllerStateReporter` (§3) become Linux-testable. That work carries over
+intact if Option A is later adopted. What D forecloses is the **UI** path, not
+the core.
+
 ---
 
 ## 2. Scope: what changes and what does not

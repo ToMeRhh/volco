@@ -92,6 +92,53 @@ the platform split becomes a real project boundary instead of an msbuild
 condition. This is a meaningful clarity win and it makes Linux CI test *more* of
 the codebase, not less.
 
+### 2.1 The future Linux path — sketched, not built
+
+**Shipping Linux is out of scope (§10).** This subsection exists only so the
+structure above is not accidentally foreclosed, and so the mechanism is written
+down rather than implied.
+
+Today's repo already builds a different binary per target, but the non-Windows
+output is a **class library with no entry point, no UI and no audio backend** —
+a harness that exists so `tests/` can run on `ubuntu-latest`. It is not a
+half-finished port. Option A's structure is what turns "different binary per
+target" into an actual shippable app on a second platform, because the UI code
+is shared rather than duplicated.
+
+The mechanism is TFM-conditional project references:
+
+```xml
+<!-- Volco.App.csproj, once a Linux backend exists -->
+<TargetFrameworks>net8.0;net8.0-windows10.0.22621.0</TargetFrameworks>
+
+<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows10.0.22621.0'">
+  <ProjectReference Include="..\Volco.Audio.Windows\Volco.Audio.Windows.csproj" />
+  <ProjectReference Include="..\Volco.Osd.Windows\Volco.Osd.Windows.csproj" />
+</ItemGroup>
+<ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+  <ProjectReference Include="..\Volco.Audio.Linux\Volco.Audio.Linux.csproj" />
+  <ProjectReference Include="..\Volco.Osd.Avalonia\Volco.Osd.Avalonia.csproj" />
+</ItemGroup>
+```
+
+`CompositionRoot` selects the backend; every `.axaml` file, every ViewModel, and
+all of `Volco.Core` is identical across both targets. Only the two platform
+assemblies swap.
+
+Two consequences worth recording now, because they shape decisions in §4 and §5:
+
+1. **The native Win32 OSD (§5) is itself a Windows-only optimization.** That is
+   precisely why `IVolumeOsd` is defined as an interface in `Volco.Core` rather
+   than the overlay being called directly — a Linux build implements it with a
+   borderless Avalonia window and loses nothing but a few hundred KB of
+   efficiency.
+2. **Avoid Segoe Fluent Icons in the views** (§4.3 already recommends `PathIcon`
+   with inline vector data). A font dependency is the one UI decision that would
+   be genuinely painful to unwind later.
+
+macOS remains device-volume-only regardless of any of this; per-app volume there
+needs a shipped virtual audio driver (shared spec §9).
+
 ---
 
 ## 3. What moves unchanged, and what changes
