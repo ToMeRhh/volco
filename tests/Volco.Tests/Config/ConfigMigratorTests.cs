@@ -94,6 +94,11 @@ public class ConfigMigratorTests
 
         Assert.Equal("", cm.Config.OutputDevices.Device1.Id);
         Assert.Equal("Old Soundcard", cm.Config.OutputDevices.Device1.FriendlyName);
+
+        // These name/id assertions alone would hold even if MigrateFile were a no-op, because
+        // DeviceRefConfigJsonConverter already produces this exact shape at Load() time. Assert
+        // migration actually ran.
+        Assert.Equal(AppConfig.CurrentSchemaVersion, cm.Config.SchemaVersion);
     }
 
     [Fact]
@@ -125,6 +130,38 @@ public class ConfigMigratorTests
         ConfigMigrator.MigrateFile(path, cm.Config, Devices);
 
         Assert.Equal(firstBackup, File.ReadAllText(backup));
+        Assert.Equal("dev-2", cm.Config.Sliders[0].Device!.Id);
+    }
+
+    /// <summary>
+    /// Reaches the `!File.Exists(backup)` guard for real: unlike
+    /// MigrateFile_IsIdempotent_AndDoesNotOverwriteAnExistingBackup (which reuses an
+    /// already-migrated config, so the second call short-circuits at the top-level
+    /// NeedsMigration check and never reaches the backup-write code at all), this simulates a
+    /// crash-interrupted earlier run by pre-seeding config.v1.bak with distinct content, then
+    /// performs a genuine migration (fresh SchemaVersion == 0 from a real Load()). If the
+    /// `!File.Exists(backup)` condition were removed or inverted, this test would fail because
+    /// the marker content would be overwritten with the current raw config.
+    /// </summary>
+    [Fact]
+    public void MigrateFile_ExistingBackupFromInterruptedRun_IsNotOverwritten()
+    {
+        var path = WriteTempConfig(V1Json);
+        var dir = Path.GetDirectoryName(path)!;
+        var backup = Path.Combine(dir, "config.v1.bak");
+        const string PreservedMarker = "PRISTINE-V1-BACKUP-FROM-EARLIER-INTERRUPTED-RUN";
+        File.WriteAllText(backup, PreservedMarker);
+
+        var cm = new ConfigManager(path);
+        cm.Load(); // fresh load: SchemaVersion == 0, NeedsMigration is genuinely true
+
+        ConfigMigrator.MigrateFile(path, cm.Config, Devices);
+
+        // The pre-existing backup must survive untouched...
+        Assert.Equal(PreservedMarker, File.ReadAllText(backup));
+
+        // ...even though migration itself still ran and did its job.
+        Assert.Equal(AppConfig.CurrentSchemaVersion, cm.Config.SchemaVersion);
         Assert.Equal("dev-2", cm.Config.Sliders[0].Device!.Id);
     }
 
