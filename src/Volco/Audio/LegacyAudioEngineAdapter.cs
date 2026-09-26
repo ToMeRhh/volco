@@ -50,6 +50,12 @@ public sealed class LegacyAudioEngineAdapter : IAudioEngine
     public void SetDeviceMute(DeviceRef device, bool muted)
     {
         // The legacy manager only toggles. Read, then toggle if it disagrees.
+        if (device.Flow == AudioFlow.Capture)
+        {
+            if (_legacy.IsInputMuted() != muted) _legacy.ToggleMuteInput();
+            return;
+        }
+
         var current = _legacy.IsOutputMuted(ToLegacyName(device));
         if (current != muted) _legacy.ToggleMuteOutput(ToLegacyName(device));
     }
@@ -88,7 +94,18 @@ public sealed class LegacyAudioEngineAdapter : IAudioEngine
     }
 
     public void SetDefaultDevice(string endpointId, AudioFlow flow)
-        => _legacy.SetDefaultOutputDevice(endpointId);
+    {
+        // The legacy call expects a friendly name, not an endpoint id. Resolve it against
+        // the current output devices rather than feeding the id into the name matcher.
+        var match = _legacy.GetOutputDevices().FirstOrDefault(d => d.Id == endpointId);
+        if (match == null)
+        {
+            Volco.AppLog.Error($"LegacyAudioEngineAdapter.SetDefaultDevice: no output device found for endpoint id '{endpointId}'.");
+            return;
+        }
+
+        _legacy.SetDefaultOutputDevice(match.Name);
+    }
 
     public void Dispose() { }
 }
