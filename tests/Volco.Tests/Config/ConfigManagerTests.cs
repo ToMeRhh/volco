@@ -275,12 +275,15 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(55555, cm.Config.Connection.Udp.ListenPort);
         Assert.True(cm.Config.DebugLogging);
 
-        Assert.Equal(2, cm.Config.Sliders.Count);
+        // Load() pads sparse lists up to the minimum 5 sliders / 3 buttons (Step 5's defensive
+        // behavior) — the two real sliders and one real button from the file must still be the
+        // ones at index 0/1/0, unmolested; the padding is additive, not destructive.
+        Assert.True(cm.Config.Sliders.Count >= 2);
         Assert.Equal(SliderMappingType.Processes, cm.Config.Sliders[0].Type);
         Assert.Equal(new List<string> { "spotify.exe" }, cm.Config.Sliders[0].Processes);
         Assert.Equal(SliderMappingType.Device, cm.Config.Sliders[1].Type);
 
-        Assert.Single(cm.Config.Buttons);
+        Assert.True(cm.Config.Buttons.Count >= 1);
         Assert.Equal(ButtonActionType.MuteSpecificDevice, cm.Config.Buttons[0].SinglePress.Action);
         Assert.Equal(ButtonActionType.ToggleOutputDevice, cm.Config.Buttons[0].DoublePress.Action);
         Assert.Equal(ButtonActionType.None, cm.Config.Buttons[0].LongPress.Action);
