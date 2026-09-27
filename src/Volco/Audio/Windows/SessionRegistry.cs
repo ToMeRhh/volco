@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.Audio;
@@ -664,14 +663,21 @@ internal sealed class SessionRegistry : IDisposable
 
     /// <summary>Requirement 4: GetProcessId → OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) →
     /// QueryFullProcessImageNameW → Path.GetFileName, then close the handle. Never
-    /// <c>Process.GetProcessById</c>. Note: the native export is
-    /// <c>QueryFullProcessImageNameW</c> (kept as the <c>NativeMethods.txt</c> entry name), but
-    /// CsWin32 strips the trailing "W" from the generated C# method name, and it resolves to
-    /// CsWin32's friendly overload - <c>bool QueryFullProcessImageName(SafeHandle, PROCESS_NAME_FORMAT,
-    /// Span&lt;char&gt;, ref uint)</c> - not the raw <c>HANDLE</c>/<c>PWSTR</c> shape assumed in an
-    /// earlier round (see report). <c>PInvoke.OpenProcess</c> is called via its
-    /// <see cref="SafeFileHandle"/>-returning overload so the two line up and the handle is closed
-    /// automatically via <c>using</c>.</summary>
+    /// <c>Process.GetProcessById</c>. Notes on the generated shapes actually used here (see report
+    /// for the full per-call type audit and confirmed/unconfirmed breakdown):
+    /// <list type="bullet">
+    /// <item><c>PInvoke.OpenProcess</c> (the plain name) returns a raw <c>HANDLE</c>. CsWin32 also
+    /// generates a separate, differently-named <c>PInvoke.OpenProcess_SafeHandle</c> that returns a
+    /// <see cref="SafeHandle"/>-derived type - that is the one called below, disposed via
+    /// <c>using</c> instead of a manual <c>CloseHandle</c>.</item>
+    /// <item>The native export is <c>QueryFullProcessImageNameW</c> (kept as the
+    /// <c>NativeMethods.txt</c> entry name), but CsWin32 strips the trailing "W" from the generated
+    /// C# name, and binds to its friendly overload - <c>bool QueryFullProcessImageName(SafeHandle,
+    /// PROCESS_NAME_FORMAT, Span&lt;char&gt;, ref uint)</c> - not a raw <c>HANDLE</c>/<c>PWSTR</c>
+    /// shape. Its first parameter's declared type is the base <see cref="SafeHandle"/> class, so
+    /// whatever concrete type <c>OpenProcess_SafeHandle</c> returns is accepted directly.</item>
+    /// </list>
+    /// </summary>
     private static string ResolveImageName(uint pid)
     {
         if (pid == 0)
@@ -679,7 +685,7 @@ internal sealed class SessionRegistry : IDisposable
             return string.Empty;
         }
 
-        using SafeFileHandle process = PInvoke.OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        using var process = PInvoke.OpenProcess_SafeHandle(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
         if (process.IsInvalid)
         {
             return string.Empty;
