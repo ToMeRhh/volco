@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.Audio;
@@ -94,6 +95,13 @@ internal sealed class SessionRegistry : IDisposable
     {
         public required IAudioSessionManager2 Manager { get; init; }
         public required IAudioSessionNotification Notification { get; init; }
+
+        /// <summary>True only once <see cref="IAudioSessionManager2.RegisterSessionNotification"/>
+        /// has actually succeeded for <see cref="Notification"/>. <see cref="Attach"/> constructs
+        /// this object and stores it before registering (see its ordering note), so there is a
+        /// window where a rollback could otherwise try to unregister a sink Core Audio never had on
+        /// file; gating on this flag avoids calling that API in an invalid state.</summary>
+        public bool Registered { get; set; }
     }
 
     /// <summary>
@@ -273,10 +281,11 @@ internal sealed class SessionRegistry : IDisposable
 
         // Sink is constructed but NOT registered yet - see the ordering note above.
         var sink = new SessionNotificationSink(this, device.Id);
+        var attachedDevice = new AttachedDevice { Manager = manager, Notification = sink };
 
         lock (_lock)
         {
-            _devices[device.Id] = new AttachedDevice { Manager = manager, Notification = sink };
+            _devices[device.Id] = attachedDevice;
         }
 
         try
@@ -305,6 +314,7 @@ internal sealed class SessionRegistry : IDisposable
             }
 
             manager.RegisterSessionNotification(sink);
+            attachedDevice.Registered = true;
         }
         catch (COMException)
         {
@@ -586,7 +596,7 @@ internal sealed class SessionRegistry : IDisposable
             _devices.Remove(deviceId, out attached);
         }
 
-        if (attached is not null)
+        if (attached is not null && attached.Registered)
         {
             try
             {
@@ -656,40 +666,39 @@ internal sealed class SessionRegistry : IDisposable
     /// QueryFullProcessImageNameW → Path.GetFileName, then close the handle. Never
     /// <c>Process.GetProcessById</c>. Note: the native export is
     /// <c>QueryFullProcessImageNameW</c> (kept as the <c>NativeMethods.txt</c> entry name), but
-    /// CsWin32 strips the trailing "W" from the generated C# method name -
-    /// <c>PInvoke.QueryFullProcessImageName</c> is the call below.</summary>
-    private static unsafe string ResolveImageName(uint pid)
+    /// CsWin32 strips the trailing "W" from the generated C# method name, and it resolves to
+    /// CsWin32's friendly overload - <c>bool QueryFullProcessImageName(SafeHandle, PROCESS_NAME_FORMAT,
+    /// Span&lt;char&gt;, ref uint)</c> - not the raw <c>HANDLE</c>/<c>PWSTR</c> shape assumed in an
+    /// earlier round (see report). <c>PInvoke.OpenProcess</c> is called via its
+    /// <see cref="SafeFileHandle"/>-returning overload so the two line up and the handle is closed
+    /// automatically via <c>using</c>.</summary>
+    private static string ResolveImageName(uint pid)
     {
         if (pid == 0)
         {
             return string.Empty;
         }
 
-        HANDLE process = PInvoke.OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-        if (process.Equals(default))
+        using SafeFileHandle process = PInvoke.OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (process.IsInvalid)
         {
             return string.Empty;
         }
 
         try
         {
-            const int BufferLength = 1024;
-            char* buffer = stackalloc char[BufferLength];
-            uint size = BufferLength;
-            if (!PInvoke.QueryFullProcessImageName(process, 0, new PWSTR(buffer), ref size))
+            Span<char> buffer = stackalloc char[260]; // MAX_PATH
+            uint size = (uint)buffer.Length;
+            if (!PInvoke.QueryFullProcessImageName(process, 0, buffer, ref size))
             {
                 return string.Empty;
             }
 
-            return Path.GetFileName(new string(buffer, 0, (int)size));
+            return Path.GetFileName(buffer[..(int)size].ToString());
         }
         catch (COMException)
         {
             return string.Empty;
-        }
-        finally
-        {
-            PInvoke.CloseHandle(process);
         }
     }
 
