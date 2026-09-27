@@ -151,7 +151,7 @@ internal sealed class SessionRegistry : IDisposable
         {
         }
 
-        public void OnChannelVolumeChanged(uint ChannelCount, float* NewChannelVolumeArray, uint ChangedChannel, Guid* EventContext)
+        public void OnChannelVolumeChanged(uint ChannelCount, float[] NewChannelVolumeArray, uint ChangedChannel, Guid* EventContext)
         {
         }
 
