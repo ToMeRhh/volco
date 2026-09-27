@@ -23,10 +23,10 @@ public partial class App : Application
     private UpdateWindow? _updateWindow;
     private ConfigManager _configManager = null!;
     private IAudioManager _audioManager = null!;
+    private IAudioEngine _audioEngine = null!;
     private IControllerConnection? _connection;
     private ButtonPressDetector _buttonPressDetector = null!;
     private SliderProcessor _sliderProcessor = null!;
-    private SessionMonitor _sessionMonitor = null!;
     private VolumeOsdWindow _osd = null!;
 
     public App()
@@ -50,16 +50,25 @@ public partial class App : Application
             "Volco", "config.json");
         _configManager = new ConfigManager(configPath);
         _configManager.Load();
-        _configManager.ConnectionConfigChanged += OnConfigChanged;
 
-        // Audio
+        // Audio first — the migrator needs the device list to resolve v1 names to endpoint ids.
         _audioManager = new AudioManager();
-        _sessionMonitor = new SessionMonitor(_audioManager);
+        _audioEngine = new LegacyAudioEngineAdapter(_audioManager);
+
+        if (ConfigMigrator.NeedsMigration(_configManager.Config))
+        {
+            AppLog.Info("Migrating config to schema v2");
+            ConfigMigrator.MigrateFile(configPath, _configManager.Config,
+                                       _audioEngine.GetDevices(AudioFlow.Render));
+            _configManager.Save();
+        }
+
+        _configManager.ConnectionConfigChanged += OnConfigChanged;
 
         // Input processing
         _buttonPressDetector = new ButtonPressDetector();
         _buttonPressDetector.PressDetected += OnButtonPressDetected;
-        _sliderProcessor = new SliderProcessor(_audioManager, _configManager, _sessionMonitor);
+        _sliderProcessor = new SliderProcessor(_audioEngine, _configManager);
 
         // Volume OSD flyout
         _osd = new VolumeOsdWindow();
@@ -143,7 +152,6 @@ public partial class App : Application
         IsExiting = true;
         _connection?.Dispose();
         _sliderProcessor.Dispose();
-        _sessionMonitor.Dispose();
         _osd?.Close();
         _updateWindow?.Close();
         _trayIcon?.Dispose();
@@ -251,7 +259,7 @@ public partial class App : Application
         };
 
         if (actionConfig == null) return;
-        var action = ActionFactory.Create(actionConfig, _audioManager, _configManager);
+        var action = ActionFactory.Create(actionConfig, _audioEngine, _configManager);
         action?.Execute();
 
         ShowMuteOsd(actionConfig);
@@ -267,16 +275,20 @@ public partial class App : Application
         switch (actionConfig.Action)
         {
             case ButtonActionType.MuteCurrentOutput:
-                label = _audioManager.GetDefaultOutputDeviceName() ?? "Output";
-                muted = _audioManager.IsOutputMuted();
+                label = _audioEngine.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia)?.FriendlyName ?? "Output";
+                muted = _audioEngine.TryGetDeviceState(
+                    DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia), out _, out muted) && muted;
                 break;
             case ButtonActionType.MuteSpecificDevice:
-                label = actionConfig.DeviceId ?? "Output";
-                muted = _audioManager.IsOutputMuted(actionConfig.DeviceId);
+                var specificDevice = ActionFactory.Resolve(actionConfig.Device);
+                if (specificDevice == null) return; // unresolvable device config; nothing to show
+                label = actionConfig.Device?.FriendlyName ?? "Output";
+                muted = _audioEngine.TryGetDeviceState(specificDevice.Value, out _, out muted) && muted;
                 break;
             case ButtonActionType.MuteCurrentInput:
                 label = "Microphone";
-                muted = _audioManager.IsInputMuted();
+                muted = _audioEngine.TryGetDeviceState(
+                    DeviceRef.Default(AudioFlow.Capture, AudioRole.Communications), out _, out muted) && muted;
                 break;
             default:
                 return; // non-mute actions don't show the OSD
@@ -304,7 +316,7 @@ public partial class App : Application
         if (currentDevice != null)
         {
             var devices = config.OutputDevices;
-            int activeIndex = currentDevice.Contains(devices.Device1, StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+            int activeIndex = currentDevice.Contains(devices.Device1.FriendlyName, StringComparison.OrdinalIgnoreCase) ? 0 : 1;
             _connection.Send(ProtocolEncoder.EncodeActiveDevice(activeIndex));
         }
     }
@@ -317,11 +329,15 @@ public partial class App : Application
             switch (actionConfig.Action)
             {
                 case ButtonActionType.MuteCurrentOutput:
-                    return _audioManager.IsOutputMuted();
+                    return _audioEngine.TryGetDeviceState(
+                        DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia), out _, out var outputMuted) && outputMuted;
                 case ButtonActionType.MuteSpecificDevice:
-                    return _audioManager.IsOutputMuted(actionConfig.DeviceId);
+                    var specificDevice = ActionFactory.Resolve(actionConfig.Device);
+                    if (specificDevice == null) return null; // unresolvable device config; nothing to report
+                    return _audioEngine.TryGetDeviceState(specificDevice.Value, out _, out var specificMuted) && specificMuted;
                 case ButtonActionType.MuteCurrentInput:
-                    return _audioManager.IsInputMuted();
+                    return _audioEngine.TryGetDeviceState(
+                        DeviceRef.Default(AudioFlow.Capture, AudioRole.Communications), out _, out var inputMuted) && inputMuted;
             }
         }
         return null;
