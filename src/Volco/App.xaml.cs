@@ -53,24 +53,15 @@ public partial class App : Application
 
         // Audio first — the migrator needs the device list to resolve v1 names to endpoint ids.
         var engine = new Volco.Audio.Windows.AudioEngine();
-        engine.Start();
+        bool engineReady = engine.Start();
         _audioEngine = engine;
+        _audioEngineStartFailed = !engineReady;
 
-        // AudioEngine.Start() blocks up to 10s for the audio thread to signal ready, but on
-        // timeout it only logs internally and returns as if nothing were wrong — it exposes no
-        // public "did it actually come up" signal. The observable symptom of that failure mode
-        // is an audio thread that never populated the device registries, so an empty device list
-        // on both flows immediately after Start() returns is the only signal available here.
-        // This is a proxy, not a guarantee (a machine with zero audio endpoints of either flow
-        // would look identical), but it is the best this caller can do without changing
-        // AudioEngine itself.
-        _audioEngineStartFailed = _audioEngine.GetDevices(AudioFlow.Render).Count == 0
-            && _audioEngine.GetDevices(AudioFlow.Capture).Count == 0;
         if (_audioEngineStartFailed)
         {
-            AppLog.Error("AudioEngine did not report any audio devices after Start(); the audio " +
-                         "thread likely failed to become ready. Volco will run but will not be " +
-                         "able to control audio until this is resolved — see volco.log.");
+            AppLog.Error("AudioEngine.Start() did not signal ready within its timeout; the audio " +
+                         "thread likely failed to come up. Volco will run but will not be able to " +
+                         "control audio until this is resolved — see volco.log.");
         }
 
         if (ConfigMigrator.NeedsMigration(_configManager.Config))
@@ -97,6 +88,15 @@ public partial class App : Application
 
         // Tray icon
         SetupTrayIcon();
+
+        // A tray tooltip needs hovering to notice, and the log needs knowing to look — if audio
+        // startup failed, put a real window in front of the user right away instead of leaving
+        // them with silently dead sliders.
+        if (_audioEngineStartFailed)
+        {
+            ShowSettings();
+        }
+
         AppLog.Info("App launch complete");
     }
 
@@ -172,6 +172,7 @@ public partial class App : Application
         IsExiting = true;
         _connection?.Dispose();
         _sliderProcessor.Dispose();
+        _audioEngine.Dispose();
         _osd?.Close();
         _updateWindow?.Close();
         _trayIcon?.Dispose();

@@ -62,11 +62,19 @@ public sealed class AudioEngine : IAudioEngine
     /// some async ready signal," so Start() absorbs that wait itself rather than pushing it onto
     /// every caller.
     /// </summary>
-    public void Start()
+    /// <returns>
+    /// <see langword="true"/> if the audio thread signalled ready within the timeout;
+    /// <see langword="false"/> if it did not (the thread keeps running and may still become ready
+    /// later, but query methods may return empty results until then). Callers that need to know
+    /// whether startup actually succeeded - rather than just "not yet timed out" - should use this
+    /// return value instead of inferring it from query results, which cannot distinguish "not
+    /// ready yet" from "ready, but there is nothing to report."
+    /// </returns>
+    public bool Start()
     {
         if (_started)
         {
-            return;
+            return _ready.IsSet;
         }
 
         _started = true;
@@ -78,10 +86,13 @@ public sealed class AudioEngine : IAudioEngine
         };
         _thread.Start();
 
-        if (!_ready.Wait(TimeSpan.FromSeconds(10)))
+        bool ready = _ready.Wait(TimeSpan.FromSeconds(10));
+        if (!ready)
         {
             Volco.AppLog.Error("AudioEngine.Start: audio thread did not signal ready within 10s.");
         }
+
+        return ready;
     }
 
     // ── Queries - served from the in-memory registries, safe from any thread ──────────────────
