@@ -30,3 +30,4 @@ PROCESS_QUERY_LIMITED_INFORMATION
 CoTaskMemFree
 PropVariantClear
 PKEY_Device_FriendlyName
+AudioSessionDisconnectReason
