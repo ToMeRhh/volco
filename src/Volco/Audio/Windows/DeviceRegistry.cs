@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Windows.Win32;
@@ -7,6 +8,7 @@ using Windows.Win32.Media.Audio.Endpoints;
 using Windows.Win32.System.Com;
 using Windows.Win32.System.Com.StructuredStorage;
 using Windows.Win32.System.Variant;
+using Windows.Win32.UI.Shell.PropertiesSystem;
 using Volco.Audio;
 
 namespace Volco.Audio.Windows;
@@ -18,8 +20,21 @@ namespace Volco.Audio.Windows;
 /// EnumerateAudioEndpoints/GetDefaultAudioEndpoint - that happens only here, at startup and
 /// in response to a live notification (spec §2.3 invariant 1).
 ///
-/// All public members must be called on the AudioEngine's audio thread (MTA). This class does
-/// not create or own a thread; see the contract documented on <see cref="Start"/>.
+/// All public members must be called on the AudioEngine's audio thread (MTA), except that
+/// <see cref="GetDevices"/>/<see cref="GetDefault"/>/<see cref="Resolve"/> may also be called from
+/// other threads (e.g. the UI) - their reads are synchronised against the audio thread's writes.
+/// This class does not create or own a thread; see the contracts documented on <see cref="Start"/>
+/// and <see cref="DrainPendingChanges"/>.
+///
+/// IMMNotificationClient callbacks arrive on an arbitrary MTA/RPC worker thread Windows Audio
+/// chooses, never necessarily the audio thread. Per the documented Core Audio contract they must
+/// not block and must never wait on a synchronization object (a deadlock risk: the audio thread
+/// could be holding that object while doing COM work the RPC callback is itself blocking on). So
+/// every callback here does zero COM work and takes no lock - it packages the change into a
+/// <see cref="PendingChange"/>, enqueues it, and calls the <c>onPendingWork</c> callback given to
+/// the constructor. All the real work (activating COM objects, disposing handles, updating
+/// defaults, raising <c>onChanged</c>) happens later, on the audio thread, when it calls
+/// <see cref="DrainPendingChanges"/>.
 /// </summary>
 [ComVisible(true)]
 internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
@@ -95,15 +110,44 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         }
     }
 
+    private enum PendingChangeKind
+    {
+        DeviceActivated,
+        DeviceRemovedOrInactive,
+        DefaultChanged,
+    }
+
+    /// <summary>
+    /// What an IMMNotificationClient callback queues for <see cref="DrainPendingChanges"/> to
+    /// apply later, on the audio thread. Deliberately tiny and allocation-free to construct so the
+    /// callback that builds one never has to do real work.
+    /// </summary>
+    private readonly record struct PendingChange(PendingChangeKind Kind, string DeviceId, AudioFlow Flow, AudioRole Role)
+    {
+        public static PendingChange Activated(string id) => new(PendingChangeKind.DeviceActivated, id, default, default);
+
+        public static PendingChange RemovedOrInactive(string id) => new(PendingChangeKind.DeviceRemovedOrInactive, id, default, default);
+
+        public static PendingChange DefaultChangedTo(AudioFlow flow, AudioRole role, string id) => new(PendingChangeKind.DefaultChanged, id, flow, role);
+    }
+
     private readonly Action<DevicesChangedEventArgs> _onChanged;
 
-    // Single lock protecting both dictionaries. Core Audio delivers IMMNotificationClient
-    // callbacks on whatever MTA/RPC worker thread Windows Audio chooses - not necessarily the
-    // audio thread that registered the client - so reads from GetDevices/GetDefault/Resolve
-    // (called from the audio thread) and writes from a notification callback can race without it.
-    // This is a short, uncontended, non-blocking critical section around a few COM calls; it does
-    // not reintroduce the per-tick COM re-activation bug this class exists to fix, because reads
-    // here are not a 50x/second hot path (that hot path is SessionRegistry's write path, Task 12).
+    /// <summary>
+    /// Invoked by an IMMNotificationClient callback every time it enqueues a
+    /// <see cref="PendingChange"/>. May be called from an arbitrary RPC thread, so - like the
+    /// callbacks themselves - it must be non-blocking. Task 13 wires this to a queue post that
+    /// wakes the audio thread; it must never itself do COM work or take a lock.
+    /// </summary>
+    private readonly Action _onPendingWork;
+
+    private readonly ConcurrentQueue<PendingChange> _pending = new();
+
+    // Protects both dictionaries against the one remaining real race: GetDevices/GetDefault/
+    // Resolve may be called from a thread other than the audio thread (e.g. the UI), while the
+    // audio thread mutates the dictionaries inside DrainPendingChanges. IMMNotificationClient
+    // callbacks never take this lock any more - see the class doc comment - so it is never held
+    // by, nor contended against, an RPC callback thread.
     private readonly object _lock = new();
     private readonly Dictionary<string, DeviceHandle> _devices = new(StringComparer.Ordinal);
     private readonly Dictionary<(AudioFlow Flow, AudioRole Role), string> _defaults = new();
@@ -112,9 +156,10 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     private bool _started;
     private bool _disposed;
 
-    public DeviceRegistry(Action<DevicesChangedEventArgs> onChanged)
+    public DeviceRegistry(Action<DevicesChangedEventArgs> onChanged, Action onPendingWork)
     {
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
+        _onPendingWork = onPendingWork ?? throw new ArgumentNullException(nameof(onPendingWork));
     }
 
     /// <summary>
@@ -126,7 +171,8 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     /// already called on it). Registering IMMNotificationClient from an STA thread is a documented
     /// deadlock source (spec §2.1). DeviceRegistry does not create or own that thread - Task 13's
     /// AudioEngine does, and it must call Start() from its dedicated audio thread before any other
-    /// member of this class is used.
+    /// member of this class is used, and must call <see cref="DrainPendingChanges"/> from that same
+    /// thread thereafter (e.g. once per work-queue iteration) to apply queued notifications.
     /// </summary>
     public void Start()
     {
@@ -153,6 +199,35 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         // lookups that follow (in the notification callbacks) are the only other place this class
         // calls EnumerateAudioEndpoints/GetDefaultAudioEndpoint (spec §2.3 invariant 1).
         _enumerator.RegisterEndpointNotificationCallback(this);
+    }
+
+    /// <summary>
+    /// Applies every <see cref="PendingChange"/> an IMMNotificationClient callback has queued since
+    /// the last call: activates COM objects and builds a handle for a newly active device, disposes
+    /// and drops a removed/now-inactive one, updates the cached default, and raises
+    /// <c>onChanged</c> once per applied change. Safe to do all of that here because, unlike the
+    /// callbacks that queued the work, this method is only ever called from the audio thread.
+    ///
+    /// Threading contract: must be called on the same MTA audio thread as <see cref="Start"/>,
+    /// never from the RPC thread a raw notification happened to arrive on.
+    /// </summary>
+    public void DrainPendingChanges()
+    {
+        while (_pending.TryDequeue(out var change))
+        {
+            switch (change.Kind)
+            {
+                case PendingChangeKind.DeviceActivated:
+                    HandleDeviceActivated(change.DeviceId);
+                    break;
+                case PendingChangeKind.DeviceRemovedOrInactive:
+                    HandleDeviceRemovedOrInactive(change.DeviceId);
+                    break;
+                case PendingChangeKind.DefaultChanged:
+                    ApplyDefaultChanged(change.Flow, change.Role, change.DeviceId);
+                    break;
+            }
+        }
     }
 
     public IReadOnlyList<AudioDevice> GetDevices(AudioFlow flow)
@@ -403,47 +478,61 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         }
     }
 
-    // ── IMMNotificationClient - must not block, must not call Register/Unregister, must hand off
-    // fast (spec §2.1, §2.4). Each method here does the minimum COM work needed to describe what
-    // changed (a handful of quick calls, no waits, no re-entrant (Un)RegisterEndpointNotification-
-    // Callback), takes the lock only to touch the dictionaries, then calls _onChanged so Task 13 can
-    // post the result to its queue. See the report for why this differs from a maximally literal
-    // reading of "never touch the registry dictionaries inline". ──────────────────────────────────
+    // ── IMMNotificationClient - must not block and must never wait on a synchronization object
+    // (spec §2.1, §2.4): no COM calls, no lock, no dictionary access, no re-entrant
+    // (Un)RegisterEndpointNotificationCallback, no invoking _onChanged directly. Each method here
+    // does exactly one thing: build a PendingChange from the (already-marshalled-to-us) arguments,
+    // enqueue it, call _onPendingWork, and return. The real work happens later in
+    // DrainPendingChanges, on the audio thread. ─────────────────────────────────────────────────
 
     void IMMNotificationClient.OnDeviceStateChanged(PCWSTR pwstrDeviceId, DEVICE_STATE dwNewState)
     {
         string id = pwstrDeviceId.ToString() ?? string.Empty;
-        if (dwNewState == DEVICE_STATE.DEVICE_STATE_ACTIVE)
-        {
-            HandleDeviceActivated(id);
-        }
-        else
-        {
-            HandleDeviceRemovedOrInactive(id);
-        }
+        Enqueue(dwNewState == DEVICE_STATE.DEVICE_STATE_ACTIVE
+            ? PendingChange.Activated(id)
+            : PendingChange.RemovedOrInactive(id));
     }
 
     void IMMNotificationClient.OnDeviceAdded(PCWSTR pwstrDeviceId)
     {
-        HandleDeviceActivated(pwstrDeviceId.ToString() ?? string.Empty);
+        Enqueue(PendingChange.Activated(pwstrDeviceId.ToString() ?? string.Empty));
     }
 
     void IMMNotificationClient.OnDeviceRemoved(PCWSTR pwstrDeviceId)
     {
-        HandleDeviceRemovedOrInactive(pwstrDeviceId.ToString() ?? string.Empty);
+        Enqueue(PendingChange.RemovedOrInactive(pwstrDeviceId.ToString() ?? string.Empty));
     }
 
     unsafe void IMMNotificationClient.OnDefaultDeviceChanged(EDataFlow flow, ERole role, PCWSTR pwstrDefaultDeviceId)
     {
-        string? id = pwstrDefaultDeviceId.Value == null ? null : pwstrDefaultDeviceId.ToString();
+        string id = pwstrDefaultDeviceId.Value == null ? string.Empty : (pwstrDefaultDeviceId.ToString() ?? string.Empty);
         AudioFlow audioFlow = flow == EDataFlow.eCapture ? AudioFlow.Capture : AudioFlow.Render;
         AudioRole audioRole = ToAudioRole(role);
+        Enqueue(PendingChange.DefaultChangedTo(audioFlow, audioRole, id));
+    }
 
+    void IMMNotificationClient.OnPropertyValueChanged(PCWSTR pwstrDeviceId, PROPERTYKEY key)
+    {
+        // Not required by any binding requirement for this task. A friendly-name change would
+        // need re-reading the property store and raising StateChanged; left for a follow-up
+        // rather than done partially/incorrectly here. (Nothing to enqueue, so nothing to drain.)
+    }
+
+    private void Enqueue(PendingChange change)
+    {
+        _pending.Enqueue(change);
+        _onPendingWork();
+    }
+
+    // ── Applied only from DrainPendingChanges, i.e. only on the audio thread ───────────────────
+
+    private void ApplyDefaultChanged(AudioFlow flow, AudioRole role, string id)
+    {
         AudioDevice? changed = null;
         lock (_lock)
         {
-            _defaults[(audioFlow, audioRole)] = id ?? string.Empty;
-            if (id is not null && _devices.TryGetValue(id, out var handle))
+            _defaults[(flow, role)] = id;
+            if (!string.IsNullOrEmpty(id) && _devices.TryGetValue(id, out var handle))
             {
                 changed = ToAudioDeviceLocked(handle);
             }
@@ -455,13 +544,6 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         {
             _onChanged(new DevicesChangedEventArgs(DeviceChangeKind.DefaultChanged, changed));
         }
-    }
-
-    void IMMNotificationClient.OnPropertyValueChanged(PCWSTR pwstrDeviceId, PROPERTYKEY key)
-    {
-        // Not required by any binding requirement for this task. A friendly-name change would
-        // need re-reading the property store and raising StateChanged; left for a follow-up
-        // rather than done partially/incorrectly here.
     }
 
     private void HandleDeviceActivated(string id)
