@@ -22,12 +22,12 @@ public partial class App : Application
     private SettingsWindow? _settingsWindow;
     private UpdateWindow? _updateWindow;
     private ConfigManager _configManager = null!;
-    private IAudioManager _audioManager = null!;
     private IAudioEngine _audioEngine = null!;
     private IControllerConnection? _connection;
     private ButtonPressDetector _buttonPressDetector = null!;
     private SliderProcessor _sliderProcessor = null!;
     private VolumeOsdWindow _osd = null!;
+    private bool _audioEngineStartFailed;
 
     public App()
     {
@@ -52,8 +52,26 @@ public partial class App : Application
         _configManager.Load();
 
         // Audio first — the migrator needs the device list to resolve v1 names to endpoint ids.
-        _audioManager = new AudioManager();
-        _audioEngine = new LegacyAudioEngineAdapter(_audioManager);
+        var engine = new Volco.Audio.Windows.AudioEngine();
+        engine.Start();
+        _audioEngine = engine;
+
+        // AudioEngine.Start() blocks up to 10s for the audio thread to signal ready, but on
+        // timeout it only logs internally and returns as if nothing were wrong — it exposes no
+        // public "did it actually come up" signal. The observable symptom of that failure mode
+        // is an audio thread that never populated the device registries, so an empty device list
+        // on both flows immediately after Start() returns is the only signal available here.
+        // This is a proxy, not a guarantee (a machine with zero audio endpoints of either flow
+        // would look identical), but it is the best this caller can do without changing
+        // AudioEngine itself.
+        _audioEngineStartFailed = _audioEngine.GetDevices(AudioFlow.Render).Count == 0
+            && _audioEngine.GetDevices(AudioFlow.Capture).Count == 0;
+        if (_audioEngineStartFailed)
+        {
+            AppLog.Error("AudioEngine did not report any audio devices after Start(); the audio " +
+                         "thread likely failed to become ready. Volco will run but will not be " +
+                         "able to control audio until this is resolved — see volco.log.");
+        }
 
         if (ConfigMigrator.NeedsMigration(_configManager.Config))
         {
@@ -92,7 +110,9 @@ public partial class App : Application
                 Background = new SolidColorBrush(ColorHelper.FromArgb(255, 30, 100, 200)),
                 Foreground = new SolidColorBrush(Colors.White),
             },
-            ToolTipText = "Volco",
+            ToolTipText = _audioEngineStartFailed
+                ? "Volco — audio engine failed to start; see volco.log"
+                : "Volco",
         };
 
         var menu = new MenuFlyout();
