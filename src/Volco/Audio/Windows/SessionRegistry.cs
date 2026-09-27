@@ -236,6 +236,20 @@ internal sealed class SessionRegistry : IDisposable
     /// Without that prior call, Windows silently registers the notification but never delivers
     /// anything through it - no error, no crash (spec §2.4).
     ///
+    /// That ordering interacts with a second one: <see cref="BuildAndStoreSession"/> (used both by
+    /// the initial enumeration below and by a drained <c>OnSessionCreated</c>) refuses to build a
+    /// session for a device id it does not find in the attached-devices dictionary, so a device
+    /// must be recorded there BEFORE its sessions are enumerated - not after, or every pre-existing
+    /// session found here is silently dropped. So the actual order is: construct the sink (but do not
+    /// register it yet) -&gt; record the device -&gt; enumerate and build its existing sessions -&gt;
+    /// only then register the sink. This keeps "enumerate before register" true for Core Audio
+    /// while keeping "device recorded before its sessions are built" true for
+    /// <see cref="BuildAndStoreSession"/>.
+    ///
+    /// If enumeration or registration throws, the device entry and any sessions already built for
+    /// it in this call are rolled back (as an ordinary <see cref="Detach"/>, without raising
+    /// events) before the exception propagates, so a failed attach leaves nothing half-registered.
+    ///
     /// No-op for a capture device (<see cref="DeviceRegistry.DeviceHandle.SessionManager"/> is
     /// null) and for a device id already attached.
     /// </summary>
@@ -257,35 +271,49 @@ internal sealed class SessionRegistry : IDisposable
             }
         }
 
-        // Requirement 1 / spec §2.4: enumerate once, unconditionally, BEFORE registering.
-        manager.GetSessionEnumerator(out IAudioSessionEnumerator sessionEnumerator);
-        try
-        {
-            sessionEnumerator.GetCount(out int count);
-            for (int i = 0; i < count; i++)
-            {
-                try
-                {
-                    sessionEnumerator.GetSession(i, out IAudioSessionControl session);
-                    BuildAndStoreSession(device.Id, session, raiseChanged: false);
-                }
-                catch (COMException)
-                {
-                    // Session vanished mid-enumeration, or refused QI; skip it and continue.
-                }
-            }
-        }
-        finally
-        {
-            ReleaseIfComObject(sessionEnumerator);
-        }
-
+        // Sink is constructed but NOT registered yet - see the ordering note above.
         var sink = new SessionNotificationSink(this, device.Id);
-        manager.RegisterSessionNotification(sink);
 
         lock (_lock)
         {
             _devices[device.Id] = new AttachedDevice { Manager = manager, Notification = sink };
+        }
+
+        try
+        {
+            // Requirement 1 / spec §2.4: enumerate once, unconditionally, BEFORE registering.
+            IAudioSessionEnumerator sessionEnumerator = manager.GetSessionEnumerator();
+            try
+            {
+                sessionEnumerator.GetCount(out int count);
+                for (int i = 0; i < count; i++)
+                {
+                    try
+                    {
+                        sessionEnumerator.GetSession(i, out IAudioSessionControl session);
+                        BuildAndStoreSession(device.Id, session, raiseChanged: false);
+                    }
+                    catch (COMException)
+                    {
+                        // Session vanished mid-enumeration, or refused QI; skip it and continue.
+                    }
+                }
+            }
+            finally
+            {
+                ReleaseIfComObject(sessionEnumerator);
+            }
+
+            manager.RegisterSessionNotification(sink);
+        }
+        catch (COMException)
+        {
+            // Leave nothing half-registered: drop the device entry and dispose whatever sessions
+            // the enumeration above already built for it. raiseChanged: false because, from the
+            // caller's perspective, this device was never successfully attached in the first
+            // place - there is nothing for a consumer to have observed yet.
+            DetachInternal(device.Id, raiseChanged: false);
+            throw;
         }
     }
 
@@ -311,6 +339,10 @@ internal sealed class SessionRegistry : IDisposable
     /// </summary>
     public void ApplyVolume(SessionFilter filter, float level)
     {
+        // Defense in depth: the IAudioEngine contract documents level as [0,1] and the old
+        // AudioManager clamped - do not rely on every caller already having done so.
+        level = Math.Clamp(level, 0f, 1f);
+
         List<SessionHandle> targets;
         lock (_lock)
         {
@@ -612,9 +644,9 @@ internal sealed class SessionRegistry : IDisposable
     }
 
     /// <summary>
-    /// LOW CONFIDENCE (see report): assumes <c>IAudioSessionControl2.IsSystemSoundsSession()</c> is
-    /// generated returning <see cref="HRESULT"/> directly (PreserveSig, since S_OK/S_FALSE are both
-    /// meaningful successes here) rather than as a void method that throws only on failure.
+    /// <c>IAudioSessionControl2.IsSystemSoundsSession()</c> is confirmed (build-verified) to return
+    /// <see cref="HRESULT"/> directly - PreserveSig, since S_OK/S_FALSE are both meaningful
+    /// successes here - rather than being wrapped as a void method that throws only on failure.
     /// </summary>
     private static HRESULT IsSystemSoundsSessionCore(IAudioSessionControl2 control) => control.IsSystemSoundsSession();
 
@@ -622,7 +654,10 @@ internal sealed class SessionRegistry : IDisposable
 
     /// <summary>Requirement 4: GetProcessId → OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) →
     /// QueryFullProcessImageNameW → Path.GetFileName, then close the handle. Never
-    /// <c>Process.GetProcessById</c>.</summary>
+    /// <c>Process.GetProcessById</c>. Note: the native export is
+    /// <c>QueryFullProcessImageNameW</c> (kept as the <c>NativeMethods.txt</c> entry name), but
+    /// CsWin32 strips the trailing "W" from the generated C# method name -
+    /// <c>PInvoke.QueryFullProcessImageName</c> is the call below.</summary>
     private static unsafe string ResolveImageName(uint pid)
     {
         if (pid == 0)
@@ -641,7 +676,7 @@ internal sealed class SessionRegistry : IDisposable
             const int BufferLength = 1024;
             char* buffer = stackalloc char[BufferLength];
             uint size = BufferLength;
-            if (!PInvoke.QueryFullProcessImageNameW(process, 0, new PWSTR(buffer), ref size))
+            if (!PInvoke.QueryFullProcessImageName(process, 0, new PWSTR(buffer), ref size))
             {
                 return string.Empty;
             }
@@ -659,10 +694,9 @@ internal sealed class SessionRegistry : IDisposable
     }
 
     /// <summary>
-    /// LOW CONFIDENCE (see report): assumes <c>ISimpleAudioVolume.SetMasterVolume</c>'s
-    /// <c>LPCGUID EventContext</c> parameter is generated as an unsafe <c>Guid*</c> (matching the
-    /// pointer-parameter pattern this file already uses for <see cref="IAudioSessionEvents"/>),
-    /// not as an <c>in Guid</c>.
+    /// <c>ISimpleAudioVolume.SetMasterVolume</c>'s <c>LPCGUID EventContext</c> parameter is
+    /// confirmed (build-verified) to be generated as an unsafe <c>Guid*</c>, matching the
+    /// pointer-parameter pattern this file already uses for <see cref="IAudioSessionEvents"/>.
     /// </summary>
     private static unsafe void WriteVolume(ISimpleAudioVolume volume, float level)
     {
