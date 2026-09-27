@@ -277,18 +277,18 @@ public partial class App : Application
             case ButtonActionType.MuteCurrentOutput:
                 label = _audioEngine.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia)?.FriendlyName ?? "Output";
                 muted = _audioEngine.TryGetDeviceState(
-                    DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia), out _, out muted) && muted;
+                    DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia), out _, out var outputMuted) && outputMuted;
                 break;
             case ButtonActionType.MuteSpecificDevice:
                 var specificDevice = ActionFactory.Resolve(actionConfig.Device);
                 if (specificDevice == null) return; // unresolvable device config; nothing to show
                 label = actionConfig.Device?.FriendlyName ?? "Output";
-                muted = _audioEngine.TryGetDeviceState(specificDevice.Value, out _, out muted) && muted;
+                muted = _audioEngine.TryGetDeviceState(specificDevice.Value, out _, out var specificMuted) && specificMuted;
                 break;
             case ButtonActionType.MuteCurrentInput:
                 label = "Microphone";
                 muted = _audioEngine.TryGetDeviceState(
-                    DeviceRef.Default(AudioFlow.Capture, AudioRole.Communications), out _, out muted) && muted;
+                    DeviceRef.Default(AudioFlow.Capture, AudioRole.Communications), out _, out var inputMuted) && inputMuted;
                 break;
             default:
                 return; // non-mute actions don't show the OSD
