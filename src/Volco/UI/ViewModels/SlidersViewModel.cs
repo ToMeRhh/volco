@@ -41,9 +41,15 @@ public partial class SlidersViewModel : ObservableObject
 
     /// <summary>
     /// Returns currently active process names for auto-suggest in process-mapped sliders.
+    /// GetSessions() returns live per-session entries and one process can own several, so
+    /// dedupe before this reaches a UI picker.
     /// </summary>
     public List<string> GetActiveProcessNames() =>
-        _audio.GetSessions().Select(s => s.ImageName).ToList();
+        _audio.GetSessions()
+              .Select(s => s.ImageName)
+              .Where(n => !string.IsNullOrEmpty(n))
+              .Distinct(StringComparer.OrdinalIgnoreCase)
+              .ToList();
 
     /// <summary>
     /// Updates the live level bar for a specific slider.

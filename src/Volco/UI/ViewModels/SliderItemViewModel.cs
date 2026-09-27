@@ -208,6 +208,8 @@ public partial class SliderItemViewModel : ObservableObject
 
         return _audio.GetSessions()
             .Select(s => s.ImageName)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(p => p.Contains(lastPart, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
