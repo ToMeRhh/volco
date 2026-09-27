@@ -301,46 +301,8 @@ public partial class App : Application
     {
         if (_connection?.Status != ConnectionStatus.Connected) return;
 
-        var config = _configManager.Config;
-
-        // Push mute state for mute buttons (indices 0 and 1)
-        for (int i = 0; i < Math.Min(2, config.Buttons.Count); i++)
-        {
-            var isMuted = GetMuteStateForButton(config.Buttons[i]);
-            if (isMuted.HasValue)
-                _connection.Send(ProtocolEncoder.EncodeMuteState(i, isMuted.Value));
-        }
-
-        // Push active device
-        var currentDevice = _audioManager.GetDefaultOutputDeviceName();
-        if (currentDevice != null)
-        {
-            var devices = config.OutputDevices;
-            int activeIndex = currentDevice.Contains(devices.Device1.FriendlyName, StringComparison.OrdinalIgnoreCase) ? 0 : 1;
-            _connection.Send(ProtocolEncoder.EncodeActiveDevice(activeIndex));
-        }
-    }
-
-    private bool? GetMuteStateForButton(ButtonConfig buttonConfig)
-    {
-        // Scan all press types for the first mute-related action
-        foreach (var actionConfig in new[] { buttonConfig.SinglePress, buttonConfig.DoublePress, buttonConfig.LongPress })
-        {
-            switch (actionConfig.Action)
-            {
-                case ButtonActionType.MuteCurrentOutput:
-                    return _audioEngine.TryGetDeviceState(
-                        DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia), out _, out var outputMuted) && outputMuted;
-                case ButtonActionType.MuteSpecificDevice:
-                    var specificDevice = ActionFactory.Resolve(actionConfig.Device);
-                    if (specificDevice == null) return null; // unresolvable device config; nothing to report
-                    return _audioEngine.TryGetDeviceState(specificDevice.Value, out _, out var specificMuted) && specificMuted;
-                case ButtonActionType.MuteCurrentInput:
-                    return _audioEngine.TryGetDeviceState(
-                        DeviceRef.Default(AudioFlow.Capture, AudioRole.Communications), out _, out var inputMuted) && inputMuted;
-            }
-        }
-        return null;
+        foreach (var frame in ControllerStateReporter.BuildFrames(_configManager.Config, _audioEngine))
+            _connection.Send(frame);
     }
 
     private void OnConfigChanged(object? sender, EventArgs e)
