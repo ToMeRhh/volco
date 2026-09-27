@@ -23,12 +23,12 @@ public partial class OutputDevicesViewModel : ObservableObject
     private string _device2 = "";
 
     /// <summary>All available output devices, for ComboBox binding.</summary>
-    public ObservableCollection<AudioDeviceInfo> OutputDevices { get; } = new();
+    public ObservableCollection<AudioDevice> OutputDevices { get; } = new();
 
     /// <summary>Device names for string-based ComboBox binding.</summary>
     public List<string> OutputDeviceNames { get; private set; }
 
-    public OutputDevicesViewModel(ConfigManager config, IAudioManager audio)
+    public OutputDevicesViewModel(ConfigManager config, IAudioEngine audio)
     {
         _config = config;
 
@@ -36,10 +36,10 @@ public partial class OutputDevicesViewModel : ObservableObject
         _device1 = cfg.Device1.FriendlyName;
         _device2 = cfg.Device2.FriendlyName;
 
-        foreach (var d in audio.GetOutputDevices())
+        foreach (var d in audio.GetDevices(AudioFlow.Render))
             OutputDevices.Add(d);
 
-        OutputDeviceNames = OutputDevices.Select(d => d.Name).ToList();
+        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
     }
 
     partial void OnDevice1Changed(string value)

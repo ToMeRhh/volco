@@ -15,7 +15,7 @@ public partial class PressActionViewModel : ObservableObject
 {
     private readonly ButtonActionConfig _cfg;
     private readonly Action _save;
-    private readonly IAudioManager _audio;
+    private readonly IAudioEngine _audio;
     private readonly ConfigManager _config;
 
     [ObservableProperty]
@@ -60,7 +60,7 @@ public partial class PressActionViewModel : ObservableObject
         };
     }
 
-    public PressActionViewModel(ButtonActionConfig cfg, Action save, IAudioManager audio, ConfigManager config)
+    public PressActionViewModel(ButtonActionConfig cfg, Action save, IAudioEngine audio, ConfigManager config)
     {
         _cfg    = cfg;
         _save   = save;
@@ -129,7 +129,7 @@ public partial class ButtonItemViewModel : ObservableObject
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     /// <summary>Available output devices for device-picker combos.</summary>
-    public ObservableCollection<AudioDeviceInfo> OutputDevices { get; } = new();
+    public ObservableCollection<AudioDevice> OutputDevices { get; } = new();
 
     /// <summary>
     /// Output device names for binding to ComboBox.ItemsSource (string list).
@@ -140,7 +140,7 @@ public partial class ButtonItemViewModel : ObservableObject
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public ButtonItemViewModel(ButtonConfig cfg, IAudioManager audio, IReadOnlyList<AudioDeviceInfo> outputDevices, ConfigManager config, Action save)
+    public ButtonItemViewModel(ButtonConfig cfg, IAudioEngine audio, IReadOnlyList<AudioDevice> outputDevices, ConfigManager config, Action save)
     {
         _cfg  = cfg;
         _save = save;
@@ -156,7 +156,7 @@ public partial class ButtonItemViewModel : ObservableObject
         foreach (var d in outputDevices)
             OutputDevices.Add(d);
 
-        OutputDeviceNames = OutputDevices.Select(d => d.Name).ToList();
+        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
     }
 
     // ── Timing change hooks ───────────────────────────────────────────────────

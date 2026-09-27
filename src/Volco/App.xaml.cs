@@ -184,7 +184,7 @@ public partial class App : Application
         {
             if (_settingsWindow == null)
             {
-                _settingsWindow = new SettingsWindow(_configManager, _audioManager, _connection, _sliderProcessor);
+                _settingsWindow = new SettingsWindow(_configManager, _audioEngine, _connection, _sliderProcessor);
                 _settingsWindow.Closed += (_, _) => _settingsWindow = null;
                 AppLog.Info("SettingsWindow created");
             }

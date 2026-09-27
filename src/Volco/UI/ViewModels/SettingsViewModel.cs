@@ -1,4 +1,3 @@
-using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.Audio;
 using Volco.Communication;
@@ -15,7 +14,7 @@ namespace Volco.UI.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
-    private readonly IAudioManager _audio;
+    private readonly IAudioEngine _audio;
     private IControllerConnection? _connection;
 
     // ── Lazy tab ViewModels ───────────────────────────────────────────────────
@@ -43,7 +42,7 @@ public partial class SettingsViewModel : ObservableObject
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public SettingsViewModel(ConfigManager config, IAudioManager audio, IControllerConnection? connection)
+    public SettingsViewModel(ConfigManager config, IAudioEngine audio, IControllerConnection? connection)
     {
         _config     = config;
         _audio      = audio;
@@ -52,9 +51,7 @@ public partial class SettingsViewModel : ObservableObject
         // Seed the device lookup used to resolve combo-box friendly names to DeviceRefConfig
         // (id + name) BEFORE any child ViewModel is built — Sliders/Buttons construct item
         // ViewModels that call DeviceRefLookup.DeviceRefFromName during their own construction.
-        DeviceRefLookup.Devices = audio.GetOutputDevices()
-            .Select(d => new AudioDevice(d.Id, d.Name, AudioFlow.Render, false, false, false))
-            .ToList();
+        DeviceRefLookup.Devices = audio.GetDevices(AudioFlow.Render);
     }
 
     // ── Connection-object hot-swap ─────────────────────────────────────────────

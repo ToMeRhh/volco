@@ -13,11 +13,11 @@ public sealed partial class SettingsWindow : Window
     private readonly SettingsViewModel _viewModel;
     private readonly SliderProcessor _sliderProcessor;
 
-    public SettingsWindow(ConfigManager configManager, IAudioManager audioManager, IControllerConnection? connection, SliderProcessor sliderProcessor)
+    public SettingsWindow(ConfigManager configManager, IAudioEngine audioEngine, IControllerConnection? connection, SliderProcessor sliderProcessor)
     {
         InitializeComponent();
 
-        _viewModel = new SettingsViewModel(configManager, audioManager, connection);
+        _viewModel = new SettingsViewModel(configManager, audioEngine, connection);
         _sliderProcessor = sliderProcessor;
 
         // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow

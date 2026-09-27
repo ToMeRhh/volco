@@ -12,11 +12,11 @@ namespace Volco.UI.ViewModels;
 public partial class SlidersViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
-    private readonly IAudioManager _audio;
+    private readonly IAudioEngine _audio;
 
     public ObservableCollection<SliderItemViewModel> Items { get; } = new();
 
-    public SlidersViewModel(ConfigManager config, IAudioManager audio)
+    public SlidersViewModel(ConfigManager config, IAudioEngine audio)
     {
         _config = config;
         _audio = audio;
@@ -26,7 +26,7 @@ public partial class SlidersViewModel : ObservableObject
     private void BuildItems()
     {
         Items.Clear();
-        var devices = _audio.GetOutputDevices();
+        var devices = _audio.GetDevices(AudioFlow.Render);
         foreach (var sliderCfg in _config.Config.Sliders)
         {
             Items.Add(new SliderItemViewModel(sliderCfg, _audio, devices, () => _config.RequestSave()));
@@ -37,13 +37,13 @@ public partial class SlidersViewModel : ObservableObject
     /// Returns available output device names for the device picker in each slider row.
     /// </summary>
     public List<string> GetOutputDeviceNames() =>
-        _audio.GetOutputDevices().Select(d => d.Name).ToList();
+        _audio.GetDevices(AudioFlow.Render).Select(d => d.FriendlyName).ToList();
 
     /// <summary>
     /// Returns currently active process names for auto-suggest in process-mapped sliders.
     /// </summary>
     public List<string> GetActiveProcessNames() =>
-        _audio.GetActiveProcessNames();
+        _audio.GetSessions().Select(s => s.ImageName).ToList();
 
     /// <summary>
     /// Updates the live level bar for a specific slider.

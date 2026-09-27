@@ -12,11 +12,11 @@ namespace Volco.UI.ViewModels;
 public partial class ButtonsViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
-    private readonly IAudioManager _audio;
+    private readonly IAudioEngine _audio;
 
     public ObservableCollection<ButtonItemViewModel> Items { get; } = new();
 
-    public ButtonsViewModel(ConfigManager config, IAudioManager audio)
+    public ButtonsViewModel(ConfigManager config, IAudioEngine audio)
     {
         _config = config;
         _audio = audio;
@@ -26,7 +26,7 @@ public partial class ButtonsViewModel : ObservableObject
     private void BuildItems()
     {
         Items.Clear();
-        var devices = _audio.GetOutputDevices();
+        var devices = _audio.GetDevices(AudioFlow.Render);
         foreach (var buttonCfg in _config.Config.Buttons)
         {
             Items.Add(new ButtonItemViewModel(buttonCfg, _audio, devices, _config, () => _config.RequestSave()));
