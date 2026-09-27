@@ -180,7 +180,7 @@ public sealed class AudioEngine : IAudioEngine
 
         try
         {
-            _deviceRegistry = new DeviceRegistry(OnDeviceRegistryChanged, PostDrain);
+            _deviceRegistry = new DeviceRegistry(OnDeviceRegistryChanged, OnDeviceVolumeChanged, PostDrain, SessionRegistry.EngineEventContext);
             _sessionRegistry = new SessionRegistry(OnSessionRegistryChanged, PostDrain);
             _defaultDevicePolicy = new DefaultDevicePolicy();
 
@@ -205,6 +205,15 @@ public sealed class AudioEngine : IAudioEngine
                 catch (COMException ex)
                 {
                     Volco.AppLog.Error($"AudioEngine: command {command.Kind} failed: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    // This is a raw background Thread - an unhandled exception here terminates
+                    // the process by default, which is exactly the reliability regression Option D
+                    // exists to remove. A dropped command that is logged is strictly better than a
+                    // dead tray app, so every command is isolated: log and keep consuming the next
+                    // one, whatever kind of exception a Do*/Process handler throws.
+                    Volco.AppLog.Error($"AudioEngine: command {command.Kind} threw an unexpected exception: {ex}");
                 }
             }
         }
@@ -307,6 +316,18 @@ public sealed class AudioEngine : IAudioEngine
     private void OnSessionRegistryChanged(SessionsChangedEventArgs args)
         => SessionsChanged?.Invoke(this, args);
 
+    /// <summary>
+    /// Raised by <see cref="DeviceRegistry"/> from inside <see cref="DeviceRegistry.DrainPendingChanges"/>
+    /// for a volume/mute change on any tracked device - whether this engine wrote it
+    /// (<see cref="DeviceVolumeChangedEventArgs.IsOwnChange"/> true, computed by
+    /// <see cref="DeviceRegistry"/> against the <see cref="SessionRegistry.EngineEventContext"/>
+    /// passed into its constructor) or it originated externally (the Windows volume mixer, another
+    /// app) - closing spec §3 item 3. Just re-raises the already-fully-formed args; already on the
+    /// audio thread, so no marshaling needed here.
+    /// </summary>
+    private void OnDeviceVolumeChanged(DeviceVolumeChangedEventArgs args)
+        => DeviceVolumeChanged?.Invoke(this, args);
+
     private void DoSetDeviceVolume(DeviceRef device, float level)
     {
         var handle = _deviceRegistry!.Resolve(device);
@@ -320,7 +341,7 @@ public sealed class AudioEngine : IAudioEngine
         try
         {
             WriteDeviceVolume(handle.Volume, clamped);
-            RaiseOwnDeviceVolumeChanged(handle, clamped, handle.CachedMuted);
+            UpdateCachedDeviceState(handle, clamped, handle.CachedMuted);
         }
         catch (COMException ex)
         {
@@ -340,7 +361,7 @@ public sealed class AudioEngine : IAudioEngine
         try
         {
             WriteDeviceMute(handle.Volume, muted);
-            RaiseOwnDeviceVolumeChanged(handle, handle.CachedLevel, muted);
+            UpdateCachedDeviceState(handle, handle.CachedLevel, muted);
         }
         catch (COMException ex)
         {
@@ -361,7 +382,7 @@ public sealed class AudioEngine : IAudioEngine
         try
         {
             WriteDeviceMute(handle.Volume, next);
-            RaiseOwnDeviceVolumeChanged(handle, handle.CachedLevel, next);
+            UpdateCachedDeviceState(handle, handle.CachedLevel, next);
         }
         catch (COMException ex)
         {
@@ -379,29 +400,24 @@ public sealed class AudioEngine : IAudioEngine
     }
 
     /// <summary>
-    /// Synthesizes a <see cref="DeviceVolumeChanged"/> notification for a write this engine itself
-    /// just performed, and eagerly updates the cached snapshot so a <see cref="TryGetDeviceState"/>
-    /// call immediately after does not race the asynchronous <see cref="IAudioEndpointVolumeCallback"/>
-    /// notification for the same change.
+    /// Eagerly updates the cached snapshot right after this engine's own write succeeds, so a
+    /// <see cref="TryGetDeviceState"/> call immediately after does not race the asynchronous
+    /// <see cref="IAudioEndpointVolumeCallback"/> notification for the same change landing on the
+    /// audio thread a little later.
     ///
-    /// <b>Known gap (flagged in the report, not silently worked around):</b>
-    /// <see cref="DeviceRegistry"/>'s internal endpoint-volume callback only writes
-    /// <c>CachedLevel</c>/<c>CachedMuted</c> - it does not forward the notification's
-    /// <c>guidEventContext</c> or call <c>onPendingWork</c> to wake the audio thread. That means
-    /// this engine has no path to observe an <i>externally</i> originated volume/mute change (e.g.
-    /// the user dragging the Windows volume mixer, or another app changing it) and cannot raise
-    /// <see cref="DeviceVolumeChanged"/> for one, nor compute <c>IsOwnChange: false</c> for it.
-    /// Only engine-initiated writes (this method's three call sites) raise the event, and always
-    /// with <c>IsOwnChange: true</c>. Fixing this would require a change to
-    /// <see cref="DeviceRegistry"/> (its callback would need to enqueue a pending change carrying
-    /// the endpoint's id, level, muted flag and event-context GUID) - out of scope here per the
-    /// explicit instruction not to touch that file; see the report for the specific line.
+    /// Does NOT raise <see cref="DeviceVolumeChanged"/> itself any more - that would double-fire
+    /// alongside the real notification. <see cref="DeviceRegistry"/>'s endpoint-volume callback now
+    /// enqueues every notification (this engine's own writes included) and
+    /// <see cref="OnDeviceVolumeChanged"/> re-raises it with an accurate
+    /// <see cref="DeviceVolumeChangedEventArgs.IsOwnChange"/> - computed by
+    /// <see cref="DeviceRegistry"/> against the <see cref="SessionRegistry.EngineEventContext"/>
+    /// passed into its constructor - covering both this engine's own writes and externally
+    /// originated changes (spec §3 item 3) through one path.
     /// </summary>
-    private void RaiseOwnDeviceVolumeChanged(DeviceRegistry.DeviceHandle handle, float level, bool muted)
+    private static void UpdateCachedDeviceState(DeviceRegistry.DeviceHandle handle, float level, bool muted)
     {
         handle.CachedLevel = level;
         handle.CachedMuted = muted;
-        DeviceVolumeChanged?.Invoke(this, new DeviceVolumeChangedEventArgs(handle.Id, level, muted, IsOwnChange: true));
     }
 
     /// <summary>

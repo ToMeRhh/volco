@@ -26,15 +26,15 @@ namespace Volco.Audio.Windows;
 /// This class does not create or own a thread; see the contracts documented on <see cref="Start"/>
 /// and <see cref="DrainPendingChanges"/>.
 ///
-/// IMMNotificationClient callbacks arrive on an arbitrary MTA/RPC worker thread Windows Audio
-/// chooses, never necessarily the audio thread. Per the documented Core Audio contract they must
-/// not block and must never wait on a synchronization object (a deadlock risk: the audio thread
-/// could be holding that object while doing COM work the RPC callback is itself blocking on). So
-/// every callback here does zero COM work and takes no lock - it packages the change into a
-/// <see cref="PendingChange"/>, enqueues it, and calls the <c>onPendingWork</c> callback given to
-/// the constructor. All the real work (activating COM objects, disposing handles, updating
-/// defaults, raising <c>onChanged</c>) happens later, on the audio thread, when it calls
-/// <see cref="DrainPendingChanges"/>.
+/// IMMNotificationClient and IAudioEndpointVolumeCallback callbacks arrive on an arbitrary
+/// MTA/RPC worker thread Windows Audio chooses, never necessarily the audio thread. Per the
+/// documented Core Audio contract they must not block and must never wait on a synchronization
+/// object (a deadlock risk: the audio thread could be holding that object while doing COM work
+/// the RPC callback is itself blocking on). So every callback here does zero COM work and takes
+/// no lock - it packages the change into a <see cref="PendingChange"/>, enqueues it, and calls
+/// the <c>onPendingWork</c> callback given to the constructor. All the real work (activating COM
+/// objects, disposing handles, updating defaults, raising <c>onChanged</c>/<c>onVolumeChanged</c>)
+/// happens later, on the audio thread, when it calls <see cref="DrainPendingChanges"/>.
 /// </summary>
 [ComVisible(true)]
 internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
@@ -87,16 +87,24 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     /// <summary>
     /// Per-device sink for <see cref="IAudioEndpointVolume.RegisterControlChangeNotify"/>. Per the
     /// documented Core Audio contract (spec §2.1/§2.4) this must not block, must not call back into
-    /// COM, and must not register/unregister notifications. It does exactly one thing: read the two
-    /// fields it needs off the notification struct (valid only for the duration of this call) and
-    /// write them onto the handle.
+    /// COM, and must not register/unregister notifications. It does exactly one thing: read the
+    /// fields it needs off the notification struct (valid only for the duration of this call),
+    /// write the two cached ones onto the handle, and enqueue a <see cref="PendingChange"/> so
+    /// <see cref="DrainPendingChanges"/> can raise <c>onVolumeChanged</c> later, on the audio
+    /// thread (spec §3 item 3 - this is what makes an externally-originated volume/mute change,
+    /// e.g. from the Windows volume mixer, observable at all).
     /// </summary>
     [ComVisible(true)]
     private sealed unsafe class EndpointVolumeCallback : IAudioEndpointVolumeCallback
     {
+        private readonly DeviceRegistry _owner;
         private readonly DeviceHandle _handle;
 
-        public EndpointVolumeCallback(DeviceHandle handle) => _handle = handle;
+        public EndpointVolumeCallback(DeviceRegistry owner, DeviceHandle handle)
+        {
+            _owner = owner;
+            _handle = handle;
+        }
 
         public void OnNotify(AUDIO_VOLUME_NOTIFICATION_DATA* pNotify)
         {
@@ -105,8 +113,16 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
                 return;
             }
 
-            _handle.CachedLevel = pNotify->fMasterVolume;
-            _handle.CachedMuted = pNotify->bMuted != 0;
+            float level = pNotify->fMasterVolume;
+            bool muted = pNotify->bMuted != 0;
+            Guid eventContext = pNotify->guidEventContext;
+
+            _handle.CachedLevel = level;
+            _handle.CachedMuted = muted;
+
+            // Enqueue + onPendingWork only - no COM, no lock, no dictionary access, same
+            // contract as every other callback in this file (see the class doc comment).
+            _owner.Enqueue(PendingChange.VolumeChanged(_handle.Id, level, muted, eventContext));
         }
     }
 
@@ -115,29 +131,62 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         DeviceActivated,
         DeviceRemovedOrInactive,
         DefaultChanged,
+        VolumeChanged,
     }
 
     /// <summary>
-    /// What an IMMNotificationClient callback queues for <see cref="DrainPendingChanges"/> to
-    /// apply later, on the audio thread. Deliberately tiny and allocation-free to construct so the
-    /// callback that builds one never has to do real work.
+    /// What an IMMNotificationClient/IAudioEndpointVolumeCallback callback queues for
+    /// <see cref="DrainPendingChanges"/> to apply later, on the audio thread. Deliberately tiny and
+    /// allocation-free to construct so the callback that builds one never has to do real work.
+    /// <see cref="Level"/>/<see cref="Muted"/>/<see cref="EventContext"/> are used only by
+    /// <see cref="PendingChangeKind.VolumeChanged"/>; every other kind leaves them at their
+    /// default.
     /// </summary>
-    private readonly record struct PendingChange(PendingChangeKind Kind, string DeviceId, AudioFlow Flow, AudioRole Role)
+    private readonly record struct PendingChange(
+        PendingChangeKind Kind,
+        string DeviceId,
+        AudioFlow Flow,
+        AudioRole Role,
+        float Level,
+        bool Muted,
+        Guid EventContext)
     {
-        public static PendingChange Activated(string id) => new(PendingChangeKind.DeviceActivated, id, default, default);
+        public static PendingChange Activated(string id) => new(PendingChangeKind.DeviceActivated, id, default, default, default, default, default);
 
-        public static PendingChange RemovedOrInactive(string id) => new(PendingChangeKind.DeviceRemovedOrInactive, id, default, default);
+        public static PendingChange RemovedOrInactive(string id) => new(PendingChangeKind.DeviceRemovedOrInactive, id, default, default, default, default, default);
 
-        public static PendingChange DefaultChangedTo(AudioFlow flow, AudioRole role, string id) => new(PendingChangeKind.DefaultChanged, id, flow, role);
+        public static PendingChange DefaultChangedTo(AudioFlow flow, AudioRole role, string id) => new(PendingChangeKind.DefaultChanged, id, flow, role, default, default, default);
+
+        public static PendingChange VolumeChanged(string id, float level, bool muted, Guid eventContext) =>
+            new(PendingChangeKind.VolumeChanged, id, default, default, level, muted, eventContext);
     }
 
     private readonly Action<DevicesChangedEventArgs> _onChanged;
 
     /// <summary>
-    /// Invoked by an IMMNotificationClient callback every time it enqueues a
-    /// <see cref="PendingChange"/>. May be called from an arbitrary RPC thread, so - like the
-    /// callbacks themselves - it must be non-blocking. Task 13 wires this to a queue post that
-    /// wakes the audio thread; it must never itself do COM work or take a lock.
+    /// Invoked (via <see cref="DrainPendingChanges"/>, on the audio thread) for a
+    /// <see cref="PendingChangeKind.VolumeChanged"/> notification - i.e. an
+    /// <see cref="IAudioEndpointVolume"/> change for a device this registry tracks, whether it
+    /// originated from this process's own write or externally (the Windows volume mixer, another
+    /// app). <see cref="DeviceVolumeChangedEventArgs.IsOwnChange"/> is computed here by comparing
+    /// the notification's event-context GUID against <see cref="_engineEventContext"/> (spec §2.3
+    /// invariant 6) - the caller passes that value in at construction so this class never needs to
+    /// reference <see cref="SessionRegistry"/> directly.
+    /// </summary>
+    private readonly Action<DeviceVolumeChangedEventArgs> _onVolumeChanged;
+
+    /// <summary>
+    /// The process-wide event-context GUID (see <see cref="_onVolumeChanged"/>) - the same value
+    /// as <c>SessionRegistry.EngineEventContext</c>, passed in by <c>AudioEngine</c> rather than
+    /// referenced by type, so this class stays independent of <c>SessionRegistry</c>.
+    /// </summary>
+    private readonly Guid _engineEventContext;
+
+    /// <summary>
+    /// Invoked by an IMMNotificationClient/IAudioEndpointVolumeCallback callback every time it
+    /// enqueues a <see cref="PendingChange"/>. May be called from an arbitrary RPC thread, so -
+    /// like the callbacks themselves - it must be non-blocking. Task 13 wires this to a queue post
+    /// that wakes the audio thread; it must never itself do COM work or take a lock.
     /// </summary>
     private readonly Action _onPendingWork;
 
@@ -156,10 +205,16 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     private bool _started;
     private bool _disposed;
 
-    public DeviceRegistry(Action<DevicesChangedEventArgs> onChanged, Action onPendingWork)
+    public DeviceRegistry(
+        Action<DevicesChangedEventArgs> onChanged,
+        Action<DeviceVolumeChangedEventArgs> onVolumeChanged,
+        Action onPendingWork,
+        Guid engineEventContext)
     {
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
+        _onVolumeChanged = onVolumeChanged ?? throw new ArgumentNullException(nameof(onVolumeChanged));
         _onPendingWork = onPendingWork ?? throw new ArgumentNullException(nameof(onPendingWork));
+        _engineEventContext = engineEventContext;
     }
 
     /// <summary>
@@ -225,6 +280,9 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
                     break;
                 case PendingChangeKind.DefaultChanged:
                     ApplyDefaultChanged(change.Flow, change.Role, change.DeviceId);
+                    break;
+                case PendingChangeKind.VolumeChanged:
+                    ApplyVolumeChanged(change.DeviceId, change.Level, change.Muted, change.EventContext);
                     break;
             }
         }
@@ -422,7 +480,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
             CachedMuted = muted != 0,
         };
 
-        var callback = new EndpointVolumeCallback(handle);
+        var callback = new EndpointVolumeCallback(this, handle);
         volume.RegisterControlChangeNotify(callback);
         handle.VolumeCallback = callback;
 
@@ -525,6 +583,19 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     }
 
     // ── Applied only from DrainPendingChanges, i.e. only on the audio thread ───────────────────
+
+    /// <summary>
+    /// Raises <c>onVolumeChanged</c> for a drained <see cref="PendingChangeKind.VolumeChanged"/>
+    /// notification (spec §3 item 3). No dictionary/lock work is needed here beyond what
+    /// <see cref="EndpointVolumeCallback"/> already did (updating <c>CachedLevel</c>/
+    /// <c>CachedMuted</c> directly on the handle at notification time) - this method's only job is
+    /// computing <see cref="DeviceVolumeChangedEventArgs.IsOwnChange"/> and forwarding.
+    /// </summary>
+    private void ApplyVolumeChanged(string deviceId, float level, bool muted, Guid eventContext)
+    {
+        bool isOwnChange = eventContext == _engineEventContext;
+        _onVolumeChanged(new DeviceVolumeChangedEventArgs(deviceId, level, muted, isOwnChange));
+    }
 
     private void ApplyDefaultChanged(AudioFlow flow, AudioRole role, string id)
     {
