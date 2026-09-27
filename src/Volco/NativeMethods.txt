@@ -1,6 +1,7 @@
 IMMDeviceEnumerator
 IMMDevice
 IMMDeviceCollection
+IMMEndpoint
 IMMNotificationClient
 IAudioEndpointVolume
 IAudioEndpointVolumeCallback
@@ -26,3 +27,6 @@ OpenProcess
 QueryFullProcessImageNameW
 CloseHandle
 PROCESS_QUERY_LIMITED_INFORMATION
+CoTaskMemFree
+PropVariantClear
+PKEY_Device_FriendlyName
