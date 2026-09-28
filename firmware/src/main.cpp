@@ -335,10 +335,21 @@ void setup() {
     buttonChangeTime[i] = 0;
   }
 
-  // LED pins — output, start off
+  // LED pins — output, start off.
+  //
+  // The two LED groups have OPPOSITE polarity, so "off" is a different level for
+  // each — don't unify these writes:
+  //   - mute LEDs are active-low. The MSG_MUTE_STATE handler drives LOW to light
+  //     them for "muted", so HIGH is off.
+  //   - device-select LEDs are active-high. MSG_ACTIVE_DEVICE drives HIGH for the
+  //     selected device, so LOW is off.
+  //
+  // This previously drove the mute pins LOW, which lit both of them on every boot
+  // and falsely showed "muted" until the host pushed real state — visible for a
+  // second or two after every USB re-plug.
   for (int i = 0; i < NUM_MUTE_BUTTONS; i++) {
     pinMode(muteLedPins[i], OUTPUT);
-    digitalWrite(muteLedPins[i], LOW);
+    digitalWrite(muteLedPins[i], HIGH);
   }
   pinMode(DEVICE_SEL_LED_0_PIN, OUTPUT);
   pinMode(DEVICE_SEL_LED_1_PIN, OUTPUT);
