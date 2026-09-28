@@ -21,6 +21,18 @@ public class SerialConnection : IControllerConnection
 
     public void Connect()
     {
+        if (string.IsNullOrEmpty(_config.ComPort))
+        {
+            // Defensive guard for Bug 2: a blank ComPort should never reach here now that
+            // ConnectionViewModel ignores/repairs null selections from the port-list refresh,
+            // but if it ever does, fail cleanly instead of letting SerialPort's constructor
+            // throw ArgumentNullException out of Connect().
+            AppLog.Error("Failed to open serial port: no COM port configured (PortName is null or empty)");
+            Status = ConnectionStatus.Error;
+            StatusChanged?.Invoke(this, Status);
+            return;
+        }
+
         try
         {
             _serialPort = new SerialPort(_config.ComPort, _config.BaudRate);

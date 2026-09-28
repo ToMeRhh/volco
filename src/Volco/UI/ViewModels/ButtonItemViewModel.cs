@@ -80,9 +80,20 @@ public partial class PressActionViewModel : ObservableObject
 
     partial void OnDeviceIdChanged(string value)
     {
+        // Same trap as SliderItemViewModel.OnDeviceNameChanged (Bug 3 refresh) and Bug 2's
+        // ComPort refresh: an ItemsSource swap can transiently null this two-way-bound
+        // SelectedItem. There's no blank/"None" entry in this picker, so ignore it.
+        if (string.IsNullOrEmpty(value)) return;
         _cfg.Device = DeviceRefFromName(value);
         _save();
     }
+
+    /// <summary>
+    /// Re-raises PropertyChanged for DeviceId only, so the ComboBox re-reads the still-correct
+    /// backing value and re-selects it against a freshly refreshed ItemsSource (see
+    /// ButtonItemViewModel.RefreshDevices). Does not touch _cfg or persist.
+    /// </summary>
+    public void ReassertDeviceSelection() => OnPropertyChanged(nameof(DeviceId));
 
     /// <summary>
     /// Builds and immediately executes the action for this press slot.
@@ -171,5 +182,24 @@ public partial class ButtonItemViewModel : ObservableObject
     {
         _cfg.DoublePressWindowMs = value;
         _save();
+    }
+
+    /// <summary>
+    /// Re-seeds the shared device picker for all three press slots from a fresh device snapshot
+    /// (Bug 3). Callers must already be on the UI thread — see SliderItemViewModel.RefreshDevices
+    /// for the same note; <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread and
+    /// is marshalled once, in SettingsViewModel.RefreshDevices.
+    /// </summary>
+    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    {
+        OutputDevices.Clear();
+        foreach (var d in devices)
+            OutputDevices.Add(d);
+        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
+        OnPropertyChanged(nameof(OutputDeviceNames));
+
+        SinglePress.ReassertDeviceSelection();
+        DoublePress.ReassertDeviceSelection();
+        LongPress.ReassertDeviceSelection();
     }
 }

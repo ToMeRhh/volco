@@ -61,4 +61,16 @@ public partial class SlidersViewModel : ObservableObject
         if (item != null)
             item.LiveLevel = Math.Clamp(level, 0f, 1f);
     }
+
+    /// <summary>
+    /// Re-seeds every slider row's device picker from a fresh device snapshot (Bug 3). Callers
+    /// must already be on the UI thread — see SettingsViewModel.RefreshDevices, which marshals
+    /// the single <see cref="IAudioEngine.DevicesChanged"/> subscription (audio thread) before
+    /// calling this.
+    /// </summary>
+    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    {
+        foreach (var item in Items)
+            item.RefreshDevices(devices);
+    }
 }

@@ -41,6 +41,19 @@ public partial class App : Application
     private sealed record PendingMuteOsd(string DeviceId, ButtonActionConfig Config);
     private PendingMuteOsd? _pendingMuteOsd;
 
+    /// <summary>
+    /// Guards <see cref="_lastPushedFrames"/> (Bug 4). PushControllerState can be entered from
+    /// several threads: the audio thread (OnDeviceVolumeChanged/OnDevicesChangedForControllerState,
+    /// both invoked from Volco.Audio.Windows.AudioEngine's dedicated thread), and whatever thread
+    /// raises IControllerConnection.StatusChanged (OnConnectionStatusChanged) — for SerialConnection/
+    /// UdpConnection that can be the UI thread (OnLaunched), the ConfigManager debounce-timer
+    /// thread (StartConnection via OnConfigChanged — see Bug 1), or UdpConnection's own receive-loop/
+    /// inactivity-timer threads. The lock only ever protects comparing/replacing this field — it is
+    /// never held across a call into the engine or into _connection.Send.
+    /// </summary>
+    private readonly object _pushStateLock = new();
+    private IReadOnlyList<byte[]>? _lastPushedFrames;
+
     public App()
     {
         _instance = this;
@@ -270,7 +283,11 @@ public partial class App : Application
     {
         AppLog.Info($"Connection status changed: {status}");
         if (status == ConnectionStatus.Connected)
-            PushControllerState();
+            // force: true — a (re)connect means the controller's own LED state is unknown
+            // (it may just have rebooted, or this may be a brand-new transport after Bug 1/2's
+            // restart path), so always send the full state at least once regardless of whether
+            // it matches the last state we happened to push to a previous connection.
+            PushControllerState(force: true);
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
@@ -386,8 +403,18 @@ public partial class App : Application
     /// </summary>
     private void OnDevicesChangedForControllerState(object? sender, DevicesChangedEventArgs e)
     {
+        // Bug 3: refresh the settings UI's device pickers for every kind of device change
+        // (added/removed/state/default), not just DefaultChanged — a replugged device should
+        // show up in the pickers even when it isn't the new default. SettingsWindow.RefreshDevices
+        // marshals to the UI thread itself (this handler runs on the audio thread); the
+        // null-conditional means it's simply a no-op while no settings window is open.
+        _settingsWindow?.RefreshDevices();
+
         if (e.Kind == DeviceChangeKind.DefaultChanged)
         {
+            // Not forced: PushControllerState already skips the send when the encoded state
+            // (mute flags + active-device index) is unchanged, but a real default-device change
+            // always does change the active-device index, so this still pushes (Bug 4 note).
             PushControllerState();
         }
     }
@@ -421,12 +448,49 @@ public partial class App : Application
         _osd.Show(new VolumeChangeNotification(label, muted ? 0f : 1f, muted, OsdKind.Mute));
     }
 
-    private void PushControllerState()
+    /// <summary>
+    /// Sends the controller-state frames (mute LEDs + active-device LED — never volume level;
+    /// see ControllerStateReporter) if they differ from what was last actually sent, or
+    /// unconditionally when <paramref name="force"/> is true.
+    /// </summary>
+    /// <remarks>
+    /// Bug 4: Core Audio's endpoint-volume callback fires for the engine's own writes too, so
+    /// OnDeviceVolumeChanged previously called this unconditionally — up to ~50 times/sec while
+    /// a Device-mapped slider is dragged, each one a synchronous blocking write
+    /// (SerialConnection.Send/UdpConnection.Send) on the audio thread. Since the encoded state
+    /// never includes volume level, a slider drag never actually changes it, so comparing against
+    /// the last-pushed frames and skipping identical pushes eliminates the flood without missing
+    /// any real mute/active-device change (see OnDeviceVolumeChanged/OnDevicesChangedForControllerState).
+    /// </remarks>
+    private void PushControllerState(bool force = false)
     {
         if (_connection?.Status != ConnectionStatus.Connected) return;
 
-        foreach (var frame in ControllerStateReporter.BuildFrames(_configManager.Config, _audioEngine))
+        // BuildFrames only performs the read-only engine queries IAudioEngine documents as safe
+        // from any thread (GetDefaultDevice/TryGetDeviceState) — no lock held here.
+        var frames = ControllerStateReporter.BuildFrames(_configManager.Config, _audioEngine);
+
+        lock (_pushStateLock)
+        {
+            if (!force && _lastPushedFrames != null && FramesEqual(_lastPushedFrames, frames))
+                return;
+            _lastPushedFrames = frames;
+        }
+
+        // Send happens outside the lock — Send() is a synchronous blocking transport write and
+        // must never run while _pushStateLock is held.
+        foreach (var frame in frames)
             _connection.Send(frame);
+    }
+
+    private static bool FramesEqual(IReadOnlyList<byte[]> a, IReadOnlyList<byte[]> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (!a[i].AsSpan().SequenceEqual(b[i])) return false;
+        }
+        return true;
     }
 
     private void OnConfigChanged(object? sender, EventArgs e)

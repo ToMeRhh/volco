@@ -44,15 +44,40 @@ public partial class OutputDevicesViewModel : ObservableObject
 
     partial void OnDevice1Changed(string value)
     {
+        // Same trap as SliderItemViewModel.OnDeviceNameChanged (Bug 3 refresh) and Bug 2's
+        // ComPort refresh: an ItemsSource swap can transiently null this two-way-bound
+        // SelectedItem. There's no blank/"None" entry in this picker, so ignore it.
+        if (string.IsNullOrEmpty(value)) return;
         _config.Config.OutputDevices.Device1 = DeviceRefFromName(value) ?? new DeviceRefConfig();
         Persist();
     }
 
     partial void OnDevice2Changed(string value)
     {
+        if (string.IsNullOrEmpty(value)) return;
         _config.Config.OutputDevices.Device2 = DeviceRefFromName(value) ?? new DeviceRefConfig();
         Persist();
     }
 
     private void Persist() => _config.RequestSave();
+
+    /// <summary>
+    /// Re-seeds the output-device picker from a fresh device snapshot (Bug 3). Callers must
+    /// already be on the UI thread — see SliderItemViewModel.RefreshDevices for the same note;
+    /// <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread and is marshalled
+    /// once, in SettingsViewModel.RefreshDevices.
+    /// </summary>
+    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    {
+        OutputDevices.Clear();
+        foreach (var d in devices)
+            OutputDevices.Add(d);
+        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
+        OnPropertyChanged(nameof(OutputDeviceNames));
+
+        // Re-assert current selections against the new ItemsSource without going through the
+        // setters/persist path (see RefreshDevices note on SliderItemViewModel).
+        OnPropertyChanged(nameof(Device1));
+        OnPropertyChanged(nameof(Device2));
+    }
 }

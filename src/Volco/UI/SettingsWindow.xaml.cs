@@ -62,6 +62,14 @@ public sealed partial class SettingsWindow : Window
     public void UpdateConnection(IControllerConnection? connection)
         => _viewModel.Connection.UpdateConnection(connection);
 
+    /// <summary>
+    /// Called by App after <see cref="IAudioEngine.DevicesChanged"/> fires (Bug 3), so a
+    /// replugged/removed device shows up in every open device picker. SettingsViewModel marshals
+    /// to the UI thread itself, the same way it captures a dispatcher the way ConnectionViewModel
+    /// does — this call itself is safe from any thread.
+    /// </summary>
+    public void RefreshDevices() => _viewModel.RefreshDevices();
+
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         if (args.SelectedItem is NavigationViewItem item)

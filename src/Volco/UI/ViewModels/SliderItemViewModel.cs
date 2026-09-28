@@ -167,6 +167,13 @@ public partial class SliderItemViewModel : ObservableObject
 
     partial void OnDeviceNameChanged(string value)
     {
+        // A ComboBox whose ItemsSource reference is swapped (RefreshDevices, below, after a
+        // device is plugged/unplugged — Bug 3) can drive its two-way-bound SelectedItem, and
+        // therefore DeviceName, to null/empty before WinUI re-resolves it against the new list —
+        // the same trap as Bug 2's ComPort refresh. There is no blank/"None" entry in this
+        // picker, so a blank value is never real user intent: ignore it rather than wiping the
+        // configured device.
+        if (string.IsNullOrEmpty(value)) return;
         _cfg.Device = DeviceRefFromName(value);
         Persist();
     }
@@ -215,4 +222,28 @@ public partial class SliderItemViewModel : ObservableObject
     }
 
     private void Persist() => _save();
+
+    /// <summary>
+    /// Re-seeds the device picker from a fresh device snapshot (Bug 3 — a device plugged in
+    /// after the settings window was first opened otherwise never appears here, since
+    /// OutputDevices/OutputDeviceNames were only ever populated once, in the constructor).
+    /// Callers must already be on the UI thread — this mutates an ObservableCollection and a
+    /// bound property, and <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread,
+    /// so the marshalling happens once, in SettingsViewModel.RefreshDevices, rather than here.
+    /// </summary>
+    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    {
+        OutputDevices.Clear();
+        foreach (var d in devices)
+            OutputDevices.Add(d);
+        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
+        OnPropertyChanged(nameof(OutputDeviceNames));
+
+        // Re-assert the current selection against the new ItemsSource. This does NOT go through
+        // the DeviceName setter/OnDeviceNameChanged (no persist, no re-resolving _cfg.Device) —
+        // it only re-raises PropertyChanged so the ComboBox re-reads the still-correct backing
+        // value and re-selects it if present in the refreshed list; if the device is gone, the
+        // ComboBox simply shows no selection, same as any other now-invalid entry.
+        OnPropertyChanged(nameof(DeviceName));
+    }
 }
