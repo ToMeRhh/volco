@@ -3,9 +3,9 @@
 // ============================================================
 // Transport — uncomment exactly one
 // ============================================================
-// #define TRANSPORT_SERIAL
+#define TRANSPORT_SERIAL
 // #define TRANSPORT_WEBSOCKET
-#define TRANSPORT_UDP
+// #define TRANSPORT_UDP
 // #define TRANSPORT_LOCAL_DEBUG  // No host needed. Verbose serial logging
 // only.
 

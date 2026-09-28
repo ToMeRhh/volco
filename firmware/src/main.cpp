@@ -11,6 +11,10 @@
 #elif defined(TRANSPORT_UDP)
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#elif defined(TRANSPORT_SERIAL)
+// Import the WiFi library so we can explicitly disable WiFi and turn off the
+// WiFi radio.
+#include <WiFi.h>
 #endif
 
 // ============================================================
@@ -74,7 +78,11 @@ static uint8_t rxPayloadIdx = 0;
 
 #if defined(TRANSPORT_SERIAL)
 
-void transport_init() { Serial.begin(SERIAL_BAUD); }
+void transport_init() {
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_OFF);
+  Serial.begin(SERIAL_BAUD);
+}
 
 bool transport_connected() { return (bool)Serial; }
 
