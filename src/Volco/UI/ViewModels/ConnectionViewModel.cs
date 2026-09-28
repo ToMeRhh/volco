@@ -139,9 +139,23 @@ public partial class ConnectionViewModel : ObservableObject
     [RelayCommand]
     private void RefreshComPorts()
     {
+        var previous = ComPort;
+
         ComPorts.Clear();
         foreach (var port in SerialPort.GetPortNames())
             ComPorts.Add(port);
+
+        // ComPorts.Clear() drives the two-way-bound ComboBox.SelectedItem — and therefore
+        // ComPort — to null via OnComPortChanged before the list is repopulated. The guard in
+        // OnComPortChanged stops that from persisting a blank port or restarting the connection,
+        // but it still leaves the backing field blank. Restore it directly here (bypassing the
+        // generated setter/partial hook, so this doesn't itself trigger a redundant save or
+        // connection restart) when the previously selected port is still present.
+        if (!string.IsNullOrEmpty(previous) && ComPorts.Contains(previous))
+        {
+            _comPort = previous;
+            OnPropertyChanged(nameof(ComPort));
+        }
     }
 
     // ── Status subscription helpers ────────────────────────────────────────────
@@ -181,9 +195,21 @@ public partial class ConnectionViewModel : ObservableObject
 
     /// <summary>
     /// Called by the owner (SettingsViewModel / App) when the connection object
-    /// changes after a config save restarts the hardware transport.
+    /// changes after a config save restarts the hardware transport. App.StartConnection
+    /// can run on a background thread (e.g. the ConfigManager debounce-timer thread when a
+    /// connection-affecting property changes) rather than the UI thread, but this mutates
+    /// bound state (Status/StatusText via UpdateStatus, plus the event subscription), so it
+    /// must marshal the same way OnConnectionStatusChanged already does.
     /// </summary>
     public void UpdateConnection(IControllerConnection? newConnection)
+    {
+        if (_dispatcher != null)
+            _dispatcher.TryEnqueue(() => UpdateConnectionOnUiThread(newConnection));
+        else
+            UpdateConnectionOnUiThread(newConnection);
+    }
+
+    private void UpdateConnectionOnUiThread(IControllerConnection? newConnection)
     {
         UnsubscribeFromConnection();
         _connection = newConnection;
@@ -205,6 +231,11 @@ public partial class ConnectionViewModel : ObservableObject
 
     partial void OnComPortChanged(string value)
     {
+        // A null/empty port only ever arises from the bound ObservableCollection being cleared
+        // during RefreshComPorts (Bug 2 - clearing ComPorts drives the two-way-bound ComboBox
+        // selection, and therefore ComPort, to null) — never real user intent, since the picker
+        // has no blank/"None" entry. Ignore it: no persist, no connection restart.
+        if (string.IsNullOrEmpty(value)) return;
         _config.Config.Connection.Serial.ComPort = value;
         Persist();
     }

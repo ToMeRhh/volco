@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Volco.Audio;
 using Volco.Config;
 using Volco.Input.Actions;
+using static Volco.UI.ViewModels.DeviceRefLookup;
 
 namespace Volco.UI.ViewModels;
 
@@ -14,7 +15,7 @@ public partial class PressActionViewModel : ObservableObject
 {
     private readonly ButtonActionConfig _cfg;
     private readonly Action _save;
-    private readonly IAudioManager _audio;
+    private readonly IAudioEngine _audio;
     private readonly ConfigManager _config;
 
     [ObservableProperty]
@@ -59,14 +60,14 @@ public partial class PressActionViewModel : ObservableObject
         };
     }
 
-    public PressActionViewModel(ButtonActionConfig cfg, Action save, IAudioManager audio, ConfigManager config)
+    public PressActionViewModel(ButtonActionConfig cfg, Action save, IAudioEngine audio, ConfigManager config)
     {
         _cfg    = cfg;
         _save   = save;
         _audio  = audio;
         _config = config;
         _actionType = cfg.Action;
-        _deviceId   = cfg.DeviceId ?? "";
+        _deviceId   = cfg.Device?.FriendlyName ?? "";
     }
 
     partial void OnActionTypeChanged(ButtonActionType value)
@@ -79,9 +80,20 @@ public partial class PressActionViewModel : ObservableObject
 
     partial void OnDeviceIdChanged(string value)
     {
-        _cfg.DeviceId = string.IsNullOrEmpty(value) ? null : value;
+        // Same trap as SliderItemViewModel.OnDeviceNameChanged (Bug 3 refresh) and Bug 2's
+        // ComPort refresh: an ItemsSource swap can transiently null this two-way-bound
+        // SelectedItem. There's no blank/"None" entry in this picker, so ignore it.
+        if (string.IsNullOrEmpty(value)) return;
+        _cfg.Device = DeviceRefFromName(value);
         _save();
     }
+
+    /// <summary>
+    /// Re-raises PropertyChanged for DeviceId only, so the ComboBox re-reads the still-correct
+    /// backing value and re-selects it against a freshly refreshed ItemsSource (see
+    /// ButtonItemViewModel.RefreshDevices). Does not touch _cfg or persist.
+    /// </summary>
+    public void ReassertDeviceSelection() => OnPropertyChanged(nameof(DeviceId));
 
     /// <summary>
     /// Builds and immediately executes the action for this press slot.
@@ -128,7 +140,7 @@ public partial class ButtonItemViewModel : ObservableObject
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     /// <summary>Available output devices for device-picker combos.</summary>
-    public ObservableCollection<AudioDeviceInfo> OutputDevices { get; } = new();
+    public ObservableCollection<AudioDevice> OutputDevices { get; } = new();
 
     /// <summary>
     /// Output device names for binding to ComboBox.ItemsSource (string list).
@@ -139,7 +151,7 @@ public partial class ButtonItemViewModel : ObservableObject
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public ButtonItemViewModel(ButtonConfig cfg, IAudioManager audio, IReadOnlyList<AudioDeviceInfo> outputDevices, ConfigManager config, Action save)
+    public ButtonItemViewModel(ButtonConfig cfg, IAudioEngine audio, IReadOnlyList<AudioDevice> outputDevices, ConfigManager config, Action save)
     {
         _cfg  = cfg;
         _save = save;
@@ -155,7 +167,7 @@ public partial class ButtonItemViewModel : ObservableObject
         foreach (var d in outputDevices)
             OutputDevices.Add(d);
 
-        OutputDeviceNames = OutputDevices.Select(d => d.Name).ToList();
+        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
     }
 
     // ── Timing change hooks ───────────────────────────────────────────────────
@@ -170,5 +182,24 @@ public partial class ButtonItemViewModel : ObservableObject
     {
         _cfg.DoublePressWindowMs = value;
         _save();
+    }
+
+    /// <summary>
+    /// Re-seeds the shared device picker for all three press slots from a fresh device snapshot
+    /// (Bug 3). Callers must already be on the UI thread — see SliderItemViewModel.RefreshDevices
+    /// for the same note; <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread and
+    /// is marshalled once, in SettingsViewModel.RefreshDevices.
+    /// </summary>
+    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    {
+        OutputDevices.Clear();
+        foreach (var d in devices)
+            OutputDevices.Add(d);
+        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
+        OnPropertyChanged(nameof(OutputDeviceNames));
+
+        SinglePress.ReassertDeviceSelection();
+        DoublePress.ReassertDeviceSelection();
+        LongPress.ReassertDeviceSelection();
     }
 }

@@ -33,8 +33,9 @@ Controller (hardware)
 │     └─ ActionFactory → IButtonAction     │
 ├──────────────────────────────────────────┤
 │  Audio Layer                             │
-│  ├─ AudioManager (NAudio + COM interop)  │
-│  └─ SessionMonitor (process enumeration) │
+│  AudioEngine (event-driven Core Audio)   │
+│  ├─ DeviceRegistry (device state/events) │
+│  └─ SessionRegistry (session events)     │
 ├──────────────────────────────────────────┤
 │  Config (JSON) + WinUI 3 Settings UI     │
 └──────────────────────────────────────────┘
@@ -96,8 +97,8 @@ Settings are stored in `%APPDATA%/Volco/config.json` and applied immediately whe
 ## Tech Stack
 
 - **C# / .NET 8 / WinUI 3** (Windows App SDK)
-- **NAudio** — Windows Core Audio API for volume and session control
-- **COM IPolicyConfig** — default audio device switching
+- **Windows Core Audio API (WASAPI)** — device and per-process session volume/mute, driven directly via COM interop with no polling
+- **COM `IPolicyConfig`** — default audio device switching
 - **H.NotifyIcon.WinUI** — system tray icon
 - **System.IO.Ports** — serial communication
 - **xUnit** — tests
@@ -145,7 +146,7 @@ src/Volco/
 ├── App.xaml/.cs              # Entry point, tray icon, component wiring
 ├── Config/                   # AppConfig data model, ConfigManager (JSON load/save)
 ├── Communication/            # IControllerConnection, Serial/UDP, ProtocolParser
-├── Audio/                    # AudioManager (NAudio), SessionMonitor
+├── Audio/                    # AudioEngine, DeviceRegistry, SessionRegistry (Core Audio, event-driven)
 ├── Input/                    # ButtonPressDetector, SliderProcessor
 │   └── Actions/              # IButtonAction + 5 action implementations + factory
 └── UI/                       # SettingsWindow + 4 tab pages (Connection, Sliders, Buttons, Output Devices)

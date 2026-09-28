@@ -12,11 +12,11 @@ namespace Volco.UI.ViewModels;
 public partial class ButtonsViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
-    private readonly IAudioManager _audio;
+    private readonly IAudioEngine _audio;
 
     public ObservableCollection<ButtonItemViewModel> Items { get; } = new();
 
-    public ButtonsViewModel(ConfigManager config, IAudioManager audio)
+    public ButtonsViewModel(ConfigManager config, IAudioEngine audio)
     {
         _config = config;
         _audio = audio;
@@ -26,11 +26,23 @@ public partial class ButtonsViewModel : ObservableObject
     private void BuildItems()
     {
         Items.Clear();
-        var devices = _audio.GetOutputDevices();
+        var devices = _audio.GetDevices(AudioFlow.Render);
         foreach (var buttonCfg in _config.Config.Buttons)
         {
             Items.Add(new ButtonItemViewModel(buttonCfg, _audio, devices, _config, () => _config.RequestSave()));
         }
+    }
+
+    /// <summary>
+    /// Re-seeds every button row's device picker from a fresh device snapshot (Bug 3). Callers
+    /// must already be on the UI thread — see SettingsViewModel.RefreshDevices, which marshals
+    /// the single <see cref="IAudioEngine.DevicesChanged"/> subscription (audio thread) before
+    /// calling this.
+    /// </summary>
+    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    {
+        foreach (var item in Items)
+            item.RefreshDevices(devices);
     }
 
     /// <summary>Human-readable label for a button action type.</summary>

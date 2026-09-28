@@ -22,9 +22,8 @@ public sealed class SliderLevelEventArgs : EventArgs
 
 public class SliderProcessor : IDisposable
 {
-    private readonly IAudioManager _audio;
+    private readonly IAudioEngine _audio;
     private readonly ConfigManager _configManager;
-    private readonly SessionMonitor _sessionMonitor;
     private readonly ushort?[] _pendingValues = new ushort?[16];
     private readonly float?[] _lastVolume = new float?[16];
     private readonly Timer _coalesceTimer;
@@ -40,11 +39,11 @@ public class SliderProcessor : IDisposable
     /// </summary>
     public event EventHandler<SliderLevelEventArgs>? SliderLevelChanged;
 
-    public SliderProcessor(IAudioManager audio, ConfigManager configManager, SessionMonitor sessionMonitor)
+    public SliderProcessor(IAudioEngine audio, ConfigManager configManager)
     {
         _audio = audio;
         _configManager = configManager;
-        _sessionMonitor = sessionMonitor;
+        _audio.SessionsChanged += OnSessionsChanged;
         _coalesceTimer = new Timer(_ => ProcessPending(), null, 20, 20);
     }
 
@@ -80,19 +79,28 @@ public class SliderProcessor : IDisposable
 
     public static List<string> GetUnmappedProcesses(AppConfig config, IReadOnlySet<string> activeProcesses)
     {
-        var mappedProcesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var slider in config.Sliders)
-        {
-            if (slider.Type == SliderMappingType.Processes)
-            {
-                foreach (var p in slider.Processes)
-                    mappedProcesses.Add(p);
-            }
-        }
+        var mapped = new HashSet<string>(MappedProcessNames(config), StringComparer.OrdinalIgnoreCase);
+        return activeProcesses.Where(p => !mapped.Contains(p)).ToList();
+    }
 
-        return activeProcesses
-            .Where(p => !mappedProcesses.Contains(p))
-            .ToList();
+    /// <summary>Resolves a slider's configured device to a <see cref="DeviceRef"/>.</summary>
+    internal static DeviceRef DeviceRefFor(SliderConfig slider)
+    {
+        if (slider.Device == null) return DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia);
+        if (!string.IsNullOrEmpty(slider.Device.Id)) return DeviceRef.ById(slider.Device.Id);
+        if (!string.IsNullOrEmpty(slider.Device.FriendlyName)) return DeviceRef.ByFriendlyName(slider.Device.FriendlyName);
+        return DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia);
+    }
+
+    /// <summary>Every process name claimed by a Processes-type slider.</summary>
+    internal static List<string> MappedProcessNames(AppConfig config)
+    {
+        var mapped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var slider in config.Sliders)
+            if (slider.Type == SliderMappingType.Processes)
+                foreach (var p in slider.Processes)
+                    mapped.Add(p);
+        return mapped.ToList();
     }
 
     /// <summary>
@@ -163,32 +171,46 @@ public class SliderProcessor : IDisposable
             var sliderConfig = config.Sliders[sliderIndex];
             var volume = MapAdcToVolume(value.Value, sliderConfig.Invert, sliderConfig.Curve, sliderConfig.DeadZonePercent);
 
-            if (sliderConfig.SmoothingFactor > 0 && _lastVolume[sliderIndex] is { } prev)
-                volume = ApplySmoothing(prev, volume, sliderConfig.SmoothingFactor);
-            _lastVolume[sliderIndex] = volume;
+            float? prevVolume;
+            lock (_lock)
+            {
+                prevVolume = _lastVolume[sliderIndex];
+            }
 
-            var sw = Stopwatch.StartNew();
+            if (sliderConfig.SmoothingFactor > 0 && prevVolume is { } prev)
+                volume = ApplySmoothing(prev, volume, sliderConfig.SmoothingFactor);
+
+            lock (_lock)
+            {
+                _lastVolume[sliderIndex] = volume;
+            }
+
+            // Only allocated when actually needed (review item 10): this ~50Hz-per-moving-slider
+            // path exists to be cheap, and a Stopwatch that exists purely to feed a debug-only
+            // log line must not be built when debug logging is off.
+            Stopwatch? sw = AppLog.IsDebugEnabled ? Stopwatch.StartNew() : null;
 
             switch (sliderConfig.Type)
             {
                 case SliderMappingType.Device:
                     AppLog.Debug($"[Slider] index={sliderIndex} type=Device device={sliderConfig.DeviceName} adc={value} vol={volume:F3}");
-                    _audio.SetDeviceVolume(volume, sliderConfig.DeviceName);
+                    _audio.SetDeviceVolume(DeviceRefFor(sliderConfig), volume);
                     break;
 
                 case SliderMappingType.Processes:
                     AppLog.Debug($"[Slider] index={sliderIndex} type=Processes procs=[{string.Join(",", sliderConfig.Processes)}] adc={value} vol={volume:F3}");
-                    _audio.SetProcessVolumes(sliderConfig.Processes, volume);
+                    _audio.SetSessionVolume(new SessionFilter.ByImageNames(sliderConfig.Processes), volume);
                     break;
 
                 case SliderMappingType.Unmapped:
-                    var unmapped = GetUnmappedProcesses(config, _sessionMonitor.ActiveProcesses);
-                    AppLog.Debug($"[Slider] index={sliderIndex} type=Unmapped unmappedCount={unmapped.Count} adc={value} vol={volume:F3}");
-                    _audio.SetProcessVolumes(unmapped, volume);
+                    var mappedNames = MappedProcessNames(config);
+                    AppLog.Debug($"[Slider] index={sliderIndex} type=Unmapped mappedCount={mappedNames.Count} adc={value} vol={volume:F3}");
+                    _audio.SetSessionVolume(new SessionFilter.Unmapped(mappedNames), volume);
                     break;
             }
 
-            AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
+            if (sw is not null)
+                AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
 
             SliderLevelChanged?.Invoke(this, new SliderLevelEventArgs(sliderIndex, volume));
 
@@ -196,7 +218,7 @@ public class SliderProcessor : IDisposable
             {
                 var currentOutput = sliderConfig.Type == SliderMappingType.Device
                                     && string.IsNullOrEmpty(sliderConfig.DeviceName)
-                    ? _audio.GetDefaultOutputDeviceName()
+                    ? _audio.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia)?.FriendlyName
                     : null;
                 var label = BuildSliderLabel(sliderConfig, currentOutput);
                 VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, Muted: false, OsdKind.Volume));
@@ -204,8 +226,59 @@ public class SliderProcessor : IDisposable
         }
     }
 
+    /// <summary>
+    /// A newly created session that a Processes slider claims gets that slider's current
+    /// level applied immediately, so an app launched mid-session does not play at whatever
+    /// volume Windows gave it.
+    /// </summary>
+    private void OnSessionsChanged(object? sender, SessionsChangedEventArgs e)
+    {
+        if (e.Kind != SessionChangeKind.Created) return;
+
+        var config = _configManager.Config;
+
+        // Pass 1: does any Processes slider CLAIM this image name? A claim is decided purely
+        // by slider.Processes membership, independent of whether that slider has moved yet —
+        // otherwise an unmoved-but-mapped slider would let the Unmapped slider (pass 2) steal
+        // its process, which is exactly the bug this two-pass split prevents.
+        for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
+        {
+            var slider = config.Sliders[i];
+            if (slider.Type != SliderMappingType.Processes) continue;
+            if (!slider.Processes.Any(p => string.Equals(p, e.Session.ImageName, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            float? level;
+            lock (_lock)
+            {
+                level = _lastVolume[i];
+            }
+            if (level is { } lvl)
+                _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), lvl);
+            return; // claimed either way — must NOT fall through to the Unmapped pass.
+        }
+
+        // Pass 2: genuinely unclaimed — an Unmapped slider owns it, if one exists and has moved.
+        for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
+        {
+            if (config.Sliders[i].Type != SliderMappingType.Unmapped) continue;
+
+            float? level;
+            lock (_lock)
+            {
+                level = _lastVolume[i];
+            }
+            if (level is { } lvl)
+            {
+                _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), lvl);
+                return;
+            }
+        }
+    }
+
     public void Dispose()
     {
+        _audio.SessionsChanged -= OnSessionsChanged;
         _coalesceTimer.Dispose();
     }
 }

@@ -13,11 +13,11 @@ public sealed partial class SettingsWindow : Window
     private readonly SettingsViewModel _viewModel;
     private readonly SliderProcessor _sliderProcessor;
 
-    public SettingsWindow(ConfigManager configManager, IAudioManager audioManager, IControllerConnection? connection, SliderProcessor sliderProcessor)
+    public SettingsWindow(ConfigManager configManager, IAudioEngine audioEngine, IControllerConnection? connection, SliderProcessor sliderProcessor)
     {
         InitializeComponent();
 
-        _viewModel = new SettingsViewModel(configManager, audioManager, connection);
+        _viewModel = new SettingsViewModel(configManager, audioEngine, connection);
         _sliderProcessor = sliderProcessor;
 
         // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow
@@ -61,6 +61,14 @@ public sealed partial class SettingsWindow : Window
     /// </summary>
     public void UpdateConnection(IControllerConnection? connection)
         => _viewModel.Connection.UpdateConnection(connection);
+
+    /// <summary>
+    /// Called by App after <see cref="IAudioEngine.DevicesChanged"/> fires (Bug 3), so a
+    /// replugged/removed device shows up in every open device picker. SettingsViewModel marshals
+    /// to the UI thread itself, the same way it captures a dispatcher the way ConnectionViewModel
+    /// does — this call itself is safe from any thread.
+    /// </summary>
+    public void RefreshDevices() => _viewModel.RefreshDevices();
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {

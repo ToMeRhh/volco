@@ -39,7 +39,7 @@ Volco is a Windows system tray app that controls PC audio via an external hardwa
 
 C# / .NET 8 / WinUI 3. Entry point is `App.xaml.cs` which wires everything together.
 
-**Data flow:** Controller sends binary frames → `IControllerConnection` receives bytes → `ProtocolParser` extracts `ControllerMessage` → `SliderProcessor` or `ButtonPressDetector` handles input → `AudioManager` changes Windows audio state. For state feedback, `ProtocolEncoder` builds frames → `IControllerConnection.Send()` pushes to controller.
+**Data flow:** Controller sends binary frames → `IControllerConnection` receives bytes → `ProtocolParser` extracts `ControllerMessage` → `SliderProcessor` or `ButtonPressDetector` handles input → `IAudioEngine` changes Windows audio state. For state feedback, `ProtocolEncoder` builds frames → `IControllerConnection.Send()` pushes to controller.
 
 Key abstractions:
 - `IControllerConnection` — transport interface (Serial, UDP, WebSocket). All three support bidirectional `Send`/receive.
@@ -47,10 +47,14 @@ Key abstractions:
 - `ProtocolEncoder` — static class that builds outbound frames (mute state, active device).
 - `ButtonPressDetector` — classifies raw press/release into single, double, long press (300ms/500ms thresholds).
 - `SliderProcessor` — maps 12-bit ADC values (0–4095) to volume, coalesces at 20ms intervals.
-- `IAudioManager` — wraps NAudio/Core Audio for volume, mute, and device switching.
+- `IAudioEngine` (`Audio/IAudioEngine.cs`) — platform-neutral audio interface; the seam that lets the protocol/config/input layers build and test on Linux.
+- `AudioEngine` (`Audio/Windows/AudioEngine.cs`) — the real Core Audio engine. Owns one dedicated MTA thread and a struct-command work queue; all COM activation, registration, and writes happen on that thread.
+- `DeviceRegistry` (`Audio/Windows/DeviceRegistry.cs`) — caches every live endpoint and its COM objects, kept current by `IMMNotificationClient` instead of re-enumeration.
+- `SessionRegistry` (`Audio/Windows/SessionRegistry.cs`) — caches every live per-app audio session across all render devices, driven by `IAudioSessionNotification`; volume writes are an O(1) dictionary lookup, never an enumeration.
+- `DefaultDevicePolicy` (`Audio/Windows/DefaultDevicePolicy.cs`) — switches the Windows default output device via the undocumented `IPolicyConfig` COM interface, replacing the old `svcl.exe` child process.
 - `ActionFactory` — maps button config to `IButtonAction` implementations.
 
-The csproj uses conditional compilation: on non-Windows platforms, UI, App.xaml.cs, and AudioManager are excluded so the protocol/config/input layers can build and test on Linux CI.
+The csproj uses conditional compilation: on non-Windows platforms, `UI/**`, `App.xaml.cs`, and `Audio/Windows/**` are excluded so the protocol/config/input layers can build and test on Linux CI.
 
 ### ESP32 Firmware (`firmware/`)
 
@@ -73,6 +77,6 @@ Bidirectional binary protocol. Frame: `0xAA | length | payload | XOR checksum`.
 
 ## Config
 
-Runtime config stored at `%APPDATA%/Volco/config.json`. Managed by `ConfigManager` (load/save/change events). Includes connection settings, slider mappings, button actions, output device pair.
+Runtime config stored at `%APPDATA%/Volco/config.json`. Managed by `ConfigManager` (load/save/change events). Includes connection settings, slider mappings, button actions, output device pair. Schema v2 stores audio devices as endpoint IDs (with the friendly name kept for display and fallback); `ConfigMigrator` migrates v1 configs, which stored devices as bare name-strings, on load.
 
 App log at `%APPDATA%/Volco/volco.log` via `AppLog` (async file writer with 500ms flush).
