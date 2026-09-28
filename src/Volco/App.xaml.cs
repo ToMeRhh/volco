@@ -29,6 +29,18 @@ public partial class App : Application
     private VolumeOsdWindow _osd = null!;
     private bool _audioEngineStartFailed;
 
+    /// <summary>
+    /// Set right before <see cref="ActionFactory.Create"/>'s action for a mute-type button press
+    /// is executed, cleared by <see cref="OnDeviceVolumeChanged"/> once ITS OWN write for the
+    /// expected device lands. Execute() only posts a command to the audio thread (review item 3)
+    /// - reading state synchronously right after it returns, as this used to, sees pre-write
+    /// state. Matched by device id (not just "any change") so a press against a device that
+    /// never actually resolves (e.g. an unplugged headset - see review item 2) does not leave a
+    /// dangling flag that pops an unrelated OSD the next time some other device's volume changes.
+    /// </summary>
+    private sealed record PendingMuteOsd(string DeviceId, ButtonActionConfig Config);
+    private PendingMuteOsd? _pendingMuteOsd;
+
     public App()
     {
         _instance = this;
@@ -56,6 +68,8 @@ public partial class App : Application
         bool engineReady = engine.Start();
         _audioEngine = engine;
         _audioEngineStartFailed = !engineReady;
+        _audioEngine.DeviceVolumeChanged += OnDeviceVolumeChanged;
+        _audioEngine.DevicesChanged += OnDevicesChangedForControllerState;
 
         if (_audioEngineStartFailed)
         {
@@ -64,7 +78,12 @@ public partial class App : Application
                          "control audio until this is resolved — see volco.log.");
         }
 
-        if (ConfigMigrator.NeedsMigration(_configManager.Config))
+        // Skipped entirely when the engine isn't ready (review item 4): DeviceRegistry.Start()
+        // may still be running on the audio thread past the timeout, and GetDevices() here would
+        // race its unsynchronised-at-the-time dictionary writes. Calling MigrateFile with an
+        // empty device list is also a data-loss trap in its own right (review item 5) - it
+        // reduces to a no-op below anyway, but skipping the call here avoids depending on that.
+        if (!_audioEngineStartFailed && ConfigMigrator.NeedsMigration(_configManager.Config))
         {
             AppLog.Info("Migrating config to schema v2");
             ConfigMigrator.MigrateFile(configPath, _configManager.Config,
@@ -171,8 +190,15 @@ public partial class App : Application
         AppLog.Info("Shutting down");
         IsExiting = true;
         _connection?.Dispose();
-        _sliderProcessor.Dispose();
-        _audioEngine.Dispose();
+        // Null-guarded (review items 4/9): OnLaunched can abort (e.g. an exception escaping into
+        // UnhandledException) before these are assigned, and Shutdown() must still be able to run.
+        _sliderProcessor?.Dispose();
+        if (_audioEngine is not null)
+        {
+            _audioEngine.DeviceVolumeChanged -= OnDeviceVolumeChanged;
+            _audioEngine.DevicesChanged -= OnDevicesChangedForControllerState;
+            _audioEngine.Dispose();
+        }
         _osd?.Close();
         _updateWindow?.Close();
         _trayIcon?.Dispose();
@@ -281,12 +307,89 @@ public partial class App : Application
 
         if (actionConfig == null) return;
         var action = ActionFactory.Create(actionConfig, _audioEngine, _configManager);
+
+        // action.Execute() only posts a command to the audio thread - the write hasn't happened
+        // yet when Execute() returns (review item 3). Reading TryGetDeviceState/GetDefaultDevice
+        // synchronously right here, as this used to, shows pre-toggle state: every mute press
+        // flashed the wrong OSD glyph and pushed the wrong controller LED. Record which device
+        // this mute action targets (if any) and let OnDeviceVolumeChanged show the OSD once ITS
+        // OWN write for that device actually lands, with authoritative state.
+        // PushControllerState() itself is now driven entirely off
+        // OnDeviceVolumeChanged/OnDevicesChangedForControllerState below, which also closes spec
+        // §3 item 3 for a change that didn't originate from a button at all (e.g. the Windows
+        // volume mixer) - DeviceVolumeChanged previously had no subscribers at all.
+        var expectedDeviceId = IsMuteAction(actionConfig.Action) ? ResolveExpectedMuteDeviceId(actionConfig) : null;
+        _pendingMuteOsd = expectedDeviceId is null ? null : new PendingMuteOsd(expectedDeviceId, actionConfig);
+
         action?.Execute();
+    }
 
-        ShowMuteOsd(actionConfig);
+    private static bool IsMuteAction(ButtonActionType type) => type is
+        ButtonActionType.MuteCurrentOutput or
+        ButtonActionType.MuteCurrentInput or
+        ButtonActionType.MuteSpecificDevice;
 
-        // Push updated state to controller after action changes audio state
+    /// <summary>Best-effort endpoint id this mute action targets, resolved with the same
+    /// read-only queries <see cref="ShowMuteOsd"/> already uses - null when it cannot be
+    /// determined right now (e.g. an unconfigured or currently-disconnected device), in which
+    /// case no OSD will be shown for this press at all, rather than a wrong one later.</summary>
+    private string? ResolveExpectedMuteDeviceId(ButtonActionConfig actionConfig) => actionConfig.Action switch
+    {
+        ButtonActionType.MuteCurrentOutput =>
+            _audioEngine.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia)?.Id,
+        ButtonActionType.MuteCurrentInput =>
+            _audioEngine.GetDefaultDevice(AudioFlow.Capture, AudioRole.Communications)?.Id,
+        ButtonActionType.MuteSpecificDevice => ResolveSpecificDeviceId(actionConfig.Device),
+        _ => null,
+    };
+
+    private string? ResolveSpecificDeviceId(DeviceRefConfig? cfg)
+    {
+        if (cfg == null) return null;
+        if (!string.IsNullOrEmpty(cfg.Id)) return cfg.Id;
+        if (string.IsNullOrEmpty(cfg.FriendlyName)) return null;
+        return _audioEngine.GetDevices(AudioFlow.Render)
+            .FirstOrDefault(d => string.Equals(d.FriendlyName, cfg.FriendlyName, StringComparison.OrdinalIgnoreCase))
+            ?.Id;
+    }
+
+    /// <summary>
+    /// Fired by <see cref="IAudioEngine.DeviceVolumeChanged"/> - on the audio thread, with
+    /// authoritative post-write level/mute state, whether this app caused the change or it came
+    /// in externally (e.g. the Windows volume mixer). Always refreshes controller LEDs (cheap,
+    /// and the only way an externally-originated change ever reaches the controller). Shows the
+    /// mute OSD only for this app's own write (<see cref="DeviceVolumeChangedEventArgs.IsOwnChange"/>)
+    /// to the exact device a pending mute press targeted (see <see cref="_pendingMuteOsd"/>) - do
+    /// not call back into the engine with a write here, only the read-only queries
+    /// ShowMuteOsd/PushControllerState already make, which are documented safe from any thread;
+    /// VolumeOsdWindow.Show marshals to the UI thread itself.
+    /// </summary>
+    private void OnDeviceVolumeChanged(object? sender, DeviceVolumeChangedEventArgs e)
+    {
         PushControllerState();
+
+        var pending = _pendingMuteOsd;
+        if (pending is not null && e.IsOwnChange && string.Equals(pending.DeviceId, e.DeviceId, StringComparison.OrdinalIgnoreCase))
+        {
+            _pendingMuteOsd = null;
+            ShowMuteOsd(pending.Config);
+        }
+    }
+
+    /// <summary>
+    /// Fired by <see cref="IAudioEngine.DevicesChanged"/> - on the audio thread. Only
+    /// <see cref="DeviceChangeKind.DefaultChanged"/> matters here: it is the authoritative,
+    /// post-write counterpart of a ToggleOutputDevice/SetOutputDevice button press (the same
+    /// staleness problem DeviceVolumeChanged solves for mute/volume - see
+    /// <see cref="OnDeviceVolumeChanged"/> - applies to the active-device LED too, since a
+    /// default-device switch is posted to the audio thread the same way).
+    /// </summary>
+    private void OnDevicesChangedForControllerState(object? sender, DevicesChangedEventArgs e)
+    {
+        if (e.Kind == DeviceChangeKind.DefaultChanged)
+        {
+            PushControllerState();
+        }
     }
 
     private void ShowMuteOsd(ButtonActionConfig actionConfig)

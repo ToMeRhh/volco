@@ -185,7 +185,10 @@ public class SliderProcessor : IDisposable
                 _lastVolume[sliderIndex] = volume;
             }
 
-            var sw = Stopwatch.StartNew();
+            // Only allocated when actually needed (review item 10): this ~50Hz-per-moving-slider
+            // path exists to be cheap, and a Stopwatch that exists purely to feed a debug-only
+            // log line must not be built when debug logging is off.
+            Stopwatch? sw = AppLog.IsDebugEnabled ? Stopwatch.StartNew() : null;
 
             switch (sliderConfig.Type)
             {
@@ -206,7 +209,8 @@ public class SliderProcessor : IDisposable
                     break;
             }
 
-            AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
+            if (sw is not null)
+                AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
 
             SliderLevelChanged?.Invoke(this, new SliderLevelEventArgs(sliderIndex, volume));
 

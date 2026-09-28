@@ -479,7 +479,16 @@ public sealed class AudioEngine : IAudioEngine
         _disposed = true;
 
         _queue.CompleteAdding();
-        _thread?.Join();
+
+        // Bounded (review item 9): this runs on the UI thread during Exit()/the updater's
+        // swap-and-restart path. An unbounded Join() against a wedged COM call in a hung audio
+        // service would hang shutdown forever. _thread is a background thread (IsBackground =
+        // true), so abandoning it after a timeout is safe - the process can still exit.
+        if (_thread is not null && !_thread.Join(TimeSpan.FromSeconds(5)))
+        {
+            Volco.AppLog.Error("AudioEngine.Dispose: audio thread did not exit within 5s; abandoning it.");
+        }
+
         _queue.Dispose();
         _ready.Dispose();
     }

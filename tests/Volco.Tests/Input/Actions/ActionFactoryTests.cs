@@ -135,4 +135,30 @@ public class ActionFactoryTests
 
         Assert.Equal("dev-1", Assert.Single(audio.SetDefaultCalls).EndpointId);
     }
+
+    /// <summary>
+    /// Review item 11: ToggleOutputDeviceAction.DeviceMatches' FriendlyName-fallback branch
+    /// (used when a configured device has Id == "") had no test - and review item 5 shows that
+    /// exact config shape is reachable in practice (a migration that ran against an empty device
+    /// list, before its own fix, stamped v2 with every reference blanked to {Id:"", FriendlyName}
+    /// forever). Device1 is configured with a blank Id and a populated FriendlyName only; the
+    /// current default device matches it by name, so toggling must target Device2 by id.
+    /// </summary>
+    [Fact]
+    public void ToggleOutputDevice_Device1ConfiguredByFriendlyNameOnly_MatchesAndSwitchesToDevice2()
+    {
+        var audio = new FakeAudioEngine
+        {
+            DefaultRender = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true, true, true)
+        };
+        _configManager.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+        _configManager.Config.OutputDevices.Device2 = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };
+
+        var config = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice };
+        ActionFactory.Create(config, audio, _configManager)!.Execute();
+
+        var (endpointId, flow) = Assert.Single(audio.SetDefaultCalls);
+        Assert.Equal("dev-2", endpointId);
+        Assert.Equal(AudioFlow.Render, flow);
+    }
 }

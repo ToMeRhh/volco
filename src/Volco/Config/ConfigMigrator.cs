@@ -49,6 +49,19 @@ public static class ConfigMigrator
     {
         if (!NeedsMigration(config)) return;
 
+        if (devices.Count == 0)
+        {
+            // Nothing to resolve v1 names/ids against yet (e.g. the audio engine failed to start
+            // in time - App.xaml.cs already guards against calling this in that case, but this is
+            // the load-bearing check). Stamping v2 anyway would turn every reference into
+            // {Id:"", FriendlyName:<name>} and make NeedsMigration false forever, permanently
+            // disabling anything keyed on a resolved id (e.g. output-device switching - review
+            // item 5). Leave the config untouched so a later launch, with a real device list,
+            // retries.
+            AppLog.Info("Config migration skipped: no audio devices available yet; will retry on a later launch.");
+            return;
+        }
+
         try
         {
             if (File.Exists(configPath))

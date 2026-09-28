@@ -73,9 +73,12 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
                     Volume.UnregisterControlChangeNotify(VolumeCallback);
                 }
             }
-            catch (COMException)
+            catch (Exception ex) when (ex is COMException or InvalidComObjectException)
             {
-                // Device is likely already gone; nothing to unregister from.
+                // Device is likely already gone (or, if a caller disposed this handle out of
+                // order relative to SessionRegistry's own teardown, the RCW may already be
+                // separated - InvalidComObjectException, not COMException). Either way there is
+                // nothing to unregister from; degrade instead of throwing out of Dispose().
             }
 
             ReleaseIfComObject(SessionManager);
@@ -305,10 +308,13 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     }
 
     /// <summary>
-    /// Resolution order: exact id match, then exact friendly-name match (against the same payload
-    /// string - see report for why <see cref="DeviceRef.Kind"/> doesn't gate this), then the
-    /// default for the ref's flow/role. An unresolvable id/name falls through to the default;
-    /// a <see cref="DeviceRefKind.Default"/> ref (whose payload is always "") goes straight there.
+    /// Resolution order: exact id match, then case-insensitive friendly-name match (against the
+    /// same payload string). Only a <see cref="DeviceRefKind.Default"/> reference (whose payload
+    /// is always "") falls through to the default for the ref's flow/role: an explicit
+    /// <see cref="DeviceRefKind.ById"/>/<see cref="DeviceRefKind.ByFriendlyName"/> reference that
+    /// does not resolve returns null instead (review item 2) - doing nothing to an action's
+    /// configured device is safer than silently retargeting a different one (e.g. an unplugged
+    /// headset's mute button must not fall back to muting the default output device).
     /// </summary>
     public DeviceHandle? Resolve(DeviceRef reference)
     {
@@ -323,11 +329,16 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
 
                 foreach (var handle in _devices.Values)
                 {
-                    if (string.Equals(handle.FriendlyName, reference.Id, StringComparison.Ordinal))
+                    if (string.Equals(handle.FriendlyName, reference.Id, StringComparison.OrdinalIgnoreCase))
                     {
                         return handle;
                     }
                 }
+            }
+
+            if (reference.Kind != DeviceRefKind.Default)
+            {
+                return null;
             }
 
             if (_defaults.TryGetValue((reference.Flow, reference.Role), out var defaultId)
@@ -394,11 +405,21 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
                 try
                 {
                     var handle = BuildHandle(device);
-                    _devices[handle.Id] = handle;
+
+                    // Locked (review item 4): GetDevices/GetDefault/Resolve are documented as
+                    // callable from other threads (e.g. the UI, while AudioEngine.Start() is
+                    // still inside its 10s wait), and used to write here without the lock they
+                    // take to read.
+                    lock (_lock)
+                    {
+                        _devices[handle.Id] = handle;
+                    }
                 }
-                catch (COMException)
+                catch (Exception ex) when (ex is COMException or InvalidCastException)
                 {
-                    // Device disappeared or refused activation mid-enumeration; drop it and continue.
+                    // Device disappeared, refused activation, or refused QI mid-enumeration;
+                    // drop it and continue. BuildHandle releases whatever it activated itself
+                    // before rethrowing - device is still ours to release (review item 6).
                     ReleaseIfComObject(device);
                 }
             }
@@ -416,7 +437,13 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
             _enumerator!.GetDefaultAudioEndpoint(nativeFlow, nativeRole, out IMMDevice device);
             try
             {
-                _defaults[(flow, role)] = GetDeviceId(device);
+                string id = GetDeviceId(device);
+
+                // Locked - see the matching note in EnumerateFlow (review item 4).
+                lock (_lock)
+                {
+                    _defaults[(flow, role)] = id;
+                }
             }
             finally
             {
@@ -432,59 +459,76 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     /// <summary>Builds one handle: id, friendly name, flow (via IMMEndpoint), IAudioEndpointVolume
     /// (+ its change callback), and - for render devices only - IAudioSessionManager2. Takes
     /// ownership of <paramref name="device"/>: on success it is stored on the returned handle; on
-    /// failure the caller is responsible for releasing it (this method does not release partially
-    /// activated interfaces if a later step throws - see report).</summary>
+    /// failure the caller is responsible for releasing it. Any interface this method itself
+    /// activated (<see cref="IAudioEndpointVolume"/>, <see cref="IAudioSessionManager2"/>) before
+    /// a later step throws IS rolled back here before rethrowing (review item 6) - a QI can fail
+    /// with <see cref="InvalidCastException"/> rather than <see cref="COMException"/>, so both are
+    /// caught, matching the precedent in <see cref="SessionRegistry"/>.</summary>
     private DeviceHandle BuildHandle(IMMDevice device)
     {
         string id = GetDeviceId(device);
         string friendlyName = GetFriendlyName(device);
         AudioFlow flow = GetFlow(device);
 
-        device.Activate(typeof(IAudioEndpointVolume).GUID, CLSCTX.CLSCTX_ALL, null, out object volumeObj);
-        var volume = (IAudioEndpointVolume)volumeObj;
-
+        IAudioEndpointVolume? volume = null;
         IAudioSessionManager2? sessionManager = null;
-        if (flow == AudioFlow.Render)
-        {
-            device.Activate(typeof(IAudioSessionManager2).GUID, CLSCTX.CLSCTX_ALL, null, out object sessionManagerObj);
-            sessionManager = (IAudioSessionManager2)sessionManagerObj;
-        }
-
-        float level = 0f;
-        BOOL muted = default;
         try
         {
-            volume.GetMasterVolumeLevelScalar(out level);
-        }
-        catch (COMException)
-        {
-        }
+            device.Activate(typeof(IAudioEndpointVolume).GUID, CLSCTX.CLSCTX_ALL, null, out object volumeObj);
+            volume = (IAudioEndpointVolume)volumeObj;
 
-        try
-        {
-            volume.GetMute(out muted);
+            if (flow == AudioFlow.Render)
+            {
+                device.Activate(typeof(IAudioSessionManager2).GUID, CLSCTX.CLSCTX_ALL, null, out object sessionManagerObj);
+                sessionManager = (IAudioSessionManager2)sessionManagerObj;
+            }
+
+            float level = 0f;
+            BOOL muted = default;
+            try
+            {
+                volume.GetMasterVolumeLevelScalar(out level);
+            }
+            catch (COMException)
+            {
+            }
+
+            try
+            {
+                volume.GetMute(out muted);
+            }
+            catch (COMException)
+            {
+            }
+
+            var handle = new DeviceHandle
+            {
+                Id = id,
+                FriendlyName = friendlyName,
+                Flow = flow,
+                Device = device,
+                Volume = volume,
+                SessionManager = sessionManager,
+                CachedLevel = level,
+                CachedMuted = muted != 0,
+            };
+
+            var callback = new EndpointVolumeCallback(this, handle);
+            volume.RegisterControlChangeNotify(callback);
+            handle.VolumeCallback = callback;
+
+            return handle;
         }
-        catch (COMException)
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
         {
+            // Roll back whatever was already activated before this step failed. `device` itself
+            // is NOT released here - the caller (EnumerateFlow/HandleDeviceActivated) still owns
+            // it and is responsible for releasing it on a thrown exception, per this method's
+            // contract.
+            ReleaseIfComObject(sessionManager);
+            ReleaseIfComObject(volume);
+            throw;
         }
-
-        var handle = new DeviceHandle
-        {
-            Id = id,
-            FriendlyName = friendlyName,
-            Flow = flow,
-            Device = device,
-            Volume = volume,
-            SessionManager = sessionManager,
-            CachedLevel = level,
-            CachedMuted = muted != 0,
-        };
-
-        var callback = new EndpointVolumeCallback(this, handle);
-        volume.RegisterControlChangeNotify(callback);
-        handle.VolumeCallback = callback;
-
-        return handle;
     }
 
     private static AudioFlow GetFlow(IMMDevice device)
@@ -632,10 +676,11 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
             }
         }
 
+        IMMDevice? device = null;
         DeviceHandle handle;
         try
         {
-            _enumerator.GetDevice(id, out IMMDevice device);
+            _enumerator.GetDevice(id, out device);
             device.GetState(out DEVICE_STATE state);
             if (state != DEVICE_STATE.DEVICE_STATE_ACTIVE)
             {
@@ -645,9 +690,13 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
 
             handle = BuildHandle(device);
         }
-        catch (COMException)
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
         {
-            // Device vanished, or activation failed, between the notification and this lookup.
+            // Device vanished, activation failed, or refused QI between the notification and
+            // this lookup. BuildHandle rolls back what it activated itself on failure, but
+            // `device` is still ours to release here (review item 6 - this previously leaked it
+            // whenever GetState/BuildHandle threw after a successful GetDevice).
+            ReleaseIfComObject(device);
             return;
         }
 
@@ -690,8 +739,19 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
             device = ToAudioDeviceLocked(removed);
         }
 
-        removed.Dispose();
+        // Raise before disposing (review item 1): _onChanged drives AudioEngine ->
+        // SessionRegistry.Detach for this device id, which calls
+        // UnregisterSessionNotification on `removed.SessionManager` - the SAME COM object
+        // instance as SessionRegistry's AttachedDevice.Manager (DeviceRegistry.DeviceHandle
+        // owns it; SessionRegistry never AddRef's its own copy). Disposing `removed` first would
+        // release that RCW out from under Detach, which throws InvalidComObjectException (not
+        // COMException) and aborts before SessionRegistry's own per-session cleanup runs -
+        // leaking the session notification registration and every session handle on this
+        // device, forever, on every unplug. This mirrors the ordering AudioEngine.Dispose()
+        // already uses at shutdown: dispose SessionRegistry before DeviceRegistry. `_onChanged`
+        // is invoked outside both lock blocks above, so `_lock` is never held across this call.
         _onChanged(new DevicesChangedEventArgs(DeviceChangeKind.Removed, device));
+        removed.Dispose();
     }
 
     // ── Helpers (caller must hold _lock) ────────────────────────────────────────────────────

@@ -225,6 +225,11 @@ internal sealed class SessionRegistry : IDisposable
     private readonly Dictionary<string, SessionHandle> _sessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AttachedDevice> _devices = new(StringComparer.Ordinal);
 
+    /// <summary>Reused across <see cref="ApplyVolume"/> calls (review item 10) - this class is
+    /// audio-thread-only, so a single scratch buffer is safe without extra locking, and avoids
+    /// the per-call <c>Where(...).ToList()</c> allocation on the ~50Hz slider path.</summary>
+    private readonly List<SessionHandle> _applyVolumeTargets = new();
+
     private bool _disposed;
 
     public SessionRegistry(Action<SessionsChangedEventArgs> onChanged, Action onPendingWork)
@@ -352,15 +357,41 @@ internal sealed class SessionRegistry : IDisposable
         // AudioManager clamped - do not rely on every caller already having done so.
         level = Math.Clamp(level, 0f, 1f);
 
-        List<SessionHandle> targets;
+        // Manual loops + a scratch list/set instead of the LINQ this replaced (review item 10):
+        // at ~50Hz with ~20 live sessions, `Where(...).ToList()` plus a per-session
+        // `names.Any(n => ...)` closure was allocating a closure, an iterator, and a delegate
+        // PER SESSION PER TICK - ~2,000 delegate allocations/second of gen0 garbage on the one
+        // path this project exists to make cheap. The HashSet below is built once per call, not
+        // once per session.
+        var targets = _applyVolumeTargets;
+        targets.Clear();
+
         lock (_lock)
         {
-            targets = filter switch
+            switch (filter)
             {
-                SessionFilter.ByImageNames byNames => _sessions.Values.Where(h => MatchesAny(byNames.Names, h.ImageName)).ToList(),
-                SessionFilter.Unmapped unmapped => _sessions.Values.Where(h => !MatchesAny(unmapped.MappedNames, h.ImageName)).ToList(),
-                _ => new List<SessionHandle>(),
-            };
+                case SessionFilter.ByImageNames byNames:
+                    var claimed = ToOrdinalIgnoreCaseSet(byNames.Names);
+                    foreach (var handle in _sessions.Values)
+                    {
+                        if (claimed.Contains(handle.ImageName))
+                        {
+                            targets.Add(handle);
+                        }
+                    }
+                    break;
+
+                case SessionFilter.Unmapped unmapped:
+                    var mapped = ToOrdinalIgnoreCaseSet(unmapped.MappedNames);
+                    foreach (var handle in _sessions.Values)
+                    {
+                        if (!mapped.Contains(handle.ImageName))
+                        {
+                            targets.Add(handle);
+                        }
+                    }
+                    break;
+            }
         }
 
         foreach (var handle in targets)
@@ -376,6 +407,8 @@ internal sealed class SessionRegistry : IDisposable
                 // clean it up on a later DrainPendingChanges. Not fatal to this call.
             }
         }
+
+        targets.Clear();
     }
 
     /// <summary>Applies every <see cref="PendingChange"/> a callback has queued since the last
@@ -601,9 +634,13 @@ internal sealed class SessionRegistry : IDisposable
             {
                 attached.Manager.UnregisterSessionNotification(attached.Notification);
             }
-            catch (COMException)
+            catch (Exception ex) when (ex is COMException or InvalidComObjectException)
             {
-                // Device is likely already gone; nothing to unregister from.
+                // Device is likely already gone. InvalidComObjectException (not COMException)
+                // is what a separated RCW throws - e.g. if DeviceRegistry ever disposed the
+                // DeviceHandle that owns this same SessionManager instance before raising the
+                // DevicesChanged notification that drives this Detach (review item 1 hardening:
+                // degrade instead of aborting DetachInternal before the session cleanup below).
             }
         }
 
@@ -719,8 +756,8 @@ internal sealed class SessionRegistry : IDisposable
         volume.SetMasterVolume(level, &ctx);
     }
 
-    private static bool MatchesAny(IReadOnlyCollection<string> names, string imageName)
-        => names.Any(n => string.Equals(n, imageName, StringComparison.OrdinalIgnoreCase));
+    private static HashSet<string> ToOrdinalIgnoreCaseSet(IReadOnlyCollection<string> names)
+        => new(names, StringComparer.OrdinalIgnoreCase);
 
     private static void ReleaseIfComObject(object? comObject)
     {
