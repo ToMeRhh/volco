@@ -54,6 +54,33 @@ public partial class App : Application
     private readonly object _pushStateLock = new();
     private IReadOnlyList<byte[]>? _lastPushedFrames;
 
+    /// <summary>
+    /// Connect-race fix: on a USB replug, the transport (e.g. SerialConnection) can report
+    /// Connected within milliseconds of Windows enumerating the CDC device, while the ESP32 is
+    /// still executing setup() and not yet reading serial — the immediate PushControllerState in
+    /// OnConnectionStatusChanged is sent into a void, leaving the controller's own boot-time LED
+    /// state (both mute LEDs lit — see firmware note) uncorrected until some later event.
+    ///
+    /// Two independent, additive mitigations, both scheduled/armed from OnConnectionStatusChanged
+    /// on every transition to Connected:
+    ///   (a) _postConnectTimer750 / _postConnectTimer2500 — one-shot re-pushes at fixed delays
+    ///       that don't depend on the controller doing anything. Guarded by _postConnectLock so a
+    ///       second connect (replug twice quickly) disposes the previous pair before arming a new
+    ///       one, rather than stacking timers.
+    ///   (b) _awaitingFirstMessageAfterConnect — set on every Connected transition, consumed
+    ///       (via Interlocked.Exchange) by the first MessageReceived after it, which is positive
+    ///       proof the firmware's serial reader is alive. Self-timing, but can't stand alone since
+    ///       an untouched controller (no slider movement past the deadband, no button press) may
+    ///       never send anything.
+    /// Both paths call PushControllerState(force: true), the same call OnConnectionStatusChanged
+    /// already makes — force bypasses _lastPushedFrames change-detection but pushes are otherwise
+    /// idempotent, so a redundant push (e.g. both (a) and (b) firing) is harmless.
+    /// </summary>
+    private readonly object _postConnectLock = new();
+    private System.Threading.Timer? _postConnectTimer750;
+    private System.Threading.Timer? _postConnectTimer2500;
+    private int _awaitingFirstMessageAfterConnect;
+
     public App()
     {
         _instance = this;
@@ -202,6 +229,19 @@ public partial class App : Application
     {
         AppLog.Info("Shutting down");
         IsExiting = true;
+        // Stop any pending post-connect re-pushes before tearing anything else down — Dispose()
+        // on a System.Threading.Timer only guarantees no *new* callback queues after it returns;
+        // one already queued on the thread pool can still run. That race is unavoidable without a
+        // WaitHandle-based dispose we don't need here: the callback (PushControllerState) reads
+        // _connection?.Status and no-ops when it isn't Connected, and everything it touches is
+        // otherwise only ever disposed, never nulled, on this path.
+        lock (_postConnectLock)
+        {
+            _postConnectTimer750?.Dispose();
+            _postConnectTimer2500?.Dispose();
+            _postConnectTimer750 = null;
+            _postConnectTimer2500 = null;
+        }
         _connection?.Dispose();
         // Null-guarded (review items 4/9): OnLaunched can abort (e.g. an exception escaping into
         // UnhandledException) before these are assigned, and Shutdown() must still be able to run.
@@ -283,15 +323,55 @@ public partial class App : Application
     {
         AppLog.Info($"Connection status changed: {status}");
         if (status == ConnectionStatus.Connected)
+        {
             // force: true — a (re)connect means the controller's own LED state is unknown
             // (it may just have rebooted, or this may be a brand-new transport after Bug 1/2's
             // restart path), so always send the full state at least once regardless of whether
             // it matches the last state we happened to push to a previous connection.
             PushControllerState(force: true);
+            // Connect-race fix (see field doc above): this immediate push can land before the
+            // controller's own boot sequence is reading serial. Arm both mitigations for this
+            // connect.
+            ArmFirstMessagePush();
+            ScheduleTimedRepushes();
+        }
+    }
+
+    /// <summary>Arms mitigation (b): the very next MessageReceived, of any kind, triggers one
+    /// forced re-push (consumed atomically so only the first message after this connect does).
+    /// Runs on whatever thread raised StatusChanged — see class-level doc on _pushStateLock for
+    /// the set of threads that can be.</summary>
+    private void ArmFirstMessagePush() =>
+        Interlocked.Exchange(ref _awaitingFirstMessageAfterConnect, 1);
+
+    /// <summary>Arms mitigation (a): one-shot re-pushes at ~750ms and ~2500ms after this connect.
+    /// Disposes any pair still pending from an earlier connect first, so replugging twice in quick
+    /// succession re-arms rather than stacking timers. Runs on whatever thread raised
+    /// StatusChanged; the timer callbacks themselves later run on a thread-pool thread.</summary>
+    private void ScheduleTimedRepushes()
+    {
+        lock (_postConnectLock)
+        {
+            _postConnectTimer750?.Dispose();
+            _postConnectTimer2500?.Dispose();
+
+            _postConnectTimer750 = new System.Threading.Timer(
+                _ => PushControllerState(force: true), null, 750, System.Threading.Timeout.Infinite);
+            _postConnectTimer2500 = new System.Threading.Timer(
+                _ => PushControllerState(force: true), null, 2500, System.Threading.Timeout.Infinite);
+        }
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
     {
+        // Connect-race fix, mitigation (b): an inbound frame is proof the firmware's serial
+        // reader is alive right now, regardless of whether it was ready when the immediate
+        // post-connect push in OnConnectionStatusChanged went out. Interlocked.Exchange both
+        // reads and clears the flag atomically so only the first message after a given connect
+        // does this, not every message afterwards.
+        if (Interlocked.Exchange(ref _awaitingFirstMessageAfterConnect, 0) == 1)
+            PushControllerState(force: true);
+
         switch (msg)
         {
             case SliderMessage slider:
