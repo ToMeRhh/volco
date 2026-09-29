@@ -9,7 +9,7 @@ using Windows.Win32.System.Com;
 using Windows.Win32.System.Com.StructuredStorage;
 using Windows.Win32.System.Variant;
 using Windows.Win32.UI.Shell.PropertiesSystem;
-using Volco.Audio;
+using Volco.Core.Audio;
 
 namespace Volco.Audio.Windows;
 

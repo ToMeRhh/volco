@@ -5,7 +5,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.Audio.Endpoints;
 using Windows.Win32.System.Com;
-using Volco.Audio;
+using Volco.Core.Audio;
 
 namespace Volco.Audio.Windows;
 
@@ -89,7 +89,7 @@ public sealed class AudioEngine : IAudioEngine
         bool ready = _ready.Wait(TimeSpan.FromSeconds(10));
         if (!ready)
         {
-            Volco.AppLog.Error("AudioEngine.Start: audio thread did not signal ready within 10s.");
+            Volco.Core.Diagnostics.AppLog.Error("AudioEngine.Start: audio thread did not signal ready within 10s.");
         }
 
         return ready;
@@ -186,7 +186,7 @@ public sealed class AudioEngine : IAudioEngine
         HRESULT hr = PInvoke.CoInitializeEx(null, COINIT.COINIT_MULTITHREADED);
         if (hr.Value < 0)
         {
-            Volco.AppLog.Error($"AudioEngine: CoInitializeEx failed with 0x{hr.Value:X8}.");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine: CoInitializeEx failed with 0x{hr.Value:X8}.");
         }
 
         try
@@ -215,7 +215,7 @@ public sealed class AudioEngine : IAudioEngine
                 }
                 catch (COMException ex)
                 {
-                    Volco.AppLog.Error($"AudioEngine: command {command.Kind} failed: {ex.Message}");
+                    Volco.Core.Diagnostics.AppLog.Error($"AudioEngine: command {command.Kind} failed: {ex.Message}");
                 }
                 catch (Exception ex)
                 {
@@ -224,7 +224,7 @@ public sealed class AudioEngine : IAudioEngine
                     // exists to remove. A dropped command that is logged is strictly better than a
                     // dead tray app, so every command is isolated: log and keep consuming the next
                     // one, whatever kind of exception a Do*/Process handler throws.
-                    Volco.AppLog.Error($"AudioEngine: command {command.Kind} threw an unexpected exception: {ex}");
+                    Volco.Core.Diagnostics.AppLog.Error($"AudioEngine: command {command.Kind} threw an unexpected exception: {ex}");
                 }
             }
         }
@@ -298,7 +298,7 @@ public sealed class AudioEngine : IAudioEngine
         }
         catch (COMException ex)
         {
-            Volco.AppLog.Error($"AudioEngine: failed to attach session registry to device '{deviceId}': {ex.Message}");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine: failed to attach session registry to device '{deviceId}': {ex.Message}");
         }
     }
 
@@ -344,7 +344,7 @@ public sealed class AudioEngine : IAudioEngine
         var handle = _deviceRegistry!.Resolve(device);
         if (handle is null)
         {
-            Volco.AppLog.Error($"AudioEngine.SetDeviceVolume: could not resolve device for {device}.");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine.SetDeviceVolume: could not resolve device for {device}.");
             return;
         }
 
@@ -356,7 +356,7 @@ public sealed class AudioEngine : IAudioEngine
         }
         catch (COMException ex)
         {
-            Volco.AppLog.Error($"AudioEngine.SetDeviceVolume: write failed for device '{handle.Id}': {ex.Message}");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine.SetDeviceVolume: write failed for device '{handle.Id}': {ex.Message}");
         }
     }
 
@@ -365,7 +365,7 @@ public sealed class AudioEngine : IAudioEngine
         var handle = _deviceRegistry!.Resolve(device);
         if (handle is null)
         {
-            Volco.AppLog.Error($"AudioEngine.SetDeviceMute: could not resolve device for {device}.");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine.SetDeviceMute: could not resolve device for {device}.");
             return;
         }
 
@@ -376,7 +376,7 @@ public sealed class AudioEngine : IAudioEngine
         }
         catch (COMException ex)
         {
-            Volco.AppLog.Error($"AudioEngine.SetDeviceMute: write failed for device '{handle.Id}': {ex.Message}");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine.SetDeviceMute: write failed for device '{handle.Id}': {ex.Message}");
         }
     }
 
@@ -385,7 +385,7 @@ public sealed class AudioEngine : IAudioEngine
         var handle = _deviceRegistry!.Resolve(device);
         if (handle is null)
         {
-            Volco.AppLog.Error($"AudioEngine.ToggleDeviceMute: could not resolve device for {device}.");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine.ToggleDeviceMute: could not resolve device for {device}.");
             return;
         }
 
@@ -397,7 +397,7 @@ public sealed class AudioEngine : IAudioEngine
         }
         catch (COMException ex)
         {
-            Volco.AppLog.Error($"AudioEngine.ToggleDeviceMute: write failed for device '{handle.Id}': {ex.Message}");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine.ToggleDeviceMute: write failed for device '{handle.Id}': {ex.Message}");
         }
     }
 
@@ -406,7 +406,7 @@ public sealed class AudioEngine : IAudioEngine
         bool ok = _defaultDevicePolicy!.TrySetDefault(endpointId);
         if (!ok)
         {
-            Volco.AppLog.Error($"AudioEngine.SetDefaultDevice: failed to set default endpoint '{endpointId}' (flow {flow}).");
+            Volco.Core.Diagnostics.AppLog.Error($"AudioEngine.SetDefaultDevice: failed to set default endpoint '{endpointId}' (flow {flow}).");
         }
     }
 
@@ -486,7 +486,7 @@ public sealed class AudioEngine : IAudioEngine
         // true), so abandoning it after a timeout is safe - the process can still exit.
         if (_thread is not null && !_thread.Join(TimeSpan.FromSeconds(5)))
         {
-            Volco.AppLog.Error("AudioEngine.Dispose: audio thread did not exit within 5s; abandoning it.");
+            Volco.Core.Diagnostics.AppLog.Error("AudioEngine.Dispose: audio thread did not exit within 5s; abandoning it.");
         }
 
         _queue.Dispose();

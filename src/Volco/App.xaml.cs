@@ -3,13 +3,14 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Volco.Audio;
-using Volco.Communication;
-using Volco.Config;
-using Volco.Input;
-using Volco.Input.Actions;
+using Volco.Core.Audio;
+using Volco.Core.Communication;
+using Volco.Core.Config;
+using Volco.Core.Diagnostics;
+using Volco.Core.Input;
+using Volco.Core.Input.Actions;
 using Volco.UI;
-using Volco.Updates;
+using Volco.Core.Updates;
 
 namespace Volco;
 

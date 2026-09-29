@@ -3,8 +3,8 @@ using System.IO.Ports;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
-using Volco.Communication;
-using Volco.Config;
+using Volco.Core.Communication;
+using Volco.Core.Config;
 
 namespace Volco.UI.ViewModels;
 

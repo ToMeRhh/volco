@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Volco.Audio;
-using Volco.Config;
+using Volco.Core.Audio;
+using Volco.Core.Config;
 
 namespace Volco.UI.ViewModels;
 

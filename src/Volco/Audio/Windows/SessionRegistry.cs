@@ -4,7 +4,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.Audio;
 using Windows.Win32.System.Threading;
-using Volco.Audio;
+using Volco.Core.Audio;
 
 namespace Volco.Audio.Windows;
 

@@ -1,7 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Volco.Config;
-using Volco.Updates;
+using Volco.Core.Config;
+using Volco.Core.Diagnostics;
+using Volco.Core.Updates;
 
 namespace Volco.UI;
 

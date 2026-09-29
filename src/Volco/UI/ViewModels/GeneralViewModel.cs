@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Volco.Config;
+using Volco.Core.Config;
+using Volco.Core.Diagnostics;
 
 namespace Volco.UI.ViewModels;
 

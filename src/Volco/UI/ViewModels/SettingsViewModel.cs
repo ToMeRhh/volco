@@ -1,8 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Dispatching;
-using Volco.Audio;
-using Volco.Communication;
-using Volco.Config;
+using Volco.Core.Audio;
+using Volco.Core.Communication;
+using Volco.Core.Config;
 
 namespace Volco.UI.ViewModels;
 

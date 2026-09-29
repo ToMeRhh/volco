@@ -1,9 +1,9 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Volco.Audio;
-using Volco.Communication;
-using Volco.Config;
-using Volco.Input;
+using Volco.Core.Audio;
+using Volco.Core.Communication;
+using Volco.Core.Config;
+using Volco.Core.Input;
 using Volco.UI.ViewModels;
 
 namespace Volco.UI;

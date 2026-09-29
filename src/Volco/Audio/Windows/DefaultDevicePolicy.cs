@@ -30,13 +30,13 @@ internal sealed class DefaultDevicePolicy
     /// all three roles - Console, Multimedia, and Communications - because Windows keeps three
     /// separate defaults and setting only one makes device switching appear half-broken (spec
     /// §2.4). Returns true only if all three succeeded; any COM failure for any role is logged
-    /// via <see cref="Volco.AppLog"/> and does not throw.
+    /// via <see cref="Volco.Core.Diagnostics.AppLog"/> and does not throw.
     /// </summary>
     public bool TrySetDefault(string endpointId)
     {
         if (string.IsNullOrEmpty(endpointId))
         {
-            Volco.AppLog.Error("DefaultDevicePolicy.TrySetDefault: called with an empty endpoint id.");
+            Volco.Core.Diagnostics.AppLog.Error("DefaultDevicePolicy.TrySetDefault: called with an empty endpoint id.");
             return false;
         }
 
@@ -62,7 +62,7 @@ internal sealed class DefaultDevicePolicy
         }
         catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
         {
-            Volco.AppLog.Error($"DefaultDevicePolicy.TrySetDefault: failed to activate IPolicyConfig for endpoint '{endpointId}': {ex.Message}");
+            Volco.Core.Diagnostics.AppLog.Error($"DefaultDevicePolicy.TrySetDefault: failed to activate IPolicyConfig for endpoint '{endpointId}': {ex.Message}");
             return false;
         }
         finally
@@ -83,7 +83,7 @@ internal sealed class DefaultDevicePolicy
         }
         catch (COMException ex)
         {
-            Volco.AppLog.Error($"DefaultDevicePolicy.TrySetDefault: SetDefaultEndpoint failed for role {role}, endpoint '{endpointId}': {ex.Message}");
+            Volco.Core.Diagnostics.AppLog.Error($"DefaultDevicePolicy.TrySetDefault: SetDefaultEndpoint failed for role {role}, endpoint '{endpointId}': {ex.Message}");
             return false;
         }
     }

@@ -4,7 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Animation;
-using Volco.Input;
+using Volco.Core.Input;
 using Windows.Graphics;
 
 namespace Volco.UI;
