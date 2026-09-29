@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Volco.Core.Config;
 using Volco.Core.Diagnostics;
 using Volco.Core.Updates;
+using Windows.Graphics;
 
 namespace Volco.UI;
 
@@ -23,7 +24,7 @@ public sealed partial class UpdateWindow : Window
         InitializeComponent();
         _configManager = configManager;
 
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(560, 460));
+        AppWindow.Resize(new SizeInt32(560, 460));
         if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
         {
             presenter.IsResizable = true;

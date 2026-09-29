@@ -5,6 +5,7 @@ using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Input;
 using Volco.UI.ViewModels;
+using Windows.Graphics;
 
 namespace Volco.UI;
 
@@ -22,7 +23,7 @@ public sealed partial class SettingsWindow : Window
 
         // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow
         var appWindow = this.AppWindow;
-        appWindow.Resize(new Windows.Graphics.SizeInt32(720, 600));
+        appWindow.Resize(new SizeInt32(720, 600));
         if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
         {
             presenter.IsResizable = true;
