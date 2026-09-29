@@ -18,6 +18,9 @@ public class ConfigManager
     private bool _pendingConnectionChange;
     private const int DebounceMs = 400;
 
+    /// <summary>The config.json path this manager loads from and saves to.</summary>
+    public string ConfigPath => _configPath;
+
     public AppConfig Config { get; private set; } = new();
     public event EventHandler? ConfigChanged;
     public event EventHandler? ConnectionConfigChanged;

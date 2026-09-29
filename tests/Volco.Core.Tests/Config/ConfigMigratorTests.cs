@@ -7,13 +7,13 @@ namespace Volco.Core.Tests.Config;
 
 public class ConfigMigratorTests
 {
-    private static readonly IReadOnlyList<AudioDevice> Devices = new List<AudioDevice>
+    internal static readonly IReadOnlyList<AudioDevice> Devices = new List<AudioDevice>
     {
         new("dev-1", "Speakers (Realtek High Definition Audio)", AudioFlow.Render, true),
         new("dev-2", "Headphones (USB Audio Device)",            AudioFlow.Render, false),
     };
 
-    private const string V1Json = """
+    internal const string V1Json = """
     {
       "connection": { "type": "Udp", "udp": { "listenPort": 12345 } },
       "sliders": [
@@ -29,7 +29,7 @@ public class ConfigMigratorTests
     }
     """;
 
-    private static string WriteTempConfig(string json)
+    internal static string WriteTempConfig(string json)
     {
         var dir = Path.Combine(Path.GetTempPath(), $"volco-migrate-{Guid.NewGuid()}");
         Directory.CreateDirectory(dir);

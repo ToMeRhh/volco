@@ -77,5 +77,8 @@ public sealed class FakeAudioEngine : IAudioEngine
     public void RaiseDeviceVolumeChanged(string deviceId, float level, bool muted, bool isOwnChange)
         => DeviceVolumeChanged?.Invoke(this, new DeviceVolumeChangedEventArgs(deviceId, level, muted, isOwnChange));
 
-    public void Dispose() { }
+    /// <summary>True once <see cref="Dispose"/> has been called. Dispose has no other effect.</summary>
+    public bool Disposed { get; private set; }
+
+    public void Dispose() => Disposed = true;
 }
