@@ -1,25 +1,25 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Dispatching;
 using Volco.Core.Audio;
-using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Runtime;
 
 namespace Volco.UI.ViewModels;
 
 /// <summary>
 /// Root ViewModel for the Settings window.
 /// Lazily creates one instance of each tab ViewModel so state and subscriptions
-/// persist across tab switches. Holds the three injected services and exposes
+/// persist across tab switches. Holds the injected services and exposes
 /// them to child VMs on demand.
 /// </summary>
 public partial class SettingsViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
-    private IControllerConnection? _connection;
+    private readonly VolcoRuntime _runtime;
 
     // Captured on construction (UI thread, same as ConnectionViewModel._dispatcher) so
-    // RefreshDevices — invoked by App off IAudioEngine.DevicesChanged, which fires on the audio
+    // RefreshDevices — invoked off VolcoRuntime.DevicesChanged, which fires on the audio
     // thread — can marshal safely before touching any child ViewModel's bound state.
     private readonly DispatcherQueue? _dispatcher;
 
@@ -32,7 +32,7 @@ public partial class SettingsViewModel : ObservableObject
     private GeneralViewModel?       _generalViewModel;
 
     public ConnectionViewModel Connection =>
-        _connectionViewModel ??= new ConnectionViewModel(_config, _connection);
+        _connectionViewModel ??= new ConnectionViewModel(_config, _runtime);
 
     public SlidersViewModel Sliders =>
         _slidersViewModel ??= new SlidersViewModel(_config, _audio);
@@ -48,11 +48,11 @@ public partial class SettingsViewModel : ObservableObject
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public SettingsViewModel(ConfigManager config, IAudioEngine audio, IControllerConnection? connection)
+    public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime)
     {
         _config     = config;
         _audio      = audio;
-        _connection = connection;
+        _runtime    = runtime;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
 
         // Seed the device lookup used to resolve combo-box friendly names to DeviceRefConfig
@@ -64,13 +64,13 @@ public partial class SettingsViewModel : ObservableObject
     // ── Device-list refresh (Bug 3) ─────────────────────────────────────────────
 
     /// <summary>
-    /// Called by App when <see cref="IAudioEngine.DevicesChanged"/> fires, so a device plugged
-    /// in (or removed) after this settings window was first opened shows up without requiring a
-    /// restart. DeviceRefLookup.Devices was otherwise only ever seeded once, in the constructor
-    /// above, and each tab's OutputDeviceNames/OutputDevices only ever built once, in its own
-    /// constructor — so nothing previously refreshed either. DevicesChanged is raised from
-    /// Volco.Audio.Windows.AudioEngine's dedicated audio thread, so this marshals via the
-    /// dispatcher captured above before mutating any child ViewModel's bound state, the same
+    /// Called by SettingsWindow when <see cref="VolcoRuntime.DevicesChanged"/> fires, so a device
+    /// plugged in (or removed) after this settings window was first opened shows up without
+    /// requiring a restart. DeviceRefLookup.Devices was otherwise only ever seeded once, in the
+    /// constructor above, and each tab's OutputDeviceNames/OutputDevices only ever built once, in
+    /// its own constructor — so nothing previously refreshed either. DevicesChanged can be raised
+    /// on any thread (the audio thread, transport threads, timer threads), so this marshals via
+    /// the dispatcher captured above before mutating any child ViewModel's bound state, the same
     /// pattern ConnectionViewModel already uses for its own background-thread callback.
     /// Only already-constructed tab ViewModels are refreshed (lazy ??=): an unopened tab builds
     /// its device list fresh, from the current engine snapshot, whenever it's first opened.
@@ -90,18 +90,5 @@ public partial class SettingsViewModel : ObservableObject
         _slidersViewModel?.RefreshDevices(devices);
         _buttonsViewModel?.RefreshDevices(devices);
         _outputDevicesViewModel?.RefreshDevices(devices);
-    }
-
-    // ── Connection-object hot-swap ─────────────────────────────────────────────
-
-    /// <summary>
-    /// Called by App when the hardware transport is restarted after a connection
-    /// config change. Forwards the new connection object to the ConnectionViewModel
-    /// if it has already been created.
-    /// </summary>
-    public void UpdateConnection(IControllerConnection? newConnection)
-    {
-        _connection = newConnection;
-        _connectionViewModel?.UpdateConnection(newConnection);
     }
 }

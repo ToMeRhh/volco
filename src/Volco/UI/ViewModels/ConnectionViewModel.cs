@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Runtime;
 
 namespace Volco.UI.ViewModels;
 
@@ -12,14 +13,14 @@ namespace Volco.UI.ViewModels;
 /// ViewModel for the Connection settings tab.
 /// Manages connection type, sub-protocol settings, COM-port enumeration, and
 /// live connection-status display. All writes call
-/// <c>RequestSave(connectionChanged: true)</c> so App restarts the hardware connection.
+/// <c>RequestSave(connectionChanged: true)</c> so the runtime restarts the hardware connection.
 /// </summary>
 public partial class ConnectionViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
-    private IControllerConnection? _connection;
+    private readonly VolcoRuntime _runtime;
 
-    // Captured on construction (UI thread) so StatusChanged callbacks can marshal
+    // Captured on construction (UI thread) so ConnectionStatusChanged callbacks can marshal
     // back to the UI thread via TryEnqueue.
     private readonly DispatcherQueue? _dispatcher;
 
@@ -113,12 +114,12 @@ public partial class ConnectionViewModel : ObservableObject
 
     // ── Constructor ────────────────────────────────────────────────────────────
 
-    public ConnectionViewModel(ConfigManager config, IControllerConnection? connection)
+    public ConnectionViewModel(ConfigManager config, VolcoRuntime runtime)
     {
         _config = config;
-        _connection = connection;
+        _runtime = runtime;
 
-        // Capture the UI-thread dispatcher so background StatusChanged events
+        // Capture the UI-thread dispatcher so background ConnectionStatusChanged events
         // can be marshalled safely (DispatcherQueue is not a XAML visual type).
         _dispatcher = DispatcherQueue.GetForCurrentThread();
 
@@ -130,8 +131,10 @@ public partial class ConnectionViewModel : ObservableObject
         _webSocketPort   = cfg.WebSocket.Port;
 
         RefreshComPortsCommand.Execute(null);
-        SubscribeToConnection();
-        UpdateStatus(_connection?.Status ?? ConnectionStatus.Disconnected);
+        // Survives transport restarts (the runtime re-attaches its own handler to each transport
+        // it creates), so unlike the old per-transport subscription this never needs re-wiring.
+        _runtime.ConnectionStatusChanged += OnConnectionStatusChanged;
+        UpdateStatus(_runtime.ConnectionStatus);
     }
 
     // ── COM-port refresh command ───────────────────────────────────────────────
@@ -160,21 +163,10 @@ public partial class ConnectionViewModel : ObservableObject
 
     // ── Status subscription helpers ────────────────────────────────────────────
 
-    private void SubscribeToConnection()
-    {
-        if (_connection != null)
-            _connection.StatusChanged += OnConnectionStatusChanged;
-    }
-
-    private void UnsubscribeFromConnection()
-    {
-        if (_connection != null)
-            _connection.StatusChanged -= OnConnectionStatusChanged;
-    }
-
     private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
     {
-        // StatusChanged may fire on a background thread; marshal to UI thread.
+        // ConnectionStatusChanged may fire on any thread (audio thread, transport threads, timer
+        // threads, the config debounce thread); marshal to the UI thread without blocking.
         if (_dispatcher != null)
             _dispatcher.TryEnqueue(() => UpdateStatus(status));
         else
@@ -191,30 +183,6 @@ public partial class ConnectionViewModel : ObservableObject
             ConnectionStatus.Error        => "Error",
             _                             => status.ToString()
         };
-    }
-
-    /// <summary>
-    /// Called by the owner (SettingsViewModel / App) when the connection object
-    /// changes after a config save restarts the hardware transport. App.StartConnection
-    /// can run on a background thread (e.g. the ConfigManager debounce-timer thread when a
-    /// connection-affecting property changes) rather than the UI thread, but this mutates
-    /// bound state (Status/StatusText via UpdateStatus, plus the event subscription), so it
-    /// must marshal the same way OnConnectionStatusChanged already does.
-    /// </summary>
-    public void UpdateConnection(IControllerConnection? newConnection)
-    {
-        if (_dispatcher != null)
-            _dispatcher.TryEnqueue(() => UpdateConnectionOnUiThread(newConnection));
-        else
-            UpdateConnectionOnUiThread(newConnection);
-    }
-
-    private void UpdateConnectionOnUiThread(IControllerConnection? newConnection)
-    {
-        UnsubscribeFromConnection();
-        _connection = newConnection;
-        SubscribeToConnection();
-        UpdateStatus(_connection?.Status ?? ConnectionStatus.Disconnected);
     }
 
     // ── Property-change hooks — write back to config ───────────────────────────

@@ -2,9 +2,6 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Volco.Core.Tests")]
-// Temporary: App.xaml.cs (in the Volco assembly) still calls the internal
-// ActionFactory.Resolve. Remove once Task 5 of the Avalonia rewrite removes that call.
-[assembly: InternalsVisibleTo("Volco")]
 
 namespace Volco.Core.Diagnostics;
 

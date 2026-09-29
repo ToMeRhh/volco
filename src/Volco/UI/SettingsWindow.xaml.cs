@@ -1,9 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Volco.Core.Audio;
-using Volco.Core.Communication;
-using Volco.Core.Config;
 using Volco.Core.Input;
+using Volco.Core.Runtime;
 using Volco.UI.ViewModels;
 using Windows.Graphics;
 
@@ -12,14 +11,14 @@ namespace Volco.UI;
 public sealed partial class SettingsWindow : Window
 {
     private readonly SettingsViewModel _viewModel;
-    private readonly SliderProcessor _sliderProcessor;
+    private readonly VolcoRuntime _runtime;
 
-    public SettingsWindow(ConfigManager configManager, IAudioEngine audioEngine, IControllerConnection? connection, SliderProcessor sliderProcessor)
+    public SettingsWindow(VolcoRuntime runtime)
     {
         InitializeComponent();
 
-        _viewModel = new SettingsViewModel(configManager, audioEngine, connection);
-        _sliderProcessor = sliderProcessor;
+        _runtime = runtime;
+        _viewModel = new SettingsViewModel(runtime.Config, runtime.Audio, runtime);
 
         // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow
         var appWindow = this.AppWindow;
@@ -34,8 +33,11 @@ public sealed partial class SettingsWindow : Window
         // is freely resizable with a sensible 720x600 default.
         appWindow.Closing += AppWindow_Closing;
 
-        // Subscribe to live slider level updates; marshal to UI thread
-        _sliderProcessor.SliderLevelChanged += OnSliderLevel;
+        // Subscribe to live slider level updates and device-list changes. Both can be raised on
+        // any thread (the audio thread, SliderProcessor's coalescing timer, or a transport
+        // thread), so marshal to the UI thread via TryEnqueue rather than handling synchronously.
+        _runtime.SliderLevelChanged += OnSliderLevel;
+        _runtime.DevicesChanged += OnDevicesChanged;
 
         // Select first tab by default
         NavView.SelectedItem = NavView.MenuItems[0];
@@ -43,6 +45,14 @@ public sealed partial class SettingsWindow : Window
 
     private void OnSliderLevel(object? sender, SliderLevelEventArgs e)
         => DispatcherQueue.TryEnqueue(() => _viewModel.Sliders.UpdateLiveLevel(e.SliderIndex, e.Level));
+
+    /// <summary>
+    /// Raised by <see cref="VolcoRuntime.DevicesChanged"/> for every kind of device change
+    /// (added/removed/state/default — Bug 3), so a replugged/removed device shows up in every
+    /// open device picker.
+    /// </summary>
+    private void OnDevicesChanged(object? sender, DevicesChangedEventArgs e)
+        => DispatcherQueue.TryEnqueue(() => _viewModel.RefreshDevices());
 
     private void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
@@ -53,23 +63,10 @@ public sealed partial class SettingsWindow : Window
         }
         else
         {
-            _sliderProcessor.SliderLevelChanged -= OnSliderLevel;
+            _runtime.SliderLevelChanged -= OnSliderLevel;
+            _runtime.DevicesChanged -= OnDevicesChanged;
         }
     }
-
-    /// <summary>
-    /// Called by App after a transport restart to refresh the ConnectionViewModel's live status.
-    /// </summary>
-    public void UpdateConnection(IControllerConnection? connection)
-        => _viewModel.Connection.UpdateConnection(connection);
-
-    /// <summary>
-    /// Called by App after <see cref="IAudioEngine.DevicesChanged"/> fires (Bug 3), so a
-    /// replugged/removed device shows up in every open device picker. SettingsViewModel marshals
-    /// to the UI thread itself, the same way it captures a dispatcher the way ConnectionViewModel
-    /// does — this call itself is safe from any thread.
-    /// </summary>
-    public void RefreshDevices() => _viewModel.RefreshDevices();
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
