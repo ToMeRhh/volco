@@ -142,14 +142,22 @@ in the update dialog and stored in your local `config.json`.
 ## Project Structure
 
 ```
-src/Volco/
-├── App.xaml/.cs              # Entry point, tray icon, component wiring
+src/Volco.Core/              # Platform-neutral (net8.0, builds/tests on Linux)
 ├── Config/                   # AppConfig data model, ConfigManager (JSON load/save)
 ├── Communication/            # IControllerConnection, Serial/UDP, ProtocolParser
-├── Audio/                    # AudioEngine, DeviceRegistry, SessionRegistry (Core Audio, event-driven)
+├── Audio/                    # IAudioEngine + DTOs (interface only, no implementation)
 ├── Input/                    # ButtonPressDetector, SliderProcessor
 │   └── Actions/              # IButtonAction + 5 action implementations + factory
-└── UI/                       # SettingsWindow + 4 tab pages (Connection, Sliders, Buttons, Output Devices)
+├── Updates/                   # BuildInfo, GitHubUpdater
+├── Diagnostics/               # AppLog
+└── Runtime/                   # VolcoRuntime — orchestrates everything above
 
-tests/Volco.Tests/            # xUnit tests for parser, button detection, slider mapping, config, actions
+src/Volco.Windows/            # Windows class library (net8.0-windows)
+└── Audio/                     # AudioEngine, DeviceRegistry, SessionRegistry (Core Audio, event-driven)
+
+src/Volco/                    # WinUI 3 exe
+├── App.xaml/.cs               # Entry point, tray icon; wires up a VolcoRuntime
+└── UI/                        # SettingsWindow + 4 tab pages (Connection, Sliders, Buttons, Output Devices)
+
+tests/Volco.Core.Tests/       # xUnit tests for parser, button detection, slider mapping, config, actions, VolcoRuntime
 ```
