@@ -105,7 +105,7 @@ public partial class App : Application
         _configManager.Load();
 
         // Audio first — the migrator needs the device list to resolve v1 names to endpoint ids.
-        var engine = new Volco.Audio.Windows.AudioEngine();
+        var engine = new global::Volco.Windows.Audio.AudioEngine();
         bool engineReady = engine.Start();
         _audioEngine = engine;
         _audioEngineStartFailed = !engineReady;

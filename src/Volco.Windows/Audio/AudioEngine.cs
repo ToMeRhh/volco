@@ -7,7 +7,7 @@ using Windows.Win32.Media.Audio.Endpoints;
 using Windows.Win32.System.Com;
 using Volco.Core.Audio;
 
-namespace Volco.Audio.Windows;
+namespace Volco.Windows.Audio;
 
 /// <summary>
 /// The real Core Audio engine (spec §2). Owns one dedicated MTA thread; every COM activation,

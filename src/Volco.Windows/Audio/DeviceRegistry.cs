@@ -11,7 +11,7 @@ using Windows.Win32.System.Variant;
 using Windows.Win32.UI.Shell.PropertiesSystem;
 using Volco.Core.Audio;
 
-namespace Volco.Audio.Windows;
+namespace Volco.Windows.Audio;
 
 /// <summary>
 /// Owns every live <see cref="IMMDevice"/> and its <see cref="IAudioEndpointVolume"/> /

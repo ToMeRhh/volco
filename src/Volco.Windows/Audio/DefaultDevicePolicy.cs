@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Windows.Win32.Media.Audio;
 
-namespace Volco.Audio.Windows;
+namespace Volco.Windows.Audio;
 
 /// <summary>
 /// Sets the Windows default audio endpoint via the undocumented <c>IPolicyConfig</c> COM

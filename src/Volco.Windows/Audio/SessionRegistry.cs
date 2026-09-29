@@ -6,7 +6,7 @@ using Windows.Win32.Media.Audio;
 using Windows.Win32.System.Threading;
 using Volco.Core.Audio;
 
-namespace Volco.Audio.Windows;
+namespace Volco.Windows.Audio;
 
 /// <summary>
 /// Owns every live audio session across ALL active render devices (not just the default one),
