@@ -355,7 +355,11 @@ public sealed class VolcoRuntimeTests : IDisposable
         config.Config.Connection.Type = ConnectionType.WebSocket;
         config.RequestSave(connectionChanged: true); // debounced, raises ConnectionConfigChanged
 
-        Assert.True(WaitUntil(() => ConnectionCount == 2), "transport was not restarted");
+        // Wait for Connect() on the new transport, not just its creation: the factory runs before
+        // the transport is published and its handlers attached, and Connect() is the last step of
+        // the restart on the ConfigManager debounce thread.
+        Assert.True(WaitUntil(() => ConnectionCount == 2 && Connection(1).ConnectCount == 1),
+                    "transport was not restarted");
         var newConnection = Connection(1);
         Assert.Equal(1, oldConnection.DisposeCount);
         Assert.Equal(ConnectionType.WebSocket, newConnection.Config.Type);

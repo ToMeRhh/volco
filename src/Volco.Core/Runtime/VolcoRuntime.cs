@@ -27,20 +27,33 @@ public sealed class VolcoRuntime : IDisposable
     private readonly Func<ConnectionConfig, IControllerConnection?> _connectionFactory;
     private readonly VolcoRuntimeOptions _options;
 
+    /// <summary>
+    /// The current transport. Ownership handoff: whoever removes a transport from this field
+    /// with an Interlocked operation (StartConnection when replacing it, or Dispose) is the one
+    /// and only party that detaches and disposes it. It is only ever written with
+    /// Interlocked.Exchange / CompareExchange, so a restart on the ConfigManager debounce thread
+    /// and a concurrent Dispose can never both dispose the same transport, and a transport a
+    /// racing restart publishes is always found by exactly one of them. Readers
+    /// (PushControllerState, ConnectionStatus, the sender filter) read it once and tolerate
+    /// null.
+    /// </summary>
     private IControllerConnection? _connection;
     private ButtonPressDetector? _buttonPressDetector;
     private SliderProcessor? _sliderProcessor;
     private bool _started;
 
     /// <summary>
-    /// Set first thing in <see cref="Dispose"/> and checked before raising any event, starting
-    /// a transport, dispatching a button action or pushing controller state. Not a lock: it only
-    /// stops work that starts after Dispose has begun. A callback already past its check (e.g. a
-    /// timer callback queued on the thread pool before its timer was disposed) can still finish,
-    /// which is the same unavoidable race the pre-runtime Shutdown() documented; everything such
-    /// a callback touches is only ever disposed, never nulled, on the dispose path.
+    /// 0/1 flag, set first thing in <see cref="Dispose"/> via Interlocked.Exchange (a full fence,
+    /// which the ownership handoff on <see cref="_connection"/> relies on) and checked through
+    /// <see cref="IsDisposed"/> before raising any event, starting a transport, dispatching a
+    /// button action or pushing controller state. Not a lock: it only stops work that starts
+    /// after Dispose has begun. A callback already past its check (e.g. a timer callback queued
+    /// on the thread pool before its timer was disposed) can still finish, which is the same
+    /// unavoidable race the pre-runtime Shutdown() documented.
     /// </summary>
-    private volatile bool _disposed;
+    private int _disposed;
+
+    private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
     /// <summary>
     /// Set right before <see cref="ActionFactory.Create"/>'s action for a mute-type button press
@@ -120,7 +133,7 @@ public sealed class VolcoRuntime : IDisposable
     public bool AudioEngineFailed => !_audioReady;
 
     /// <summary>The current transport's status; Disconnected when there is no transport.</summary>
-    public ConnectionStatus ConnectionStatus => _connection?.Status ?? ConnectionStatus.Disconnected;
+    public ConnectionStatus ConnectionStatus => Volatile.Read(ref _connection)?.Status ?? ConnectionStatus.Disconnected;
 
     // All events may be raised on ANY thread (audio thread, transport threads, timer threads).
     // Subscribers marshal to their UI thread themselves.
@@ -147,7 +160,7 @@ public sealed class VolcoRuntime : IDisposable
     /// </summary>
     public void Start()
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(VolcoRuntime));
+        if (IsDisposed) throw new ObjectDisposedException(nameof(VolcoRuntime));
         if (_started) throw new InvalidOperationException("VolcoRuntime.Start() may only be called once.");
         _started = true;
 
@@ -202,37 +215,75 @@ public sealed class VolcoRuntime : IDisposable
     /// </summary>
     private void StartConnection()
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
 
-        var old = _connection;
+        // Take ownership of the old transport (see _connection): if Dispose() got to it first,
+        // this returns null and Dispose() retires it instead.
+        var old = Interlocked.Exchange(ref _connection, null);
         if (old != null)
         {
-            // Disposed while still attached and still current, so the Disconnected a real
-            // transport raises from its own Dispose() reaches ConnectionStatusChanged subscribers.
-            // Detached right after (Review Focus #2): the old transport can still raise events
-            // from its background threads after Dispose() returns, and those must never be
-            // reported as the status of the connection that replaces it.
-            old.Dispose();
-            old.MessageReceived -= OnMessageReceived;
-            old.StatusChanged -= OnConnectionStatusChanged;
+            // Detached before Dispose() (Review Focus #2): the old transport can still raise
+            // events from its background threads, and those must never be reported as the
+            // status of the connection that replaces it. The Disconnected a real transport
+            // raises from its own Dispose() therefore no longer reaches subscribers by itself,
+            // so report it here, once, if they were last told something else - otherwise a
+            // settings page would keep showing the old transport's "Connected" while e.g. a new
+            // WebSocket listener sits Disconnected and raises nothing.
+            var lastStatus = old.Status;
+            RetireTransport(old);
+            if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
+                ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
         }
 
         var config = Config.Config.Connection;
         AppLog.Info($"Starting connection: {config.Type}");
-        _connection = _connectionFactory(config);
+        var connection = _connectionFactory(config);
 
-        if (_connection == null) return;
+        if (connection == null) return;
 
-        _connection.MessageReceived += OnMessageReceived;
-        _connection.StatusChanged += OnConnectionStatusChanged;
-        _connection.Connect();
+        connection.MessageReceived += OnMessageReceived;
+        connection.StatusChanged += OnConnectionStatusChanged;
+
+        // Publish. Anything displaced is a transport a concurrent StartConnection published in
+        // the meantime; by the ownership rule, removing it makes it ours to retire.
+        var displaced = Interlocked.Exchange(ref _connection, connection);
+        if (displaced != null) RetireTransport(displaced);
+
+        // Dispose() may have started after the IsDisposed check at the top. Both the publish
+        // above and Dispose()'s flag write are full fences, so if this read still sees 0, any
+        // Dispose() that starts later is guaranteed to find the transport in _connection and
+        // retire it itself. If it sees 1, exactly one of us gets it out of the field: retire
+        // it only if CompareExchange says it is still there, and never Connect() it.
+        // Residual window, accepted: a Dispose() landing between this check and Connect() below
+        // retires the transport, and Connect() then runs on (or concurrently with) its Dispose().
+        // Closing it would need a lock held across Connect()/Dispose(), both of which raise
+        // StatusChanged synchronously into subscribers - a deadlock risk for a UI that marshals
+        // synchronously. Dispose() only happens at app exit, so the worst case is a listener
+        // re-bound by a process that is about to end.
+        if (IsDisposed)
+        {
+            if (Interlocked.CompareExchange(ref _connection, null, connection) == connection)
+                RetireTransport(connection);
+            return;
+        }
+
+        connection.Connect();
+    }
+
+    /// <summary>Detaches and disposes a transport this thread has taken ownership of by removing
+    /// it from <see cref="_connection"/> (see its doc). Never called with a lock held.</summary>
+    private void RetireTransport(IControllerConnection connection)
+    {
+        connection.MessageReceived -= OnMessageReceived;
+        connection.StatusChanged -= OnConnectionStatusChanged;
+        connection.Dispose();
     }
 
     private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
     {
         // Belt and braces for the restart path above: an old transport's handler invocation that
         // was already in flight on another thread when StartConnection detached it is dropped.
-        if (_disposed || !ReferenceEquals(sender, _connection)) return;
+        if (IsDisposed || !ReferenceEquals(sender, Volatile.Read(ref _connection))) return;
 
         AppLog.Info($"Connection status changed: {status}");
         ConnectionStatusChanged?.Invoke(this, status);
@@ -270,7 +321,7 @@ public sealed class VolcoRuntime : IDisposable
         lock (_postConnectLock)
         {
             DisposePostConnectTimers();
-            if (_disposed) return;
+            if (IsDisposed) return;
 
             var delays = _options.PostConnectRepushDelays;
             var timers = new System.Threading.Timer[delays.Count];
@@ -294,7 +345,7 @@ public sealed class VolcoRuntime : IDisposable
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
 
         // Connect-race fix, mitigation (b): an inbound frame is proof the firmware's serial
         // reader is alive right now, regardless of whether it was ready when the immediate
@@ -321,7 +372,7 @@ public sealed class VolcoRuntime : IDisposable
 
     private void OnButtonPressDetected(object? sender, ButtonPressEventArgs e)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
 
         AppLog.Info($"Button press detected: Index={e.ButtonIndex}, Type={e.PressType}");
         var config = Config.Config;
@@ -397,7 +448,7 @@ public sealed class VolcoRuntime : IDisposable
     /// </summary>
     private void OnDeviceVolumeChanged(object? sender, DeviceVolumeChangedEventArgs e)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
 
         PushControllerState();
 
@@ -419,7 +470,7 @@ public sealed class VolcoRuntime : IDisposable
     /// </summary>
     private void OnDevicesChangedForControllerState(object? sender, DevicesChangedEventArgs e)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
 
         // Bug 3: the settings UI's device pickers must refresh for every kind of device change
         // (added/removed/state/default), not just DefaultChanged — a replugged device should
@@ -472,13 +523,13 @@ public sealed class VolcoRuntime : IDisposable
 
     private void OnSliderLevelChanged(object? sender, SliderLevelEventArgs e)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
         SliderLevelChanged?.Invoke(this, e);
     }
 
     private void RaiseVolumeChanged(VolumeChangeNotification n)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
         VolumeChanged?.Invoke(this, n);
     }
 
@@ -498,11 +549,11 @@ public sealed class VolcoRuntime : IDisposable
     /// </remarks>
     private void PushControllerState(bool force = false)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
 
         // Read once: _connection can be replaced by StartConnection on another thread, and the
         // status check and the sends below must talk to the same transport.
-        var connection = _connection;
+        var connection = Volatile.Read(ref _connection);
         if (connection?.Status != ConnectionStatus.Connected) return;
 
         // BuildFrames only performs the read-only engine queries IAudioEngine documents as safe
@@ -545,8 +596,7 @@ public sealed class VolcoRuntime : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         Config.ConnectionConfigChanged -= OnConfigChanged;
 
@@ -554,22 +604,18 @@ public sealed class VolcoRuntime : IDisposable
         // on a System.Threading.Timer only guarantees no *new* callback queues after it returns;
         // one already queued on the thread pool can still run. That race is unavoidable without a
         // WaitHandle-based dispose we don't need here: the callback (PushControllerState) checks
-        // _disposed and the connection's Status and no-ops, and everything it touches is
-        // otherwise only ever disposed, never nulled, on this path.
+        // IsDisposed, reads _connection once and tolerates null, and no-ops unless Connected.
         lock (_postConnectLock)
         {
             DisposePostConnectTimers();
         }
 
-        var connection = _connection;
+        // Take ownership of the current transport (see _connection): a concurrent restart that
+        // already took it retires it itself, and one that publishes a new transport after this
+        // point sees IsDisposed and retires that one itself.
+        var connection = Interlocked.Exchange(ref _connection, null);
         if (connection != null)
-        {
-            // Detached first: nothing a transport raises while (or after) it shuts down is
-            // reported once the runtime is disposed.
-            connection.MessageReceived -= OnMessageReceived;
-            connection.StatusChanged -= OnConnectionStatusChanged;
-            connection.Dispose();
-        }
+            RetireTransport(connection); // detached first: nothing it raises while shutting down is reported
 
         if (_sliderProcessor is not null)
         {
