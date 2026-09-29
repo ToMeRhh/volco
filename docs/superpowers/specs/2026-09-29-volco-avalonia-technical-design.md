@@ -139,12 +139,15 @@ of it is Windows. It moves to `Volco.Core/Runtime/VolcoRuntime.cs`:
 ```csharp
 public sealed class VolcoRuntime : IDisposable
 {
-    public VolcoRuntime(ConfigManager config, IAudioEngine audio);
+    public VolcoRuntime(ConfigManager config, IAudioEngine audio, bool audioReady,
+                        Func<ConnectionConfig, IControllerConnection?>? connectionFactory = null,
+                        VolcoRuntimeOptions? options = null);
     public void Start();
 
-    public IAudioEngine     Audio            { get; }
-    public ConfigManager    Config           { get; }
-    public ConnectionStatus ConnectionStatus { get; }
+    public IAudioEngine     Audio             { get; }
+    public ConfigManager    Config            { get; }
+    public bool             AudioEngineFailed { get; }
+    public ConnectionStatus ConnectionStatus  { get; }
 
     public event EventHandler<VolumeChangeNotification>? VolumeChanged;
     public event EventHandler<SliderLevelEventArgs>?     SliderLevelChanged;
@@ -166,7 +169,11 @@ It owns everything today's `App.xaml.cs` owns that is not a window:
   `_postConnectTimer2500`, `_awaitingFirstMessageAfterConnect`).
 
 Every type in the signature above is a `Volco.Core` type. **The UI never names a
-platform type.**
+platform type.** `audioReady` is what the platform engine's start-up returned (false →
+no config migration, `AudioEngineFailed`); the connection factory and options exist so
+tests can inject fake transports and short re-push delays. The exact contract, with
+per-member semantics, is in `docs/superpowers/plans/2026-09-29-step1-decompose.md`
+Task 4.
 
 Two consequences:
 
@@ -279,9 +286,13 @@ A borderless Avalonia window in `Volco.App/Osd/`, driven by
   already limits inbound events to ~50 Hz, but the OSD must not assume that).
 - Auto-hide 1500 ms after the last update, then fade over ~250 ms via window opacity,
   then hide. No continuous render loop and no timer-driven repaint.
-- Position bottom-centre of the work area of the monitor containing the cursor;
-  reposition **only on the hidden→visible transition**, which is what today's code
-  correctly does to avoid flashing.
+- Position bottom-centre of the **primary screen's working area**
+  (`Screens.Primary.WorkingArea`, scaled by `Screens.Primary.Scaling`), 80 DIP above
+  the bottom edge — parity with today, which in practice always lands on the primary
+  monitor. Reposition **only on the hidden→visible transition**, which is what today's
+  code correctly does to avoid flashing. Following the cursor's monitor is deliberately
+  deferred: Avalonia has no portable global-cursor API, so it would add a second
+  platform seam. It is a candidate for step 3.
 - Per-monitor DPI awareness v2 must be declared in `app.manifest`; today's manifest
   lacks it.
 - Behavioural parity per the Option A spec §5.4, itself drawn from
