@@ -9,8 +9,8 @@ public class ConfigMigratorTests
 {
     private static readonly IReadOnlyList<AudioDevice> Devices = new List<AudioDevice>
     {
-        new("dev-1", "Speakers (Realtek High Definition Audio)", AudioFlow.Render, true,  true,  true),
-        new("dev-2", "Headphones (USB Audio Device)",            AudioFlow.Render, false, false, false),
+        new("dev-1", "Speakers (Realtek High Definition Audio)", AudioFlow.Render, true),
+        new("dev-2", "Headphones (USB Audio Device)",            AudioFlow.Render, false),
     };
 
     private const string V1Json = """

@@ -15,7 +15,7 @@ public class ControllerStateReporterTests
     };
 
     private static AudioDevice Dev(string id, string name)
-        => new(id, name, AudioFlow.Render, true, true, true);
+        => new(id, name, AudioFlow.Render, true);
 
     [Fact]
     public void ResolveActiveDeviceIndex_OnDevice1_ReturnsZero()
