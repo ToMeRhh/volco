@@ -341,7 +341,10 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
                 return null;
             }
 
-            if (_defaults.TryGetValue((reference.Flow, reference.Role), out var defaultId)
+            // A DeviceRefKind.Default reference no longer carries a role (spec §4.4) - it maps
+            // its flow onto the tracked role the same way AudioEngine.GetDefaultDevice and
+            // ToAudioDeviceLocked do, so "the default" means the same device everywhere.
+            if (_defaults.TryGetValue((reference.Flow, AudioRoleMapping.ForFlow(reference.Flow)), out var defaultId)
                 && !string.IsNullOrEmpty(defaultId)
                 && _devices.TryGetValue(defaultId, out var byDefault))
             {
@@ -770,12 +773,20 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         return false;
     }
 
+    /// <summary>
+    /// <see cref="AudioDevice.IsDefault"/> means "is the cached default for this device's flow's
+    /// mapped role" (spec §4.4: Render → Multimedia, Capture → Communications) - the same mapping
+    /// <see cref="Resolve"/> uses for a <see cref="DeviceRefKind.Default"/> reference and
+    /// <see cref="AudioEngine.GetDefaultDevice"/> uses for its role argument. Console-role state
+    /// still lives in <see cref="_defaults"/> (populated by <see cref="CacheDefault"/> and kept
+    /// current by <see cref="ApplyDefaultChanged"/>, since <c>SetDefaultDevice</c> still writes
+    /// all three roles) but no longer surfaces on <see cref="AudioDevice"/> - it has no consumer
+    /// outside this class.
+    /// </summary>
     private AudioDevice ToAudioDeviceLocked(DeviceHandle handle)
     {
-        bool isConsole = _defaults.TryGetValue((handle.Flow, AudioRole.Console), out var c) && c == handle.Id;
-        bool isMultimedia = _defaults.TryGetValue((handle.Flow, AudioRole.Multimedia), out var m) && m == handle.Id;
-        bool isCommunications = _defaults.TryGetValue((handle.Flow, AudioRole.Communications), out var cm) && cm == handle.Id;
-        return new AudioDevice(handle.Id, handle.FriendlyName, handle.Flow, isConsole, isMultimedia, isCommunications);
+        bool isDefault = _defaults.TryGetValue((handle.Flow, AudioRoleMapping.ForFlow(handle.Flow)), out var id) && id == handle.Id;
+        return new AudioDevice(handle.Id, handle.FriendlyName, handle.Flow, isDefault);
     }
 
     private static AudioRole ToAudioRole(ERole role) => role switch

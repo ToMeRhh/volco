@@ -87,10 +87,10 @@ public class SliderProcessor : IDisposable
     /// <summary>Resolves a slider's configured device to a <see cref="DeviceRef"/>.</summary>
     internal static DeviceRef DeviceRefFor(SliderConfig slider)
     {
-        if (slider.Device == null) return DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia);
+        if (slider.Device == null) return DeviceRef.DefaultOutput();
         if (!string.IsNullOrEmpty(slider.Device.Id)) return DeviceRef.ById(slider.Device.Id);
         if (!string.IsNullOrEmpty(slider.Device.FriendlyName)) return DeviceRef.ByFriendlyName(slider.Device.FriendlyName);
-        return DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia);
+        return DeviceRef.DefaultOutput();
     }
 
     /// <summary>Every process name claimed by a Processes-type slider.</summary>
@@ -219,7 +219,7 @@ public class SliderProcessor : IDisposable
             {
                 var currentOutput = sliderConfig.Type == SliderMappingType.Device
                                     && string.IsNullOrEmpty(sliderConfig.DeviceName)
-                    ? _audio.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia)?.FriendlyName
+                    ? _audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName
                     : null;
                 var label = BuildSliderLabel(sliderConfig, currentOutput);
                 VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, Muted: false, OsdKind.Volume));

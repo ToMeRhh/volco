@@ -107,7 +107,7 @@ public class ActionFactoryTests
     {
         var audio = new FakeAudioEngine
         {
-            DefaultRender = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true, true, true)
+            DefaultRender = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true)
         };
         _configManager.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
         _configManager.Config.OutputDevices.Device2 = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };
@@ -125,7 +125,7 @@ public class ActionFactoryTests
     {
         var audio = new FakeAudioEngine
         {
-            DefaultRender = new AudioDevice("dev-99", "Monitor", AudioFlow.Render, true, true, true)
+            DefaultRender = new AudioDevice("dev-99", "Monitor", AudioFlow.Render, true)
         };
         _configManager.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
         _configManager.Config.OutputDevices.Device2 = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };
@@ -149,7 +149,7 @@ public class ActionFactoryTests
     {
         var audio = new FakeAudioEngine
         {
-            DefaultRender = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true, true, true)
+            DefaultRender = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true)
         };
         _configManager.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
         _configManager.Config.OutputDevices.Device2 = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };

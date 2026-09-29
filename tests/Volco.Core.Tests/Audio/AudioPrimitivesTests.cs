@@ -6,12 +6,20 @@ namespace Volco.Core.Tests.Audio;
 public class AudioPrimitivesTests
 {
     [Fact]
-    public void DeviceRef_Default_HasDefaultKindAndNoId()
+    public void DeviceRef_DefaultOutput_HasDefaultKindRenderFlowAndNoId()
     {
-        var r = DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia);
+        var r = DeviceRef.DefaultOutput();
         Assert.Equal(DeviceRefKind.Default, r.Kind);
         Assert.Equal(AudioFlow.Render, r.Flow);
-        Assert.Equal(AudioRole.Multimedia, r.Role);
+        Assert.Equal("", r.Id);
+    }
+
+    [Fact]
+    public void DeviceRef_DefaultInput_HasDefaultKindCaptureFlowAndNoId()
+    {
+        var r = DeviceRef.DefaultInput();
+        Assert.Equal(DeviceRefKind.Default, r.Kind);
+        Assert.Equal(AudioFlow.Capture, r.Flow);
         Assert.Equal("", r.Id);
     }
 

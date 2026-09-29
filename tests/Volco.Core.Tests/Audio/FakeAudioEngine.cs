@@ -29,7 +29,7 @@ public sealed class FakeAudioEngine : IAudioEngine
     public IReadOnlyList<AudioDevice> GetDevices(AudioFlow flow)
         => Devices.Where(d => d.Flow == flow).ToList();
 
-    public AudioDevice? GetDefaultDevice(AudioFlow flow, AudioRole role)
+    public AudioDevice? GetDefaultDevice(AudioFlow flow)
         => flow == AudioFlow.Render ? DefaultRender : DefaultCapture;
 
     public IReadOnlyList<AudioSessionInfo> GetSessions() => Sessions;

@@ -17,7 +17,7 @@ public class ToggleOutputDeviceAction : IButtonAction
     public void Execute()
     {
         var devices = _configManager.Config.OutputDevices;
-        var current = _audio.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia);
+        var current = _audio.GetDefaultDevice(AudioFlow.Render);
 
         // On device 1 -> go to 2. Anywhere else (including a third device) -> go to 1.
         var onDevice1 = current != null && DeviceMatches(current, devices.Device1);

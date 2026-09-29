@@ -7,5 +7,5 @@ public class MuteCurrentOutputAction : IButtonAction
     private readonly IAudioEngine _audio;
     public MuteCurrentOutputAction(IAudioEngine audio) => _audio = audio;
     public void Execute()
-        => _audio.ToggleDeviceMute(DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia));
+        => _audio.ToggleDeviceMute(DeviceRef.DefaultOutput());
 }

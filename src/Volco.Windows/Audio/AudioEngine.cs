@@ -100,8 +100,21 @@ public sealed class AudioEngine : IAudioEngine
     public IReadOnlyList<AudioDevice> GetDevices(AudioFlow flow)
         => _deviceRegistry?.GetDevices(flow) ?? Array.Empty<AudioDevice>();
 
-    public AudioDevice? GetDefaultDevice(AudioFlow flow, AudioRole role)
-        => _deviceRegistry?.GetDefault(flow, role);
+    /// <summary>
+    /// Maps the public, platform-neutral <see cref="AudioFlow"/> onto the Core Audio role Windows
+    /// tracks as "the" default for that flow (spec §4.4, the sole surviving trace of Core Audio's
+    /// three-role default-device model in this API): <c>Render → Multimedia</c>,
+    /// <c>Capture → Communications</c>. <see cref="AudioDevice.IsDefault"/> on the result means
+    /// "is the cached default for this mapped role" (see <see cref="DeviceRegistry.ToAudioDeviceLocked"/>),
+    /// and a <see cref="DeviceRefKind.Default"/> <see cref="DeviceRef"/> resolves through the same
+    /// mapping (see <see cref="DeviceRegistry.Resolve"/>) - "default" means the same device in
+    /// every one of those three places. <see cref="SetDefaultDevice"/> still writes all three
+    /// Core Audio roles (Console/Multimedia/Communications); Windows offers no narrower
+    /// granularity, and <c>AudioRole.Console</c> has no caller outside
+    /// <see cref="DeviceRegistry"/>'s own default cache.
+    /// </summary>
+    public AudioDevice? GetDefaultDevice(AudioFlow flow)
+        => _deviceRegistry?.GetDefault(flow, AudioRoleMapping.ForFlow(flow));
 
     public IReadOnlyList<AudioSessionInfo> GetSessions()
         => _sessionRegistry?.GetSessions() ?? Array.Empty<AudioSessionInfo>();

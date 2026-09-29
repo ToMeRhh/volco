@@ -23,7 +23,7 @@ public static class ControllerStateReporter
                 frames.Add(ProtocolEncoder.EncodeMuteState(i, muted.Value));
         }
 
-        var current = audio.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia);
+        var current = audio.GetDefaultDevice(AudioFlow.Render);
         var index = ResolveActiveDeviceIndex(current, config.OutputDevices);
         if (index.HasValue)
             frames.Add(ProtocolEncoder.EncodeActiveDevice(index.Value));
@@ -61,10 +61,10 @@ public static class ControllerStateReporter
             switch (action.Action)
             {
                 case ButtonActionType.MuteCurrentOutput:
-                    return Muted(audio, DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia));
+                    return Muted(audio, DeviceRef.DefaultOutput());
 
                 case ButtonActionType.MuteCurrentInput:
-                    return Muted(audio, DeviceRef.Default(AudioFlow.Capture, AudioRole.Communications));
+                    return Muted(audio, DeviceRef.DefaultInput());
 
                 case ButtonActionType.MuteSpecificDevice:
                     var reference = Input.Actions.ActionFactory.Resolve(action.Device);

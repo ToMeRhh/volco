@@ -434,9 +434,9 @@ public partial class App : Application
     private string? ResolveExpectedMuteDeviceId(ButtonActionConfig actionConfig) => actionConfig.Action switch
     {
         ButtonActionType.MuteCurrentOutput =>
-            _audioEngine.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia)?.Id,
+            _audioEngine.GetDefaultDevice(AudioFlow.Render)?.Id,
         ButtonActionType.MuteCurrentInput =>
-            _audioEngine.GetDefaultDevice(AudioFlow.Capture, AudioRole.Communications)?.Id,
+            _audioEngine.GetDefaultDevice(AudioFlow.Capture)?.Id,
         ButtonActionType.MuteSpecificDevice => ResolveSpecificDeviceId(actionConfig.Device),
         _ => null,
     };
@@ -507,9 +507,9 @@ public partial class App : Application
         switch (actionConfig.Action)
         {
             case ButtonActionType.MuteCurrentOutput:
-                label = _audioEngine.GetDefaultDevice(AudioFlow.Render, AudioRole.Multimedia)?.FriendlyName ?? "Output";
+                label = _audioEngine.GetDefaultDevice(AudioFlow.Render)?.FriendlyName ?? "Output";
                 muted = _audioEngine.TryGetDeviceState(
-                    DeviceRef.Default(AudioFlow.Render, AudioRole.Multimedia), out _, out var outputMuted) && outputMuted;
+                    DeviceRef.DefaultOutput(), out _, out var outputMuted) && outputMuted;
                 break;
             case ButtonActionType.MuteSpecificDevice:
                 var specificDevice = ActionFactory.Resolve(actionConfig.Device);
@@ -520,7 +520,7 @@ public partial class App : Application
             case ButtonActionType.MuteCurrentInput:
                 label = "Microphone";
                 muted = _audioEngine.TryGetDeviceState(
-                    DeviceRef.Default(AudioFlow.Capture, AudioRole.Communications), out _, out var inputMuted) && inputMuted;
+                    DeviceRef.DefaultInput(), out _, out var inputMuted) && inputMuted;
                 break;
             default:
                 return; // non-mute actions don't show the OSD

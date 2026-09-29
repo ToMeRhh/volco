@@ -4,7 +4,7 @@ public interface IAudioEngine : IDisposable
 {
     // Queries — served from the in-memory registry, never enumerate.
     IReadOnlyList<AudioDevice>      GetDevices(AudioFlow flow);
-    AudioDevice?                    GetDefaultDevice(AudioFlow flow, AudioRole role);
+    AudioDevice?                    GetDefaultDevice(AudioFlow flow);
     IReadOnlyList<AudioSessionInfo> GetSessions();
 
     // Writes — O(1) lookup plus one COM call, posted to the audio thread.

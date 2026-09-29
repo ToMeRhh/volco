@@ -60,4 +60,17 @@ public class FakeAudioEngineTests
         using var fake = new FakeAudioEngine();
         Assert.False(fake.TryGetDeviceState(DeviceRef.ById("nope"), out _, out _));
     }
+
+    [Fact]
+    public void GetDefaultDevice_ReturnsPerFlowDefault()
+    {
+        using var fake = new FakeAudioEngine
+        {
+            DefaultRender = new AudioDevice("dev-render", "Speakers", AudioFlow.Render, true),
+            DefaultCapture = new AudioDevice("dev-capture", "Microphone", AudioFlow.Capture, true),
+        };
+
+        Assert.Equal("dev-render", fake.GetDefaultDevice(AudioFlow.Render)?.Id);
+        Assert.Equal("dev-capture", fake.GetDefaultDevice(AudioFlow.Capture)?.Id);
+    }
 }
