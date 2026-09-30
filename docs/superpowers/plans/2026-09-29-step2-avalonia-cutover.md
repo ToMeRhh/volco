@@ -86,7 +86,7 @@ public partial class VolcoApplication : Application
 }
 ```
 
-`CompositionRoot` (internal to `Volco.App`) owns startup: `ConfigManager` at `%APPDATA%/Volco/config.json`, then `Load()`, then `createPlatform()`, then `new VolcoRuntime(config, p.Audio, p.AudioReady)` and `Start()`. It then creates the OSD window and tray icon, and shows settings if `AudioEngineFailed`. Shutdown order: runtime `Dispose` → engine `Dispose` → close windows → tray. This mirrors Step 1's `App.xaml.cs`.
+`CompositionRoot` (internal to `Volco.App`) owns startup: `ConfigManager` at `%APPDATA%/Volco/config.json`, then `Load()`, then `createPlatform()`, then `new VolcoRuntime(config, p.Audio, p.AudioReady)`, then creates the OSD window and subscribes it and every other runtime handler (`runtime.VolumeChanged += (_, n) => osd.Show(n)`, etc.), and **only then** calls `runtime.Start()` (rule (a) above). After that it creates the tray icon, and shows settings if `AudioEngineFailed`. Shutdown order: runtime `Dispose` → engine `Dispose` → close windows → tray. This mirrors Step 1's `App.xaml.cs`.
 
 Shared styles resource: `avares://Volco.App/Styles/VolcoStyles.axaml` merges `Colors`, `Tokens`, `Typography`, `Brushes`, `Icons` and the `SettingsCard` theme. Both `VolcoApplication` and the test app include it, and nothing else.
 
@@ -227,7 +227,7 @@ To avoid the WinUI → `Volco.App` reference, the WinUI project **compile-links*
 **Files:** `src/Volco.App/Osd/{VolumeOsdWindow.axaml(.cs),VolumeOsdViewModel.cs}`; tests `tests/Volco.App.Tests/Osd/{VolumeOsdViewModelTests,VolumeOsdWindowTests}.cs`
 
 **Interfaces:**
-- Produces: `VolumeOsdWindow(IWindowEffects effects)` with `public void Show(VolumeChangeNotification n)`, which is thread-safe (posts to the UI thread). `CompositionRoot` wires `runtime.VolumeChanged += (_, n) => osd.Show(n)`.
+- Produces: `VolumeOsdWindow(IWindowEffects effects)` with `public void Show(VolumeChangeNotification n)`, which is thread-safe (posts to the UI thread). `CompositionRoot` wires, before calling `runtime.Start()`, `runtime.VolumeChanged += (_, n) => osd.Show(n)`.
 - `VolumeOsdViewModel` is pure (plain `[Fact]`-testable): `Apply(VolumeChangeNotification)` → `Label`, `Level` (0–100), `ValueText` ("37%", or "Muted"/"On" when `Kind == Mute`), `IsMutedGlyph`.
 
 **Requirements (spec §5.3):** created once and kept hidden. `WindowDecorations=None`, `Topmost`, `ShowActivated=False`, `ShowInTaskbar=False`, transparent background, rounded `Border` pill 360×56 DIP. `effects.MakeClickThrough(this)` is called exactly once, from the first `Opened`. Position is bottom-centre of `Screens.Primary.WorkingArea`, 80 DIP above the bottom, and is computed only on the hidden→visible transition. Repaint only on change, capped at 60 Hz: coalesce `Show` calls arriving within 16 ms into one UI post. Auto-hide 1500 ms after the last `Show`, then ~250 ms opacity fade (a `DispatcherTimer` stepping `Opacity`, or an Avalonia `Transitions` on `Opacity`), then `Hide()`. No continuous render loop. Icons come from `Icons.axaml` (`Icon.Volume` / `Icon.Muted`).
