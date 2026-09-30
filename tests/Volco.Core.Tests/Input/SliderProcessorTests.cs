@@ -181,6 +181,68 @@ public class SliderProcessorTests
             c.Filter is SessionFilter.ByImageNames byNames && byNames.Names.Contains("spotify.exe"));
     }
 
+    // ── Fix B: OSD must not show for a Device slider whose target doesn't resolve ─────────────
+
+    [Fact]
+    public async Task DeviceSlider_AbsentDevice_RaisesSliderLevelButNotVolumeChanged()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "absent-dev", FriendlyName = "Unplugged Headset" },
+        });
+
+        // FakeAudioEngine.DeviceStates has no entry for "absent-dev" -> TryGetDeviceState false.
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var levelTcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.SliderLevelChanged += (_, e) => levelTcs.TrySetResult(e);
+        var sawVolumeChanged = false;
+        processor.VolumeChanged += (_, _) => sawVolumeChanged = true;
+
+        processor.HandleSliderEvent(0, 2048);
+
+        var completed = await Task.WhenAny(levelTcs.Task, Task.Delay(500));
+        Assert.True(completed == levelTcs.Task, "SliderLevelChanged did not fire");
+
+        // Give a wrongly-raised VolumeChanged (same coalesce tick) a chance to show up.
+        await Task.Delay(100);
+        Assert.False(sawVolumeChanged, "VolumeChanged fired for a slider mapped to an absent device");
+    }
+
+    [Fact]
+    public async Task DeviceSlider_PresentDevice_RaisesBothSliderLevelAndVolumeChanged()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "present-dev", FriendlyName = "Headphones" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var levelTcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var volumeTcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.SliderLevelChanged += (_, e) => levelTcs.TrySetResult(e);
+        processor.VolumeChanged += (_, e) => volumeTcs.TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+
+        var completedLevel = await Task.WhenAny(levelTcs.Task, Task.Delay(500));
+        Assert.True(completedLevel == levelTcs.Task, "SliderLevelChanged did not fire");
+        var completedVolume = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
+        Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static ConfigManager NewConfigManager()
