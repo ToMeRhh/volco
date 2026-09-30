@@ -28,6 +28,14 @@
 - Preserved contracts at cutover: output `Volco.exe` (`<AssemblyName>Volco</AssemblyName>`), artifact `Volco-win-x64`, single-file self-contained win-x64, `GitHubUpdater.AssetName`, `UpdateInstaller.ApplyAndRestart`.
 - Wire protocol, firmware and simulator are untouched.
 
+### Carried from Step 1's final review
+
+- (a) Construct `VolcoRuntime` and subscribe every handler (OSD `VolumeChanged` included) before calling `Start()`. Step 1's WinUI shell subscribes the OSD after `Start()`, which is a small window for lost OSD events.
+- (b) Runtime events arrive on arbitrary threads, and `SerialConnection` raises `StatusChanged` while holding its internal lock, so Avalonia handlers must use `Dispatcher.UIThread.Post`, never `Invoke`/`InvokeAsync().Wait()`.
+- (c) The `Volco.Windows` namespace shadows the global `Windows.*` inside any `namespace Volco.*`, so write `global::Windows…` or put the `using` above a file-scoped namespace line. Importing both `Windows.UI` and `Microsoft.UI` makes `Colors` ambiguous.
+- (d) ViewModels must unsubscribe from runtime events when their lifetime is shorter than the app's (Step 1's `ConnectionViewModel` never unsubscribes).
+- (e) `SettingsWindow.OnDevicesChanged` marshals twice, and `UpdateWindow.xaml.cs` has a stale `Updates.BuildInfo` cref; both disappear with the WinUI files, so don't port them.
+
 ## Review Focus
 
 Spec-implied failure modes that the per-task tests would not otherwise catch. Each gets a pinning test in its owning task.

@@ -10,6 +10,13 @@ run id [`36639772876`](https://github.com/ToMeRhh/volco/actions/runs/36639772876
 (commit `dbe0603`). Download the artifact, extract it, and run `Volco.exe`
 directly — it is a self-contained single-file publish, no install needed.
 
+`build.yml` keeps its artifacts for 7 days, so this run's artifact expires
+around **2026-10-06**. If it is gone by the time you run this checklist,
+re-dispatch a fresh one and use that run's artifact instead:
+```bash
+gh workflow run build.yml --ref step1-decompose --field run_build=true
+```
+
 **How to report failures:** for each failing item, note the item number,
 what you did, what you expected, what actually happened, and — if possible —
 the relevant lines from `%APPDATA%/Volco/volco.log`. Reply on the PR for this
@@ -75,12 +82,29 @@ are explicitly accepted.
    comes up with the migrated device mappings intact.
 
 10. **Release-channel updater visibility** *(Review Focus #1 — pins
-    `BuildInfoStampTests`)*. Run a release-stamped build — either a
-    `release.yml`-produced build, or a local publish with
-    `-p:VolcoReleaseChannel=release` via CI — and open the tray menu.
-    *Expected:* the tray menu shows "Check for Updates…". (A `local`-channel
-    dev build, such as the artifact under test in item 1–9, should *not*
-    show it — verify that too, as a contrast check.)
+    `BuildInfoStampTests`)*.
+
+    - **Contrast check (do this against the artifact under test in items
+      1–9):** open the tray menu on the `local`-channel CI artifact.
+      *Expected:* it does **not** show "Check for Updates…".
+    - **Release-channel check:** do this ONLY as a local Windows publish on
+      your own machine —
+      ```
+      msbuild src/Volco/Volco.csproj -t:Publish -p:Configuration=Release ^
+        -p:VolcoReleaseChannel=release -p:VolcoVersion=0.0.1
+      ```
+      run the resulting `Volco.exe`, and open the tray menu.
+      *Expected:* it shows "Check for Updates…".
+
+      Alternatively, defer this half of the check to a post-merge check on
+      the first real tagged release, instead of producing a release-stamped
+      build from this branch.
+
+    **Never run `release.yml` from this branch (or from any branch other
+    than a real release).** `release.yml` calls `gh release create`, which
+    is not a draft — publishing one from `step1-decompose` would put an
+    unreviewed build at `/releases/latest`, which `GitHubUpdater` reads, and
+    offer it to every installed user as an update.
 
 11. **Web simulator over WebSocket.** Switch the app's connection type to
     WebSocket, then open `tools/simulator/index.html` in a browser and
