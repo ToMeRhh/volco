@@ -243,6 +243,50 @@ public class SliderProcessorTests
         Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
     }
 
+    // ── Fix D: GetLastLevel ──────────────────────────────────────────────────
+
+    [Fact]
+    public void GetLastLevel_NullBeforeAnyEvent()
+    {
+        var configManager = NewConfigManager();
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        Assert.Null(processor.GetLastLevel(0));
+    }
+
+    [Fact]
+    public void GetLastLevel_OutOfRangeIndex_ReturnsNull()
+    {
+        var configManager = NewConfigManager();
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        Assert.Null(processor.GetLastLevel(-1));
+        Assert.Null(processor.GetLastLevel(999));
+    }
+
+    [Fact]
+    public async Task GetLastLevel_EqualsProcessedVolume_AfterOneEvent()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Unmapped });
+
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var tcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.SliderLevelChanged += (_, e) => tcs.TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(500));
+        Assert.True(completed == tcs.Task, "SliderLevelChanged did not fire");
+        var received = await tcs.Task;
+
+        Assert.Equal(received.Level, processor.GetLastLevel(0));
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static ConfigManager NewConfigManager()

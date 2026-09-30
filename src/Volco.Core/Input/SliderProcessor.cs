@@ -152,6 +152,26 @@ public class SliderProcessor : IDisposable
         }
     }
 
+    /// <summary>
+    /// Fix D: the most recently processed (post-curve, post-smoothing) volume in [0,1] for a
+    /// slider index, or null when the index is out of range or that slider has never reported a
+    /// value yet. The firmware only sends a slider's value when it changes, so right after app
+    /// start this is genuinely unknown for any slider that hasn't moved - callers (a settings
+    /// page seeding its live-level display) must treat null as "no data yet", not zero. Read
+    /// under <see cref="_lock"/>: ProcessPending (the coalescing timer) writes it from a
+    /// different thread.
+    /// </summary>
+    public float? GetLastLevel(int sliderIndex)
+    {
+        if (sliderIndex < 0 || sliderIndex >= _lastVolume.Length)
+            return null;
+
+        lock (_lock)
+        {
+            return _lastVolume[sliderIndex];
+        }
+    }
+
     private void ProcessPending()
     {
         var config = _configManager.Config;

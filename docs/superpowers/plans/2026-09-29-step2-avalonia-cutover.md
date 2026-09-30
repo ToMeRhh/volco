@@ -35,6 +35,7 @@
 - (c) The `Volco.Windows` namespace shadows the global `Windows.*` inside any `namespace Volco.*`, so write `global::Windows…` or put the `using` above a file-scoped namespace line. Importing both `Windows.UI` and `Microsoft.UI` makes `Colors` ambiguous.
 - (d) ViewModels must unsubscribe from runtime events when their lifetime is shorter than the app's (Step 1's `ConnectionViewModel` never unsubscribes).
 - (e) `SettingsWindow.OnDevicesChanged` marshals twice, and `UpdateWindow.xaml.cs` has a stale `Updates.BuildInfo` cref; both disappear with the WinUI files, so don't port them.
+- (f) The firmware only reports a slider's value when it moves, so `SliderLevelChanged` alone leaves a row stuck at a stale/zeroed level until that slider is touched - the Avalonia Sliders page must also seed its live levels from `runtime.GetSliderLevel(i)` (Step 1 fix, checklist finding D) every time it's shown, not only from `SliderLevelChanged` events.
 
 ## Review Focus
 

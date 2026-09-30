@@ -586,6 +586,28 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Contains(Snapshot(_engine.SetDefaultCalls), c => c.EndpointId == Headphones);
     }
 
+    // ---- Fix D: GetSliderLevel ---------------------------------------------------------------
+
+    [Fact]
+    public void GetSliderLevel_NullBeforeStart_ReflectsMessageAfterStart_NullAfterDispose()
+    {
+        var config = NewConfig();
+        var runtime = new VolcoRuntime(config, _engine, audioReady: true, Factory, NoTimedRepushes);
+
+        Assert.Null(runtime.GetSliderLevel(0)); // before Start()
+
+        runtime.Start();
+        _runtimes.Add(runtime); // still covered by test-teardown Dispose (idempotent)
+
+        // Slider 0 defaults to Device / current default output (see NewConfig).
+        Connection(0).RaiseMessage(new SliderMessage(0, 4095));
+        Assert.True(WaitUntil(() => runtime.GetSliderLevel(0) is { } lvl && lvl > 0.9f),
+                    "slider level was not reflected after a slider message");
+
+        runtime.Dispose();
+        Assert.Null(runtime.GetSliderLevel(0)); // after Dispose()
+    }
+
     [Fact]
     public void DevicesChanged_IsForwardedForEveryKind()
     {

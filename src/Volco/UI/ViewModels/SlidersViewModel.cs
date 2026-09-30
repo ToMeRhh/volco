@@ -63,6 +63,25 @@ public partial class SlidersViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Fix D: seeds every slider row's live level from <paramref name="getLevel"/> (typically
+    /// <see cref="Volco.Core.Runtime.VolcoRuntime.GetSliderLevel"/>). The firmware only reports a
+    /// slider's value when it moves, so after app start - or after this settings window was
+    /// hidden and shown again, missing whatever
+    /// <see cref="Volco.Core.Runtime.VolcoRuntime.SliderLevelChanged"/> events fired while it was
+    /// hidden - a row can be stuck showing a stale or zeroed level even though the runtime already
+    /// knows the real one. Rows for which <paramref name="getLevel"/> returns null (never
+    /// reported) are left untouched.
+    /// </summary>
+    public void SeedLiveLevels(Func<int, float?> getLevel)
+    {
+        foreach (var item in Items)
+        {
+            if (getLevel(item.Index) is { } level)
+                item.LiveLevel = Math.Clamp(level, 0f, 1f);
+        }
+    }
+
+    /// <summary>
     /// Re-seeds every slider row's device picker from a fresh device snapshot (Bug 3). Callers
     /// must already be on the UI thread — see SettingsViewModel.RefreshDevices, which marshals
     /// the single <see cref="IAudioEngine.DevicesChanged"/> subscription (audio thread) before

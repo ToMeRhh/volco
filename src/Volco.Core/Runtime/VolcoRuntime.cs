@@ -135,6 +135,18 @@ public sealed class VolcoRuntime : IDisposable
     /// <summary>The current transport's status; Disconnected when there is no transport.</summary>
     public ConnectionStatus ConnectionStatus => Volatile.Read(ref _connection)?.Status ?? ConnectionStatus.Disconnected;
 
+    /// <summary>
+    /// Fix D: the most recently processed volume [0,1] for a slider index, or null before
+    /// <see cref="Start"/>, after <see cref="Dispose"/>, or when that slider has never reported a
+    /// value yet (the firmware only sends a slider's value when it moves, so this can genuinely
+    /// be unknown for a long time after app start). Additive: lets a UI seed its live-level
+    /// display from state the runtime already holds instead of waiting on
+    /// <see cref="SliderLevelChanged"/> alone, which a window hidden since before a slider last
+    /// moved would otherwise never receive.
+    /// </summary>
+    public float? GetSliderLevel(int sliderIndex)
+        => IsDisposed ? null : _sliderProcessor?.GetLastLevel(sliderIndex);
+
     // All events may be raised on ANY thread (audio thread, transport threads, timer threads).
     // Subscribers marshal to their UI thread themselves.
 
