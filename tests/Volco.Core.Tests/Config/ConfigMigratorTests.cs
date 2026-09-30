@@ -165,6 +165,101 @@ public class ConfigMigratorTests
         Assert.Equal("dev-2", cm.Config.Sliders[0].Device!.Id);
     }
 
+    // ── Fix C: HealDeviceIds ─────────────────────────────────────────────────
+
+    [Fact]
+    public void HealDeviceIds_FillsBlankIdForOutputDevicePair_ByExactName()
+    {
+        var config = AppConfig.CreateDefault();
+        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers (Realtek High Definition Audio)" };
+        config.OutputDevices.Device2 = new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" };
+
+        var changed = ConfigMigrator.HealDeviceIds(config, Devices);
+
+        Assert.True(changed);
+        Assert.Equal("dev-1", config.OutputDevices.Device1.Id);
+        Assert.Equal("dev-2", config.OutputDevices.Device2.Id);
+    }
+
+    [Fact]
+    public void HealDeviceIds_FillsBlankIdForSliderDevice_ByExactName()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Sliders[0].Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers (Realtek High Definition Audio)" };
+
+        var changed = ConfigMigrator.HealDeviceIds(config, Devices);
+
+        Assert.True(changed);
+        Assert.Equal("dev-1", config.Sliders[0].Device!.Id);
+    }
+
+    [Fact]
+    public void HealDeviceIds_FillsBlankIdForButtonAction_ByExactName()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Buttons[0].SinglePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.MuteSpecificDevice,
+            Device = new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" },
+        };
+        config.Buttons[0].DoublePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.MuteSpecificDevice,
+            Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers (Realtek High Definition Audio)" },
+        };
+        config.Buttons[0].LongPress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.SetOutputDevice,
+            Device = new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" },
+        };
+
+        var changed = ConfigMigrator.HealDeviceIds(config, Devices);
+
+        Assert.True(changed);
+        Assert.Equal("dev-2", config.Buttons[0].SinglePress.Device!.Id);
+        Assert.Equal("dev-1", config.Buttons[0].DoublePress.Device!.Id);
+        Assert.Equal("dev-2", config.Buttons[0].LongPress.Device!.Id);
+    }
+
+    [Fact]
+    public void HealDeviceIds_NeverTouchesANonEmptyId_EvenIfNameMatchesADifferentDevice()
+    {
+        var config = AppConfig.CreateDefault();
+        // Id already points at dev-1, but the name (if it were consulted) matches dev-2.
+        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Headphones (USB Audio Device)" };
+
+        var changed = ConfigMigrator.HealDeviceIds(config, Devices);
+
+        Assert.False(changed);
+        Assert.Equal("dev-1", config.OutputDevices.Device1.Id);
+        Assert.Equal("Headphones (USB Audio Device)", config.OutputDevices.Device1.FriendlyName);
+    }
+
+    [Fact]
+    public void HealDeviceIds_IgnoresPartialNameMatches()
+    {
+        var config = AppConfig.CreateDefault();
+        // "Headphones" is a substring of "Headphones (USB Audio Device)" - ResolveName's v1
+        // fallback would match this, but HealDeviceIds must not.
+        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Headphones" };
+
+        var changed = ConfigMigrator.HealDeviceIds(config, Devices);
+
+        Assert.False(changed);
+        Assert.Equal("", config.OutputDevices.Device1.Id);
+        Assert.Equal("Headphones", config.OutputDevices.Device1.FriendlyName);
+    }
+
+    [Fact]
+    public void HealDeviceIds_ReturnsFalse_WhenNothingChanges()
+    {
+        // CreateDefault(): output pair and button actions have no FriendlyName to match on, and
+        // sliders default to Device=null.
+        var config = AppConfig.CreateDefault();
+
+        Assert.False(ConfigMigrator.HealDeviceIds(config, Devices));
+    }
+
     [Fact]
     public void MigrateFile_MissingFile_DoesNotThrow()
     {

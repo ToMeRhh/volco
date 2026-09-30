@@ -187,6 +187,16 @@ public sealed class VolcoRuntime : IDisposable
             Config.Save();
         }
 
+        // Fix C: repair any DeviceRefConfig left with a blank id (e.g. Preserve() during v1
+        // migration when the device was absent, or a v2 config with an id manually removed) now
+        // that the device list is available. Same audioReady guard as migration above, for the
+        // same reason (GetDevices() would race DeviceRegistry.Start() otherwise).
+        if (_audioReady && ConfigMigrator.HealDeviceIds(Config.Config, Audio.GetDevices(AudioFlow.Render)))
+        {
+            AppLog.Info("Healed device id(s) from a friendly-name match at startup");
+            Config.Save();
+        }
+
         Config.ConnectionConfigChanged += OnConfigChanged;
 
         // Input processing
@@ -484,6 +494,20 @@ public sealed class VolcoRuntime : IDisposable
         // as DevicesChanged; subscribers marshal to the UI thread themselves (this handler runs
         // on the audio thread), and with no settings window open there are simply no subscribers.
         DevicesChanged?.Invoke(this, e);
+
+        if (e.Kind is DeviceChangeKind.Added or DeviceChangeKind.StateChanged)
+        {
+            // Fix C: a device that was absent (blank-id reference) at Start()'s heal pass, or at
+            // the last StateChanged, may now be present - re-resolve against the current device
+            // list so output switching recovers without a restart. GetDevices/HealDeviceIds only
+            // touch config in memory here; RequestSave() debounces the write, and no runtime lock
+            // is held across it.
+            if (ConfigMigrator.HealDeviceIds(Config.Config, Audio.GetDevices(AudioFlow.Render)))
+            {
+                AppLog.Info("Healed device id(s) after a device change");
+                Config.RequestSave();
+            }
+        }
 
         if (e.Kind == DeviceChangeKind.DefaultChanged)
         {

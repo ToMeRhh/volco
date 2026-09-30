@@ -128,6 +128,56 @@ public static class ConfigMigrator
         }
     }
 
+    /// <summary>
+    /// Fix C: fills in the endpoint id for any <see cref="DeviceRefConfig"/> that has an empty
+    /// <see cref="DeviceRefConfig.Id"/> but a non-empty <see cref="DeviceRefConfig.FriendlyName"/>,
+    /// when a device's friendly name matches it EXACTLY (OrdinalIgnoreCase). This is what repairs
+    /// a reference <see cref="Preserve"/> left blank because the target device was absent at
+    /// migration time (or a v2 config with an id manually removed) — <see cref="ConfigMigrator"/>
+    /// itself only runs once, for schema v1, so nothing else ever revisits these.
+    ///
+    /// Deliberately does NOT fall back to the v1 substring match <see cref="ResolveName"/> uses:
+    /// this can run at any later point in the app's life, against whatever devices happen to be
+    /// plugged in right now, so a loose match binding output switching to the wrong endpoint would
+    /// be a worse outcome than leaving the reference unhealed for another day. Never touches a
+    /// reference that already has a non-empty id.
+    /// </summary>
+    /// <returns>True if anything changed.</returns>
+    public static bool HealDeviceIds(AppConfig config, IReadOnlyList<AudioDevice> devices)
+    {
+        var changed = false;
+
+        changed |= Heal(config.OutputDevices.Device1, devices);
+        changed |= Heal(config.OutputDevices.Device2, devices);
+
+        foreach (var slider in config.Sliders)
+            changed |= Heal(slider.Device, devices);
+
+        foreach (var button in config.Buttons)
+        {
+            changed |= Heal(button.SinglePress.Device, devices);
+            changed |= Heal(button.DoublePress.Device, devices);
+            changed |= Heal(button.LongPress.Device, devices);
+        }
+
+        return changed;
+    }
+
+    private static bool Heal(DeviceRefConfig? cfg, IReadOnlyList<AudioDevice> devices)
+    {
+        if (cfg == null) return false;
+        if (!string.IsNullOrEmpty(cfg.Id)) return false;
+        if (string.IsNullOrEmpty(cfg.FriendlyName)) return false;
+
+        var match = devices.FirstOrDefault(d =>
+            string.Equals(d.FriendlyName, cfg.FriendlyName, StringComparison.OrdinalIgnoreCase));
+        if (match == null) return false;
+
+        cfg.Id = match.Id;
+        cfg.FriendlyName = match.FriendlyName; // normalise to the device's own casing
+        return true;
+    }
+
     private static void MigrateAction(JsonElement button, string property,
         ButtonActionConfig target, IReadOnlyList<AudioDevice> devices)
     {

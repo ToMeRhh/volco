@@ -516,6 +516,76 @@ public sealed class VolcoRuntimeTests : IDisposable
 
     // ---- device forwarding and lifetime ----------------------------------------------------
 
+    // ---- Fix C: healing blank device ids -----------------------------------------------------
+
+    [Fact]
+    public void Start_HealsBlankOutputDeviceId_WhenNameMatchesAPresentDevice()
+    {
+        var config = NewConfig(c =>
+        {
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+        });
+        var path = config.ConfigPath;
+
+        StartRuntime(config);
+
+        Assert.Equal(Speakers, config.Config.OutputDevices.Device1.Id);
+        Assert.Contains(Speakers, File.ReadAllText(path)); // saved to disk, not just in memory
+    }
+
+    [Fact]
+    public void Start_AudioNotReady_DoesNotHealDeviceIds()
+    {
+        var config = NewConfig(c =>
+        {
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+        });
+
+        StartRuntime(config, audioReady: false);
+
+        Assert.Equal("", config.Config.OutputDevices.Device1.Id);
+    }
+
+    [Fact]
+    public void DeviceAdded_HealsBlankDeviceId_ForADeviceThatWasAbsentAtStart()
+    {
+        const string NewDeviceId = "new-dev";
+        var config = NewConfig(c =>
+        {
+            // Not in _engine.Devices yet - Start()'s heal pass must leave this unhealed.
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "New Speakers" };
+        });
+
+        StartRuntime(config);
+        Assert.Equal("", config.Config.OutputDevices.Device1.Id);
+
+        var newDevice = new AudioDevice(NewDeviceId, "New Speakers", AudioFlow.Render, false);
+        _engine.Devices.Add(newDevice);
+        _engine.RaiseDeviceChanged(DeviceChangeKind.Added, newDevice);
+
+        Assert.True(WaitUntil(() => config.Config.OutputDevices.Device1.Id == NewDeviceId),
+                    "device id was not healed after DevicesChanged(Added)");
+    }
+
+    [Fact]
+    public void HealedOutputDevice_TogglePressEndsUpSettingTheHealedDevice()
+    {
+        var config = NewConfig(c =>
+        {
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = Speakers, FriendlyName = "Speakers" };
+            c.OutputDevices.Device2 = new DeviceRefConfig { Id = "", FriendlyName = "Headphones" };
+            c.Buttons[2].SinglePress = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice };
+        });
+
+        StartRuntime(config);
+        Assert.Equal(Headphones, config.Config.OutputDevices.Device2.Id); // healed at Start()
+
+        Press(Connection(0), 2);
+
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "no SetDefaultDevice call");
+        Assert.Contains(Snapshot(_engine.SetDefaultCalls), c => c.EndpointId == Headphones);
+    }
+
     [Fact]
     public void DevicesChanged_IsForwardedForEveryKind()
     {
