@@ -3,11 +3,21 @@ using Volco.Core.Audio;
 namespace Volco.Core.Tests.Audio;
 
 /// <summary>
-/// Recording in-memory <see cref="IAudioEngine"/> for tests. Synchronous: writes land in
-/// the call lists immediately, with no thread hop, so tests need no waiting.
+/// Recording in-memory <see cref="IAudioEngine"/> for tests. Calls into this engine can come from
+/// a runtime timer or audio-thread stand-in rather than the test thread, so the call-recording
+/// lists below are written under a lock (see <see cref="Snapshot{T}"/>) even though nothing else
+/// about this fake is asynchronous.
 /// </summary>
 public sealed class FakeAudioEngine : IAudioEngine
 {
+    /// <summary>Guards every Add below. Runtime timer/audio threads can be appending to these
+    /// call-recording lists while a test thread reads them; <see cref="List{T}.Add"/> bumps its
+    /// internal size before storing the item, so an unsynchronised reader that only waits on
+    /// <c>Count &gt; 0</c> can observe a default-initialised element. Callers that read after a
+    /// wait must go through <see cref="Snapshot{T}"/>, taken under this same lock, rather than
+    /// indexing or enumerating these lists directly.</summary>
+    private readonly object _lock = new();
+
     public List<(DeviceRef Device, float Level)>  DeviceVolumeCalls  { get; } = new();
     public List<(DeviceRef Device, bool Muted)>   SetMuteCalls       { get; } = new();
     public List<DeviceRef>                        ToggleMuteCalls    { get; } = new();
@@ -35,19 +45,37 @@ public sealed class FakeAudioEngine : IAudioEngine
     public IReadOnlyList<AudioSessionInfo> GetSessions() => Sessions;
 
     public void SetDeviceVolume(DeviceRef device, float level)
-        => DeviceVolumeCalls.Add((device, level));
+    {
+        lock (_lock) DeviceVolumeCalls.Add((device, level));
+    }
 
     public void SetDeviceMute(DeviceRef device, bool muted)
-        => SetMuteCalls.Add((device, muted));
+    {
+        lock (_lock) SetMuteCalls.Add((device, muted));
+    }
 
     public void ToggleDeviceMute(DeviceRef device)
-        => ToggleMuteCalls.Add(device);
+    {
+        lock (_lock) ToggleMuteCalls.Add(device);
+    }
 
     public void SetSessionVolume(SessionFilter filter, float level)
-        => SessionVolumeCalls.Add((filter, level));
+    {
+        lock (_lock) SessionVolumeCalls.Add((filter, level));
+    }
 
     public void SetDefaultDevice(string endpointId, AudioFlow flow)
-        => SetDefaultCalls.Add((endpointId, flow));
+    {
+        lock (_lock) SetDefaultCalls.Add((endpointId, flow));
+    }
+
+    /// <summary>Thread-safe point-in-time copy of a call-recording list, taken under the same
+    /// lock the Add methods above use. Tests that waited on a condition like <c>Count &gt; 0</c>
+    /// must read the list's contents through this, not by indexing/enumerating it directly.</summary>
+    public IReadOnlyList<T> Snapshot<T>(List<T> list)
+    {
+        lock (_lock) return list.ToArray();
+    }
 
     public bool TryGetDeviceState(DeviceRef device, out float level, out bool muted)
     {

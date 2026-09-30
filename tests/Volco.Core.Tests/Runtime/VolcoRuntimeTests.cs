@@ -139,6 +139,12 @@ public sealed class VolcoRuntimeTests : IDisposable
     private static bool ContainsFrame(IEnumerable<byte[]> frames, byte[] expected)
         => frames.Any(f => f.AsSpan().SequenceEqual(expected));
 
+    /// <summary>Thread-safe point-in-time copy of one of <see cref="_engine"/>'s call-recording
+    /// lists (see <see cref="FakeAudioEngine.Snapshot{T}"/>). Use this instead of indexing or
+    /// enumerating those lists directly after a <see cref="WaitUntil"/> — the wait only proves
+    /// the count moved, not that the item at that index has finished being stored.</summary>
+    private IReadOnlyList<T> Snapshot<T>(List<T> list) => _engine.Snapshot(list);
+
     /// <summary>Thread-safe event recorder: runtime events can fire on any thread.</summary>
     private sealed class Recorder<T>
     {
@@ -162,8 +168,9 @@ public sealed class VolcoRuntimeTests : IDisposable
         Connection(0).RaiseMessage(new SliderMessage(0, 4095));
 
         Assert.True(WaitUntil(() => _engine.DeviceVolumeCalls.Count > 0), "no SetDeviceVolume call");
-        Assert.Equal(DeviceRef.DefaultOutput(), _engine.DeviceVolumeCalls[0].Device);
-        Assert.Equal(1.0, (double)_engine.DeviceVolumeCalls[0].Level, 3);
+        var deviceVolumeCalls = Snapshot(_engine.DeviceVolumeCalls);
+        Assert.Equal(DeviceRef.DefaultOutput(), deviceVolumeCalls[0].Device);
+        Assert.Equal(1.0, (double)deviceVolumeCalls[0].Level, 3);
 
         // SliderProcessor's events are re-raised as the runtime's own.
         Assert.True(WaitUntil(() => levels.Count > 0 && volumes.Count > 0), "slider events not re-raised");
@@ -179,7 +186,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         Press(Connection(0), 0);
 
         Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "no ToggleDeviceMute call");
-        Assert.Contains(DeviceRef.DefaultOutput(), _engine.ToggleMuteCalls);
+        Assert.Contains(DeviceRef.DefaultOutput(), Snapshot(_engine.ToggleMuteCalls));
     }
 
     // ---- mute OSD correlation --------------------------------------------------------------
@@ -222,13 +229,22 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Empty(osd.Items);
     }
 
-    [Fact]
-    public void MutePress_UnresolvableDevice_NeverShowsOsd()
+    /// <summary>Covers two ways a mute-specific-device press can target a device that never
+    /// resolves to a real, currently-connected endpoint: no id at all (falls back to a friendly
+    /// name that matches nothing, so the runtime's expected-device resolution returns null and no
+    /// OSD is ever pending), and a non-empty id that matches no known device (the id is trusted
+    /// as-is, so an OSD-pending record IS created — but for a device id nothing will ever report a
+    /// change for, so no OSD ever fires either way). Both must behave identically from the
+    /// caller's point of view: press executes, no OSD shows.</summary>
+    [Theory]
+    [InlineData("", "Unplugged Headset")]
+    [InlineData("absent-id", "Unplugged Headset")]
+    public void MutePress_UnresolvableDevice_NeverShowsOsd(string id, string friendlyName)
     {
         var config = NewConfig(c => c.Buttons[0].SinglePress = new ButtonActionConfig
         {
             Action = ButtonActionType.MuteSpecificDevice,
-            Device = new DeviceRefConfig { Id = "", FriendlyName = "Unplugged Headset" },
+            Device = new DeviceRefConfig { Id = id, FriendlyName = friendlyName },
         });
         var runtime = StartRuntime(config);
         var osd = new Recorder<VolumeChangeNotification>();
@@ -236,7 +252,8 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Press(Connection(0), 0);
         Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "press never executed");
-        Assert.Equal(DeviceRef.ByFriendlyName("Unplugged Headset"), _engine.ToggleMuteCalls[0]);
+        var expected = string.IsNullOrEmpty(id) ? DeviceRef.ByFriendlyName(friendlyName) : DeviceRef.ById(id);
+        Assert.Equal(expected, Snapshot(_engine.ToggleMuteCalls)[0]);
 
         // Own changes on devices that are NOT the (unresolvable) target must not pop an OSD.
         _engine.DeviceStates[Speakers] = (0.5f, true);
@@ -373,6 +390,42 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
         Assert.Equal(ConnectionStatus.Connected, runtime.ConnectionStatus);
         Assert.True(newConnection.SentCount > 0, "state not pushed to the new transport");
+    }
+
+    /// <summary>Pins Review Focus #2's user-visible case: restarting while the OLD transport is
+    /// still Connected (a Serial → WebSocket/UDP switch mid-session), not merely Disconnected as
+    /// in <see cref="Restart_ForwardsStatusFromNewTransportOnly"/>. This is the only path that
+    /// exercises the runtime's own synthetic Disconnected raise in StartConnection — in
+    /// production it is the only thing that stops a settings page showing a stale "Connected"
+    /// when the new transport (e.g. a WebSocket/UDP listener with no peer yet) sits Disconnected
+    /// and never raises anything itself.</summary>
+    [Fact]
+    public void Restart_FromConnected_ReportsDisconnectedOnce()
+    {
+        var config = NewConfig();
+        var runtime = StartRuntime(config);
+        var statuses = new Recorder<ConnectionStatus>();
+        runtime.ConnectionStatusChanged += statuses.Handler;
+        var oldConnection = Connection(0);
+
+        oldConnection.SetStatus(ConnectionStatus.Connected);
+        Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
+
+        config.Config.Connection.Type = ConnectionType.WebSocket;
+        config.RequestSave(connectionChanged: true); // debounced, raises ConnectionConfigChanged
+
+        Assert.True(WaitUntil(() => ConnectionCount == 2 && Connection(1).ConnectCount == 1),
+                    "transport was not restarted");
+        var newConnection = Connection(1);
+
+        Assert.Equal(new[] { ConnectionStatus.Connected, ConnectionStatus.Disconnected }, statuses.Items);
+        Assert.Equal(ConnectionStatus.Disconnected, runtime.ConnectionStatus);
+
+        newConnection.SetStatus(ConnectionStatus.Connected);
+        Assert.Equal(new[]
+        {
+            ConnectionStatus.Connected, ConnectionStatus.Disconnected, ConnectionStatus.Connected,
+        }, statuses.Items);
     }
 
     // ---- config migration ------------------------------------------------------------------
