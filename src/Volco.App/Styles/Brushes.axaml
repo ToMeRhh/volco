@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Brushes.axaml - semantic brushes, one set per theme variant, bound to the theme's colors. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}"/>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{DynamicResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
+      <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource TextSecondaryColor}"/>
+      <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}"/>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{DynamicResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
+      <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource TextSecondaryColor}"/>
+      <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

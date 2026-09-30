@@ -1,0 +1,51 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:Volco.App.Controls">
+  <ControlTheme x:Key="{x:Type controls:SettingsCard}" TargetType="controls:SettingsCard">
+    <Setter Property="Background" Value="{DynamicResource SurfaceCardBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource SurfaceStrokeBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CardCornerRadius}"/>
+    <Setter Property="Padding" Value="{DynamicResource CardPadding}"/>
+    <Setter Property="MinWidth" Value="{DynamicResource SettingsCardMinWidth}"/>
+    <Setter Property="MaxWidth" Value="{DynamicResource SettingsCardMaxWidth}"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <ContentPresenter Name="PART_HeaderIcon"
+                              Grid.Column="0"
+                              Content="{TemplateBinding HeaderIcon}"
+                              IsVisible="{TemplateBinding HeaderIcon, Converter={x:Static ObjectConverters.IsNotNull}}"
+                              VerticalAlignment="Center"
+                              Margin="0,0,16,0"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Name="PART_Header"
+                         Text="{TemplateBinding Header}"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         TextWrapping="Wrap"/>
+              <TextBlock Name="PART_Description"
+                         Text="{TemplateBinding Description}"
+                         IsVisible="{TemplateBinding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                         FontSize="12"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         TextWrapping="Wrap"/>
+            </StackPanel>
+            <ContentPresenter Name="PART_ContentPresenter"
+                              Grid.Column="2"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              VerticalAlignment="Center"
+                              Margin="16,0,0,0"/>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

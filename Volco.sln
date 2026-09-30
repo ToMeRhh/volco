@@ -10,6 +10,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Volco.Windows", "src\Volco.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Volco.Core.Tests", "tests\Volco.Core.Tests\Volco.Core.Tests.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Volco.App", "src\Volco.App\Volco.App.csproj", "{D1A2B3C4-1111-4A5B-8C9D-0E1F2A3B4C5D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Volco.App.Tests", "tests\Volco.App.Tests\Volco.App.Tests.csproj", "{D2A2B3C4-2222-4A5B-8C9D-0E1F2A3B4C5E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -32,5 +36,13 @@ Global
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Debug|x64.Build.0 = Debug|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.ActiveCfg = Release|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.Build.0 = Release|Any CPU
+		{D1A2B3C4-1111-4A5B-8C9D-0E1F2A3B4C5D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D1A2B3C4-1111-4A5B-8C9D-0E1F2A3B4C5D}.Debug|x64.Build.0 = Debug|Any CPU
+		{D1A2B3C4-1111-4A5B-8C9D-0E1F2A3B4C5D}.Release|x64.ActiveCfg = Release|Any CPU
+		{D1A2B3C4-1111-4A5B-8C9D-0E1F2A3B4C5D}.Release|x64.Build.0 = Release|Any CPU
+		{D2A2B3C4-2222-4A5B-8C9D-0E1F2A3B4C5E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D2A2B3C4-2222-4A5B-8C9D-0E1F2A3B4C5E}.Debug|x64.Build.0 = Debug|Any CPU
+		{D2A2B3C4-2222-4A5B-8C9D-0E1F2A3B4C5E}.Release|x64.ActiveCfg = Release|Any CPU
+		{D2A2B3C4-2222-4A5B-8C9D-0E1F2A3B4C5E}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
