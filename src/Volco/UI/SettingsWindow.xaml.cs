@@ -20,6 +20,13 @@ public sealed partial class SettingsWindow : Window
         _runtime = runtime;
         _viewModel = new SettingsViewModel(runtime.Config, runtime.Audio, runtime);
 
+        // Fix D: seed every slider row's live level from state the runtime already holds. The
+        // firmware only reports a slider's value when it moves, so right after app start (or
+        // after this window was hidden and shown again) a slider that hasn't moved would
+        // otherwise show a stale/zeroed level forever, waiting on a SliderLevelChanged event that
+        // may never come.
+        _viewModel.Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
+
         // WinUI 3 Window doesn't support Width/Height in XAML; set via AppWindow
         var appWindow = this.AppWindow;
         appWindow.Resize(new SizeInt32(720, 600));
@@ -39,12 +46,28 @@ public sealed partial class SettingsWindow : Window
         _runtime.SliderLevelChanged += OnSliderLevel;
         _runtime.DevicesChanged += OnDevicesChanged;
 
+        // Fix D: AppWindow_Closing below hides rather than closes this window (see its comment),
+        // so it is only ever constructed once — re-showing it never re-runs the seeding above.
+        // Activated fires every time the window regains activation, including right after that
+        // Show()/un-hide, which is exactly when a level that changed while the window was hidden
+        // (and therefore missed by the SliderLevelChanged subscription above) needs to be caught
+        // up. Already on the UI thread — no dispatcher marshalling needed.
+        Activated += OnActivated;
+
         // Select first tab by default
         NavView.SelectedItem = NavView.MenuItems[0];
     }
 
     private void OnSliderLevel(object? sender, SliderLevelEventArgs e)
         => DispatcherQueue.TryEnqueue(() => _viewModel.Sliders.UpdateLiveLevel(e.SliderIndex, e.Level));
+
+    /// <summary>Fix D: re-seed live levels whenever this window becomes active again (not on
+    /// the Deactivated transition Activated also reports).</summary>
+    private void OnActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
+            _viewModel.Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
+    }
 
     /// <summary>
     /// Raised by <see cref="VolcoRuntime.DevicesChanged"/> for every kind of device change

@@ -135,6 +135,18 @@ public sealed class VolcoRuntime : IDisposable
     /// <summary>The current transport's status; Disconnected when there is no transport.</summary>
     public ConnectionStatus ConnectionStatus => Volatile.Read(ref _connection)?.Status ?? ConnectionStatus.Disconnected;
 
+    /// <summary>
+    /// Fix D: the most recently processed volume [0,1] for a slider index, or null before
+    /// <see cref="Start"/>, after <see cref="Dispose"/>, or when that slider has never reported a
+    /// value yet (the firmware only sends a slider's value when it moves, so this can genuinely
+    /// be unknown for a long time after app start). Additive: lets a UI seed its live-level
+    /// display from state the runtime already holds instead of waiting on
+    /// <see cref="SliderLevelChanged"/> alone, which a window hidden since before a slider last
+    /// moved would otherwise never receive.
+    /// </summary>
+    public float? GetSliderLevel(int sliderIndex)
+        => IsDisposed ? null : _sliderProcessor?.GetLastLevel(sliderIndex);
+
     // All events may be raised on ANY thread (audio thread, transport threads, timer threads).
     // Subscribers marshal to their UI thread themselves.
 
@@ -184,6 +196,16 @@ public sealed class VolcoRuntime : IDisposable
             AppLog.Info("Migrating config to schema v2");
             ConfigMigrator.MigrateFile(Config.ConfigPath, Config.Config,
                                        Audio.GetDevices(AudioFlow.Render));
+            Config.Save();
+        }
+
+        // Fix C: repair any DeviceRefConfig left with a blank id (e.g. Preserve() during v1
+        // migration when the device was absent, or a v2 config with an id manually removed) now
+        // that the device list is available. Same audioReady guard as migration above, for the
+        // same reason (GetDevices() would race DeviceRegistry.Start() otherwise).
+        if (_audioReady && ConfigMigrator.HealDeviceIds(Config.Config, Audio.GetDevices(AudioFlow.Render)))
+        {
+            AppLog.Info("Healed device id(s) from a friendly-name match at startup");
             Config.Save();
         }
 
@@ -364,8 +386,14 @@ public sealed class VolcoRuntime : IDisposable
             case ButtonMessage button:
                 AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
                 var bcfg = Config.Config.Buttons.ElementAtOrDefault(button.ButtonIndex);
+                // Fix A: no double-press action configured -> pass 0, which makes
+                // ButtonPressDetector fire Single synchronously on release instead of waiting out
+                // a double-press window that can never be satisfied. Long-press is unaffected.
+                var doublePressWindowMs = bcfg != null && bcfg.DoublePress.Action == ButtonActionType.None
+                    ? 0
+                    : bcfg?.DoublePressWindowMs ?? 300;
                 _buttonPressDetector?.HandleButtonEvent(button.ButtonIndex, button.State,
-                    bcfg?.LongPressMs ?? 500, bcfg?.DoublePressWindowMs ?? 300);
+                    bcfg?.LongPressMs ?? 500, doublePressWindowMs);
                 break;
         }
     }
@@ -478,6 +506,20 @@ public sealed class VolcoRuntime : IDisposable
         // as DevicesChanged; subscribers marshal to the UI thread themselves (this handler runs
         // on the audio thread), and with no settings window open there are simply no subscribers.
         DevicesChanged?.Invoke(this, e);
+
+        if (e.Kind is DeviceChangeKind.Added or DeviceChangeKind.StateChanged)
+        {
+            // Fix C: a device that was absent (blank-id reference) at Start()'s heal pass, or at
+            // the last StateChanged, may now be present - re-resolve against the current device
+            // list so output switching recovers without a restart. GetDevices/HealDeviceIds only
+            // touch config in memory here; RequestSave() debounces the write, and no runtime lock
+            // is held across it.
+            if (ConfigMigrator.HealDeviceIds(Config.Config, Audio.GetDevices(AudioFlow.Render)))
+            {
+                AppLog.Info("Healed device id(s) after a device change");
+                Config.RequestSave();
+            }
+        }
 
         if (e.Kind == DeviceChangeKind.DefaultChanged)
         {

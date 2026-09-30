@@ -36,9 +36,13 @@ public class ButtonPressDetector
 
     public void HandleButtonEvent(int buttonIndex, ButtonState state, int longPressMs, int doublePressWindowMs)
     {
-        var tracker = _trackers.GetOrAdd(buttonIndex,
-            idx => new ButtonStateTracker(idx, longPressMs, doublePressWindowMs, OnPressDetected));
-        tracker.HandleState(state);
+        // Fix A (secondary bug): the tracker is created once per button and lives for the
+        // process lifetime, but its timings must NOT be frozen at that first creation - a
+        // settings change to LongPressMs/DoublePressWindowMs must take effect on the very next
+        // press. GetOrAdd only decides identity; HandleState below takes the timings from THIS
+        // call, every call.
+        var tracker = _trackers.GetOrAdd(buttonIndex, idx => new ButtonStateTracker(idx, OnPressDetected));
+        tracker.HandleState(state, longPressMs, doublePressWindowMs);
     }
 
     private void OnPressDetected(int buttonIndex, PressType pressType)
@@ -49,8 +53,6 @@ public class ButtonPressDetector
     private class ButtonStateTracker
     {
         private readonly int _buttonIndex;
-        private readonly int _longPressMs;
-        private readonly int _doublePressWindowMs;
         private readonly Action<int, PressType> _callback;
         private readonly object _lock = new();
         private CancellationTokenSource? _longPressCts;
@@ -58,18 +60,24 @@ public class ButtonPressDetector
         private bool _longPressFired;
         private bool _waitingForDoublePress;
 
-        public ButtonStateTracker(int buttonIndex, int longPressMs, int doublePressWindowMs, Action<int, PressType> callback)
+        // Fix A: set on every HandleState call (under _lock), not just once at construction -
+        // see the comment on HandleButtonEvent above.
+        private int _longPressMs;
+        private int _doublePressWindowMs;
+
+        public ButtonStateTracker(int buttonIndex, Action<int, PressType> callback)
         {
             _buttonIndex = buttonIndex;
-            _longPressMs = longPressMs;
-            _doublePressWindowMs = doublePressWindowMs;
             _callback = callback;
         }
 
-        public void HandleState(ButtonState state)
+        public void HandleState(ButtonState state, int longPressMs, int doublePressWindowMs)
         {
             lock (_lock)
             {
+                _longPressMs = longPressMs;
+                _doublePressWindowMs = doublePressWindowMs;
+
                 if (state == ButtonState.Pressed)
                     OnPressed();
                 else
@@ -89,7 +97,7 @@ public class ButtonPressDetector
             _singlePressCts = null;
 
             _longPressCts = new CancellationTokenSource();
-            _ = LongPressTimerAsync(_longPressCts.Token);
+            _ = LongPressTimerAsync(_longPressCts.Token, _longPressMs);
         }
 
         private void OnReleased()
@@ -114,18 +122,30 @@ public class ButtonPressDetector
                 return;
             }
 
+            // Fix A (primary bug): no double-press action is configured for this button
+            // (doublePressWindowMs <= 0, set by VolcoRuntime.OnMessageReceived), so there is
+            // nothing to wait for - fire Single synchronously, right here, with no timer and no
+            // latency. _waitingForDoublePress is deliberately left false: a second press arriving
+            // a moment later must classify on its own terms (as another immediate Single), not
+            // pair up with this one as a Double that was never configured.
+            if (_doublePressWindowMs <= 0)
+            {
+                _callback(_buttonIndex, PressType.Single);
+                return;
+            }
+
             _waitingForDoublePress = true;
             _singlePressCts?.Cancel();
             _singlePressCts?.Dispose();
             _singlePressCts = new CancellationTokenSource();
-            _ = SinglePressTimerAsync(_singlePressCts.Token);
+            _ = SinglePressTimerAsync(_singlePressCts.Token, _doublePressWindowMs);
         }
 
-        private async Task LongPressTimerAsync(CancellationToken ct)
+        private async Task LongPressTimerAsync(CancellationToken ct, int longPressMs)
         {
             try
             {
-                await Task.Delay(_longPressMs, ct);
+                await Task.Delay(longPressMs, ct);
                 lock (_lock)
                 {
                     if (ct.IsCancellationRequested) return;
@@ -139,11 +159,11 @@ public class ButtonPressDetector
             catch (OperationCanceledException) { }
         }
 
-        private async Task SinglePressTimerAsync(CancellationToken ct)
+        private async Task SinglePressTimerAsync(CancellationToken ct, int doublePressWindowMs)
         {
             try
             {
-                await Task.Delay(_doublePressWindowMs, ct);
+                await Task.Delay(doublePressWindowMs, ct);
                 lock (_lock)
                 {
                     if (ct.IsCancellationRequested) return;

@@ -189,6 +189,45 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Contains(DeviceRef.DefaultOutput(), Snapshot(_engine.ToggleMuteCalls));
     }
 
+    // ---- Fix A: no double-press configured -> single press dispatches synchronously ---------
+
+    [Fact]
+    public void SinglePress_NoDoublePressConfigured_TogglesMuteSynchronously()
+    {
+        // NewConfig() gives button 0 SinglePress=MuteCurrentOutput and leaves DoublePress at its
+        // default (Action=None), so the runtime must pass doublePressWindowMs=0 down to the
+        // detector, which fires Single synchronously on release - no polling needed here.
+        StartRuntime();
+        var connection = Connection(0);
+
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+
+        Assert.Single(Snapshot(_engine.ToggleMuteCalls));
+    }
+
+    [Fact]
+    public void SinglePress_WithDoublePressConfigured_WaitsForWindowBeforeDispatching()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+            c.Buttons[0].DoublePressWindowMs = 60;
+        });
+        StartRuntime(config);
+        var connection = Connection(0);
+
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+
+        // Immediately after the release, the single press must still be pending: a double-press
+        // action IS configured, so the detector must wait out the window rather than dispatch now.
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0),
+                    "single press never dispatched after its double-press window elapsed");
+    }
+
     // ---- mute OSD correlation --------------------------------------------------------------
 
     [Fact]
@@ -476,6 +515,98 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     // ---- device forwarding and lifetime ----------------------------------------------------
+
+    // ---- Fix C: healing blank device ids -----------------------------------------------------
+
+    [Fact]
+    public void Start_HealsBlankOutputDeviceId_WhenNameMatchesAPresentDevice()
+    {
+        var config = NewConfig(c =>
+        {
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+        });
+        var path = config.ConfigPath;
+
+        StartRuntime(config);
+
+        Assert.Equal(Speakers, config.Config.OutputDevices.Device1.Id);
+        Assert.Contains(Speakers, File.ReadAllText(path)); // saved to disk, not just in memory
+    }
+
+    [Fact]
+    public void Start_AudioNotReady_DoesNotHealDeviceIds()
+    {
+        var config = NewConfig(c =>
+        {
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+        });
+
+        StartRuntime(config, audioReady: false);
+
+        Assert.Equal("", config.Config.OutputDevices.Device1.Id);
+    }
+
+    [Fact]
+    public void DeviceAdded_HealsBlankDeviceId_ForADeviceThatWasAbsentAtStart()
+    {
+        const string NewDeviceId = "new-dev";
+        var config = NewConfig(c =>
+        {
+            // Not in _engine.Devices yet - Start()'s heal pass must leave this unhealed.
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "New Speakers" };
+        });
+
+        StartRuntime(config);
+        Assert.Equal("", config.Config.OutputDevices.Device1.Id);
+
+        var newDevice = new AudioDevice(NewDeviceId, "New Speakers", AudioFlow.Render, false);
+        _engine.Devices.Add(newDevice);
+        _engine.RaiseDeviceChanged(DeviceChangeKind.Added, newDevice);
+
+        Assert.True(WaitUntil(() => config.Config.OutputDevices.Device1.Id == NewDeviceId),
+                    "device id was not healed after DevicesChanged(Added)");
+    }
+
+    [Fact]
+    public void HealedOutputDevice_TogglePressEndsUpSettingTheHealedDevice()
+    {
+        var config = NewConfig(c =>
+        {
+            c.OutputDevices.Device1 = new DeviceRefConfig { Id = Speakers, FriendlyName = "Speakers" };
+            c.OutputDevices.Device2 = new DeviceRefConfig { Id = "", FriendlyName = "Headphones" };
+            c.Buttons[2].SinglePress = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice };
+        });
+
+        StartRuntime(config);
+        Assert.Equal(Headphones, config.Config.OutputDevices.Device2.Id); // healed at Start()
+
+        Press(Connection(0), 2);
+
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "no SetDefaultDevice call");
+        Assert.Contains(Snapshot(_engine.SetDefaultCalls), c => c.EndpointId == Headphones);
+    }
+
+    // ---- Fix D: GetSliderLevel ---------------------------------------------------------------
+
+    [Fact]
+    public void GetSliderLevel_NullBeforeStart_ReflectsMessageAfterStart_NullAfterDispose()
+    {
+        var config = NewConfig();
+        var runtime = new VolcoRuntime(config, _engine, audioReady: true, Factory, NoTimedRepushes);
+
+        Assert.Null(runtime.GetSliderLevel(0)); // before Start()
+
+        runtime.Start();
+        _runtimes.Add(runtime); // still covered by test-teardown Dispose (idempotent)
+
+        // Slider 0 defaults to Device / current default output (see NewConfig).
+        Connection(0).RaiseMessage(new SliderMessage(0, 4095));
+        Assert.True(WaitUntil(() => runtime.GetSliderLevel(0) is { } lvl && lvl > 0.9f),
+                    "slider level was not reflected after a slider message");
+
+        runtime.Dispose();
+        Assert.Null(runtime.GetSliderLevel(0)); // after Dispose()
+    }
 
     [Fact]
     public void DevicesChanged_IsForwardedForEveryKind()

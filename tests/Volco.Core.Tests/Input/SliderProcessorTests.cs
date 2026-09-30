@@ -181,6 +181,115 @@ public class SliderProcessorTests
             c.Filter is SessionFilter.ByImageNames byNames && byNames.Names.Contains("spotify.exe"));
     }
 
+    // ── Fix B: OSD must not show for a Device slider whose target doesn't resolve ─────────────
+
+    [Fact]
+    public async Task DeviceSlider_AbsentDevice_RaisesSliderLevelButNotVolumeChanged()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "absent-dev", FriendlyName = "Unplugged Headset" },
+        });
+
+        // FakeAudioEngine.DeviceStates has no entry for "absent-dev" -> TryGetDeviceState false.
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var levelTcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.SliderLevelChanged += (_, e) => levelTcs.TrySetResult(e);
+        // Written on the coalescing-timer thread, read on this (test) thread after the awaits
+        // below - plain bool read/write isn't guaranteed to be visible across threads without a
+        // memory barrier, so use Interlocked/Volatile rather than a bare bool.
+        int volumeChangedFired = 0;
+        processor.VolumeChanged += (_, _) => Interlocked.Exchange(ref volumeChangedFired, 1);
+
+        processor.HandleSliderEvent(0, 2048);
+
+        var completed = await Task.WhenAny(levelTcs.Task, Task.Delay(500));
+        Assert.True(completed == levelTcs.Task, "SliderLevelChanged did not fire");
+
+        // Give a wrongly-raised VolumeChanged (same coalesce tick) a chance to show up.
+        await Task.Delay(100);
+        Assert.Equal(0, Volatile.Read(ref volumeChangedFired));
+    }
+
+    [Fact]
+    public async Task DeviceSlider_PresentDevice_RaisesBothSliderLevelAndVolumeChanged()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "present-dev", FriendlyName = "Headphones" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var levelTcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var volumeTcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.SliderLevelChanged += (_, e) => levelTcs.TrySetResult(e);
+        processor.VolumeChanged += (_, e) => volumeTcs.TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+
+        var completedLevel = await Task.WhenAny(levelTcs.Task, Task.Delay(500));
+        Assert.True(completedLevel == levelTcs.Task, "SliderLevelChanged did not fire");
+        var completedVolume = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
+        Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
+    }
+
+    // ── Fix D: GetLastLevel ──────────────────────────────────────────────────
+
+    [Fact]
+    public void GetLastLevel_NullBeforeAnyEvent()
+    {
+        var configManager = NewConfigManager();
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        Assert.Null(processor.GetLastLevel(0));
+    }
+
+    [Fact]
+    public void GetLastLevel_OutOfRangeIndex_ReturnsNull()
+    {
+        var configManager = NewConfigManager();
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        Assert.Null(processor.GetLastLevel(-1));
+        Assert.Null(processor.GetLastLevel(999));
+    }
+
+    [Fact]
+    public async Task GetLastLevel_EqualsProcessedVolume_AfterOneEvent()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Unmapped });
+
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var tcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.SliderLevelChanged += (_, e) => tcs.TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(500));
+        Assert.True(completed == tcs.Task, "SliderLevelChanged did not fire");
+        var received = await tcs.Task;
+
+        Assert.Equal(received.Level, processor.GetLastLevel(0));
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static ConfigManager NewConfigManager()

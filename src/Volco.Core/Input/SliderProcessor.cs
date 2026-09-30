@@ -152,6 +152,26 @@ public class SliderProcessor : IDisposable
         }
     }
 
+    /// <summary>
+    /// Fix D: the most recently processed (post-curve, post-smoothing) volume in [0,1] for a
+    /// slider index, or null when the index is out of range or that slider has never reported a
+    /// value yet. The firmware only sends a slider's value when it changes, so right after app
+    /// start this is genuinely unknown for any slider that hasn't moved - callers (a settings
+    /// page seeding its live-level display) must treat null as "no data yet", not zero. Read
+    /// under <see cref="_lock"/>: ProcessPending (the coalescing timer) writes it from a
+    /// different thread.
+    /// </summary>
+    public float? GetLastLevel(int sliderIndex)
+    {
+        if (sliderIndex < 0 || sliderIndex >= _lastVolume.Length)
+            return null;
+
+        lock (_lock)
+        {
+            return _lastVolume[sliderIndex];
+        }
+    }
+
     private void ProcessPending()
     {
         var config = _configManager.Config;
@@ -191,11 +211,20 @@ public class SliderProcessor : IDisposable
             // log line must not be built when debug logging is off.
             Stopwatch? sw = AppLog.IsDebugEnabled ? Stopwatch.StartNew() : null;
 
+            // Fix B: a Device slider whose target doesn't currently resolve to a live endpoint
+            // (unplugged, or a stale/unhealed id) still gets SetDeviceVolume called on it - that
+            // write is a documented no-op - but must NOT claim an OSD-worthy volume change below.
+            // Defaults to true for Processes/Unmapped, which have no single "device" to be absent.
+            bool deviceResolved = true;
+
             switch (sliderConfig.Type)
             {
                 case SliderMappingType.Device:
+                    var deviceRef = DeviceRefFor(sliderConfig);
                     AppLog.Debug($"[Slider] index={sliderIndex} type=Device device={sliderConfig.DeviceName} adc={value} vol={volume:F3}");
-                    _audio.SetDeviceVolume(DeviceRefFor(sliderConfig), volume);
+                    _audio.SetDeviceVolume(deviceRef, volume);
+                    // TryGetDeviceState is an O(1) cached read, documented safe from any thread.
+                    deviceResolved = _audio.TryGetDeviceState(deviceRef, out _, out _);
                     break;
 
                 case SliderMappingType.Processes:
@@ -213,9 +242,11 @@ public class SliderProcessor : IDisposable
             if (sw is not null)
                 AppLog.Debug($"[Slider] index={sliderIndex} dispatch took {sw.ElapsedMilliseconds}ms");
 
+            // Always raised, even for an unresolved Device target: it reflects the physical
+            // slider position, not the (possibly absent) device it's mapped to.
             SliderLevelChanged?.Invoke(this, new SliderLevelEventArgs(sliderIndex, volume));
 
-            if (VolumeChanged != null)
+            if (deviceResolved && VolumeChanged != null)
             {
                 var currentOutput = sliderConfig.Type == SliderMappingType.Device
                                     && string.IsNullOrEmpty(sliderConfig.DeviceName)

@@ -130,4 +130,84 @@ public class ButtonPressDetectorTests
         }
         _detector.HandleButtonEvent(3, ButtonState.Released, 120, 300);
     }
+
+    // ── Fix A: doublePressWindowMs <= 0 fires Single synchronously, and per-call timings ──────
+
+    [Fact]
+    public void Window0_SinglePress_FiresSynchronouslyBeforeHandleButtonEventReturns()
+    {
+        _detector.HandleButtonEvent(5, ButtonState.Pressed, longPressMs: 500, doublePressWindowMs: 0);
+        _detector.HandleButtonEvent(5, ButtonState.Released, longPressMs: 500, doublePressWindowMs: 0);
+
+        // No WaitForEventsAsync at all: with no double-press window there is nothing to wait for,
+        // so the Single must already have been raised by the time Release's HandleButtonEvent
+        // call returns to us, on this thread.
+        lock (_eventsLock)
+        {
+            Assert.Single(_events);
+            Assert.Equal(PressType.Single, _events[0].PressType);
+            Assert.Equal(5, _events[0].ButtonIndex);
+        }
+    }
+
+    [Fact]
+    public void WindowNegative1_SinglePress_FiresSynchronously()
+    {
+        // -1 is the actual discriminator against the old code: Task.Delay's -1 sentinel means
+        // "infinite" (Timeout.Infinite), so the pre-fix SinglePressTimerAsync would await forever
+        // (until cancelled by a later press) rather than complete - unlike 0, which .NET 8's
+        // Task.Delay completes synchronously for, so a window-0 case alone would pass even
+        // against the pre-fix code path once it reached the timer.
+        _detector.HandleButtonEvent(9, ButtonState.Pressed, longPressMs: 500, doublePressWindowMs: -1);
+        _detector.HandleButtonEvent(9, ButtonState.Released, longPressMs: 500, doublePressWindowMs: -1);
+
+        lock (_eventsLock)
+        {
+            Assert.Single(_events);
+            Assert.Equal(PressType.Single, _events[0].PressType);
+            Assert.Equal(9, _events[0].ButtonIndex);
+        }
+    }
+
+    [Fact]
+    public void Window0_TwoQuickPressReleasePairs_RaiseTwoSinglesAndNoDouble()
+    {
+        _detector.HandleButtonEvent(6, ButtonState.Pressed, 500, 0);
+        _detector.HandleButtonEvent(6, ButtonState.Released, 500, 0);
+        _detector.HandleButtonEvent(6, ButtonState.Pressed, 500, 0);
+        _detector.HandleButtonEvent(6, ButtonState.Released, 500, 0);
+
+        lock (_eventsLock)
+        {
+            Assert.Equal(2, _events.Count);
+            Assert.All(_events, e => Assert.Equal(PressType.Single, e.PressType));
+        }
+    }
+
+    [Fact]
+    public async Task TrackerTimingIsNotFrozenAtFirstUse_SwitchingToWindow0TakesEffectImmediately()
+    {
+        // First cycle for this button uses a real double-press window (300ms) - before the fix,
+        // _trackers.GetOrAdd froze this tracker's timings at 300ms for its whole lifetime.
+        _detector.HandleButtonEvent(7, ButtonState.Pressed, 500, 300);
+        _detector.HandleButtonEvent(7, ButtonState.Released, 500, 300);
+        await WaitForEventsAsync(1);
+
+        lock (_eventsLock)
+        {
+            Assert.Single(_events);
+            Assert.Equal(PressType.Single, _events[0].PressType);
+        }
+
+        // Second cycle, same button, now with window 0: if the timing were frozen at 300ms this
+        // would still be waiting and the synchronous assert below would see only 1 event.
+        _detector.HandleButtonEvent(7, ButtonState.Pressed, 500, 0);
+        _detector.HandleButtonEvent(7, ButtonState.Released, 500, 0);
+
+        lock (_eventsLock)
+        {
+            Assert.Equal(2, _events.Count);
+            Assert.Equal(PressType.Single, _events[1].PressType);
+        }
+    }
 }
