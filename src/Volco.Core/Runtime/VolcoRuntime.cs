@@ -364,8 +364,14 @@ public sealed class VolcoRuntime : IDisposable
             case ButtonMessage button:
                 AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
                 var bcfg = Config.Config.Buttons.ElementAtOrDefault(button.ButtonIndex);
+                // Fix A: no double-press action configured -> pass 0, which makes
+                // ButtonPressDetector fire Single synchronously on release instead of waiting out
+                // a double-press window that can never be satisfied. Long-press is unaffected.
+                var doublePressWindowMs = bcfg != null && bcfg.DoublePress.Action == ButtonActionType.None
+                    ? 0
+                    : bcfg?.DoublePressWindowMs ?? 300;
                 _buttonPressDetector?.HandleButtonEvent(button.ButtonIndex, button.State,
-                    bcfg?.LongPressMs ?? 500, bcfg?.DoublePressWindowMs ?? 300);
+                    bcfg?.LongPressMs ?? 500, doublePressWindowMs);
                 break;
         }
     }

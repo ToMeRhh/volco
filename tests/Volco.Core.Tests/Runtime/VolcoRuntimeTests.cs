@@ -189,6 +189,45 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Contains(DeviceRef.DefaultOutput(), Snapshot(_engine.ToggleMuteCalls));
     }
 
+    // ---- Fix A: no double-press configured -> single press dispatches synchronously ---------
+
+    [Fact]
+    public void SinglePress_NoDoublePressConfigured_TogglesMuteSynchronously()
+    {
+        // NewConfig() gives button 0 SinglePress=MuteCurrentOutput and leaves DoublePress at its
+        // default (Action=None), so the runtime must pass doublePressWindowMs=0 down to the
+        // detector, which fires Single synchronously on release - no polling needed here.
+        StartRuntime();
+        var connection = Connection(0);
+
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+
+        Assert.Single(Snapshot(_engine.ToggleMuteCalls));
+    }
+
+    [Fact]
+    public void SinglePress_WithDoublePressConfigured_WaitsForWindowBeforeDispatching()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+            c.Buttons[0].DoublePressWindowMs = 60;
+        });
+        StartRuntime(config);
+        var connection = Connection(0);
+
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+
+        // Immediately after the release, the single press must still be pending: a double-press
+        // action IS configured, so the detector must wait out the window rather than dispatch now.
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0),
+                    "single press never dispatched after its double-press window elapsed");
+    }
+
     // ---- mute OSD correlation --------------------------------------------------------------
 
     [Fact]
