@@ -140,7 +140,9 @@ public static class ConfigMigrator
     /// this can run at any later point in the app's life, against whatever devices happen to be
     /// plugged in right now, so a loose match binding output switching to the wrong endpoint would
     /// be a worse outcome than leaving the reference unhealed for another day. Never touches a
-    /// reference that already has a non-empty id.
+    /// reference that already has a non-empty id. For the same reason, a friendly name matched by
+    /// MORE than one present device is left unhealed too — an ambiguous name is exactly the case
+    /// where guessing which endpoint was meant risks binding to the wrong one.
     /// </summary>
     /// <returns>True if anything changed.</returns>
     public static bool HealDeviceIds(AppConfig config, IReadOnlyList<AudioDevice> devices)
@@ -169,10 +171,22 @@ public static class ConfigMigrator
         if (!string.IsNullOrEmpty(cfg.Id)) return false;
         if (string.IsNullOrEmpty(cfg.FriendlyName)) return false;
 
-        var match = devices.FirstOrDefault(d =>
-            string.Equals(d.FriendlyName, cfg.FriendlyName, StringComparison.OrdinalIgnoreCase));
-        if (match == null) return false;
+        var matches = devices.Where(d =>
+            string.Equals(d.FriendlyName, cfg.FriendlyName, StringComparison.OrdinalIgnoreCase)).ToList();
 
+        if (matches.Count == 0) return false;
+
+        if (matches.Count > 1)
+        {
+            // Ambiguous: more than one present device shares this friendly name. Heal's own
+            // principle (see the class doc above) is that a wrong binding is worse than no
+            // binding, so this reference is left blank rather than guessing.
+            AppLog.Info($"Device id heal: \"{cfg.FriendlyName}\" matches {matches.Count} present " +
+                        "devices; leaving this reference unresolved rather than guessing.");
+            return false;
+        }
+
+        var match = matches[0];
         cfg.Id = match.Id;
         cfg.FriendlyName = match.FriendlyName; // normalise to the device's own casing
         return true;

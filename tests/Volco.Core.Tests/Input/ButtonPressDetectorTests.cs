@@ -151,6 +151,25 @@ public class ButtonPressDetectorTests
     }
 
     [Fact]
+    public void WindowNegative1_SinglePress_FiresSynchronously()
+    {
+        // -1 is the actual discriminator against the old code: Task.Delay's -1 sentinel means
+        // "infinite" (Timeout.Infinite), so the pre-fix SinglePressTimerAsync would await forever
+        // (until cancelled by a later press) rather than complete - unlike 0, which .NET 8's
+        // Task.Delay completes synchronously for, so a window-0 case alone would pass even
+        // against the pre-fix code path once it reached the timer.
+        _detector.HandleButtonEvent(9, ButtonState.Pressed, longPressMs: 500, doublePressWindowMs: -1);
+        _detector.HandleButtonEvent(9, ButtonState.Released, longPressMs: 500, doublePressWindowMs: -1);
+
+        lock (_eventsLock)
+        {
+            Assert.Single(_events);
+            Assert.Equal(PressType.Single, _events[0].PressType);
+            Assert.Equal(9, _events[0].ButtonIndex);
+        }
+    }
+
+    [Fact]
     public void Window0_TwoQuickPressReleasePairs_RaiseTwoSinglesAndNoDouble()
     {
         _detector.HandleButtonEvent(6, ButtonState.Pressed, 500, 0);

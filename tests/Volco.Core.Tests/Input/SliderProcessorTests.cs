@@ -201,8 +201,11 @@ public class SliderProcessorTests
 
         var levelTcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
         processor.SliderLevelChanged += (_, e) => levelTcs.TrySetResult(e);
-        var sawVolumeChanged = false;
-        processor.VolumeChanged += (_, _) => sawVolumeChanged = true;
+        // Written on the coalescing-timer thread, read on this (test) thread after the awaits
+        // below - plain bool read/write isn't guaranteed to be visible across threads without a
+        // memory barrier, so use Interlocked/Volatile rather than a bare bool.
+        int volumeChangedFired = 0;
+        processor.VolumeChanged += (_, _) => Interlocked.Exchange(ref volumeChangedFired, 1);
 
         processor.HandleSliderEvent(0, 2048);
 
@@ -211,7 +214,7 @@ public class SliderProcessorTests
 
         // Give a wrongly-raised VolumeChanged (same coalesce tick) a chance to show up.
         await Task.Delay(100);
-        Assert.False(sawVolumeChanged, "VolumeChanged fired for a slider mapped to an absent device");
+        Assert.Equal(0, Volatile.Read(ref volumeChangedFired));
     }
 
     [Fact]

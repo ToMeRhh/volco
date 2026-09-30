@@ -251,6 +251,40 @@ public class ConfigMigratorTests
     }
 
     [Fact]
+    public void HealDeviceIds_AmbiguousFriendlyName_LeavesReferenceUnresolved()
+    {
+        // Two present devices share the same friendly name - healing would have to guess which
+        // one was meant, so neither should be picked.
+        var ambiguousDevices = new List<AudioDevice>
+        {
+            new("dev-1", "Speakers", AudioFlow.Render, true),
+            new("dev-3", "Speakers", AudioFlow.Render, false),
+        };
+        var config = AppConfig.CreateDefault();
+        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+
+        var changed = ConfigMigrator.HealDeviceIds(config, ambiguousDevices);
+
+        Assert.False(changed);
+        Assert.Equal("", config.OutputDevices.Device1.Id);
+        Assert.Equal("Speakers", config.OutputDevices.Device1.FriendlyName);
+    }
+
+    [Fact]
+    public void HealDeviceIds_MatchesCaseInsensitively_AndNormalisesFriendlyNameCasing()
+    {
+        var config = AppConfig.CreateDefault();
+        // Config carries the name in a different casing than the device reports.
+        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "speakers (realtek high definition audio)" };
+
+        var changed = ConfigMigrator.HealDeviceIds(config, Devices);
+
+        Assert.True(changed);
+        Assert.Equal("dev-1", config.OutputDevices.Device1.Id);
+        Assert.Equal("Speakers (Realtek High Definition Audio)", config.OutputDevices.Device1.FriendlyName);
+    }
+
+    [Fact]
     public void HealDeviceIds_ReturnsFalse_WhenNothingChanges()
     {
         // CreateDefault(): output pair and button actions have no FriendlyName to match on, and
