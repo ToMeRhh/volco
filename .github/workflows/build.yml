@@ -29,7 +29,7 @@ jobs:
 
     - name: Test
       run: |
-        dotnet test tests/Volco.Tests/Volco.Tests.csproj \
+        dotnet test tests/Volco.Core.Tests/Volco.Core.Tests.csproj \
           --configuration Release
 
   build:

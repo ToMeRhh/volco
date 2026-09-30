@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <VolcoVersion Condition="'$(VolcoVersion)' == ''">0.0.0</VolcoVersion>
+    <VolcoReleaseChannel Condition="'$(VolcoReleaseChannel)' == ''">local</VolcoReleaseChannel>
+    <Version>$(VolcoVersion)</Version>
+    <InformationalVersion>$(VolcoVersion)</InformationalVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="ReleaseChannel" Value="$(VolcoReleaseChannel)" />
+  </ItemGroup>
+</Project>

@@ -2,7 +2,7 @@ using System;
 using Microsoft.UI;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
-using Volco.Communication;
+using Volco.Core.Communication;
 
 namespace Volco.UI.Converters;
 
@@ -21,10 +21,10 @@ public sealed class ConnectionStatusToBrushConverter : IValueConverter
         {
             return status switch
             {
-                ConnectionStatus.Connected    => new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x22, 0xB1, 0x4C)),
-                ConnectionStatus.Error        => new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xE8, 0x11, 0x23)),
-                ConnectionStatus.Disconnected => new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x88, 0x88, 0x88)),
-                _                             => new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x88, 0x88, 0x88)),
+                ConnectionStatus.Connected    => new SolidColorBrush(global::Windows.UI.Color.FromArgb(0xFF, 0x22, 0xB1, 0x4C)),
+                ConnectionStatus.Error        => new SolidColorBrush(global::Windows.UI.Color.FromArgb(0xFF, 0xE8, 0x11, 0x23)),
+                ConnectionStatus.Disconnected => new SolidColorBrush(global::Windows.UI.Color.FromArgb(0xFF, 0x88, 0x88, 0x88)),
+                _                             => new SolidColorBrush(global::Windows.UI.Color.FromArgb(0xFF, 0x88, 0x88, 0x88)),
             };
         }
 

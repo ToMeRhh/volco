@@ -1,5 +1,5 @@
-using Volco.Audio;
-using Volco.Config;
+using Volco.Core.Audio;
+using Volco.Core.Config;
 
 namespace Volco.UI.ViewModels;
 

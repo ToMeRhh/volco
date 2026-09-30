@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Volco.Audio;
-using Volco.Config;
+using Volco.Core.Audio;
+using Volco.Core.Config;
 using static Volco.UI.ViewModels.DeviceRefLookup;
 
 namespace Volco.UI.ViewModels;

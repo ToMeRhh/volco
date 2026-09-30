@@ -1,0 +1,172 @@
+using System.Runtime.InteropServices;
+using Windows.Win32.Media.Audio;
+
+namespace Volco.Windows.Audio;
+
+/// <summary>
+/// Sets the Windows default audio endpoint via the undocumented <c>IPolicyConfig</c> COM
+/// interface - the same route every tool in this space uses (EarTrumpet, SoundSwitch,
+/// AudioSwitcher, the AudioDeviceCmdlets PowerShell module, and the <c>svcl.exe</c> this class
+/// replaces). There is no public Windows API for this (spec §6).
+///
+/// <c>IPolicyConfig</c> is not in the CsWin32-consumed Win32 metadata, so it cannot be generated
+/// the way every other COM interface in this codebase is - it is hand-written here with
+/// <see cref="ComImportAttribute"/> and an explicit vtable slot order (see the interface's own
+/// doc comment for the ordering and its confidence level; this is the single highest runtime
+/// risk item in Task 13 and cannot be caught by a compile).
+///
+/// Because the interface is undocumented and may change or disappear on a future Windows
+/// release, every failure here is caught, logged, and swallowed - this must never take the app
+/// down (spec §6, "failures must be non-fatal").
+/// </summary>
+internal sealed class DefaultDevicePolicy
+{
+    // CLSID_CPolicyConfigClient (spec §6) - the single source of truth for this value is the
+    // [Guid(...)] attribute on the nested PolicyConfigClient coclass below; this comment just
+    // records the identifier's name from the spec for anyone grepping for it.
+
+    /// <summary>
+    /// Activates <c>CPolicyConfigClient</c> and calls <c>IPolicyConfig::SetDefaultEndpoint</c> for
+    /// all three roles - Console, Multimedia, and Communications - because Windows keeps three
+    /// separate defaults and setting only one makes device switching appear half-broken (spec
+    /// §2.4). Returns true only if all three succeeded; any COM failure for any role is logged
+    /// via <see cref="Volco.Core.Diagnostics.AppLog"/> and does not throw.
+    /// </summary>
+    public bool TrySetDefault(string endpointId)
+    {
+        if (string.IsNullOrEmpty(endpointId))
+        {
+            Volco.Core.Diagnostics.AppLog.Error("DefaultDevicePolicy.TrySetDefault: called with an empty endpoint id.");
+            return false;
+        }
+
+        object? comObject = null;
+        try
+        {
+            // Mirrors the confirmed local precedent for activating a coclass by GUID directly -
+            // DeviceRegistry.cs:186 does "(IMMDeviceEnumerator)new MMDeviceEnumerator()" for a
+            // CsWin32-generated coclass wrapper. IPolicyConfig has no CsWin32-generated coclass
+            // (it isn't in the consumed metadata), so PolicyConfigClient below is a hand-written
+            // equivalent: a bare [ComImport]/[Guid] class with no members, which is the standard,
+            // long-established idiom for activating an undocumented COM class purely by CLSID -
+            // "new PolicyConfigClient()" triggers CoCreateInstance under the hood via the CLR's
+            // built-in COM activation for [ComImport] classes.
+            comObject = new PolicyConfigClient();
+            var policyConfig = (IPolicyConfig)comObject;
+
+            bool allOk = true;
+            allOk &= TrySetRole(policyConfig, endpointId, ERole.eConsole);
+            allOk &= TrySetRole(policyConfig, endpointId, ERole.eMultimedia);
+            allOk &= TrySetRole(policyConfig, endpointId, ERole.eCommunications);
+            return allOk;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
+        {
+            Volco.Core.Diagnostics.AppLog.Error($"DefaultDevicePolicy.TrySetDefault: failed to activate IPolicyConfig for endpoint '{endpointId}': {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            if (comObject is not null && Marshal.IsComObject(comObject))
+            {
+                Marshal.ReleaseComObject(comObject);
+            }
+        }
+    }
+
+    private static bool TrySetRole(IPolicyConfig policyConfig, string endpointId, ERole role)
+    {
+        try
+        {
+            policyConfig.SetDefaultEndpoint(endpointId, role);
+            return true;
+        }
+        catch (COMException ex)
+        {
+            Volco.Core.Diagnostics.AppLog.Error($"DefaultDevicePolicy.TrySetDefault: SetDefaultEndpoint failed for role {role}, endpoint '{endpointId}': {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Hand-written equivalent of a CsWin32-generated coclass wrapper (see the comment at its one
+    /// call site in <see cref="TrySetDefault"/>). No members are needed - only the CLSID, used by
+    /// the CLR's COM activation when this type is constructed with <c>new</c>.
+    /// </summary>
+    [ComImport]
+    [Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")]
+    private class PolicyConfigClient
+    {
+    }
+
+    /// <summary>
+    /// Hand-written <c>IPolicyConfig</c> (Win7+ IID). Not generated by CsWin32 - this interface is
+    /// not in the Win32 metadata CsWin32 consumes, and is undocumented by Microsoft entirely.
+    ///
+    /// <b>Vtable ordering - the highest-risk item in this task, flag prominently for manual
+    /// verification:</b> COM interop with <c>[ComImport]</c> resolves a call by the interface
+    /// member's *declaration position*, not its name - so <see cref="SetDefaultEndpoint"/> must be
+    /// declared at exactly the vtable slot the real <c>IPolicyConfig</c> puts it at (slot 13
+    /// overall: 3 <c>IUnknown</c> slots + 10 preceding methods declared here), or this class will
+    /// silently invoke the wrong function pointer at runtime - something no build or test can
+    /// catch. The order below is reproduced from memory of the widely-mirrored community
+    /// <c>PolicyConfig.h</c> reference header referenced by spec §6 (the same header essentially
+    /// every C#/C++ tool in this space - including, transitively, <c>svcl.exe</c> itself - has
+    /// copied for over a decade). I have NOT been able to check it against a live copy of that
+    /// header in this task (no external search was permitted), so treat this ordering as
+    /// plausible-but-unverified and confirm it against a current reference implementation before
+    /// shipping. The ten placeholder methods before <see cref="SetDefaultEndpoint"/> are never
+    /// invoked by this class - only their *count and order* matter, not their declared parameter
+    /// shapes, so their signatures are simplified stand-ins for the real (multi-parameter)
+    /// prototypes, noted in each one's summary.
+    /// </summary>
+    [ComImport]
+    [Guid("F8679F50-850A-41CF-9C72-430F290290C8")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPolicyConfig
+    {
+        /// <summary>Slot 3. Real prototype: HRESULT GetMixFormat(PCWSTR, WAVEFORMATEX**). Never called.</summary>
+        void GetMixFormat();
+
+        /// <summary>Slot 4. Real prototype: HRESULT GetDeviceFormat(PCWSTR, INT, WAVEFORMATEX**). Never called.</summary>
+        void GetDeviceFormat();
+
+        /// <summary>Slot 5. Real prototype: HRESULT ResetDeviceFormat(PCWSTR). Never called.</summary>
+        void ResetDeviceFormat();
+
+        /// <summary>Slot 6. Real prototype: HRESULT SetDeviceFormat(PCWSTR, WAVEFORMATEX*, WAVEFORMATEX*). Never called.</summary>
+        void SetDeviceFormat();
+
+        /// <summary>Slot 7. Real prototype: HRESULT GetProcessingPeriod(PCWSTR, INT, PINT64, PINT64). Never called.</summary>
+        void GetProcessingPeriod();
+
+        /// <summary>Slot 8. Real prototype: HRESULT SetProcessingPeriod(PCWSTR, PINT64). Never called.</summary>
+        void SetProcessingPeriod();
+
+        /// <summary>Slot 9. Real prototype: HRESULT GetShareMode(PCWSTR, DeviceShareMode*). Never called.</summary>
+        void GetShareMode();
+
+        /// <summary>Slot 10. Real prototype: HRESULT SetShareMode(PCWSTR, DeviceShareMode*). Never called.</summary>
+        void SetShareMode();
+
+        /// <summary>Slot 11. Real prototype: HRESULT GetPropertyValue(PCWSTR, const PROPERTYKEY&amp;, PROPVARIANT*). Never called.</summary>
+        void GetPropertyValue();
+
+        /// <summary>Slot 12. Real prototype: HRESULT SetPropertyValue(PCWSTR, const PROPERTYKEY&amp;, PROPVARIANT*). Never called.</summary>
+        void SetPropertyValue();
+
+        /// <summary>
+        /// Slot 13. The one method this class actually calls. Real prototype:
+        /// HRESULT SetDefaultEndpoint(PCWSTR wszDeviceId, ERole eRole). Marshaled with an explicit
+        /// LPWStr string (standard, low-risk .NET COM interop for a PCWSTR in-parameter -
+        /// unrelated to the vtable-order risk above) and the CsWin32-generated <see cref="ERole"/>
+        /// enum already used throughout DeviceRegistry/SessionRegistry, so its underlying size and
+        /// values (eConsole=0, eMultimedia=1, eCommunications=2) match what this codebase already
+        /// relies on elsewhere.
+        /// </summary>
+        void SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string deviceId, ERole role);
+
+        /// <summary>Slot 14. Real prototype: HRESULT SetEndpointVisibility(PCWSTR, INT). Never called.</summary>
+        void SetEndpointVisibility();
+    }
+}
