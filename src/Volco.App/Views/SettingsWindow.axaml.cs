@@ -13,7 +13,6 @@ public sealed record NavItem(string Label, string Tag, Geometry? Icon, Func<Cont
 public partial class SettingsWindow : Window
 {
     private readonly SettingsViewModel _vm;
-    private readonly VolcoRuntime _runtime;
     private readonly ListBox _navList;
     private readonly ContentControl _pageHost;
     private readonly Dictionary<string, Control> _pages = new();
@@ -24,7 +23,6 @@ public partial class SettingsWindow : Window
     public SettingsWindow(SettingsViewModel vm, VolcoRuntime runtime)
     {
         _vm = vm;
-        _runtime = runtime;
         AvaloniaXamlLoader.Load(this);
         _navList = this.FindControl<ListBox>("NavList")!;
         _pageHost = this.FindControl<ContentControl>("PageHost")!;
@@ -41,11 +39,6 @@ public partial class SettingsWindow : Window
         _navList.SelectedIndex = 0;
 
         Closing += OnClosing;
-
-        // Rule (f): the firmware only reports a slider when it moves, so seed live levels now and
-        // whenever the (hidden/shown, never recreated) window is activated again.
-        _vm.Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
-        Activated += (_, _) => _vm.Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
     }
 
     private static NavItem Nav(string label, string tag, string iconKey, Func<Control> create)

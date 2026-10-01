@@ -34,6 +34,27 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void SettingsViewModel_SeedsLiveLevelsFromRuntime_WhenCreatedAfterSliderReports()
+    {
+        using var rig = new TestRig();
+        const int index = 0;
+        Assert.Null(rig.Runtime.GetSliderLevel(index));
+
+        // The firmware only reports a slider when it moves: deliver a frame before any VM exists.
+        rig.Connection!.RaiseMessage(new SliderMessage(index, 2048));
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (rig.Runtime.GetSliderLevel(index) is null && DateTime.UtcNow < deadline)
+            Thread.Sleep(10);
+        var level = rig.Runtime.GetSliderLevel(index);
+        Assert.NotNull(level);
+
+        using var vm = rig.CreateSettings(new RecordingDispatcher());
+
+        var item = vm.Sliders.Items.Single(i => i.Index == index);
+        Assert.Equal((double)level!.Value, item.LiveLevel, 5);
+    }
+
+    [Fact]
     public async Task ConnectionViewModel_StatusFromWorkerThread_MarshalsAndUpdates()
     {
         using var rig = new TestRig();

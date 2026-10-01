@@ -63,6 +63,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
         _runtime.DevicesChanged     += OnDevicesChanged;
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
+
+        // Rule (f): the firmware only reports a slider when it moves, so levels reported before
+        // this VM existed would never reach the bars. Seed from the runtime now; from here on the
+        // SliderLevelChanged subscription (kept for the VM's whole lifetime, even while the window
+        // is hidden) keeps them current, so no re-seed on window activation is needed.
+        Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
     }
 
     // ── Runtime event handlers (any thread) ───────────────────────────────────
