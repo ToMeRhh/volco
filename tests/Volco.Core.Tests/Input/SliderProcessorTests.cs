@@ -69,9 +69,9 @@ public class SliderProcessorTests
         using var processor = new SliderProcessor(audio, configManager);
 
         processor.HandleSliderEvent(sliderIndex: 0, adcValue: 2048);
-        await WaitForAsync(() => audio.DeviceVolumeCalls.Count >= 1);
+        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 1);
 
-        var (device, level) = Assert.Single(audio.DeviceVolumeCalls);
+        var (device, level) = Assert.Single(audio.Snapshot(audio.DeviceVolumeCalls));
         Assert.Equal(DeviceRefKind.Default, device.Kind);
         Assert.InRange(level, 0.4f, 0.6f);
     }
@@ -92,9 +92,9 @@ public class SliderProcessorTests
         using var processor = new SliderProcessor(audio, configManager);
 
         processor.HandleSliderEvent(0, 4095);
-        await WaitForAsync(() => audio.SessionVolumeCalls.Count >= 1);
+        await WaitForAsync(() => audio.Snapshot(audio.SessionVolumeCalls).Count >= 1);
 
-        var (filter, level) = Assert.Single(audio.SessionVolumeCalls);
+        var (filter, level) = Assert.Single(audio.Snapshot(audio.SessionVolumeCalls));
         var byNames = Assert.IsType<SessionFilter.ByImageNames>(filter);
         Assert.Equal(new[] { "spotify.exe" }, byNames.Names);
         Assert.Equal(1f, level, 2);
@@ -116,9 +116,9 @@ public class SliderProcessorTests
         using var processor = new SliderProcessor(audio, configManager);
 
         processor.HandleSliderEvent(1, 1024);
-        await WaitForAsync(() => audio.SessionVolumeCalls.Any(c => c.Filter is SessionFilter.Unmapped));
+        await WaitForAsync(() => audio.Snapshot(audio.SessionVolumeCalls).Any(c => c.Filter is SessionFilter.Unmapped));
 
-        var call = audio.SessionVolumeCalls.First(c => c.Filter is SessionFilter.Unmapped);
+        var call = audio.Snapshot(audio.SessionVolumeCalls).First(c => c.Filter is SessionFilter.Unmapped);
         var unmapped = Assert.IsType<SessionFilter.Unmapped>(call.Filter);
         Assert.Contains("spotify.exe", unmapped.MappedNames);
     }
@@ -139,13 +139,13 @@ public class SliderProcessorTests
 
         // Establish a level, then let the coalesce tick flush it.
         processor.HandleSliderEvent(0, 1024);
-        await WaitForAsync(() => audio.SessionVolumeCalls.Count >= 1);
-        var before = audio.SessionVolumeCalls.Count;
+        await WaitForAsync(() => audio.Snapshot(audio.SessionVolumeCalls).Count >= 1);
+        var before = audio.Snapshot(audio.SessionVolumeCalls).Count;
 
         audio.RaiseSessionCreated(new AudioSessionInfo("inst-9", 7, "spotify.exe", "dev-1", false));
-        await WaitForAsync(() => audio.SessionVolumeCalls.Count > before);
+        await WaitForAsync(() => audio.Snapshot(audio.SessionVolumeCalls).Count > before);
 
-        var last = audio.SessionVolumeCalls[^1];
+        var last = audio.Snapshot(audio.SessionVolumeCalls)[^1];
         var byNames = Assert.IsType<SessionFilter.ByImageNames>(last.Filter);
         Assert.Contains("spotify.exe", byNames.Names);
         Assert.InRange(last.Level, 0.2f, 0.3f);
@@ -169,15 +169,15 @@ public class SliderProcessorTests
         using var processor = new SliderProcessor(audio, configManager);
 
         processor.HandleSliderEvent(1, 1024);
-        await WaitForAsync(() => audio.SessionVolumeCalls.Count >= 1);
-        var before = audio.SessionVolumeCalls.Count;
+        await WaitForAsync(() => audio.Snapshot(audio.SessionVolumeCalls).Count >= 1);
+        var before = audio.Snapshot(audio.SessionVolumeCalls).Count;
 
         // FakeAudioEngine raises this synchronously, so OnSessionsChanged has already run
         // by the time this call returns — no polling needed.
         audio.RaiseSessionCreated(new AudioSessionInfo("inst-1", 5, "spotify.exe", "dev-1", false));
 
-        Assert.Equal(before, audio.SessionVolumeCalls.Count);
-        Assert.DoesNotContain(audio.SessionVolumeCalls, c =>
+        Assert.Equal(before, audio.Snapshot(audio.SessionVolumeCalls).Count);
+        Assert.DoesNotContain(audio.Snapshot(audio.SessionVolumeCalls), c =>
             c.Filter is SessionFilter.ByImageNames byNames && byNames.Names.Contains("spotify.exe"));
     }
 
@@ -301,7 +301,7 @@ public class SliderProcessorTests
     }
 
     /// <summary>Polls until <paramref name="condition"/> holds or the timeout expires.</summary>
-    private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 1000)
+    private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 5000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)

@@ -33,7 +33,7 @@ cd firmware && pio device monitor   # serial monitor
 
 ## Architecture
 
-Volco is a Windows system tray app that controls PC audio via an external hardware controller (ESP32 with sliders and buttons). The app is split into four real projects (separate `.csproj`s, not `<Compile Remove>` tricks), plus the firmware:
+Volco is a Windows system tray app that controls PC audio via an external hardware controller (ESP32 with sliders and buttons). The app is split into three real source projects (`Volco.Core`, `Volco.App`, `Volco.Windows`) plus two test projects (separate `.csproj`s, not `<Compile Remove>` tricks), plus the firmware:
 
 ### `src/Volco.Core/` — platform-neutral, `net8.0`, builds and tests on Linux
 
@@ -44,14 +44,6 @@ No UI, no platform APIs. Holds the protocol, config, input, and orchestration la
 - `Config/`, `Updates/` — `ConfigManager`/`ConfigMigrator`, `BuildInfo`/`GitHubUpdater`.
 - `Diagnostics/` — `Volco.Core.Diagnostics.AppLog`.
 - `Runtime/` — `VolcoRuntime`, the UI-facing orchestrator. This is what used to be ~350 lines of `App.xaml.cs`: it owns transport construction/`Connect()`/restart-on-config-change, routing `IControllerConnection.MessageReceived` to `SliderProcessor`/`ButtonPressDetector`, `ActionFactory` dispatch on detected presses, the pending-mute-OSD correlation, `PushControllerState` (with dedup against the last-pushed frame so slider drags don't flood the controller), and the post-connect re-push timers. It exposes only `Volco.Core` types (`IAudioEngine`, `ConfigManager`, `ConnectionStatus`, etc.) — nothing UI or Windows-specific leaks through it. Constructed headless (e.g. with a fake `IAudioEngine`), the whole app's behavior is driveable from Linux tests with no UI process.
-
-### `src/Volco.Windows/` — `net8.0-windows10.0.22621.0`, class library
-
-The COM audio engine, in namespace `Volco.Windows.Audio`:
-- `AudioEngine` — the real Core Audio engine. Owns one dedicated MTA thread and a struct-command work queue; all COM activation, registration, and writes happen on that thread. `Start()` returns `bool` (whether the engine came up), which `VolcoRuntime` uses to skip config migration if audio isn't ready.
-- `DeviceRegistry` — caches every live endpoint and its COM objects, kept current by `IMMNotificationClient` instead of re-enumeration.
-- `SessionRegistry` — caches every live per-app audio session across all render devices, driven by `IAudioSessionNotification`; volume writes are an O(1) dictionary lookup, never an enumeration.
-- `DefaultDevicePolicy` — switches the Windows default output device via the undocumented `IPolicyConfig` COM interface, replacing the old `svcl.exe` child process.
 
 ### `src/Volco.App/` — Avalonia 12 UI, `net8.0`, builds and tests on Linux
 

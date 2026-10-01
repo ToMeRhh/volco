@@ -56,4 +56,18 @@ public class AppLogTests
             AppLog.IsDebugEnabled = original;
         }
     }
+
+    [Fact]
+    public void Flush_WritesQueuedLineSynchronously_AndIsSafeToCallTwice()
+    {
+        var marker = $"flush-test-{Guid.NewGuid():N}";
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Volco", "volco.log");
+
+        AppLog.Info(marker);
+        AppLog.Flush();
+        AppLog.Flush();
+
+        Assert.Contains(marker, File.ReadAllText(path));
+    }
 }

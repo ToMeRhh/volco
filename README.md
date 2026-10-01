@@ -109,7 +109,8 @@ Requires the .NET 10 SDK (pinned in `global.json`; projects still target net8.0)
 
 ```bash
 dotnet publish src/Volco.Windows/Volco.Windows.csproj -c Release -r win-x64 --self-contained true \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:EnableCompressionInSingleFile=true -o ./publish/
 ```
 
 The tests build and run on any OS: `dotnet test tests/Volco.Core.Tests` and `dotnet test tests/Volco.App.Tests`.

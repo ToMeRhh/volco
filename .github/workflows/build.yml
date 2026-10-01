@@ -72,5 +72,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: Volco-win-x64
-        path: ./publish/
+        path: |
+          ./publish/
+          !./publish/lib*.pdb
         retention-days: 7

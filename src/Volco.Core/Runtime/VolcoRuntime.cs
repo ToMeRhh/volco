@@ -12,7 +12,7 @@ namespace Volco.Core.Runtime;
 /// message routing to <see cref="SliderProcessor"/> / <see cref="ButtonPressDetector"/>,
 /// <see cref="ActionFactory"/> dispatch, the pending-mute-OSD correlation, controller-state
 /// (LED) pushes with change detection, and the post-connect re-push mitigations. Headless: a UI
-/// head (WinUI today, Avalonia later) constructs one, calls <see cref="Start"/>, and renders
+/// head (the Avalonia head, Volco.App) constructs one, calls <see cref="Start"/>, and renders
 /// what the events publish.
 /// </summary>
 /// <remarks>

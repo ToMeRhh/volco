@@ -75,21 +75,30 @@ public static class AppLog
         Queue.Enqueue(line);
     }
 
-    private static void Flush()
+    private static readonly object FlushLock = new();
+
+    /// <summary>
+    /// Synchronously drains the queue to the log file. Safe from any thread and safe to call
+    /// repeatedly; used on crash and shutdown paths where the 500 ms timer may never fire.
+    /// </summary>
+    public static void Flush()
     {
-        if (Queue.IsEmpty) return;
-
-        var lines = new List<string>();
-        while (Queue.TryDequeue(out var line))
-            lines.Add(line);
-
-        if (lines.Count > 0)
+        lock (FlushLock)
         {
-            try
+            if (Queue.IsEmpty) return;
+
+            var lines = new List<string>();
+            while (Queue.TryDequeue(out var line))
+                lines.Add(line);
+
+            if (lines.Count > 0)
             {
-                File.AppendAllLines(LogPath, lines);
+                try
+                {
+                    File.AppendAllLines(LogPath, lines);
+                }
+                catch { }
             }
-            catch { }
         }
     }
 }

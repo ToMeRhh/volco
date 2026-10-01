@@ -66,6 +66,7 @@ public partial class VolcoApplication : Application
             catch (Exception ex)
             {
                 AppLog.Error($"Startup failed: {ex}");
+                AppLog.Flush();
                 throw;
             }
         }

@@ -235,6 +235,8 @@ internal sealed class CompositionRoot : IDisposable
             tray.Dispose();
             _trayIcon = null;
         }
+
+        AppLog.Flush();
     }
 
     public void Dispose() => Shutdown();
