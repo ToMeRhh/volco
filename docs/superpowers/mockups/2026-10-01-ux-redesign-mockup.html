@@ -1,0 +1,750 @@
+<title>Volco Settings Redesign</title>
+<style>
+/* Layout: a mock desktop settings window (nav column + scrolling page) beside a notes column; a "controller" bar under it drives live feedback. */
+:root{
+  --bg:#F6F6F7; --surface:#FFFFFF; --subtle:#EFEFF1; --border:#E4E4E7; --border-strong:#8E8E96;
+  --text:#18181B; --text2:#52525B; --text3:#6B6B74;
+  --accent:#3358C4; --accent-soft:#E6ECFA; --on-accent:#FFFFFF;
+  --success:#1F7A45; --warning:#9A5B00; --warning-soft:#FBF1E1; --danger:#B42318;
+  --stage:#E9E9EC; --shadow:0 8px 24px rgba(20,20,30,.12);
+  --osd-bg:#1A1A1D; --osd-text:#F4F4F5; --osd-border:#2C2C31; --osd-accent:#8AA6F2;
+  --font:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --r-card:8px; --r-ctl:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111113; --surface:#1A1A1D; --subtle:#222226; --border:#2C2C31; --border-strong:#6A6A73;
+  --text:#F4F4F5; --text2:#A8A8B0; --text3:#8E8E97;
+  --accent:#8AA6F2; --accent-soft:#232B40; --on-accent:#111113;
+  --success:#5CC98A; --warning:#E7B04F; --warning-soft:#2E2617; --danger:#F4877C;
+  --stage:#0A0A0B; --shadow:0 8px 24px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111113; --surface:#1A1A1D; --subtle:#222226; --border:#2C2C31; --border-strong:#6A6A73;
+  --text:#F4F4F5; --text2:#A8A8B0; --text3:#8E8E97;
+  --accent:#8AA6F2; --accent-soft:#232B40; --on-accent:#111113;
+  --success:#5CC98A; --warning:#E7B04F; --warning-soft:#2E2617; --danger:#F4877C;
+  --stage:#0A0A0B; --shadow:0 8px 24px rgba(0,0,0,.5); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--stage);color:var(--text);font:13px/1.45 var(--font);padding:20px 16px 40px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+
+/* review bar (outside the app) */
+.review{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;justify-content:space-between}
+.review h1{font-size:15px;font-weight:600;margin:0}
+.review p{margin:2px 0 0;color:var(--text2);max-width:70ch}
+.review-ctl{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+@media (max-width:980px){.stage{grid-template-columns:minmax(0,1fr)}}
+
+/* the app window */
+.window{position:relative;background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);min-width:0}
+.titlebar{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 6px 0 14px;font-size:12px;color:var(--text2)}
+.titlebar .wc{display:flex}
+.titlebar .wc span{width:40px;height:28px;display:grid;place-items:center;color:var(--text3)}
+.win-body{display:grid;grid-template-columns:200px minmax(0,1fr);height:640px}
+@media (max-width:640px){.win-body{grid-template-columns:minmax(0,1fr);height:auto}}
+
+nav{display:flex;flex-direction:column;padding:4px 8px 12px;gap:2px;min-width:0}
+@media (max-width:640px){nav{flex-direction:row;overflow-x:auto;padding:4px 8px}}
+.nav-item{position:relative;display:flex;align-items:center;gap:12px;padding:8px 12px;border:0;background:none;border-radius:var(--r-ctl);cursor:pointer;color:var(--text);text-align:left;white-space:nowrap}
+.nav-item:hover{background:var(--subtle)}
+.nav-item[aria-current="page"]{background:var(--surface)}
+.nav-item[aria-current="page"]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:2px;background:var(--accent)}
+.nav-item svg{width:16px;height:16px;flex:none;color:var(--text2)}
+.nav-spacer{flex:1}
+.conn{display:flex;align-items:center;gap:8px;padding:10px 12px;color:var(--text2);font-size:12px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--success);flex:none}
+.dot.off{background:var(--danger)}
+
+main{overflow-y:auto;padding:8px 24px 32px;min-width:0}
+@media (max-width:640px){main{padding:8px 12px 24px}}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 16px}
+.page-head h2{font-size:20px;font-weight:600;margin:0;text-wrap:balance}
+.page-head p{margin:2px 0 0;color:var(--text2);max-width:60ch}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--r-ctl);border:1px solid var(--border-strong);background:var(--surface);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--subtle)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{border-color:transparent;background:none;color:var(--accent);padding:0 6px}
+.btn.ghost:hover{background:var(--accent-soft)}
+.btn svg{width:14px;height:14px}
+.icon-btn{width:28px;height:28px;display:grid;place-items:center;border:0;background:none;border-radius:var(--r-ctl);cursor:pointer;color:var(--text2);flex:none}
+.icon-btn:hover{background:var(--subtle);color:var(--text)}
+.icon-btn svg{width:16px;height:16px}
+
+/* cards */
+.list{display:flex;flex-direction:column;gap:8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);transition:box-shadow .15s, outline-color .6s;outline:2px solid transparent;outline-offset:-1px}
+.card.pulse{outline-color:var(--accent);transition:outline-color 0s}
+.card.empty{background:transparent;border-style:dashed}
+.card.empty .name{font-weight:400;color:var(--text3)}
+.card.dragging{box-shadow:var(--shadow);cursor:grabbing}
+.card.dragging .grip{cursor:grabbing;opacity:1}
+.card.drop-before{box-shadow:0 -3px 0 0 var(--accent)}
+.card.drop-after{box-shadow:0 3px 0 0 var(--accent)}
+.card-head{display:flex;align-items:center;gap:6px;padding:8px 8px 8px 4px;min-height:52px;position:relative}
+.grip{width:22px;height:32px;border:0;background:none;color:var(--text3);cursor:grab;display:grid;place-items:center;border-radius:4px;opacity:.35;flex:none}
+.card:hover .grip,.grip:focus-visible{opacity:1}
+.grip svg{width:14px;height:14px}
+.head-main{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:none;text-align:left;cursor:pointer;padding:4px 4px;border-radius:var(--r-ctl);flex-wrap:wrap}
+.head-main .name{font-size:14px;font-weight:600}
+.chip{font-size:12px;color:var(--text3);border:1px solid var(--border);border-radius:999px;padding:0 8px;line-height:20px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip.warn{color:var(--warning);border-color:var(--warning);background:var(--warning-soft)}
+.summary{color:var(--text2);min-width:0;flex:1 1 160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meter{width:96px;height:4px;border-radius:2px;background:var(--border);overflow:hidden;flex:none}
+.meter i{display:block;height:100%;background:var(--accent);transition:width .12s linear}
+@media (max-width:520px){.meter{width:48px}}
+.chev{transition:transform .15s;color:var(--text3)}
+.card.open .chev{transform:rotate(180deg)}
+.card-body{padding:4px 16px 16px 32px;display:flex;flex-direction:column;gap:16px;border-top:1px solid var(--border)}
+@media (max-width:520px){.card-body{padding:4px 12px 14px}}
+.card-body > :first-child{margin-top:12px}
+
+.field{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 16px;align-items:center}
+@media (max-width:620px){.field{grid-template-columns:minmax(0,1fr)}}
+.field > label,.field > .lbl{color:var(--text2)}
+.hint{font-size:12px;color:var(--text3);margin:0}
+.text-in,select.sel{height:32px;border:1px solid var(--border-strong);border-radius:var(--r-ctl);background:var(--surface);padding:0 10px;min-width:0;max-width:340px;width:100%}
+.num-in{width:96px}
+
+.seg{display:inline-flex;background:var(--subtle);border-radius:var(--r-ctl);padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;border-radius:4px;padding:4px 12px;cursor:pointer;color:var(--text2);display:inline-flex;align-items:center;gap:6px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--border)}
+.seg .live{width:6px;height:6px;border-radius:50%;background:var(--success)}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--border-strong);border-radius:var(--r-ctl);padding:4px 6px;max-width:440px;background:var(--surface)}
+.chips .tag{display:inline-flex;align-items:center;gap:4px;background:var(--subtle);border-radius:999px;padding:1px 4px 1px 10px}
+.chips .tag button{border:0;background:none;cursor:pointer;color:var(--text3);width:18px;height:18px;border-radius:50%;line-height:1}
+.chips .tag button:hover{background:var(--border);color:var(--text)}
+.chips input{border:0;outline:0;background:none;flex:1;min-width:120px;height:24px}
+
+.adv-toggle{align-self:flex-start;display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:var(--text2);font-size:12px;cursor:pointer;padding:2px 4px;border-radius:4px}
+.adv-toggle:hover{color:var(--text)}
+.adv-toggle svg{width:12px;height:12px;transition:transform .15s}
+.adv-toggle[aria-expanded="true"] svg{transform:rotate(180deg)}
+.adv{display:flex;flex-direction:column;gap:12px;padding-left:12px;border-left:2px solid var(--border)}
+.range{display:flex;align-items:center;gap:10px;max-width:340px}
+.range input{flex:1;accent-color:var(--accent)}
+.range output{width:40px;text-align:right;color:var(--text2);font-variant-numeric:tabular-nums}
+
+.switch{position:relative;width:40px;height:20px;border-radius:999px;border:1px solid var(--border-strong);background:var(--surface);cursor:pointer;padding:0;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:var(--text2);transition:left .15s}
+.switch[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}
+.switch[aria-checked="true"]::after{left:23px;background:var(--on-accent)}
+.inline{display:flex;align-items:center;gap:10px}
+
+/* button actions */
+.actions{display:flex;flex-direction:column;gap:10px}
+.act-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:4px 16px;align-items:start}
+@media (max-width:620px){.act-row{grid-template-columns:minmax(0,1fr)}}
+.act-row > .lbl{color:var(--text2);padding-top:6px}
+.act-main{display:flex;flex-direction:column;gap:8px;min-width:0}
+.params{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-left:12px;border-left:2px solid var(--border)}
+.params .text-in,.params select.sel{max-width:240px;width:auto;min-width:160px}
+.params span{color:var(--text3)}
+.feedback{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-ctl);background:var(--subtle);color:var(--text2);flex-wrap:wrap}
+.led{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);flex:none}
+.led i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--border-strong);display:inline-block}
+.led i.on{background:var(--success);border-color:var(--success)}
+
+/* presets */
+.presets{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.preset-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.banner{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;padding:8px 12px;border-radius:var(--r-ctl);border:1px solid var(--border);background:var(--surface);color:var(--text2)}
+.banner b{color:var(--text);font-weight:600}
+
+/* menu popover */
+.menu{position:absolute;right:36px;top:44px;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--shadow);padding:4px;min-width:160px;display:flex;flex-direction:column}
+.menu button{border:0;background:none;text-align:left;padding:7px 10px;border-radius:4px;cursor:pointer}
+.menu button:hover{background:var(--subtle)}
+.menu button.danger{color:var(--danger)}
+.menu hr{border:0;border-top:1px solid var(--border);margin:4px 0}
+
+/* settings-style rows (connection / general) */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px;display:flex;flex-direction:column;gap:14px;margin-bottom:12px}
+.panel h3{font-size:14px;font-weight:600;margin:0}
+.status{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.status .big{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
+.status .meta{color:var(--text2);font-variant-numeric:tabular-nums}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.row .t{display:flex;flex-direction:column;min-width:0}
+.row .t small{color:var(--text3);font-size:12px}
+
+/* OSD + toast */
+.osd{position:absolute;left:50%;bottom:22px;transform:translate(-50%,8px);width:340px;max-width:calc(100% - 32px);height:56px;border-radius:8px;background:var(--osd-bg);color:var(--osd-text);border:1px solid var(--osd-border);display:flex;align-items:center;gap:12px;padding:0 16px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:30}
+.osd.show{opacity:1;transform:translate(-50%,0)}
+.osd svg{width:20px;height:20px;flex:none}
+.osd .mid{flex:1;min-width:0}
+.osd .lab{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.osd .bar{height:4px;border-radius:2px;background:var(--osd-border);margin-top:5px;overflow:hidden}
+.osd .bar i{display:block;height:100%;background:var(--osd-accent)}
+.osd .val{width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.toast{position:absolute;left:50%;bottom:88px;transform:translateX(-50%);background:var(--text);color:var(--bg);border-radius:var(--r-ctl);padding:8px 8px 8px 14px;display:flex;gap:12px;align-items:center;z-index:31;box-shadow:var(--shadow);white-space:nowrap}
+.toast button{border:0;background:none;color:inherit;font-weight:600;text-decoration:underline;cursor:pointer;padding:4px 6px}
+
+/* notes column */
+.notes{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.notes h3{margin:0;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text3)}
+.notes ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:10px;color:var(--text2)}
+.notes li b{color:var(--text);font-weight:600}
+
+/* controller simulator */
+.sim{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.sim-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.sim-head b{font-weight:600}
+.sim-head span{color:var(--text3);font-size:12px}
+.sim-groups{display:flex;flex-wrap:wrap;gap:8px 24px}
+.sim-group{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sim-group > span{color:var(--text3);font-size:12px;width:64px}
+.sim .btn{height:28px;font-size:12px}
+.hw-leds{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding-top:8px;border-top:1px solid var(--border)}
+.hw-leds > span{color:var(--text3);font-size:12px}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="review">
+    <div>
+      <h1>Volco settings redesign mockup</h1>
+      <p>This is a clickable mockup with sample data, not the app. Open cards, drag them by the handle, add and remove items, and switch presets. Use the controller bar at the bottom to act as the hardware.</p>
+    </div>
+    <div class="review-ctl">
+      <div class="seg" role="group" aria-label="Theme" id="themeSeg">
+        <button data-theme-set="system" aria-pressed="true">System</button>
+        <button data-theme-set="light" aria-pressed="false">Light</button>
+        <button data-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="window" id="win">
+      <div class="titlebar"><span>Volco Settings</span>
+        <div class="wc" aria-hidden="true"><span>&#x2013;</span><span>&#x25A2;</span><span>&#x2715;</span></div>
+      </div>
+      <div class="win-body">
+        <nav id="nav" aria-label="Settings sections"></nav>
+        <main id="page"></main>
+      </div>
+      <div class="osd" id="osd" aria-hidden="true"></div>
+      <div id="toastHost"></div>
+    </div>
+    <aside class="notes" id="notes" aria-label="Design notes"></aside>
+  </div>
+
+  <section class="sim" aria-label="Controller simulator">
+    <div class="sim-head"><b>Pretend to be the controller</b><span>Sends the same input numbers the hardware sends. The settings window reacts, and the OSD appears.</span></div>
+    <div class="sim-groups" id="sim"></div>
+    <div class="hw-leds" id="hwLeds"></div>
+  </section>
+</div>
+
+<script>
+const I = {
+  sliders:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 5.5h14M3 14.5h14"/><circle cx="12.5" cy="5.5" r="2" fill="var(--surface)"/><circle cx="7.5" cy="14.5" r="2" fill="var(--surface)"/></svg>',
+  buttons:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></svg>',
+  conn:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M7 3v4M13 3v4M5 7h10v3a5 5 0 0 1-10 0V7zM10 15v3"/></svg>',
+  gear:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="10" cy="10" r="2.5"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/></svg>',
+  grip:'<svg viewBox="0 0 14 14" fill="currentColor"><circle cx="5" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="5" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg>',
+  more:'<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
+  chev:'<svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>',
+  chevs:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>',
+  plus:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>',
+  refresh:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M13 8a5 5 0 1 1-1.5-3.5M13 3v2.5h-2.5"/></svg>',
+  spk:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M3 8h3l4-3.5v11L6 12H3z"/><path d="M13.5 7.5a3.5 3.5 0 0 1 0 5M15.5 5.5a6.5 6.5 0 0 1 0 9" stroke-linecap="round"/></svg>',
+  muted:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M3 8h3l4-3.5v11L6 12H3z"/><path d="M13 8l4 4M17 8l-4 4" stroke-linecap="round"/></svg>',
+  warn:'<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2l6.5 11.5h-13z"/><path d="M8 6.5v3M8 11.5v.1"/></svg>',
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const DEVICES = {
+  render:['Speakers (Realtek Audio)','Headphones (Arctis 7)','LG HDR 4K (NVIDIA Audio)'],
+  capture:['Microphone (Yeti Stereo)','Headset Mic (Arctis 7)']
+};
+const PROCESSES = ['spotify.exe','chrome.exe','firefox.exe','discord.exe','msedge.exe','vlc.exe','teams.exe','steam.exe','zoom.exe'];
+
+const ACTIONS = [
+  {group:'Audio', items:[
+    {id:'none', name:'Do nothing'},
+    {id:'mute-output', name:'Mute current output', short:'Mute output', fb:'on'},
+    {id:'mute-input', name:'Mute current input (mic)', short:'Mute mic', fb:'on'},
+    {id:'mute-device', name:'Mute a specific device', short:'Mute device', fb:'on', params:['device:any']},
+    {id:'set-output', name:'Switch output to…', short:'Switch output', fb:'on', params:['device:render']},
+    {id:'toggle-output', name:'Toggle between two outputs', short:'Toggle output', fb:'pair', params:['pair']},
+  ]},
+  {group:'Presets', items:[
+    {id:'next-preset', name:'Next preset', short:'Next preset', fb:'preset'},
+    {id:'goto-preset', name:'Switch to preset…', short:'Go to preset', fb:'preset', params:['preset']},
+  ]},
+  {group:'Custom (coming later)', items:[
+    {id:'custom-placeholder', name:'Run a program, call a webhook…', disabled:true},
+  ]},
+];
+const actionById = id => ACTIONS.flatMap(g=>g.items).find(a=>a.id===id) || ACTIONS[0].items[0];
+
+let uid = 100;
+const S = {
+  sliders:[
+    {id:'s1', input:0, target:'device', apps:[], device:'', invert:false, curve:'Linear', dead:0, smooth:0, level:72},
+    {id:'s2', input:1, target:'apps', apps:['spotify.exe'], device:'', invert:false, curve:'Logarithmic', dead:2, smooth:20, level:45},
+    {id:'s3', input:2, target:'apps', apps:['chrome.exe','firefox.exe','discord.exe'], device:'', invert:false, curve:'Linear', dead:0, smooth:0, level:60},
+    {id:'s4', input:3, target:'other', apps:[], device:'', invert:false, curve:'Linear', dead:0, smooth:0, level:80},
+    {id:'s5', input:4, target:'device', apps:[], device:'Headphones (Arctis 7)', invert:false, curve:'Linear', dead:0, smooth:0, level:35},
+  ],
+  buttons:[
+    {id:'b1', input:0, hold:500, dbl:300},
+    {id:'b2', input:1, hold:500, dbl:300},
+    {id:'b3', input:2, hold:500, dbl:300},
+  ],
+  presets:[
+    {id:'p1', name:'Default', bind:{
+      b1:{press:{type:'mute-input'}, double:{type:'none'}, hold:{type:'none'}},
+      b2:{press:{type:'mute-output'}, double:{type:'none'}, hold:{type:'none'}},
+      b3:{press:{type:'toggle-output', a:'Speakers (Realtek Audio)', b:'Headphones (Arctis 7)'}, double:{type:'none'}, hold:{type:'next-preset'}},
+    }},
+    {id:'p2', name:'Gaming', bind:{
+      b1:{press:{type:'mute-device', device:'Headset Mic (Arctis 7)'}, double:{type:'none'}, hold:{type:'none'}},
+      b2:{press:{type:'set-output', device:'Headphones (Arctis 7)'}, double:{type:'set-output', device:'Speakers (Realtek Audio)'}, hold:{type:'none'}},
+      b3:{press:{type:'toggle-output', a:'Speakers (Realtek Audio)', b:'Headphones (Arctis 7)'}, double:{type:'none'}, hold:{type:'next-preset'}},
+    }},
+  ],
+  live:'p1',
+  conn:{type:'Serial', port:'COM3', baud:115200, udp:12345, ws:8765, connected:true},
+  general:{debug:false, ci:false, token:''},
+  audio:{outMuted:false, inMuted:false, devMuted:{}, output:'Speakers (Realtek Audio)'},
+};
+const U = {page:'sliders', open:new Set(['s2','b3']), adv:new Set(), editPreset:'p1', menu:null, renaming:null, toast:null};
+
+/* ---------- helpers ---------- */
+const binding = (presetId, bid) => {
+  const p = S.presets.find(p=>p.id===presetId);
+  p.bind[bid] ??= {press:{type:'none'}, double:{type:'none'}, hold:{type:'none'}};
+  return p.bind[bid];
+};
+const dupInputs = () => new Set();
+const nextFree = list => list.length;
+const actionLabel = a => {
+  const d = actionById(a.type);
+  if (a.type==='mute-device' || a.type==='set-output') return `${d.short}: ${(a.device||'not set').replace(/ \(.*/,'')}`;
+  if (a.type==='toggle-output') return `Toggle ${(a.a||'?').replace(/ \(.*/,'')} / ${(a.b||'?').replace(/ \(.*/,'')}`;
+  if (a.type==='goto-preset') return `Go to ${S.presets.find(p=>p.id===a.preset)?.name||'preset'}`;
+  return d.short || d.name;
+};
+const isUnsetS = s => s.target==='none';
+const isUnsetB = b => S.presets.every(p=>{const d=binding(p.id,b.id);return d.press.type==='none'&&d.double.type==='none'&&d.hold.type==='none'});
+const sliderSummary = s => s.target==='apps' ? (s.apps.join(', ') || 'No apps yet') : s.target==='other' ? 'All other apps'
+  : s.target==='device' ? (s.device || 'Current default output') : 'Not set up';
+const buttonSummary = b => {
+  const bd = binding(U.editPreset, b.id), parts=[];
+  if (bd.press.type!=='none') parts.push(actionLabel(bd.press));
+  if (bd.double.type!=='none') parts.push('Double: '+actionLabel(bd.double));
+  if (bd.hold.type!=='none') parts.push('Hold: '+actionLabel(bd.hold));
+  return parts.join(' · ') || (isUnsetB(b) ? 'Not set up' : 'Nothing in this preset');
+};
+/* the per-button feedback value the app would send (0x05 ButtonFeedback) */
+const feedback = (b, presetId=S.live) => {
+  const bd = binding(presetId, b.id);
+  for (const k of ['press','double','hold']) {
+    const a = bd[k], d = actionById(a.type);
+    if (!d.fb) continue;
+    let value = 0;
+    if (a.type==='mute-output') value = S.audio.outMuted?1:0;
+    else if (a.type==='mute-input') value = S.audio.inMuted?1:0;
+    else if (a.type==='mute-device') value = S.audio.devMuted[a.device]?1:0;
+    else if (a.type==='set-output') value = S.audio.output===a.device?1:0;
+    else if (a.type==='toggle-output') value = S.audio.output===a.a?1:S.audio.output===a.b?2:0;
+    else value = S.presets.findIndex(p=>p.id===S.live)+1;
+    return {kind:d.fb, value, from:k, action:a};
+  }
+  return null;
+};
+const fbText = f => {
+  if (!f) return 'No light. None of this button’s actions has an on/off state.';
+  const where = {press:'Press',double:'Double press',hold:'Hold'}[f.from];
+  if (f.kind==='pair') return `Shows which output is active (A or B). Follows the ${where} action.`;
+  if (f.kind==='preset') return `Shows which preset is live. Follows the ${where} action.`;
+  if (f.action.type==='set-output') return `On while that device is the output. Follows the ${where} action.`;
+  return `On while muted. Follows the ${where} action.`;
+};
+const ledHtml = f => {
+  if (!f) return '<span class="led" title="No indicator"><i></i></span>';
+  if (f.kind==='pair') return `<span class="led" title="Indicator">A <i class="${f.value===1?'on':''}"></i> <i class="${f.value===2?'on':''}"></i> B</span>`;
+  if (f.kind==='preset') return `<span class="led" title="Indicator">${S.presets.map((p,i)=>`<i class="${f.value===i+1?'on':''}" title="${esc(p.name)}"></i>`).join('')}</span>`;
+  return `<span class="led" title="Indicator"><i class="${f.value?'on':''}"></i></span>`;
+};
+
+/* ---------- render ---------- */
+const NAV = [['sliders','Sliders',I.sliders],['buttons','Buttons',I.buttons],['connection','Connection',I.conn],['general','General',I.gear]];
+function renderNav(){
+  const c = S.conn;
+  document.getElementById('nav').innerHTML =
+    NAV.map(([id,l,ic])=>`<button class="nav-item" data-nav="${id}" ${U.page===id?'aria-current="page"':''}>${ic}<span>${l}</span></button>`).join('')
+    + `<div class="nav-spacer"></div><div class="conn"><span class="dot ${c.connected?'':'off'}"></span>${c.connected?`Connected · ${c.type==='Serial'?c.port:c.type}`:'Not connected'}</div>`;
+}
+
+function sliderCard(s, dups){
+  const open = U.open.has(s.id), adv = U.adv.has(s.id);
+  return `<article class="card ${open?'open':''} ${isUnsetS(s)?'empty':''}" data-id="${s.id}" data-kind="slider">
+  <div class="card-head">
+    <button class="grip" data-grip aria-label="Move slider ${s.input} (Alt+Up / Alt+Down)">${I.grip}</button>
+    <button class="head-main" data-act="toggle" aria-expanded="${open}">
+      <span class="name" data-inchip data-kind-label="Slider">Slider ${s.input}</span>
+      <span class="summary">${esc(sliderSummary(s))}</span>
+    </button>
+    <div class="meter" title="Live level ${s.level}%"><i style="width:${s.level}%"></i></div>
+    <button class="icon-btn" data-act="menu" aria-label="More options">${I.more}</button>
+    <button class="icon-btn" data-act="toggle" aria-label="${open?'Collapse':'Expand'}" tabindex="-1">${I.chev}</button>
+    ${U.menu===s.id?menuHtml(s.input===S.sliders.length-1):''}
+  </div>
+  ${open?`<div class="card-body">
+    <div class="field"><span class="lbl">Controls</span>
+      <div class="seg" role="group">${[['apps','Apps'],['other','All other apps'],['device','A device']].map(([v,l])=>`<button data-act="target" data-v="${v}" aria-pressed="${s.target===v}">${l}</button>`).join('')}</div></div>
+    ${s.target==='apps'?`<div class="field"><label for="a-${s.id}">Apps</label>
+      <div class="chips">${s.apps.map(a=>`<span class="tag">${esc(a)}<button data-act="rm-app" data-v="${esc(a)}" aria-label="Remove ${esc(a)}">×</button></span>`).join('')}
+      <input id="a-${s.id}" list="procs" data-f="add-app" placeholder="Add an app, e.g. spotify.exe"></div></div>`:''}
+    ${s.target==='device'?`<div class="field"><label for="d-${s.id}">Device</label>
+      <select class="sel" id="d-${s.id}" data-f="device"><option value="">Current default output</option>${DEVICES.render.concat(DEVICES.capture).map(d=>`<option ${s.device===d?'selected':''}>${esc(d)}</option>`).join('')}</select></div>`:''}
+    ${s.target==='other'?`<p class="hint">Controls every app that no other slider lists${(()=>{const c=S.sliders.filter(x=>x.target==='apps').flatMap(x=>x.apps);return c.length?' (everything except '+esc(c.join(', '))+')':''})()}.</p>`:''}
+    ${s.target==='none'?`<p class="hint">Not set up. Choose what this slider controls.</p>`:''}
+    <button class="adv-toggle" data-act="adv" aria-expanded="${adv}">Advanced ${I.chevs}</button>
+    ${adv?`<div class="adv">
+      <div class="field"><span class="lbl">Invert direction</span><button class="switch" role="switch" data-act="invert" aria-checked="${s.invert}" aria-label="Invert direction"></button></div>
+      <div class="field"><label for="c-${s.id}">Response curve</label><select class="sel" id="c-${s.id}" data-f="curve">${['Linear','Logarithmic','Exponential','S-Curve'].map(c=>`<option ${s.curve===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label for="dz-${s.id}">Dead zone</label><div class="range"><input type="range" min="0" max="20" id="dz-${s.id}" data-f="dead" value="${s.dead}"><output>${s.dead}%</output></div></div>
+      <div class="field"><label for="sm-${s.id}">Smoothing</label><div class="range"><input type="range" min="0" max="100" id="sm-${s.id}" data-f="smooth" value="${s.smooth}"><output>${s.smooth?s.smooth+'%':'Off'}</output></div></div>
+    </div>`:''}
+  </div>`:''}
+</article>`;
+}
+
+function paramsHtml(b, slot, a){
+  const d = actionById(a.type); if (!d.params) return '';
+  const k = `${b.id}-${slot}`;
+  const opt = (list, cur) => `<option value="" ${!cur?'selected':''} disabled>Choose a device</option>`+list.map(x=>`<option ${cur===x?'selected':''}>${esc(x)}</option>`).join('');
+  if (d.params[0]==='device:any') return `<div class="params"><select class="sel" aria-label="Device" data-p="device" data-slot="${slot}">${opt(DEVICES.render.concat(DEVICES.capture),a.device)}</select></div>`;
+  if (d.params[0]==='device:render') return `<div class="params"><select class="sel" aria-label="Output device" data-p="device" data-slot="${slot}">${opt(DEVICES.render,a.device)}</select></div>`;
+  if (d.params[0]==='pair') return `<div class="params"><span>A</span><select class="sel" aria-label="Output A" data-p="a" data-slot="${slot}">${opt(DEVICES.render,a.a)}</select><span>B</span><select class="sel" aria-label="Output B" data-p="b" data-slot="${slot}">${opt(DEVICES.render,a.b)}</select></div>`;
+  if (d.params[0]==='preset') return `<div class="params"><select class="sel" aria-label="Preset" data-p="preset" data-slot="${slot}"><option value="" disabled ${!a.preset?'selected':''}>Choose a preset</option>${S.presets.map(p=>`<option value="${p.id}" ${a.preset===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>`;
+  return '';
+}
+function actionSelect(slot, a){
+  return `<select class="sel" data-slot="${slot}" data-p="type" aria-label="${slot} action">`+ACTIONS.map(g=>`<optgroup label="${g.group}">${g.items.map(i=>`<option value="${i.id}" ${i.disabled?'disabled':''} ${a.type===i.id?'selected':''}>${i.name}</option>`).join('')}</optgroup>`).join('')+`</select>`;
+}
+function buttonCard(b, dups){
+  const open = U.open.has(b.id), adv = U.adv.has(b.id), bd = binding(U.editPreset, b.id);
+  const f = feedback(b, U.editPreset);
+  return `<article class="card ${open?'open':''} ${isUnsetB(b)?'empty':''}" data-id="${b.id}" data-kind="button">
+  <div class="card-head">
+    <button class="grip" data-grip aria-label="Move button ${b.input}">${I.grip}</button>
+    <button class="head-main" data-act="toggle" aria-expanded="${open}">
+      <span class="name" data-inchip data-kind-label="Button">Button ${b.input}</span>
+      <span class="summary">${esc(buttonSummary(b))}</span>
+    </button>
+    ${ledHtml(feedback(b, S.live))}
+    <button class="icon-btn" data-act="menu" aria-label="More options">${I.more}</button>
+    <button class="icon-btn" data-act="toggle" aria-label="${open?'Collapse':'Expand'}" tabindex="-1">${I.chev}</button>
+    ${U.menu===b.id?menuHtml(b.input===S.buttons.length-1):''}
+  </div>
+  ${open?`<div class="card-body">
+    <div class="actions">
+      ${[['press','Press'],['double','Double press'],['hold','Hold']].map(([slot,l])=>`<div class="act-row"><span class="lbl">${l}</span><div class="act-main"><div class="inline">${actionSelect(slot, bd[slot])}<button class="btn" data-act="test" data-slot="${slot}" ${bd[slot].type==='none'?'disabled':''}>Test</button></div>${paramsHtml(b, slot, bd[slot])}</div></div>`).join('')}
+    </div>
+    <div class="feedback">${ledHtml(f)}<span>Controller light: ${esc(fbText(f))}</span></div>
+    <button class="adv-toggle" data-act="adv" aria-expanded="${adv}">Advanced ${I.chevs}</button>
+    ${adv?`<div class="adv">
+      <div class="field"><label for="h-${b.id}">Hold after</label><div class="inline"><input type="number" step="50" min="200" max="2000" class="text-in num-in" id="h-${b.id}" data-f="hold" value="${b.hold}"><span class="hint">ms</span></div></div>
+      <div class="field"><label for="w-${b.id}">Double-press window</label><div class="inline"><input type="number" step="50" min="150" max="1000" class="text-in num-in" id="w-${b.id}" data-f="dbl" value="${b.dbl}"><span class="hint">ms</span></div></div>
+      <p class="hint">Timing and position are shared by every preset.</p>
+    </div>`:''}
+  </div>`:''}
+</article>`;
+}
+const menuHtml = (isLast) => `<div class="menu" role="menu">
+  <button data-act="up" role="menuitem">Move up</button>
+  <button data-act="down" role="menuitem">Move down</button><hr>
+  <button data-act="reset" class="danger" role="menuitem">Reset</button>
+  ${isLast?`<button data-act="remove" class="danger" role="menuitem">Remove last ${U.page==='sliders'?'slider':'button'}</button>`:''}</div>`;
+
+function presetBar(){
+  const many = S.presets.length > 1;
+  const editing = S.presets.find(p=>p.id===U.editPreset), live = S.presets.find(p=>p.id===S.live);
+  if (!many) return `<div class="presets"><div class="preset-row"><span class="hint">Presets let one button change what the other buttons do.</span><button class="btn ghost" data-act="add-preset">${I.plus} Add preset</button></div></div>`;
+  return `<div class="presets">
+    <div class="preset-row">
+      <div class="seg" role="tablist" aria-label="Presets">${S.presets.map(p=>`<button role="tab" data-act="edit-preset" data-v="${p.id}" aria-pressed="${p.id===U.editPreset}" aria-selected="${p.id===U.editPreset}">${p.id===S.live?'<span class="live" title="Live on the controller"></span>':''}${esc(p.name)}</button>`).join('')}</div>
+      <button class="btn ghost" data-act="add-preset">${I.plus} Add preset</button>
+      ${U.renaming==='preset'?`<input class="text-in" style="max-width:180px" id="presetName" data-f="preset-name" value="${esc(editing.name)}" aria-label="Preset name">`:`<button class="btn ghost" data-act="rename-preset">Rename</button>`}
+      <button class="btn ghost" data-act="delete-preset" style="color:var(--danger)">Delete</button>
+    </div>
+    ${U.editPreset!==S.live
+      ? `<div class="banner"><span>You are editing <b>${esc(editing.name)}</b>. The controller is using <b>${esc(live.name)}</b>.</span><button class="btn" data-act="make-live">Make ${esc(editing.name)} live</button></div>`
+      : `<div class="banner"><span><span class="dot" style="display:inline-block;margin-right:6px"></span><b>${esc(editing.name)}</b> is live on the controller.</span></div>`}
+  </div>`;
+}
+
+function renderPage(){
+  const p = document.getElementById('page');
+  if (U.page==='sliders'){
+    const d = dupInputs(S.sliders);
+    p.innerHTML = `<div class="page-head"><div><h2>Sliders</h2><p>What each slider on your controller changes, in the order the controller numbers them. Drag a card to move its settings to a different physical slider.</p></div>
+      <button class="btn primary" data-act="add">${I.plus} Add slider</button></div>
+      <div class="list" id="list">${S.sliders.map(s=>sliderCard(s,d)).join('')}</div>`;
+  } else if (U.page==='buttons'){
+    const d = dupInputs(S.buttons);
+    p.innerHTML = `<div class="page-head"><div><h2>Buttons</h2><p>What each button does when you press it, double-press it, or hold it, in the order the controller numbers them.</p></div>
+      <button class="btn primary" data-act="add">${I.plus} Add button</button></div>
+      ${presetBar()}
+      <div class="list" id="list">${S.buttons.map(b=>buttonCard(b,d)).join('')}</div>`;
+  } else if (U.page==='connection'){
+    const c = S.conn;
+    p.innerHTML = `<div class="page-head"><div><h2>Connection</h2><p>How Volco talks to your controller.</p></div></div>
+    <div class="panel"><div class="status">
+      <span class="big"><span class="dot ${c.connected?'':'off'}"></span>${c.connected?'Connected':'Not connected'}</span>
+      <span class="meta">${c.connected?(c.type==='Serial'?`${c.port} · ${c.baud.toLocaleString()} baud`:c.type==='Udp'?`UDP · port ${c.udp}`:`WebSocket · port ${c.ws}`)+' · last message 0.2 s ago':'Waiting for the controller'}</span>
+      <span style="flex:1"></span><button class="btn" data-act="reconnect">${I.refresh} Reconnect</button></div></div>
+    <div class="panel">
+      <div class="field"><span class="lbl">Connect using</span><div class="seg" role="group">${[['Serial','USB cable'],['Udp','Wi-Fi (UDP)'],['WebSocket','WebSocket']].map(([v,l])=>`<button data-act="ctype" data-v="${v}" aria-pressed="${c.type===v}">${l}</button>`).join('')}</div></div>
+      ${c.type==='Serial'?`<div class="field"><label for="port">Port</label><div class="inline"><select class="sel" id="port" data-f="port" style="max-width:220px">${['COM3','COM4','COM7'].map(x=>`<option ${c.port===x?'selected':''}>${x}</option>`).join('')}</select><button class="icon-btn" aria-label="Refresh ports">${I.refresh}</button></div></div>
+      <div class="field"><label for="baud">Baud rate</label><select class="sel" id="baud" data-f="baud" style="max-width:160px">${[9600,19200,38400,57600,115200].map(b=>`<option ${c.baud===b?'selected':''}>${b}</option>`).join('')}</select></div>`:''}
+      ${c.type==='Udp'?`<div class="field"><label for="udp">Listen port</label><input type="number" class="text-in num-in" id="udp" data-f="udp" value="${c.udp}"></div>`:''}
+      ${c.type==='WebSocket'?`<div class="field"><label for="ws">Server port</label><input type="number" class="text-in num-in" id="ws" data-f="ws" value="${c.ws}"></div>`:''}
+      <p class="hint">These must match the values in your controller’s firmware.</p>
+    </div>`;
+  } else {
+    const g = S.general, adv = U.adv.has('upd');
+    p.innerHTML = `<div class="page-head"><div><h2>General</h2></div></div>
+    <div class="panel"><h3>Updates</h3>
+      <div class="row"><div class="t"><span>Volco 0.9.4</span><small>Released 2026-09-28</small></div><button class="btn">Check for updates</button></div>
+      <div class="field"><label for="tok">GitHub token</label><div class="act-main"><input class="text-in" id="tok" type="password" placeholder="ghp_…" value="${esc(g.token)}"><p class="hint">Required: Volco’s repository is private. Needs repo and actions:read access. Stored in your local config.</p></div></div>
+      <button class="adv-toggle" data-act="adv-upd" aria-expanded="${adv}">Advanced ${I.chevs}</button>
+      ${adv?`<div class="adv">
+        <div class="row"><div class="t"><span>Update from development builds</span><small>Uses the latest CI build instead of the latest release.</small></div><button class="switch" role="switch" data-act="ci" aria-checked="${g.ci}" aria-label="Update from development builds"></button></div>
+      </div>`:''}
+    </div>
+    <div class="panel"><h3>Troubleshooting</h3>
+      <div class="row"><div class="t"><span>Detailed logging</span><small>Writes extra detail to %APPDATA%\\Volco\\volco.log.</small></div><button class="switch" role="switch" data-act="debug" aria-checked="${g.debug}" aria-label="Detailed logging"></button></div>
+      <div class="row"><div class="t"><span>Log file</span><small>%APPDATA%\\Volco\\volco.log</small></div><button class="btn">Open folder</button></div>
+    </div>`;
+  }
+}
+
+const NOTES = {
+  sliders:[
+    '<b>No names.</b> A slider is its number and what it controls, so the header reads “Slider 1 · spotify.exe”. Closed, a card also shows a live level bar. Click it to edit.',
+    '<b>Position is the input.</b> The first card is input 0, the second is input 1, and so on, which is how the firmware numbers its sliders. There is no separate input field to set.',
+    '<b>Dragging re-assigns.</b> Drag “Music” to the top and its settings now belong to physical slider 0. The input numbers update while you drag.',
+    '<b>One “empty” state.</b> <b>Reset</b> (⋯ menu) returns a card to “Not set up”, which is also how a newly added card starts. Choosing Apps, All other apps or A device sets it up. Unset cards get a dashed outline. Nothing is ever deleted from the middle, so no other slider moves.',
+    '<b>Add</b> appends the next number. <b>Remove last slider</b> appears only in the last card’s ⋯ menu, to shrink the list.',
+    '<b>What it controls</b>: Apps (chips with autocomplete, replacing the comma-separated box), <b>All other apps</b> (today’s “Unmapped”: every app no other slider lists), a device, or Nothing (new: lets a just-added slider sit idle).',
+    '<b>Advanced</b> (curve, dead zone, smoothing, invert) stays collapsed unless you open it.',
+    'Click “Move” on a slider in the controller bar below. The matching card flashes and its level bar moves, which is how you find a physical slider.',
+  ],
+  buttons:[
+    '<b>Three actions per button</b>: Press, Double press, Hold. Each one picks from a grouped list, and its settings appear right under it.',
+    '<b>Presets</b> live above the list. With one preset you only see “Add preset”. The green dot marks the preset that is live on the controller. You can edit a preset that isn’t live, and the banner tells you so.',
+    'Only the <b>actions</b> change per preset. Timing and position are shared. Dragging a button card moves its actions in every preset. <b>Reset</b> clears its actions in every preset.',
+    '<b>Controller light</b> (the dots on each card) is what the app tells the hardware to show for that button. It comes from the button’s action: on while muted, A/B for the active output, one dot per preset.',
+    'The old <b>Output Devices</b> page is gone. The two devices now belong to the “Toggle between two outputs” action.',
+    '<b>Test</b> runs that action once, as the current UI does today.',
+    '“Custom (coming later)” in the action list marks where programs and webhooks will go.',
+    'In the controller bar, click “Hold” next to button 2 to change the live preset, and watch the tabs and lights update.',
+  ],
+  connection:[
+    '<b>Status first.</b> You see whether the controller is connected before any settings.',
+    'Connection types are named by what you plug in: USB cable, Wi-Fi.',
+    'Each connection type shows its own settings directly: port and baud rate for USB, a port number for Wi-Fi and WebSocket.',
+    'The connection status is also always visible at the bottom of the left column.',
+  ],
+  general:[
+    'Updates and logging move here from the tray menu and the old General page.',
+    'The GitHub token is shown directly because updates need it. Development-build updates sit under Advanced.',
+    'Settings that need new engine support (OSD position, start with Windows) are not shown. They are listed separately in the spec.',
+  ],
+};
+function renderNotes(){
+  document.getElementById('notes').innerHTML = `<h3>Notes · ${NAV.find(n=>n[0]===U.page)[1]}</h3><ol>${NOTES[U.page].map(n=>`<li>${n}</li>`).join('')}</ol>`;
+}
+function renderSim(){
+  document.getElementById('sim').innerHTML =
+    `<div class="sim-group"><span>Sliders</span>${S.sliders.map(s=>`<button class="btn" data-sim="slider" data-v="${s.id}">Move slider ${s.input}</button>`).join('')}</div>
+     <div class="sim-group"><span>Buttons</span>${S.buttons.map(b=>`<button class="btn" data-sim="press" data-v="${b.id}">Press button ${b.input}</button><button class="btn" data-sim="hold" data-v="${b.id}">Hold</button>`).join('')}</div>`;
+  const live = S.presets.find(p=>p.id===S.live);
+  document.getElementById('hwLeds').innerHTML = `<span>Lights on the controller (preset <b>${esc(live.name)}</b>):</span>` +
+    S.buttons.map(b=>{const f=feedback(b);return `<span class="led" title="Input ${b.input}">Input ${b.input} ${ledHtml(f).replace(/^<span class="led"[^>]*>|<\/span>$/g,'')}</span>`}).join('');
+}
+function renderToast(){
+  document.getElementById('toastHost').innerHTML = U.toast ? `<div class="toast" role="status">${esc(U.toast.text)}<button data-act="undo">Undo</button></div>` : '';
+}
+function renumber(){ S.sliders.forEach((x,i)=>x.input=i); S.buttons.forEach((x,i)=>x.input=i); }
+function render(){ renumber(); renderNav(); renderPage(); renderNotes(); renderSim(); renderToast(); }
+
+/* ---------- interactions ---------- */
+const list = () => U.page==='sliders' ? S.sliders : S.buttons;
+const find = id => S.sliders.find(x=>x.id===id) || S.buttons.find(x=>x.id===id);
+let toastTimer;
+function showToast(text, undo){ U.toast={text, undo}; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{U.toast=null;renderToast()},6000); renderToast(); }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-nav],[data-act],[data-sim],[data-theme-set]');
+  if (!t) { if (U.menu){U.menu=null;render();} return; }
+  if (t.dataset.themeSet){ const v=t.dataset.themeSet; if(v==='system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme=v;
+    document.querySelectorAll('#themeSeg button').forEach(b=>b.setAttribute('aria-pressed', b===t)); return; }
+  if (t.dataset.nav){ U.page=t.dataset.nav; U.menu=null; render(); document.getElementById('page').scrollTop=0; return; }
+  if (t.dataset.sim) return simulate(t.dataset.sim, t.dataset.v);
+  const card = t.closest('.card'), id = card?.dataset.id, item = id && find(id), act = t.dataset.act;
+  const L = list(), idx = item ? L.indexOf(item) : -1;
+  switch(act){
+    case 'toggle': U.open.has(id)?U.open.delete(id):U.open.add(id); U.menu=null; break;
+    case 'adv': U.adv.has(id)?U.adv.delete(id):U.adv.add(id); break;
+    case 'adv-conn': U.adv.has('conn')?U.adv.delete('conn'):U.adv.add('conn'); break;
+    case 'adv-upd': U.adv.has('upd')?U.adv.delete('upd'):U.adv.add('upd'); break;
+    case 'menu': U.menu = U.menu===id?null:id; render(); document.querySelector('.menu button')?.focus(); return;
+    case 'up': if(idx>0){L.splice(idx,1);L.splice(idx-1,0,item);} U.menu=null; break;
+    case 'down': if(idx<L.length-1){L.splice(idx,1);L.splice(idx+1,0,item);} U.menu=null; break;
+    case 'reset': { U.menu=null; const kind = card.dataset.kind==='slider'?'Slider':'Button', before=JSON.stringify(item);
+      const saved = kind==='Button' ? S.presets.map(p=>JSON.stringify(binding(p.id,item.id))) : null;
+      if (kind==='Slider') Object.assign(item,{target:'none',apps:[],device:'',invert:false,curve:'Linear',dead:0,smooth:0});
+      else { Object.assign(item,{hold:500,dbl:300}); S.presets.forEach(p=>{p.bind[item.id]={press:{type:'none'},double:{type:'none'},hold:{type:'none'}}}); }
+      U.adv.delete(id);
+      showToast(`${kind} ${idx} reset`, ()=>{ Object.assign(item, JSON.parse(before)); if(saved) S.presets.forEach((p,i)=>{p.bind[item.id]=JSON.parse(saved[i])}); }); break; }
+    case 'remove': { U.menu=null; const kind = card.dataset.kind==='slider'?'Slider':'Button';
+      L.splice(idx,1); showToast(`${kind} ${idx} removed`, ()=>{L.splice(idx,0,item)}); break; }
+    case 'test': runAction(binding(U.editPreset,id)[t.dataset.slot], item, t.dataset.slot); return;
+    case 'undo': U.toast?.undo(); U.toast=null; break;
+    case 'add': { const n = nextFree(L);
+      const it = U.page==='sliders' ? {id:'x'+(uid++), input:n, target:'none', apps:[], device:'', invert:false, curve:'Linear', dead:0, smooth:0, level:0}
+                                     : {id:'x'+(uid++), input:n, hold:500, dbl:300};
+      L.push(it); U.open.add(it.id); render(); document.querySelector(`.card[data-id="${it.id}"]`)?.scrollIntoView({block:'center'}); return; }
+    case 'target': item.target=t.dataset.v; break;
+    case 'rm-app': item.apps=item.apps.filter(a=>a!==t.dataset.v); break;
+    case 'invert': item.invert=!item.invert; break;
+    case 'edit-preset': U.editPreset=t.dataset.v; U.renaming=null; break;
+    case 'make-live': S.live=U.editPreset; break;
+    case 'add-preset': { const p={id:'p'+(uid++), name:`Preset ${S.presets.length+1}`, bind:JSON.parse(JSON.stringify(S.presets.find(p=>p.id===U.editPreset).bind))};
+      S.presets.push(p); U.editPreset=p.id; U.renaming='preset'; render(); document.getElementById('presetName')?.select(); return; }
+    case 'rename-preset': U.renaming='preset'; render(); document.getElementById('presetName')?.select(); return;
+    case 'delete-preset': { if (S.presets.length<2) break; const i=S.presets.findIndex(p=>p.id===U.editPreset), p=S.presets[i];
+      S.presets.splice(i,1); const wasLive=S.live===p.id; if(wasLive) S.live=S.presets[0].id; U.editPreset=S.presets[0].id;
+      showToast(`Preset “${p.name}” deleted`, ()=>{S.presets.splice(i,0,p); U.editPreset=p.id; if(wasLive) S.live=p.id;}); break; }
+    case 'ctype': S.conn.type=t.dataset.v; break;
+    case 'reconnect': S.conn.connected=!S.conn.connected; break;
+    case 'debug': S.general.debug=!S.general.debug; break;
+    case 'ci': S.general.ci=!S.general.ci; break;
+    default: return;
+  }
+  render();
+});
+
+document.addEventListener('change', e => {
+  const t = e.target, card = t.closest('.card'), item = card && find(card.dataset.id);
+  const f = t.dataset.f, p = t.dataset.p;
+  if (f==='preset-name'){ const pr=S.presets.find(x=>x.id===U.editPreset); pr.name=t.value.trim()||pr.name; U.renaming=null; return render(); }
+  if (!item){ if(f==='port') S.conn.port=t.value; if(f==='baud') S.conn.baud=+t.value; if(f==='udp') S.conn.udp=+t.value; if(f==='ws') S.conn.ws=+t.value; return render(); }
+  if (p){ const bd=binding(U.editPreset,item.id), slot=t.dataset.slot;
+    if (p==='type'){ bd[slot]={type:t.value}; if(t.value==='toggle-output'){bd[slot].a=DEVICES.render[0];bd[slot].b=DEVICES.render[1];} }
+    else bd[slot][p]=t.value; return render(); }
+  if (f==='input') item.input=Math.max(0,+t.value|0);
+  else if (f==='device') item.device=t.value;
+  else if (f==='curve') item.curve=t.value;
+  else if (f==='hold'||f==='dbl') item[f]=+t.value;
+  else if (f==='add-app'){ const v=t.value.trim().toLowerCase(); if(v&&!item.apps.includes(v)) item.apps.push(v); render(); document.getElementById('a-'+item.id)?.focus(); return; }
+  else if (f==='dead'||f==='smooth') item[f]=+t.value;
+  render();
+});
+document.addEventListener('input', e => {
+  const t=e.target; if (t.type==='range'){ const o=t.nextElementSibling; o.textContent = t.dataset.f==='smooth' ? (+t.value?t.value+'%':'Off') : t.value+'%'; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key==='Enter' && e.target.dataset?.f==='add-app'){ e.target.dispatchEvent(new Event('change',{bubbles:true})); e.preventDefault(); }
+  if (e.key==='Enter' && e.target.dataset?.f==='preset-name'){ e.target.blur(); }
+  if (e.key==='Escape' && U.menu){ U.menu=null; render(); }
+  if (e.altKey && (e.key==='ArrowUp'||e.key==='ArrowDown') && e.target.matches('[data-grip]')){
+    const id=e.target.closest('.card').dataset.id, L=list(), i=L.findIndex(x=>x.id===id), j=i+(e.key==='ArrowUp'?-1:1);
+    if (j<0||j>=L.length) return; const [it]=L.splice(i,1); L.splice(j,0,it); render();
+    document.querySelector(`.card[data-id="${id}"] [data-grip]`)?.focus(); e.preventDefault();
+  }
+});
+
+/* drag to reorder: the card follows the pointer and the other cards slide out of the way */
+let drag=null;
+const GAP=8;
+function slide(el, fromTop){ const d=fromTop-el.getBoundingClientRect().top; if(!d) return;
+  el.style.transition='none'; el.style.transform=`translateY(${d}px)`; el.getBoundingClientRect();
+  el.style.transition='transform .18s ease'; el.style.transform=''; }
+document.addEventListener('pointerdown', e => {
+  const g=e.target.closest('[data-grip]'); if(!g||e.button!==0) return;
+  const card=g.closest('.card'); U.menu=null;
+  drag={id:card.dataset.id, card, startY:e.clientY, moved:false};
+  card.classList.add('dragging'); card.style.position='relative'; card.style.zIndex=10; card.style.transition='box-shadow .15s';
+  g.setPointerCapture(e.pointerId); e.preventDefault();
+});
+document.addEventListener('pointermove', e => {
+  if(!drag) return; const c=drag.card;
+  let dy=e.clientY-drag.startY; drag.moved=true;
+  c.style.transform=`translateY(${dy}px)`;
+  const r=c.getBoundingClientRect(), mid=r.top+r.height/2;
+  const next=c.nextElementSibling, prev=c.previousElementSibling;
+  if(next && mid > next.getBoundingClientRect().top + next.offsetHeight/2){
+    const t=next.getBoundingClientRect().top; c.parentNode.insertBefore(next, c); slide(next, t);
+    drag.startY += next.offsetHeight+GAP;
+  } else if(prev && mid < prev.getBoundingClientRect().top + prev.offsetHeight/2){
+    const t=prev.getBoundingClientRect().top; c.parentNode.insertBefore(c, prev); slide(prev, t);
+    drag.startY -= prev.offsetHeight+GAP;
+  }
+  c.style.transform=`translateY(${e.clientY-drag.startY}px)`;
+  [...c.parentNode.children].forEach((el,i)=>{const ch=el.querySelector('[data-inchip]'); if(ch) ch.textContent=ch.dataset.kindLabel+' '+i;});
+});
+document.addEventListener('pointerup', () => {
+  if(!drag) return; const d=drag; drag=null; const c=d.card;
+  c.style.transition='transform .15s ease, box-shadow .15s'; c.style.transform='';
+  const ids=[...c.parentNode.children].map(x=>x.dataset.id), L=list();
+  const sorted=ids.map(id=>L.find(x=>x.id===id)); L.splice(0,L.length,...sorted);
+  setTimeout(()=>{ c.classList.remove('dragging'); render(); }, 160);
+});
+
+/* controller simulation */
+let osdTimer;
+function osd(icon, label, pct, text){
+  const o=document.getElementById('osd');
+  o.innerHTML = `${icon}<div class="mid"><div class="lab">${esc(label)}</div>${pct==null?'':`<div class="bar"><i style="width:${pct}%"></i></div>`}</div><div class="val">${esc(text)}</div>`;
+  o.classList.add('show'); clearTimeout(osdTimer); osdTimer=setTimeout(()=>o.classList.remove('show'),1600);
+}
+function pulse(id){ const c=document.querySelector(`.card[data-id="${id}"]`); if(!c) return; c.classList.add('pulse'); setTimeout(()=>c.classList.remove('pulse'),120); }
+let wiggle=null;
+function simulate(kind, id){
+  const item = find(id); if(!item) return;
+  if (kind==='slider'){
+    const start=item.level, target = start>50 ? Math.max(5,start-35) : Math.min(95,start+35); let t=0;
+    clearInterval(wiggle); wiggle=setInterval(()=>{ t+=1; item.level=Math.round(start+(target-start)*Math.min(1,t/12));
+      const bar=document.querySelector(`.card[data-id="${id}"] .meter i`); if(bar) bar.style.width=item.level+'%';
+      pulse(id); if(t>=12){clearInterval(wiggle);}
+      const label = item.target==='device' ? (item.device||'Speakers (Realtek Audio)') : item.target==='other' ? 'Other apps' : item.target==='apps' ? item.apps.map(a=>a.replace(/\.exe$/,'')).join(', ') : 'Slider '+item.input+' (not set up)';
+      osd(I.spk, label, item.level, item.level+'%'); }, 30);
+    return;
+  }
+  const bd = binding(S.live, id); runAction(bd[kind==='hold'?'hold':'press'], item, kind);
+}
+function runAction(a, item, kind){
+  const id=item.id; pulse(id);
+  switch(a.type){
+    case 'mute-output': S.audio.outMuted=!S.audio.outMuted; osd(S.audio.outMuted?I.muted:I.spk, S.audio.output, S.audio.outMuted?0:72, S.audio.outMuted?'Muted':'72%'); break;
+    case 'mute-input': S.audio.inMuted=!S.audio.inMuted; osd(S.audio.inMuted?I.muted:I.spk, 'Microphone (Yeti Stereo)', null, S.audio.inMuted?'Muted':'On'); break;
+    case 'mute-device': S.audio.devMuted[a.device]=!S.audio.devMuted[a.device]; osd(S.audio.devMuted[a.device]?I.muted:I.spk, a.device||'No device set', null, S.audio.devMuted[a.device]?'Muted':'On'); break;
+    case 'set-output': if(a.device) S.audio.output=a.device; osd(I.spk, S.audio.output, 72, '72%'); break;
+    case 'toggle-output': S.audio.output = S.audio.output===a.a ? a.b : a.a; osd(I.spk, S.audio.output, 72, '72%'); break;
+    case 'next-preset': { const i=S.presets.findIndex(p=>p.id===S.live); S.live=S.presets[(i+1)%S.presets.length].id; osd(I.buttons, 'Preset', null, S.presets.find(p=>p.id===S.live).name); break; }
+    case 'goto-preset': if(a.preset) S.live=a.preset; osd(I.buttons, 'Preset', null, S.presets.find(p=>p.id===S.live).name); break;
+    default: osd(I.buttons, 'Button '+item.input, null, kind==='hold'?'Hold: nothing':'Nothing'); break;
+  }
+  render(); pulse(id);
+}
+
+render();
+</script>
+<datalist id="procs"><option>spotify.exe</option><option>chrome.exe</option><option>firefox.exe</option><option>discord.exe</option><option>msedge.exe</option><option>vlc.exe</option><option>teams.exe</option><option>steam.exe</option><option>zoom.exe</option></datalist>
