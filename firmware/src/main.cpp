@@ -28,23 +28,15 @@
 // Protocol constants
 // ============================================================
 static const uint8_t START_MARKER = 0xAA;
-static const uint8_t MSG_SLIDER = 0x01;
-static const uint8_t MSG_BUTTON = 0x02;
-static const uint8_t MSG_MUTE_STATE = 0x03;
-static const uint8_t MSG_ACTIVE_DEVICE = 0x04;
+static const uint8_t MSG_SLIDER = 0x01;           // controller -> PC
+static const uint8_t MSG_BUTTON = 0x02;           // controller -> PC
+static const uint8_t MSG_BUTTON_FEEDBACK = 0x05;  // PC -> controller
 
 // ============================================================
-// Pin tables
+// Table sizes (the tables themselves are in config.h)
 // ============================================================
-static const uint8_t sliderPins[NUM_SLIDERS] = {
-    SLIDER_0_PIN, SLIDER_1_PIN, SLIDER_2_PIN, SLIDER_3_PIN, SLIDER_4_PIN};
-
-static const uint8_t buttonPins[] = {MUTE_BTN_0_PIN, MUTE_BTN_1_PIN,
-                                     DEVICE_SEL_BTN_PIN};
-static const uint8_t NUM_BUTTONS = sizeof(buttonPins) / sizeof(buttonPins[0]);
-
-static const uint8_t muteLedPins[NUM_MUTE_BUTTONS] = {MUTE_BTN_0_LED_PIN,
-                                                      MUTE_BTN_1_LED_PIN};
+static constexpr uint8_t NUM_SLIDERS = sizeof(SLIDER_PINS) / sizeof(SLIDER_PINS[0]);
+static constexpr uint8_t NUM_BUTTONS = sizeof(BUTTONS) / sizeof(BUTTONS[0]);
 
 // ============================================================
 // State
@@ -56,9 +48,9 @@ static unsigned long lastSliderReadTime = 0;
 static float smoothedValues[NUM_SLIDERS] = {0};
 
 // Buttons (debounce)
-static bool buttonRawStates[3];            // last raw reading per button
-static bool buttonReportedStates[3];       // last state sent to server
-static unsigned long buttonChangeTime[3];  // when raw state last changed
+static bool buttonRawStates[NUM_BUTTONS];            // last raw reading
+static bool buttonReportedStates[NUM_BUTTONS];       // last state sent to PC
+static unsigned long buttonChangeTime[NUM_BUTTONS];  // when raw state changed
 
 // Connection
 static unsigned long lastReconnectTime = 0;
@@ -253,27 +245,64 @@ static void sendButton(uint8_t index, uint8_t state) {
 }
 
 // ============================================================
+// Indicators: show a button's feedback value
+// ============================================================
+
+static void writeLed(uint8_t pin, bool lit, bool activeLow) {
+  digitalWrite(pin, (lit != activeLow) ? HIGH : LOW);
+}
+
+// value 0 = off/unknown, 1..N = on, or choice N. What that means (muted,
+// output A, preset 2, ...) is the PC's business; this only renders it.
+static void showIndicator(const Indicator& ind, uint8_t value) {
+  switch (ind.kind) {
+    case IND_KIND_LED:
+      writeLed(ind.pinA, value != 0, ind.activeLow);
+      break;
+    case IND_KIND_LED_PAIR:
+      writeLed(ind.pinA, value == 1, ind.activeLow);
+      writeLed(ind.pinB, value == 2, ind.activeLow);
+      break;
+    case IND_KIND_NONE:
+      break;
+  }
+}
+
+static void initIndicator(const Indicator& ind) {
+  switch (ind.kind) {
+    case IND_KIND_LED_PAIR:
+      pinMode(ind.pinB, OUTPUT);
+      [[fallthrough]];  // pin A is set up like a single LED
+    case IND_KIND_LED:
+      pinMode(ind.pinA, OUTPUT);
+      break;
+    case IND_KIND_NONE:
+      break;
+  }
+  // Start dark. "Off" is a different pin level per polarity, which is why
+  // showIndicator, not a plain digitalWrite, sets it: driving an active-low
+  // LED LOW here would show it lit until the PC pushes real state.
+  showIndicator(ind, 0);
+}
+
+// ============================================================
 // Protocol: receive and parse incoming frames
 // ============================================================
 
 static void handleParsedMessage(const uint8_t* payload, uint8_t len) {
-  if (len < 2) return;
+  if (len < 1) return;
   uint8_t type = payload[0];
 
-  if (type == MSG_MUTE_STATE && len >= 3) {
-    uint8_t btnIndex = payload[1];
-    bool muted = payload[2] != 0;
-    if (btnIndex < NUM_MUTE_BUTTONS) {
-      digitalWrite(muteLedPins[btnIndex], muted ? LOW : HIGH);
-      DEBUG_LOG("[DBG] Mute btn " + String(btnIndex) + " = " +
-                (muted ? "ON" : "OFF"));
+  if (type == MSG_BUTTON_FEEDBACK && len >= 3) {
+    uint8_t button = payload[1];
+    uint8_t value = payload[2];
+    if (button < NUM_BUTTONS) {
+      showIndicator(BUTTONS[button].indicator, value);
+      DEBUG_LOG("[DBG] Feedback btn " + String(button) + " = " + String(value));
     }
-  } else if (type == MSG_ACTIVE_DEVICE && len >= 2) {
-    uint8_t deviceIndex = payload[1];
-    digitalWrite(DEVICE_SEL_LED_0_PIN, deviceIndex == 0 ? HIGH : LOW);
-    digitalWrite(DEVICE_SEL_LED_1_PIN, deviceIndex == 1 ? HIGH : LOW);
-    DEBUG_LOG("[DBG] Active device = " + String(deviceIndex));
   }
+  // Any other type is not for the controller (or is newer than this
+  // firmware): ignore it.
 }
 
 static void processReceivedByte(uint8_t b) {
@@ -324,44 +353,24 @@ static void processReceivedByte(uint8_t b) {
 void setup() {
   // Slider pins — input (ADC)
   for (int i = 0; i < NUM_SLIDERS; i++) {
-    pinMode(sliderPins[i], INPUT);
+    pinMode(SLIDER_PINS[i], INPUT);
   }
 
-  // Button pins — input with pull-up (LOW = pressed)
+  // Button pins — input with pull-up (LOW = pressed); indicators start off.
   for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
-    pinMode(buttonPins[i], INPUT_PULLUP);
+    pinMode(BUTTONS[i].pin, INPUT_PULLUP);
     buttonRawStates[i] = HIGH;
     buttonReportedStates[i] = HIGH;
     buttonChangeTime[i] = 0;
+    initIndicator(BUTTONS[i].indicator);
   }
-
-  // LED pins — output, start off.
-  //
-  // The two LED groups have OPPOSITE polarity, so "off" is a different level
-  // for each — don't unify these writes:
-  //   - mute LEDs are active-low. The MSG_MUTE_STATE handler drives LOW to
-  //   light them for "muted", so HIGH is off.
-  //   - device-select LEDs are active-high. MSG_ACTIVE_DEVICE drives HIGH for
-  //   the selected device, so LOW is off.
-  //
-  // This previously drove the mute pins LOW, which lit both of them on every
-  // boot and falsely showed "muted" until the host pushed real state — visible
-  // for a second or two after every USB re-plug.
-  for (int i = 0; i < NUM_MUTE_BUTTONS; i++) {
-    pinMode(muteLedPins[i], OUTPUT);
-    digitalWrite(muteLedPins[i], HIGH);
-  }
-  pinMode(DEVICE_SEL_LED_0_PIN, OUTPUT);
-  pinMode(DEVICE_SEL_LED_1_PIN, OUTPUT);
-  digitalWrite(DEVICE_SEL_LED_0_PIN, LOW);
-  digitalWrite(DEVICE_SEL_LED_1_PIN, LOW);
 
   // 12-bit ADC resolution
   analogReadResolution(12);
 
   // Seed slider values so we don't send spurious changes on startup
   for (int i = 0; i < NUM_SLIDERS; i++) {
-    lastSliderValues[i] = analogRead(sliderPins[i]);
+    lastSliderValues[i] = analogRead(SLIDER_PINS[i]);
   }
 
   transport_init();
@@ -385,7 +394,7 @@ void loop() {
     lastSliderReadTime = now;
     for (int i = 0; i < NUM_SLIDERS; i++) {
       // 1. Get raw reading
-      uint16_t rawValue = analogRead(sliderPins[i]);
+      uint16_t rawValue = analogRead(SLIDER_PINS[i]);
 
       // 2. Exponential Moving Average (EMA) - Non-blocking smoothing
       // Formula: Smooth = (Current * Weight) + (Previous * (1 - Weight))
@@ -413,7 +422,7 @@ void loop() {
 
   // --- 2. Read buttons (with debounce) ---
   for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
-    bool currentRaw = digitalRead(buttonPins[i]);
+    bool currentRaw = digitalRead(BUTTONS[i].pin);
 
     // Track when the raw state last changed
     if (currentRaw != buttonRawStates[i]) {

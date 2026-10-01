@@ -55,11 +55,11 @@ The controller and server exchange framed binary messages:
 #### Controller → Server
 
 **Slider** (payload: 4 bytes): `0x01 | index | value_high | value_low`
-- Index: 0–4
+- Index: the slider's hardware input number (its position in the firmware's `SLIDER_PINS`)
 - Value: 12-bit ADC (0–4095) as 16-bit big-endian
 
 **Button** (payload: 3 bytes): `0x02 | index | state`
-- Index: 0–2
+- Index: the button's hardware input number (its position in the firmware's `BUTTONS`)
 - State: `0x01` pressed, `0x00` released
 
 ### Button Press Detection
@@ -71,14 +71,10 @@ Raw pressed/released events are classified on the PC side:
 
 #### Server → Controller
 
-**Mute state** (payload: 3 bytes): `0x03 | button_index | mute_state`
-- Button index: 0–1 (mute buttons)
-- Mute state: `0x01` muted (LED on), `0x00` unmuted (LED off)
+**Button feedback** (payload: 3 bytes): `0x05 | button_index | value`
+- Value: `0` off/unknown, `1..N` on, or choice N. The app derives it from the button's action in the live preset (on while muted; `1`/`2` for which of a toggle's two outputs is active; `1 +` the live preset's position for preset actions). The firmware decides how its hardware shows it (one LED, an LED pair, …).
 
-**Active device** (payload: 2 bytes): `0x04 | device_index`
-- Device index: `0` or `1`
-
-The server pushes state on controller connect (initial sync) and whenever mute or active device changes.
+The server pushes feedback for every button on controller connect (initial sync) and whenever any value changes, including after a preset switch. `0x03` (mute state) and `0x04` (active device) were retired with config schema v3.
 
 ### Configurable Button Actions
 
@@ -87,12 +83,14 @@ The server pushes state on controller connect (initial sync) and whenever mute o
 | Mute Current Output | Toggle mute on default output device |
 | Mute Current Input | Toggle mute on default input (mic) |
 | Mute Specific Device | Toggle mute on a named device |
-| Toggle Output Device | Switch between two configured output devices |
+| Toggle Output Device | Switch between the action's own two output devices (A and B) |
 | Set Output Device | Set a specific device as default output |
+| Next Preset | Make the next button preset live |
+| Switch to Preset | Make a specific button preset live |
 
 ## Configuration
 
-Settings are stored in `%APPDATA%/Volco/config.json` and applied immediately when changed through the UI. The config includes connection settings, slider mappings, button actions, and output device toggle pair.
+Settings are stored in `%APPDATA%/Volco/config.json` and applied immediately when changed through the UI. The config includes connection settings, slider mappings, button presets and each button's actions per preset (schema v3).
 
 ## Tech Stack
 

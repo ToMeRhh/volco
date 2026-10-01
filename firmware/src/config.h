@@ -1,5 +1,7 @@
 #pragma once
 
+#include "hardware.h"
+
 // ============================================================
 // Transport — uncomment exactly one
 // ============================================================
@@ -24,38 +26,33 @@
 #define SERIAL_BAUD 115200
 
 // ============================================================
-// Pin assignments
+// Hardware layout
 // ============================================================
+//
+// The order of each table is the input number the PC sees: the first slider
+// is slider 0, the first button is button 0, and so on. The Volco settings
+// window lists sliders and buttons in this same order.
 
-// Analog sliders
-#define SLIDER_0_PIN 33
-#define SLIDER_1_PIN 35
-#define SLIDER_2_PIN 32
-#define SLIDER_3_PIN 36
-#define SLIDER_4_PIN 34
+// Analog sliders: one ADC pin per slider.
+static const uint8_t SLIDER_PINS[] = {33, 35, 32, 36, 34};
 
-// Mute buttons + LEDs
-#define MUTE_BTN_0_PIN 4
-#define MUTE_BTN_0_LED_PIN 12
-#define MUTE_BTN_1_PIN 14
-#define MUTE_BTN_1_LED_PIN 21
-
-// Device selector button + LEDs
-#define DEVICE_SEL_BTN_PIN 5
-#define DEVICE_SEL_LED_0_PIN 18
-#define DEVICE_SEL_LED_1_PIN 19
+// Buttons: { input pin, indicator }.
+//   IND_NONE                             no light
+//   IND_LED(pin, polarity)               one LED: on for any value except 0
+//   IND_LED_PAIR(pinA, pinB, polarity)   two LEDs: 1 lights A, 2 lights B
+// polarity is ACTIVE_HIGH (HIGH lights the LED) or ACTIVE_LOW (LOW does).
+static const ButtonDef BUTTONS[] = {
+    {4, IND_LED(12, ACTIVE_LOW)},
+    {14, IND_LED(21, ACTIVE_LOW)},
+    {5, IND_LED_PAIR(18, 19, ACTIVE_HIGH)},
+};
 
 // ============================================================
 // Tuning
 // ============================================================
-#define NUM_SLIDERS 5
-#define NUM_MUTE_BUTTONS 2
 #define DEBOUNCE_MS 30
-#define SLIDER_DEADBAND 25  // ADC units — ignore changes smaller than this
+#define SLIDER_DEADBAND 25          // ADC units: ignore smaller changes
 #define SLIDER_READ_INTERVAL_MS 10  // How often to sample sliders (ms)
 #define RECONNECT_INTERVAL_MS 3000  // How often to check connection (ms)
-
-#define SLIDER_DEADBAND \
-  25  // Slightly higher to account for smoothed fluctuations
 #define FILTER_WEIGHT \
   0.2  // Smoothing factor (0.0 to 1.0). Lower = smoother but slower.

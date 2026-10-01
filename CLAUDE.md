@@ -63,9 +63,9 @@ The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (s
 
 ### ESP32 Firmware (`firmware/`)
 
-PlatformIO / Arduino framework / C++17. Single `main.cpp` + `config.h`.
+PlatformIO / Arduino framework / C++17. `main.cpp` + `config.h` + `hardware.h`; `firmware/README.md` explains the code structure.
 
-Transport is selected at compile time via `#define TRANSPORT_SERIAL|WEBSOCKET|UDP` in `config.h`. All pin assignments and tuning constants are in `config.h`.
+Transport is selected at compile time via `#define TRANSPORT_SERIAL|WEBSOCKET|UDP` in `config.h`. The hardware is described by two tables in `config.h`: `SLIDER_PINS` and `BUTTONS` (`{ pin, indicator }`, indicator = `IND_NONE` / `IND_LED` / `IND_LED_PAIR`). A table's order is the input number the app sees. The firmware has no notion of mute or devices; it only reports raw input and renders `0x05` feedback values.
 
 ### Wire Protocol
 
@@ -73,8 +73,7 @@ Bidirectional binary protocol. Frame: `0xAA | length | payload | XOR checksum`.
 
 - `0x01` Slider (controller→server): index + 16-bit value
 - `0x02` Button (controller→server): index + state
-- `0x03` Mute State (server→controller): button index + muted flag
-- `0x04` Active Device (server→controller): device index
+- `0x05` Button Feedback (server→controller): button index + value (0 = off/unknown, 1..N = on / choice N). `Communication/ButtonFeedback` derives each button's value from its action in the live preset; the firmware's per-button indicator table decides how to show it. (`0x03` mute state and `0x04` active device were retired with config schema v3.)
 
 ### Web Simulator (`tools/simulator/`)
 
@@ -82,6 +81,6 @@ Bidirectional binary protocol. Frame: `0xAA | length | payload | XOR checksum`.
 
 ## Config
 
-Runtime config stored at `%APPDATA%/Volco/config.json`. Managed by `ConfigManager` (load/save/change events). Includes connection settings, slider mappings, button actions, output device pair. Schema v2 stores audio devices as endpoint IDs (with the friendly name kept for display and fallback); `ConfigMigrator` migrates v1 configs, which stored devices as bare name-strings, on load.
+Runtime config stored at `%APPDATA%/Volco/config.json`. Managed by `ConfigManager` (load/save/change events). Includes connection settings, slider mappings, button presets and button actions. A slider's or button's **position in its list is its hardware input number** (`Index` is rewritten to match on save). Schema v3: each button keeps its actions per preset (`buttons[i].actions[presetId]`), and the toggle action carries its own A/B devices (`device`/`deviceB`); there is no global output pair. Devices are stored as endpoint IDs with the friendly name kept for display and fallback. `ConfigManager.Load` upgrades v1/v2 JSON to the v3 shape (v2 is rewritten with a `config.v2.bak`); v1's device-name resolution still runs in `VolcoRuntime.Start` once audio is up.
 
 App log at `%APPDATA%/Volco/volco.log` via `AppLog` (async file writer with 500ms flush).
