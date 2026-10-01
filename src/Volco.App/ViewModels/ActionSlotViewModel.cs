@@ -115,14 +115,14 @@ public sealed partial class ActionSlotViewModel : ObservableObject
     {
         // A swapped ItemsSource can null the two-way-bound selection for a moment; never user intent.
         if (_loading || string.IsNullOrEmpty(value)) return;
-        _cfg.Device = DeviceRefLookup.DeviceRefFromName(value);
+        _cfg.Device = DeviceRefLookup.DeviceRefFromName(_devices, value);
         _changed();
     }
 
     partial void OnDeviceBChanged(string value)
     {
         if (_loading || string.IsNullOrEmpty(value)) return;
-        _cfg.DeviceB = DeviceRefLookup.DeviceRefFromName(value);
+        _cfg.DeviceB = DeviceRefLookup.DeviceRefFromName(_devices, value);
         _changed();
     }
 

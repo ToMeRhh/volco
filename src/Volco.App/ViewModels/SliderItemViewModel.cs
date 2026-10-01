@@ -247,7 +247,7 @@ public partial class SliderItemViewModel : ObservableObject
         // Swapping the picker's ItemsSource (a device was plugged in or out) can drive its
         // two-way-bound SelectedItem to null for a moment. That is never the user's choice.
         if (_loading || string.IsNullOrEmpty(value)) return;
-        Config.Device = value == CurrentDefaultOutput ? null : DeviceRefLookup.DeviceRefFromName(value);
+        Config.Device = value == CurrentDefaultOutput ? null : DeviceRefLookup.DeviceRefFromName(_devices, value);
         Persist();
     }
 
@@ -319,8 +319,11 @@ public partial class SliderItemViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedDevice));
     }
 
+    private IReadOnlyList<AudioDevice> _devices = Array.Empty<AudioDevice>();
+
     private void SetDevices(IReadOnlyList<AudioDevice> devices)
     {
+        _devices = devices;
         var choices = new List<string> { CurrentDefaultOutput };
         choices.AddRange(devices.Select(device => device.FriendlyName));
         // A friendly-name-only device that is not plugged in still shows as selected.

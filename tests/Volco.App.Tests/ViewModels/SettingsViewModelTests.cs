@@ -35,6 +35,28 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void TwoSettingsTrees_EachResolvePickedDevicesAgainstTheirOwnDeviceList()
+    {
+        // Same friendly name, different endpoint ids: a shared lookup would hand the first tree
+        // the second tree's id.
+        using var rigA = new TestRig(new FakeAudioEngine { Devices = { new AudioDevice("a-spk", "Speakers", AudioFlow.Render, true) } });
+        using var rigB = new TestRig(new FakeAudioEngine { Devices = { new AudioDevice("b-spk", "Speakers", AudioFlow.Render, true) } });
+        using var vmA = rigA.CreateSettings(new RecordingDispatcher());
+        var sliderA = vmA.Sliders.Items[0];
+        var pressA = vmA.Buttons.Items[0].Press;
+        using var vmB = rigB.CreateSettings(new RecordingDispatcher());
+        _ = vmB.Sliders.Items[0];
+        _ = vmB.Buttons.Items[0];
+
+        sliderA.IsDevice = true;
+        sliderA.SelectedDevice = "Speakers";
+        pressA.Device = "Speakers";
+
+        Assert.Equal("a-spk", rigA.Config.Config.Sliders[0].Device?.Id);
+        Assert.Equal("a-spk", rigA.Config.Config.Buttons[0].Default().SinglePress.Device?.Id);
+    }
+
+    [Fact]
     public void SettingsViewModel_SeedsLiveLevelsFromRuntime_WhenCreatedAfterSliderReports()
     {
         using var rig = new TestRig();
