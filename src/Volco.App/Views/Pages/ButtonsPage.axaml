@@ -1,4 +1,173 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Volco.App.Views.Pages.ButtonsPage">
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Views.Pages.ButtonsPage"
+             x:DataType="vm:ButtonsViewModel">
+  <UserControl.Resources>
+    <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
+  </UserControl.Resources>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{StaticResource PagePadding}"
+                Spacing="{StaticResource SpaceL}"
+                MaxWidth="{StaticResource SettingsCardMaxWidth}"
+                HorizontalAlignment="Left">
+
+      <TextBlock Text="Button Actions" Classes="SectionHeader"/>
+
+      <ItemsControl Name="ButtonRepeater" ItemsSource="{Binding Items}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ButtonItemViewModel">
+            <Border Name="ButtonCard"
+                    Padding="{StaticResource CardPadding}"
+                    Margin="0,0,0,8"
+                    CornerRadius="{StaticResource CardCornerRadius}"
+                    Background="{DynamicResource SurfaceCardBrush}"
+                    BorderBrush="{DynamicResource SurfaceStrokeBrush}"
+                    BorderThickness="1">
+              <StackPanel Spacing="{StaticResource SpaceS}">
+
+                <!-- Title row: "Button N" + collapse chevron -->
+                <Button Name="ExpandButton"
+                        Command="{Binding ToggleExpandedCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Index, StringFormat='Button {0}'}"
+                               Classes="CardTitle"
+                               VerticalAlignment="Center"/>
+                    <Panel Grid.Column="1" VerticalAlignment="Center">
+                      <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                                IsVisible="{Binding IsExpanded}"/>
+                      <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
+                                IsVisible="{Binding !IsExpanded}"/>
+                    </Panel>
+                  </Grid>
+                </Button>
+
+                <!-- Collapsible body -->
+                <StackPanel Name="Body" Spacing="{StaticResource SpaceS}" IsVisible="{Binding IsExpanded}">
+
+                  <!-- Single Press row -->
+                  <StackPanel Orientation="Horizontal"
+                              Spacing="{StaticResource SpaceS}"
+                              VerticalAlignment="Center">
+                    <TextBlock Text="Single Press"
+                               Width="120"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Name="SingleActionCombo"
+                              SelectedIndex="{Binding SinglePress.ActionTypeIndex, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}">
+                      <ComboBoxItem Content="None"/>
+                      <ComboBoxItem Content="Mute Specific Device"/>
+                      <ComboBoxItem Content="Mute Current Output"/>
+                      <ComboBoxItem Content="Mute Current Input"/>
+                      <ComboBoxItem Content="Toggle Output Device"/>
+                      <ComboBoxItem Content="Set Output Device"/>
+                    </ComboBox>
+                    <ComboBox Name="SingleDeviceCombo"
+                              ItemsSource="{Binding OutputDeviceNames}"
+                              SelectedItem="{Binding SinglePress.DeviceId, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}"
+                              PlaceholderText="Select device…"
+                              IsVisible="{Binding SinglePress.NeedsDevice}"/>
+                    <Button Name="SingleTestButton"
+                            Command="{Binding SinglePress.TestCommand}"
+                            Content="Test"
+                            ToolTip.Tip="Execute this press action now"/>
+                  </StackPanel>
+
+                  <!-- Double Press row -->
+                  <StackPanel Orientation="Horizontal"
+                              Spacing="{StaticResource SpaceS}"
+                              VerticalAlignment="Center">
+                    <TextBlock Text="Double Press"
+                               Width="120"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Name="DoubleActionCombo"
+                              SelectedIndex="{Binding DoublePress.ActionTypeIndex, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}">
+                      <ComboBoxItem Content="None"/>
+                      <ComboBoxItem Content="Mute Specific Device"/>
+                      <ComboBoxItem Content="Mute Current Output"/>
+                      <ComboBoxItem Content="Mute Current Input"/>
+                      <ComboBoxItem Content="Toggle Output Device"/>
+                      <ComboBoxItem Content="Set Output Device"/>
+                    </ComboBox>
+                    <ComboBox Name="DoubleDeviceCombo"
+                              ItemsSource="{Binding OutputDeviceNames}"
+                              SelectedItem="{Binding DoublePress.DeviceId, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}"
+                              PlaceholderText="Select device…"
+                              IsVisible="{Binding DoublePress.NeedsDevice}"/>
+                    <Button Name="DoubleTestButton"
+                            Command="{Binding DoublePress.TestCommand}"
+                            Content="Test"
+                            ToolTip.Tip="Execute this press action now"/>
+                  </StackPanel>
+
+                  <!-- Long Press row -->
+                  <StackPanel Orientation="Horizontal"
+                              Spacing="{StaticResource SpaceS}"
+                              VerticalAlignment="Center">
+                    <TextBlock Text="Long Press"
+                               Width="120"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Name="LongActionCombo"
+                              SelectedIndex="{Binding LongPress.ActionTypeIndex, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}">
+                      <ComboBoxItem Content="None"/>
+                      <ComboBoxItem Content="Mute Specific Device"/>
+                      <ComboBoxItem Content="Mute Current Output"/>
+                      <ComboBoxItem Content="Mute Current Input"/>
+                      <ComboBoxItem Content="Toggle Output Device"/>
+                      <ComboBoxItem Content="Set Output Device"/>
+                    </ComboBox>
+                    <ComboBox Name="LongDeviceCombo"
+                              ItemsSource="{Binding OutputDeviceNames}"
+                              SelectedItem="{Binding LongPress.DeviceId, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}"
+                              PlaceholderText="Select device…"
+                              IsVisible="{Binding LongPress.NeedsDevice}"/>
+                    <Button Name="LongTestButton"
+                            Command="{Binding LongPress.TestCommand}"
+                            Content="Test"
+                            ToolTip.Tip="Execute this press action now"/>
+                  </StackPanel>
+
+                  <!-- Timing thresholds -->
+                  <StackPanel Orientation="Horizontal"
+                              Spacing="{StaticResource SpaceM}"
+                              Margin="0,4,0,0">
+                    <StackPanel Spacing="{StaticResource SpaceXs}">
+                      <TextBlock Text="Long press (ms)" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                      <NumericUpDown Name="LongPressBox"
+                                     Value="{Binding LongPressMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"
+                                     Minimum="100" Maximum="5000" FormatString="0" Width="160"/>
+                    </StackPanel>
+                    <StackPanel Spacing="{StaticResource SpaceXs}">
+                      <TextBlock Text="Double-press window (ms)" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                      <NumericUpDown Name="DoublePressBox"
+                                     Value="{Binding DoublePressWindowMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"
+                                     Minimum="50" Maximum="2000" FormatString="0" Width="160"/>
+                    </StackPanel>
+                  </StackPanel>
+
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

@@ -33,7 +33,7 @@ public partial class SettingsWindow : Window
         {
             Nav("Connection", "connection", "Icon.Connection", () => new ConnectionPage(vm.Connection)),
             Nav("Sliders", "sliders", "Icon.Sliders", () => new SlidersPage(vm.Sliders)),
-            Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage()),
+            Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage(vm.Buttons)),
             Nav("Output Devices", "outputdevices", "Icon.Speaker", () => new OutputDevicesPage()),
             Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
         };
