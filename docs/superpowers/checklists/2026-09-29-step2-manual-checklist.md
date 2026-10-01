@@ -7,11 +7,11 @@ is a full manual pass. Run it side by side with the Step 1 (WinUI) build where
 an item says "compare".
 
 **Build under test:** the `Volco-win-x64` artifact from Windows run
-[`36849004610`](https://github.com/ToMeRhh/volco/actions/runs/36849004610) on
-branch `step2-avalonia`. Its code equals the branch head; the later commit
-only changed tests.
+[`36852267391`](https://github.com/ToMeRhh/volco/actions/runs/36852267391) on
+branch `step2-avalonia`. Built from commit `21f698e`; its code equals the branch head (any
+later commit only changes docs).
 ```bash
-gh run download 36849004610 -n Volco-win-x64 --repo ToMeRhh/volco
+gh run download 36852267391 -n Volco-win-x64 --repo ToMeRhh/volco
 ```
 Extract it and run `Volco.exe` directly (self-contained single-file, no
 install).
@@ -23,7 +23,7 @@ gh workflow run build.yml --ref step2-avalonia --field run_build=true
 ```
 
 **Check that the build under test is still current.** If the branch has new
-commits after review fixes, do not test run `36849004610`: use the artifact of
+commits after review fixes, do not test run `36852267391`: use the artifact of
 the newest `run_build=true` run on `step2-avalonia` instead
 (`gh run list --branch step2-avalonia --workflow build.yml --limit 5`).
 
