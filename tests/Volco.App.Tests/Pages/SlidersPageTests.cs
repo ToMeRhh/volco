@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.ViewModels;
@@ -95,6 +97,37 @@ public class SlidersPageTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("discord.exe, chrome.exe", box.Text);
         Assert.Equal("discord.exe, chrome.exe", vm.Sliders.Items[0].ProcessesText);
+    }
+
+    [AvaloniaFact]
+    public void SlidersPage_ProcessAutoComplete_CommittingSuggestionKeepsEarlierTokens()
+    {
+        var (page, rig, vm) = Show(c => c.Sliders[0].Type = SliderMappingType.Processes);
+        using var _ = rig; using var __ = vm;
+        var box = All<AutoCompleteBox>(page, "ProcessBox")[0];
+        var window = (Window)page.GetVisualRoot()!;
+
+        // Real commit path: type, let the dropdown populate, arrow to the suggestion, press Enter.
+        box.Focus();
+        Dispatcher.UIThread.RunJobs();
+        window.KeyTextInput("discord.exe, ch");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(box.IsDropDownOpen);
+
+        Press(window, Key.Down);
+        Dispatcher.UIThread.RunJobs();
+        Press(window, Key.Enter);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("discord.exe, chrome.exe", box.Text);
+        Assert.Equal("discord.exe, chrome.exe", vm.Sliders.Items[0].ProcessesText);
+        Assert.Equal(new[] { "discord.exe", "chrome.exe" }, rig.Config.Config.Sliders[0].Processes);
+    }
+
+    private static void Press(Window window, Key key)
+    {
+        window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
+        window.KeyRelease(key, RawInputModifiers.None, PhysicalKey.None, null);
     }
 
     [AvaloniaFact]
