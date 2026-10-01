@@ -2,6 +2,7 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
+using Volco.App.Osd;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.Core.Communication;
@@ -30,6 +31,7 @@ internal sealed class CompositionRoot : IDisposable
     private SettingsWindow? _settingsWindow;
     private SettingsViewModel? _settingsViewModel;
     private UpdateWindow? _updateWindow;
+    private VolumeOsdWindow? _osd;
     private TrayIcon? _trayIcon;
     private bool _shutDown;
 
@@ -58,10 +60,11 @@ internal sealed class CompositionRoot : IDisposable
 
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory);
 
-        // OSD HOOK (Task 8): create the OSD window here and subscribe it BEFORE Start(), e.g.
-        //   var osd = new OsdWindow(_platform.WindowEffects);
-        //   _runtime.VolumeChanged += (_, n) => Dispatcher.UIThread.Post(() => osd.Show(n));
-        // Runtime events fire on arbitrary threads: always Post, never Invoke (rule b).
+        // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
+        // thread itself (rule b), so the handler calls it directly.
+        _osd = new VolumeOsdWindow(_platform.WindowEffects);
+        var osd = _osd;
+        _runtime.VolumeChanged += (_, n) => osd.Show(n);
 
         // Every handler is subscribed above; only now may the runtime start raising events.
         _runtime.Start();
@@ -199,6 +202,12 @@ internal sealed class CompositionRoot : IDisposable
         // engine before the engine is disposed. It does not dispose the engine itself.
         _runtime?.Dispose();
         _platform?.Audio.Dispose();
+
+        if (_osd is { } osdWindow)
+        {
+            _osd = null;
+            osdWindow.Close();
+        }
 
         if (_updateWindow is { } uw)
         {
