@@ -1,5 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.ViewModels;
@@ -77,24 +81,108 @@ public class SlidersPageTests
         Assert.True(All<StackPanel>(page, "DeviceSection")[0].IsVisible);
     }
 
+    private static (AutoCompleteBox Box, Window Window) TypeInProcessBox(SlidersPage page, string text)
+    {
+        var box = All<AutoCompleteBox>(page, "ProcessBox")[0];
+        var window = (Window)TopLevel.GetTopLevel(page)!;
+        box.Focus();
+        Dispatcher.UIThread.RunJobs();
+        window.KeyTextInput(text);
+        Dispatcher.UIThread.RunJobs();
+        return (box, window);
+    }
+
+    /// <summary>The dropdown's list, which lives in the popup rather than under the box.</summary>
+    private static ListBox DropDownList(AutoCompleteBox box)
+        => box.GetVisualDescendants().OfType<Popup>().Single().Child!
+            .GetVisualDescendants().OfType<ListBox>().Single();
+
+    private static string[] Suggestions(AutoCompleteBox box)
+        => DropDownList(box).Items.OfType<string>().OrderBy(x => x).ToArray();
+
+    private static void AssertCommitted(AutoCompleteBox box, TestRig rig, SettingsViewModel vm)
+    {
+        Assert.Equal("discord.exe, chrome.exe", box.Text);
+        Assert.Equal("discord.exe, chrome.exe", vm.Sliders.Items[0].ProcessesText);
+        Assert.Equal(new[] { "discord.exe", "chrome.exe" }, rig.Config.Config.Sliders[0].Processes);
+    }
+
     [AvaloniaFact]
-    public void SlidersPage_ProcessAutoComplete_SuggestsLiveSessions()
+    public void SlidersPage_ProcessAutoComplete_CommittingSuggestionKeepsEarlierTokens()
     {
         var (page, rig, vm) = Show(c => c.Sliders[0].Type = SliderMappingType.Processes);
         using var _ = rig; using var __ = vm;
-        var box = All<AutoCompleteBox>(page, "ProcessBox")[0];
 
-        box.Text = "discord.exe, ch";
+        // Real commit path: type, let the dropdown populate, arrow to the suggestion, press Enter.
+        var (box, window) = TypeInProcessBox(page, "discord.exe, ch");
+        Assert.True(box.IsDropDownOpen);
+        // Filtered on the last token only.
+        Assert.Equal(new[] { "chrome.exe" }, Suggestions(box));
+
+        Press(window, Key.Down);
+        Dispatcher.UIThread.RunJobs();
+        Press(window, Key.Enter);
         Dispatcher.UIThread.RunJobs();
 
-        var suggestions = Assert.IsAssignableFrom<IEnumerable<string>>(box.ItemsSource).ToList();
-        Assert.Equal(new[] { "chrome.exe" }, suggestions);
+        AssertCommitted(box, rig, vm);
+    }
 
-        // Choosing a suggestion replaces only the last token.
-        box.SelectedItem = "chrome.exe";
+    [AvaloniaFact]
+    public void SlidersPage_ProcessAutoComplete_NewSessionDuringPick_DoesNotRevertCommit()
+    {
+        var (page, rig, vm) = Show(c => c.Sliders[0].Type = SliderMappingType.Processes);
+        using var _ = rig; using var __ = vm;
+
+        var (box, window) = TypeInProcessBox(page, "discord.exe, ch");
+        // A new app starts audio between populating the dropdown and committing the pick.
+        rig.Engine.Sessions.Add(new AudioSessionInfo("s4", 13, "chromium.exe", "dev-1", false));
+
+        Press(window, Key.Down);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal("discord.exe, chrome.exe", box.Text);
-        Assert.Equal("discord.exe, chrome.exe", vm.Sliders.Items[0].ProcessesText);
+        Press(window, Key.Enter);
+        Dispatcher.UIThread.RunJobs();
+
+        AssertCommitted(box, rig, vm);
+    }
+
+    [AvaloniaFact]
+    public void SlidersPage_ProcessAutoComplete_PointerClickOnSuggestionKeepsEarlierTokens()
+    {
+        var (page, rig, vm) = Show(c => c.Sliders[0].Type = SliderMappingType.Processes);
+        using var _ = rig; using var __ = vm;
+
+        var (box, window) = TypeInProcessBox(page, "discord.exe, ch");
+        Assert.True(box.IsDropDownOpen);
+        var item = DropDownList(box).GetVisualDescendants().OfType<ListBoxItem>().Single();
+        var point = item.TranslatePoint(new Point(item.Bounds.Width / 2, item.Bounds.Height / 2), window)!.Value;
+
+        window.MouseMove(point);
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        AssertCommitted(box, rig, vm);
+    }
+
+    [AvaloniaFact]
+    public void SlidersPage_ProcessAutoComplete_NewSessionAppearsWhenTypingAgain()
+    {
+        var (page, rig, vm) = Show(c => c.Sliders[0].Type = SliderMappingType.Processes);
+        using var _ = rig; using var __ = vm;
+        var (box, window) = TypeInProcessBox(page, "ch");
+        Assert.Equal(new[] { "chrome.exe" }, Suggestions(box));
+
+        rig.Engine.Sessions.Add(new AudioSessionInfo("s4", 13, "chromium.exe", "dev-1", false));
+        window.KeyTextInput("r");
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { "chrome.exe", "chromium.exe" }, Suggestions(box));
+    }
+
+    private static void Press(Window window, Key key)
+    {
+        window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
+        window.KeyRelease(key, RawInputModifiers.None, PhysicalKey.None, null);
     }
 
     [AvaloniaFact]

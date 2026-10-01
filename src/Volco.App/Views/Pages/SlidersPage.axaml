@@ -74,10 +74,8 @@
                                      Width="300"
                                      HorizontalAlignment="Left"
                                      Watermark="e.g. spotify.exe, chrome.exe"
-                                     FilterMode="None"
                                      MinimumPrefixLength="0"
                                      Text="{Binding ProcessesText, Mode=TwoWay}"
-                                     TextChanged="ProcessBox_TextChanged"
                                      AttachedToVisualTree="ProcessBox_Attached"/>
                   </StackPanel>
 
