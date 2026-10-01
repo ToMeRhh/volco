@@ -29,6 +29,7 @@ internal sealed class CompositionRoot : IDisposable
     private VolcoRuntime? _runtime;
     private SettingsWindow? _settingsWindow;
     private SettingsViewModel? _settingsViewModel;
+    private UpdateWindow? _updateWindow;
     private TrayIcon? _trayIcon;
     private bool _shutDown;
 
@@ -160,8 +161,29 @@ internal sealed class CompositionRoot : IDisposable
         }
     }
 
-    /// <summary>Menu target for "Check for Updates...". Task 7 opens the UpdateWindow here.</summary>
-    public void CheckForUpdates() => AppLog.Info("Check for Updates menu item clicked");
+    /// <summary>Menu target for "Check for Updates...". Reuses one window and re-activates it.</summary>
+    public void CheckForUpdates()
+    {
+        AppLog.Info("ShowUpdates called");
+        try
+        {
+            if (_config is null) return;
+            if (_updateWindow is null)
+            {
+                _updateWindow = new UpdateWindow(_config);
+                _updateWindow.Closed += (_, _) => _updateWindow = null;
+                AppLog.Info("UpdateWindow created");
+            }
+            if (!_updateWindow.IsVisible) _updateWindow.Show();
+            _updateWindow.Activate();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"ShowUpdates failed: {ex}");
+        }
+    }
+
+    internal UpdateWindow? UpdateWindow => _updateWindow;
 
     public void Shutdown()
     {
@@ -177,6 +199,12 @@ internal sealed class CompositionRoot : IDisposable
         // engine before the engine is disposed. It does not dispose the engine itself.
         _runtime?.Dispose();
         _platform?.Audio.Dispose();
+
+        if (_updateWindow is { } uw)
+        {
+            _updateWindow = null;
+            uw.Close();
+        }
 
         if (_settingsWindow is { } w)
         {

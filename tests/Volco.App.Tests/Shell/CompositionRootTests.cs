@@ -40,6 +40,31 @@ public class CompositionRootTests
     }
 
     [AvaloniaFact]
+    public void CompositionRoot_CheckForUpdates_ReusesAndReactivatesOneWindow()
+    {
+        var root = Create(new FakeAudioEngine(), audioReady: true);
+        try
+        {
+            root.Start();
+            Assert.Null(root.UpdateWindow);
+
+            root.CheckForUpdates();
+            var first = root.UpdateWindow;
+            Assert.NotNull(first);
+            Assert.True(first!.IsVisible);
+
+            root.CheckForUpdates();
+            Assert.Same(first, root.UpdateWindow);
+
+            first.Close();
+            Assert.Null(root.UpdateWindow);
+            root.CheckForUpdates();
+            Assert.NotSame(first, root.UpdateWindow);
+        }
+        finally { root.Shutdown(); }
+    }
+
+    [AvaloniaFact]
     public void CompositionRoot_AudioReady_DoesNotShowSettingsOnStart()
     {
         var root = Create(new FakeAudioEngine(), audioReady: true);
