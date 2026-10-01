@@ -193,15 +193,22 @@ public partial class SliderItemViewModel : ObservableObject
 
     partial void OnDeadZonePercentChanged(double value)
     {
+        // Quantise to 0.01 (WinUI's StepFrequency); Avalonia sliders are continuous.
+        var rounded = Quantise(value);
+        if (rounded != value) { DeadZonePercent = rounded; return; }
         _cfg.DeadZonePercent = value;
         Persist();
     }
 
     partial void OnSmoothingFactorChanged(double value)
     {
+        var rounded = Quantise(value);
+        if (rounded != value) { SmoothingFactor = rounded; return; }
         _cfg.SmoothingFactor = value;
         Persist();
     }
+
+    private static double Quantise(double v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
 
     // LiveLevel changes do NOT trigger a save — it's a transient display value.
 

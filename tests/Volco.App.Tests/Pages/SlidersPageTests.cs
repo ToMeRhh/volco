@@ -131,8 +131,35 @@ public class SlidersPageTests
         using var _ = rig; using var __ = vm;
         Assert.True(All<StackPanel>(page, "Body")[0].IsVisible);
 
-        vm.Sliders.Items[0].ToggleExpandedCommand.Execute(null);
+        var button = All<Button>(page, "ExpandButton")[0];
+        button.Command!.Execute(button.CommandParameter);
 
         Assert.False(All<StackPanel>(page, "Body")[0].IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void SlidersPage_DeadZoneSlider_QuantisesToHundredthsInConfig()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        var slider = All<Slider>(page, "DeadZoneSlider")[0];
+
+        slider.Value = 0.1234;
+
+        Assert.Equal(0.12, rig.Config.Config.Sliders[0].DeadZonePercent);
+        Assert.Equal(0.12, slider.Value, 6);
+    }
+
+    [AvaloniaFact]
+    public void SlidersPage_SmoothingSlider_QuantisesToHundredthsInConfig()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        var slider = All<Slider>(page, "SmoothingSlider")[0];
+
+        slider.Value = 0.876;
+
+        Assert.Equal(0.88, rig.Config.Config.Sliders[0].SmoothingFactor);
+        Assert.Equal(0.88, slider.Value, 6);
     }
 }
