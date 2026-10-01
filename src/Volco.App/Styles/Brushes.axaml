@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Brushes.axaml - one brush per colour token (Colors.axaml), per theme. -->
+<!-- Brushes.axaml - one brush per colour token (Colors.axaml), per theme. Every variant needs its
+     own copy, the high-contrast ones included: a brush found through an inherited variant's
+     dictionary resolves its colour as that base variant, not as the one requested. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:app="using:Volco.App">
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
       <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}"/>
@@ -24,6 +27,46 @@
       <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}"/>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{DynamicResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="SubtleBrush" Color="{DynamicResource SubtleColor}"/>
+      <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource BorderColor}"/>
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="{DynamicResource BorderStrongColor}"/>
+      <SolidColorBrush x:Key="TextBrush" Color="{DynamicResource TextColor}"/>
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource TextSecondaryColor}"/>
+      <SolidColorBrush x:Key="TextTertiaryBrush" Color="{DynamicResource TextTertiaryColor}"/>
+      <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}"/>
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="{DynamicResource AccentSoftColor}"/>
+      <SolidColorBrush x:Key="OnAccentBrush" Color="{DynamicResource OnAccentColor}"/>
+      <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
+      <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
+      <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
+      <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
+      <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="{x:Static app:VolcoThemes.HighContrastDark}">
+      <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}"/>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{DynamicResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="SubtleBrush" Color="{DynamicResource SubtleColor}"/>
+      <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource BorderColor}"/>
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="{DynamicResource BorderStrongColor}"/>
+      <SolidColorBrush x:Key="TextBrush" Color="{DynamicResource TextColor}"/>
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource TextSecondaryColor}"/>
+      <SolidColorBrush x:Key="TextTertiaryBrush" Color="{DynamicResource TextTertiaryColor}"/>
+      <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}"/>
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="{DynamicResource AccentSoftColor}"/>
+      <SolidColorBrush x:Key="OnAccentBrush" Color="{DynamicResource OnAccentColor}"/>
+      <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
+      <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
+      <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
+      <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
+      <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="{x:Static app:VolcoThemes.HighContrastLight}">
       <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}"/>
       <SolidColorBrush x:Key="SurfaceBrush" Color="{DynamicResource SurfaceColor}"/>
       <SolidColorBrush x:Key="SubtleBrush" Color="{DynamicResource SubtleColor}"/>

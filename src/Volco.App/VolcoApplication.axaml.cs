@@ -39,6 +39,7 @@ public partial class VolcoApplication : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        FollowHighContrast();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -71,5 +72,17 @@ public partial class VolcoApplication : Application
             }
         }
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Light/Dark follow the OS through <c>RequestedThemeVariant="Default"</c>; high contrast is
+    /// not a variant Avalonia knows, so switch to ours while the OS has it on (and back after).
+    /// </summary>
+    private void FollowHighContrast()
+    {
+        if (PlatformSettings is not { } settings) return;
+        RequestedThemeVariant = VolcoThemes.Select(settings.GetColorValues());
+        settings.ColorValuesChanged += (_, values) =>
+            Dispatcher.UIThread.Post(() => RequestedThemeVariant = VolcoThemes.Select(values));
     }
 }

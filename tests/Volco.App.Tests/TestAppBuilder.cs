@@ -6,8 +6,8 @@ using Avalonia.Themes.Fluent;
 using Volco.App.Tests;
 
 [assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]
-// DeviceRefLookup.Devices is process-wide static state that each ViewModel tree overwrites, so
-// test classes running in parallel race on it (seen as a flaky OutputDevicesPage test).
+// Headless Avalonia tests share one UI thread, and AppLog.IsDebugEnabled is process-wide, so
+// test classes run one at a time.
 [assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Volco.App.Tests;

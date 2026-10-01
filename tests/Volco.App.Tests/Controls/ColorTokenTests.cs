@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Styling;
 using Xunit;
 
@@ -60,6 +62,68 @@ public class ColorTokenTests
             var ratio = Contrast(Token(foreground, theme), Token(background, theme));
             Assert.True(ratio >= minimum, $"{foreground} on {background} ({theme}) is {ratio:F2}:1, needs {minimum}:1");
         }
+    }
+
+    /// <summary>High contrast: text, accent and status at least 7:1 (WCAG AAA), borders 3:1.</summary>
+    public static TheoryData<string, string, double> HighContrastPairs => new()
+    {
+        { "TextColor", "SurfaceColor", 7.0 },
+        { "TextColor", "SubtleColor", 7.0 },
+        { "TextSecondaryColor", "SurfaceColor", 7.0 },
+        { "TextSecondaryColor", "SubtleColor", 7.0 },
+        { "TextTertiaryColor", "SurfaceColor", 7.0 },
+        { "TextTertiaryColor", "SubtleColor", 7.0 },
+        { "TextColor", "AccentSoftColor", 7.0 },
+        { "AccentColor", "SurfaceColor", 7.0 },
+        { "OnAccentColor", "AccentColor", 7.0 },
+        { "SuccessColor", "SurfaceColor", 7.0 },
+        { "WarningColor", "SurfaceColor", 7.0 },
+        { "DangerColor", "SurfaceColor", 7.0 },
+        { "BorderColor", "SurfaceColor", 3.0 },
+        { "BorderStrongColor", "SurfaceColor", 3.0 },
+    };
+
+    [AvaloniaTheory]
+    [MemberData(nameof(HighContrastPairs))]
+    public void Tokens_MeetTheirContrastTarget_InHighContrast(string foreground, string background, double minimum)
+    {
+        foreach (var theme in new[] { VolcoThemes.HighContrastDark, VolcoThemes.HighContrastLight })
+        {
+            var ratio = Contrast(Token(foreground, theme), Token(background, theme));
+            Assert.True(ratio >= minimum, $"{foreground} on {background} ({theme}) is {ratio:F2}:1, needs {minimum}:1");
+        }
+    }
+
+    [AvaloniaFact]
+    public void HighContrast_BrushesPickUpTheHighContrastColours()
+    {
+        // The brushes live in the Light/Dark dictionaries and reference the colours dynamically;
+        // the high-contrast variants inherit those dictionaries, so the brushes must resolve to
+        // the high-contrast colours, not the base theme's.
+        var border = new Border();
+        border.Bind(Border.BackgroundProperty, border.GetResourceObservable("SurfaceBrush"));
+        var window = new Window { Content = border, RequestedThemeVariant = VolcoThemes.HighContrastDark };
+        window.Show();
+        try
+        {
+            Assert.Equal(Token("SurfaceColor", VolcoThemes.HighContrastDark),
+                         Assert.IsAssignableFrom<ISolidColorBrush>(border.Background).Color);
+            Assert.NotEqual(Token("SurfaceColor", ThemeVariant.Dark),
+                            Assert.IsAssignableFrom<ISolidColorBrush>(border.Background).Color);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void Select_FollowsTheOsContrastPreference()
+    {
+        Assert.Equal(ThemeVariant.Default, VolcoThemes.Select(null));
+        Assert.Equal(ThemeVariant.Default, VolcoThemes.Select(new PlatformColorValues
+            { ThemeVariant = PlatformThemeVariant.Dark, ContrastPreference = ColorContrastPreference.NoPreference }));
+        Assert.Equal(VolcoThemes.HighContrastDark, VolcoThemes.Select(new PlatformColorValues
+            { ThemeVariant = PlatformThemeVariant.Dark, ContrastPreference = ColorContrastPreference.High }));
+        Assert.Equal(VolcoThemes.HighContrastLight, VolcoThemes.Select(new PlatformColorValues
+            { ThemeVariant = PlatformThemeVariant.Light, ContrastPreference = ColorContrastPreference.High }));
     }
 
     [AvaloniaFact]

@@ -49,10 +49,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime = runtime;
         _ui = ui;
 
-        // Seed the device lookup used to resolve picked friendly names to DeviceRefConfig (id +
-        // name) BEFORE any page ViewModel is built: their cards resolve names while constructing.
-        DeviceRefLookup.Devices = audio.GetDevices(AudioFlow.Render);
-
         _runtime.DevicesChanged += OnDevicesChanged;
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
         _runtime.ButtonActivity += OnButtonActivity;
@@ -74,7 +70,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         {
             if (_disposed) return;
             var devices = _audio.GetDevices(AudioFlow.Render);
-            DeviceRefLookup.Devices = devices;
             _slidersViewModel?.RefreshDevices(devices);
             _buttonsViewModel?.RefreshDevices(devices);
         });

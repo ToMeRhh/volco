@@ -180,7 +180,7 @@ The direction: quiet and neutral, letting the content carry the screen. Flat sur
 | `Warning` | `#9A5B00` | `#E7B04F` | Reconnecting | 5.4 / 8.9 |
 | `Danger` | `#B42318` | `#F4877C` | Reset/Remove, errors, disconnected | 6.6 / 7.1 |
 
-A **HighContrast** variant maps these tokens to Windows system colours. State is never shown by colour alone: the connection dot always has a text label.
+**HighContrast** variants (dark and light, picked from the OS high-contrast theme) replace these tokens with a fixed palette modelled on Windows' Night sky/Aquatic and Desert themes: text, accent and status ≥ 7:1, borders ≥ 3:1. They do not read the user's own system colours, which would need a Win32 call outside `Volco.App`. State is never shown by colour alone: the connection dot always has a text label.
 
 **Type:** Segoe UI Variable (fallback: the platform UI font).
 

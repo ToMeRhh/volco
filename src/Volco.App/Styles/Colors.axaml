@@ -2,11 +2,16 @@
 <!--
     Colors.axaml - the colour tokens of the UX redesign spec (docs/superpowers/specs/2026-10-01-volco-ux-redesign.md §3.7),
     one set per theme. Contrast ratios against Surface are listed there; ColorTokenTests checks them.
+    The two high-contrast sets (VolcoThemes, chosen when Windows high contrast is on) drop the greys:
+    every text, accent and status token is at least 7:1 (WCAG AAA) and every border at least 3:1.
+    They follow Windows' Night sky / Aquatic (dark) and Desert (light) themes; the user's own
+    high-contrast colours are not read, since that needs a Win32 call Volco.App may not make.
     The Step 2 names (SurfaceColor, SurfaceCardColor, SurfaceStrokeColor, TextPrimaryColor, IconAccentColor)
     are kept as aliases so older views keep working.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:app="using:Volco.App">
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
       <Color x:Key="BgColor">#FFF6F6F7</Color>
@@ -49,6 +54,48 @@
       <Color x:Key="SurfaceStrokeColor">#FF2C2C31</Color>
       <Color x:Key="TextPrimaryColor">#FFF4F4F5</Color>
       <Color x:Key="IconAccentColor">#FF8AA6F2</Color>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="{x:Static app:VolcoThemes.HighContrastDark}">
+      <Color x:Key="BgColor">#FF000000</Color>
+      <Color x:Key="SurfaceColor">#FF000000</Color>
+      <Color x:Key="SubtleColor">#FF1A1A1A</Color>
+      <Color x:Key="BorderColor">#FFA0A0A0</Color>
+      <Color x:Key="BorderStrongColor">#FFFFFFFF</Color>
+      <Color x:Key="TextColor">#FFFFFFFF</Color>
+      <Color x:Key="TextSecondaryColor">#FFFFFFFF</Color>
+      <Color x:Key="TextTertiaryColor">#FFD6D6D6</Color>
+      <Color x:Key="AccentColor">#FF1AEBFF</Color>
+      <Color x:Key="AccentSoftColor">#FF00363D</Color>
+      <Color x:Key="OnAccentColor">#FF000000</Color>
+      <Color x:Key="SuccessColor">#FF3FF23F</Color>
+      <Color x:Key="WarningColor">#FFFFFF00</Color>
+      <Color x:Key="DangerColor">#FFFF8A80</Color>
+      <!-- Step 2 names, kept as aliases -->
+      <Color x:Key="SurfaceCardColor">#FF000000</Color>
+      <Color x:Key="SurfaceStrokeColor">#FFA0A0A0</Color>
+      <Color x:Key="TextPrimaryColor">#FFFFFFFF</Color>
+      <Color x:Key="IconAccentColor">#FF1AEBFF</Color>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="{x:Static app:VolcoThemes.HighContrastLight}">
+      <Color x:Key="BgColor">#FFFFFAEF</Color>
+      <Color x:Key="SurfaceColor">#FFFFFAEF</Color>
+      <Color x:Key="SubtleColor">#FFEDE6D3</Color>
+      <Color x:Key="BorderColor">#FF6B6B6B</Color>
+      <Color x:Key="BorderStrongColor">#FF000000</Color>
+      <Color x:Key="TextColor">#FF000000</Color>
+      <Color x:Key="TextSecondaryColor">#FF1F1F1F</Color>
+      <Color x:Key="TextTertiaryColor">#FF383838</Color>
+      <Color x:Key="AccentColor">#FF174F63</Color>
+      <Color x:Key="AccentSoftColor">#FFD6E8EE</Color>
+      <Color x:Key="OnAccentColor">#FFFFFFFF</Color>
+      <Color x:Key="SuccessColor">#FF0A5C1E</Color>
+      <Color x:Key="WarningColor">#FF6B3D00</Color>
+      <Color x:Key="DangerColor">#FF8E0B0B</Color>
+      <!-- Step 2 names, kept as aliases -->
+      <Color x:Key="SurfaceCardColor">#FFFFFAEF</Color>
+      <Color x:Key="SurfaceStrokeColor">#FF6B6B6B</Color>
+      <Color x:Key="TextPrimaryColor">#FF000000</Color>
+      <Color x:Key="IconAccentColor">#FF174F63</Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

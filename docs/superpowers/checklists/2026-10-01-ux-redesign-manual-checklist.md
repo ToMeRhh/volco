@@ -90,4 +90,5 @@ For each row, change it, close Settings, restart the app, and check it stuck.
 ## 9. Themes
 
 - [ ] Light and dark both look right (Windows Settings → Personalisation → Colours).
-- [ ] High contrast: everything is readable. (No dedicated high-contrast palette yet; see the PR's follow-ups.)
+- [ ] High contrast on (Windows Settings → Accessibility → Contrast themes): with Night sky or Aquatic the app turns black with white text and cyan accents; with Desert it turns cream with black text. Everything is readable and every card has a visible outline.
+- [ ] Turning high contrast off while Settings is open switches back to the normal light/dark look without a restart.
