@@ -212,17 +212,6 @@ public partial class SliderItemViewModel : ObservableObject
 
     // LiveLevel changes do NOT trigger a save — it's a transient display value.
 
-    /// <summary>Returns process-name suggestions matching the last typed token.</summary>
-    public List<string> GetProcessSuggestions(string currentText)
-    {
-        if (LastToken(currentText).Length == 0)
-            return new List<string>();
-
-        return GetLiveProcessNames()
-            .Where(n => MatchesLastToken(currentText, n))
-            .ToList();
-    }
-
     /// <summary>Distinct image names of every live audio session, case-insensitively de-duplicated.</summary>
     public List<string> GetLiveProcessNames()
         => _audio.GetSessions()

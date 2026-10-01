@@ -6,9 +6,10 @@ using Volco.App.ViewModels;
 namespace Volco.App.Views.Pages;
 
 /// <summary>
-/// Slider mappings and tuning. Bindings do the work; the code-behind only feeds each process
-/// <see cref="AutoCompleteBox"/> its suggestions (via <see cref="SliderItemViewModel.GetProcessSuggestions"/>)
-/// and replaces the last comma-separated token when a suggestion is chosen.
+/// Slider mappings and tuning. Bindings do the work; the code-behind only configures each process
+/// <see cref="AutoCompleteBox"/>: it holds the live process names (<see cref="SliderItemViewModel.GetLiveProcessNames"/>),
+/// filters them on the last comma-separated token (<see cref="SliderItemViewModel.MatchesLastToken"/>), and replaces
+/// that token when a suggestion is chosen.
 /// </summary>
 public partial class SlidersPage : UserControl
 {
@@ -43,13 +44,14 @@ public partial class SlidersPage : UserControl
 
         // The box filters the full live list itself (on the last token). Reassigning ItemsSource while
         // a suggestion is being committed clears the dropdown selection, which makes the box revert
-        // the pick to the typed text, so the list is only refreshed on focus / dropdown open.
+        // the pick to the typed text. So the list is only refreshed when the user types (Populating,
+        // which never fires on a commit) or the dropdown is opened by key (DropDownOpening), and only
+        // when the set of names actually changed.
         box.ItemFilter = (search, item) => SliderItemViewModel.MatchesLastToken(search, item as string);
-        RefreshProcessNames(box);
-        box.GotFocus -= ProcessBox_Refresh;
-        box.GotFocus += ProcessBox_Refresh;
-        box.DropDownOpened -= ProcessBox_Refresh;
-        box.DropDownOpened += ProcessBox_Refresh;
+        box.Populating -= ProcessBox_Refresh;
+        box.Populating += ProcessBox_Refresh;
+        box.DropDownOpening -= ProcessBox_Refresh;
+        box.DropDownOpening += ProcessBox_Refresh;
     }
 
     private void ProcessBox_Refresh(object? sender, EventArgs e)
@@ -61,8 +63,9 @@ public partial class SlidersPage : UserControl
     {
         if (box.DataContext is not SliderItemViewModel vm) return;
         var names = vm.GetLiveProcessNames();
-        // Skip no-op reassignments: they would reset the dropdown view and selection.
-        if (box.ItemsSource is IEnumerable<string> current && current.SequenceEqual(names)) return;
+        // An unchanged set must never reassign: that would reset the dropdown view and selection.
+        if (box.ItemsSource is IEnumerable<string> current
+            && new HashSet<string>(current, StringComparer.OrdinalIgnoreCase).SetEquals(names)) return;
         box.ItemsSource = names;
     }
 }
