@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
-using Avalonia.Shapes;
+using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
