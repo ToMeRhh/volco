@@ -68,6 +68,16 @@ public sealed class VolcoRuntime : IDisposable
     private PendingMuteOsd? _pendingMuteOsd;
 
     /// <summary>
+    /// Same idea for a SetOutputDevice/ToggleOutputDevice press: the switch is posted to the
+    /// audio thread, so the OSD waits for the authoritative <see cref="DeviceChangeKind.DefaultChanged"/>
+    /// for the target endpoint. Read/written with Volatile/Interlocked (handlers run on the
+    /// detector and audio threads, no lock) so that of the up-to-3 per-role DefaultChanged events
+    /// exactly one wins the compare-exchange and raises the OSD.
+    /// </summary>
+    private sealed record PendingDeviceOsd(string TargetId);
+    private PendingDeviceOsd? _pendingDeviceOsd;
+
+    /// <summary>
     /// Guards <see cref="_lastPushedFrames"/> (Bug 4). PushControllerState can be entered from
     /// several threads: the audio thread (OnDeviceVolumeChanged/OnDevicesChangedForControllerState,
     /// both invoked from the platform audio engine's dedicated thread), whatever thread raises
@@ -431,7 +441,30 @@ public sealed class VolcoRuntime : IDisposable
         var expectedDeviceId = IsMuteAction(actionConfig.Action) ? ResolveExpectedMuteDeviceId(actionConfig) : null;
         _pendingMuteOsd = expectedDeviceId is null ? null : new PendingMuteOsd(expectedDeviceId, actionConfig);
 
+        // Output-device switch: compute the target with the actions' own logic BEFORE Execute()
+        // (afterwards the default may already have moved). Any press replaces the pending record.
+        PendingDeviceOsd? pendingSwitch = null;
+        AudioDevice? alreadyCurrent = null;
+        if (actionConfig.Action is ButtonActionType.SetOutputDevice or ButtonActionType.ToggleOutputDevice)
+        {
+            var current = Audio.GetDefaultDevice(AudioFlow.Render);
+            var targetId = actionConfig.Action == ButtonActionType.SetOutputDevice
+                ? SetOutputDeviceAction.ResolveTargetId(actionConfig.Device)
+                : ToggleOutputDeviceAction.ResolveTargetId(current, Config.Config.OutputDevices);
+            if (targetId is not null)
+            {
+                // Already the default: Windows raises no change, so confirm right away.
+                if (current is not null && string.Equals(current.Id, targetId, StringComparison.OrdinalIgnoreCase))
+                    alreadyCurrent = current;
+                else
+                    pendingSwitch = new PendingDeviceOsd(targetId);
+            }
+        }
+        Interlocked.Exchange(ref _pendingDeviceOsd, pendingSwitch);
+
         action?.Execute();
+
+        if (alreadyCurrent is not null) ShowDeviceOsd(alreadyCurrent.Id, alreadyCurrent.FriendlyName);
     }
 
     private static bool IsMuteAction(ButtonActionType type) => type is
@@ -523,6 +556,17 @@ public sealed class VolcoRuntime : IDisposable
 
         if (e.Kind == DeviceChangeKind.DefaultChanged)
         {
+            // Device-switch OSD. Clear the pending record FIRST (compare-exchange: only one of
+            // the per-role DefaultChanged events wins), then raise. No lock is held.
+            var pendingSwitch = Volatile.Read(ref _pendingDeviceOsd);
+            if (pendingSwitch is not null
+                && e.Device.Flow == AudioFlow.Render
+                && string.Equals(pendingSwitch.TargetId, e.Device.Id, StringComparison.OrdinalIgnoreCase)
+                && Interlocked.CompareExchange(ref _pendingDeviceOsd, null, pendingSwitch) == pendingSwitch)
+            {
+                ShowDeviceOsd(e.Device.Id, e.Device.FriendlyName);
+            }
+
             // Not forced: PushControllerState already skips the send when the encoded state
             // (mute flags + active-device index) is unchanged, but a real default-device change
             // always does change the active-device index, so this still pushes (Bug 4 note).
@@ -559,6 +603,16 @@ public sealed class VolcoRuntime : IDisposable
         }
 
         RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Mute));
+    }
+
+    /// <summary>Raises <see cref="VolumeChanged"/> with an <see cref="OsdKind.Device"/>
+    /// notification: the new default output's name plus its current level and mute flag
+    /// (level 0, not muted when the state cannot be read).</summary>
+    private void ShowDeviceOsd(string deviceId, string friendlyName)
+    {
+        var muted = ReadState(DeviceRef.ById(deviceId), out var level);
+        var label = string.IsNullOrEmpty(friendlyName) ? "Output" : friendlyName;
+        RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Device));
     }
 
     /// <summary>Reads a device's level and mute flag; level 0 and not muted when unreadable.</summary>

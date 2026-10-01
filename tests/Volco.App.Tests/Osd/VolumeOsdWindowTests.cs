@@ -150,6 +150,27 @@ public class VolumeOsdWindowTests
     }
 
     [AvaloniaFact]
+    public void OsdWindow_DeviceNotification_ShowsSpeakerGlyphAndPercent()
+    {
+        var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000));
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.37f, false, OsdKind.Device));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Headphones", osd.LabelBlock.Text);
+        Assert.Equal("37%", osd.ValueBlock.Text);
+        Assert.True(osd.SpeakerGlyph.IsVisible);
+        Assert.False(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.MutedGlyph.IsVisible);
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.37f, true, OsdKind.Device));
+        PumpUntil(() => osd.ValueBlock.Text == "Muted");
+        Assert.Equal("Muted", osd.ValueBlock.Text);
+        Assert.True(osd.MutedGlyph.IsVisible);
+        Assert.False(osd.SpeakerGlyph.IsVisible);
+        osd.Close();
+    }
+
+    [AvaloniaFact]
     public void OsdWindow_BurstOfShows_CoalescesIntoOneRepaintOfLatestValue()
     {
         var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000));
