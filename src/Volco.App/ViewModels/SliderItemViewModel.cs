@@ -229,7 +229,7 @@ public partial class SliderItemViewModel : ObservableObject
     /// OutputDevices/OutputDeviceNames were only ever populated once, in the constructor).
     /// Callers must already be on the UI thread — this mutates an ObservableCollection and a
     /// bound property, and <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread,
-    /// so the marshalling happens once, in SettingsViewModel.RefreshDevices, rather than here.
+    /// so the marshalling happens once, in SettingsViewModel's DevicesChanged handler, rather than here.
     /// </summary>
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
     {

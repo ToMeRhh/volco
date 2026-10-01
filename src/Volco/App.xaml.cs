@@ -12,10 +12,10 @@ using Volco.Core.Updates;
 
 namespace Volco;
 
-public partial class App : Application
+public partial class WinUiApp : Application
 {
     public static bool IsExiting { get; private set; }
-    private static App _instance = null!;
+    private static WinUiApp _instance = null!;
     private TaskbarIcon? _trayIcon;
     private SettingsWindow? _settingsWindow;
     private UpdateWindow? _updateWindow;
@@ -24,7 +24,7 @@ public partial class App : Application
     private VolcoRuntime _runtime = null!;
     private VolumeOsdWindow _osd = null!;
 
-    public App()
+    public WinUiApp()
     {
         _instance = this;
         InitializeComponent();

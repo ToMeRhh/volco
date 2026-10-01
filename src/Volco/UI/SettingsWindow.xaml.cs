@@ -45,7 +45,7 @@ public sealed partial class SettingsWindow : Window
         // so it is only ever constructed once — re-showing it never re-runs the seeding above.
         // Activated fires every time the window regains activation, including right after that
         // Show()/un-hide, which is exactly when a level that changed while the window was hidden
-        // (and therefore missed by the SliderLevelChanged subscription above) needs to be caught
+        // (and therefore missed by SettingsViewModel's SliderLevelChanged subscription) needs to be caught
         // up. Already on the UI thread — no dispatcher marshalling needed.
         Activated += OnActivated;
 
@@ -63,7 +63,7 @@ public sealed partial class SettingsWindow : Window
 
     private void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
-        if (!App.IsExiting)
+        if (!WinUiApp.IsExiting)
         {
             args.Cancel = true;
             sender.Hide();

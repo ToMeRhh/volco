@@ -6,6 +6,11 @@ using Xunit;
 
 namespace Volco.App.Tests.Pages;
 
+/// <summary>Touches the process-global AppLog.IsDebugEnabled, so it must not run in parallel.</summary>
+[CollectionDefinition("AppLogGlobalState", DisableParallelization = true)]
+public class AppLogGlobalStateCollection;
+
+[Collection("AppLogGlobalState")]
 public class GeneralPageTests
 {
     [AvaloniaFact]

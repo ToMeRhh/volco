@@ -188,7 +188,7 @@ public partial class ButtonItemViewModel : ObservableObject
     /// Re-seeds the shared device picker for all three press slots from a fresh device snapshot
     /// (Bug 3). Callers must already be on the UI thread — see SliderItemViewModel.RefreshDevices
     /// for the same note; <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread and
-    /// is marshalled once, in SettingsViewModel.RefreshDevices.
+    /// is marshalled once, in SettingsViewModel's DevicesChanged handler.
     /// </summary>
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
     {

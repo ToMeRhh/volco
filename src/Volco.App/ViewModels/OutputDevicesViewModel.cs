@@ -65,7 +65,7 @@ public partial class OutputDevicesViewModel : ObservableObject
     /// Re-seeds the output-device picker from a fresh device snapshot (Bug 3). Callers must
     /// already be on the UI thread — see SliderItemViewModel.RefreshDevices for the same note;
     /// <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread and is marshalled
-    /// once, in SettingsViewModel.RefreshDevices.
+    /// once, in SettingsViewModel's DevicesChanged handler.
     /// </summary>
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
     {

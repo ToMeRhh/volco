@@ -124,7 +124,7 @@ public sealed partial class UpdateWindow : Window
             AppLog.Info($"Update downloaded to {stagedExe}; handing off to installer.");
 
             UpdateInstaller.ApplyAndRestart(stagedExe);
-            App.RequestExit();
+            WinUiApp.RequestExit();
         }
         catch (Exception ex)
         {

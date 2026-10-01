@@ -69,4 +69,34 @@ public class SettingsViewModelTests
         Assert.Equal(0, ui.Pending);
         Assert.Equal(ConnectionStatus.Disconnected, vm.Connection.Status);
     }
+
+    [Fact]
+    public async Task SettingsViewModel_QueuedWorkRunsAfterDispose_DoesNothingAndDisposeIsIdempotent()
+    {
+        var engine = new FakeAudioEngine { Devices = { Speakers } };
+        using var rig = new TestRig(engine);
+        var ui = new RecordingDispatcher();
+        var vm = rig.CreateSettings(ui);
+        var outputs = vm.OutputDevices;
+        var connection = vm.Connection;
+
+        engine.Devices.Add(Headphones);
+        await Task.Run(() =>
+        {
+            engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones);
+            rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        });
+        Assert.True(ui.Pending > 0);
+
+        vm.Dispose();
+        var ex = Record.Exception(() =>
+        {
+            ui.RunAll();
+            vm.Dispose();
+        });
+
+        Assert.Null(ex);
+        Assert.Equal(new[] { "Speakers" }, outputs.OutputDevices.Select(d => d.FriendlyName));
+        Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+    }
 }
