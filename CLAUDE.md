@@ -22,7 +22,7 @@ gh run list --branch <branch-name> --limit 3
   gh workflow run build.yml --ref <branch-name> --field run_build=true
   ```
 
-CI runs tests on Ubuntu (net8.0) and builds/publishes on Windows (net8.0-windows10.0.22621.0, x64). Tests use xUnit, in `tests/Volco.Core.Tests/`.
+CI runs tests on Ubuntu (net8.0) and builds/publishes on Windows (net8.0-windows10.0.22621.0, win-x64) with `dotnet publish` (single-file, self-contained; no msbuild). There are two test projects, both run by the Linux job: `tests/Volco.Core.Tests/` (xUnit 2) and `tests/Volco.App.Tests/` (Avalonia headless, xUnit v3). `global.json` pins SDK 10.0.100 (needed by the Avalonia analyzers); every project still targets net8.0 / net8.0-windows10.0.22621.0, and both workflows install the 8.0.x and 10.0.x SDKs.
 
 **Firmware** (ESP32, in `firmware/`):
 ```bash
@@ -33,7 +33,7 @@ cd firmware && pio device monitor   # serial monitor
 
 ## Architecture
 
-Volco is a Windows system tray app that controls PC audio via an external hardware controller (ESP32 with sliders and buttons). The app is split into three real projects (separate `.csproj`s, not `<Compile Remove>` tricks), plus the firmware:
+Volco is a Windows system tray app that controls PC audio via an external hardware controller (ESP32 with sliders and buttons). The app is split into four real projects (separate `.csproj`s, not `<Compile Remove>` tricks), plus the firmware:
 
 ### `src/Volco.Core/` — platform-neutral, `net8.0`, builds and tests on Linux
 
@@ -53,9 +53,19 @@ The COM audio engine, in namespace `Volco.Windows.Audio`:
 - `SessionRegistry` — caches every live per-app audio session across all render devices, driven by `IAudioSessionNotification`; volume writes are an O(1) dictionary lookup, never an enumeration.
 - `DefaultDevicePolicy` — switches the Windows default output device via the undocumented `IPolicyConfig` COM interface, replacing the old `svcl.exe` child process.
 
-### `src/Volco/` — WinUI 3 exe
+### `src/Volco.App/` — Avalonia 12 UI, `net8.0`, builds and tests on Linux
 
-C# / .NET 8 / WinUI 3. `App.xaml.cs` is now a thin shell: it constructs a `VolcoRuntime` and wires its events to the tray icon and settings window, rather than owning orchestration itself.
+The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (startup/shutdown, tray, windows), the settings window and its five pages, the update window, the volume OSD, ViewModels, styles. It is a view over `VolcoRuntime`. **`Volco.App` and `Volco.Core` must stay platform-free** (no `DllImport`/`LibraryImport`, no `Windows.*`/`Microsoft.UI.*`, no CsWin32); the Linux CI job enforces this simply by compiling and testing them. Everything OS-specific comes in through two seams: `IAudioEngine` (Core) and `IWindowEffects` (App, `MakeClickThrough` for the OSD), bundled as `PlatformServices` and handed to `VolcoAppHost.Run`.
+
+### `src/Volco.Windows/` — `net8.0-windows10.0.22621.0`, the shipping `Volco.exe`
+
+`WinExe` with `<AssemblyName>Volco</AssemblyName>`, referencing `Volco.Core` and `Volco.App`. Entry point is `Program.Main`: it hooks the AppDomain/TaskScheduler exception loggers, builds the `AudioEngine`, and calls `VolcoAppHost.Run(args, () => new PlatformServices(engine, ready, new Win32WindowEffects()))`. Holds the Windows implementations of the two seams, in namespace `Volco.Windows.*`:
+- `Audio/AudioEngine` — the real Core Audio engine. Owns one dedicated MTA thread and a struct-command work queue; all COM activation, registration, and writes happen on that thread. `Start()` returns `bool` (whether the engine came up), which `VolcoRuntime` uses to skip config migration if audio isn't ready.
+- `Audio/DeviceRegistry` — caches every live endpoint and its COM objects, kept current by `IMMNotificationClient` instead of re-enumeration.
+- `Audio/SessionRegistry` — caches every live per-app audio session across all render devices, driven by `IAudioSessionNotification`; volume writes are an O(1) dictionary lookup, never an enumeration.
+- `Audio/DefaultDevicePolicy` — switches the Windows default output device via the undocumented `IPolicyConfig` COM interface.
+- `Platform/Win32WindowEffects` — `IWindowEffects` via Win32 extended styles; the only UI P/Invoke in the repo.
+- `app.manifest` (asInvoker, PerMonitorV2 DPI) and `volco.ico`.
 
 **Data flow:** Controller sends binary frames → `IControllerConnection` receives bytes → `ProtocolParser` extracts `ControllerMessage` → `VolcoRuntime` routes to `SliderProcessor`/`ButtonPressDetector` → `IAudioEngine` changes Windows audio state. For state feedback, `ProtocolEncoder` builds frames → `IControllerConnection.Send()` pushes to controller.
 
