@@ -1,6 +1,8 @@
+using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Volco.App.Platform;
+using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
 using Volco.Core.Tests.Runtime;
 using Xunit;
@@ -15,15 +17,43 @@ public class CompositionRootTests
         public void MakeClickThrough(Window window) => Calls.Add(window);
     }
 
-    private static CompositionRoot Create(FakeAudioEngine engine, bool audioReady)
+    private static CompositionRoot Create(FakeAudioEngine engine, bool audioReady,
+                                          Action<CompositionRoot>? onConnect = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
-        return new CompositionRoot(
+        CompositionRoot? root = null;
+        root = new CompositionRoot(
             Path.Combine(dir, "config.json"),
             () => new PlatformServices(engine, audioReady, new RecordingEffects()),
-            connectionFactory: cfg => new FakeControllerConnection(cfg),
+            connectionFactory: cfg =>
+            {
+                onConnect?.Invoke(root!);
+                return new FakeControllerConnection(cfg);
+            },
             createTray: false);
+        return root;
+    }
+
+    private static int VolumeChangedSubscribers(VolcoRuntime runtime)
+        => (typeof(VolcoRuntime)
+                .GetField(nameof(VolcoRuntime.VolumeChanged), BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(runtime) as Delegate)?.GetInvocationList().Length ?? 0;
+
+    [AvaloniaFact]
+    public void CompositionRoot_OsdIsSubscribedBeforeTheRuntimeConnects()
+    {
+        // The runtime builds its transport inside Start(); from then on a controller frame can
+        // raise VolumeChanged, so the OSD must already be listening.
+        var subscribersAtConnect = -1;
+        var root = Create(new FakeAudioEngine(), audioReady: true,
+                          onConnect: r => subscribersAtConnect = VolumeChangedSubscribers(r.Runtime!));
+        try
+        {
+            root.Start();
+            Assert.True(subscribersAtConnect > 0, $"VolumeChanged had {subscribersAtConnect} subscribers when the transport was built");
+        }
+        finally { root.Shutdown(); }
     }
 
     [AvaloniaFact]
