@@ -508,7 +508,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig(c =>
         {
-            c.Buttons[0].SinglePress = SetDevice("", "Headphones");   // name only: the action is a no-op
+            c.Buttons[0].SinglePress = SetDevice("");   // unconfigured (no id, no name, so HealDeviceIds cannot fill it): a no-op
             c.Buttons[2].SinglePress = SetDevice(Headphones, "Headphones");
         });
         var runtime = StartRuntime(config);
