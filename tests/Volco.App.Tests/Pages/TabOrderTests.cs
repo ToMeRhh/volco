@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -14,14 +15,17 @@ namespace Volco.App.Tests.Pages;
 /// </summary>
 public class TabOrderTests
 {
-    private static List<string?> TabSequence(Control start, int count)
+    private static List<string?> TabSequence(Window window, Control start, int count)
     {
+        start.Focus(NavigationMethod.Tab);
+        Dispatcher.UIThread.RunJobs();
         var names = new List<string?>();
-        IInputElement? current = start;
-        for (int i = 0; i < count && current is not null; i++)
+        for (int i = 0; i < count; i++)
         {
-            current = KeyboardNavigationHandler.GetNext(current, NavigationDirection.Next);
-            names.Add((current as Control)?.Name);
+            window.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
+            window.KeyRelease(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
+            Dispatcher.UIThread.RunJobs();
+            names.Add((window.FocusManager?.GetFocusedElement() as Control)?.Name);
         }
         return names;
     }
@@ -32,12 +36,13 @@ public class TabOrderTests
         using var rig = new TestRig();
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var page = new SlidersPage(vm.Sliders);
-        new Window { Content = page, Width = 900, Height = 900 }.Show();
+        var window = new Window { Content = page, Width = 900, Height = 900 };
+        window.Show();
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(
             new[] { "Grip", "ExpandButton", "MenuButton", "Grip", "ExpandButton", "MenuButton" },
-            TabSequence(page.FindControl<Button>("AddButton")!, 6));
+            TabSequence(window, page.FindControl<Button>("AddButton")!, 6));
     }
 
     [AvaloniaFact]
@@ -46,11 +51,12 @@ public class TabOrderTests
         using var rig = new TestRig();
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var page = new ButtonsPage(vm.Buttons);
-        new Window { Content = page, Width = 900, Height = 900 }.Show();
+        var window = new Window { Content = page, Width = 900, Height = 900 };
+        window.Show();
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(
             new[] { "AddFirstPresetButton", "Grip", "ExpandButton", "MenuButton", "Grip" },
-            TabSequence(page.FindControl<Button>("AddButton")!, 5));
+            TabSequence(window, page.FindControl<Button>("AddButton")!, 5));
     }
 }
