@@ -279,7 +279,7 @@ public class SliderProcessor : IDisposable
         // by slider.Processes membership, independent of whether that slider has moved yet —
         // otherwise an unmoved-but-mapped slider would let the Unmapped slider (pass 2) steal
         // its process, which is exactly the bug this two-pass split prevents.
-        for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
+        for (int i = 0; i < config.Sliders.Count; i++)
         {
             var slider = config.Sliders[i];
             if (slider.Type != SliderMappingType.Processes) continue;
@@ -289,7 +289,7 @@ public class SliderProcessor : IDisposable
             float? level;
             lock (_lock)
             {
-                level = _lastVolume[i];
+                level = _lastVolume.TryGetValue(i, out var v) ? v : null;
             }
             if (level is { } lvl)
                 _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), lvl);
@@ -297,14 +297,14 @@ public class SliderProcessor : IDisposable
         }
 
         // Pass 2: genuinely unclaimed — an Unmapped slider owns it, if one exists and has moved.
-        for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
+        for (int i = 0; i < config.Sliders.Count; i++)
         {
             if (config.Sliders[i].Type != SliderMappingType.Unmapped) continue;
 
             float? level;
             lock (_lock)
             {
-                level = _lastVolume[i];
+                level = _lastVolume.TryGetValue(i, out var v) ? v : null;
             }
             if (level is { } lvl)
             {
