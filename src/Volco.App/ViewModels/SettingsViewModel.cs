@@ -7,10 +7,9 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// Root ViewModel for the Settings window.
-/// Lazily creates one instance of each tab ViewModel so state and subscriptions
-/// persist across tab switches. Holds the injected services and exposes
-/// them to child VMs on demand.
+/// Root ViewModel for the Settings window. Lazily creates one ViewModel per page, so state and
+/// subscriptions persist across page switches, and owns every runtime/engine subscription the
+/// pages need, marshalling each event to the UI thread before touching bound state.
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 {
@@ -18,72 +17,66 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly IAudioEngine _audio;
     private readonly VolcoRuntime _runtime;
 
-    // Runtime events (DevicesChanged, SliderLevelChanged) fire on arbitrary threads (audio thread,
-    // SliderProcessor's coalescing timer, transport threads). This VM owns those subscriptions
-    // and marshals every handler through the injected dispatcher before touching bound state.
+    // Runtime and engine events fire on arbitrary threads (audio thread, SliderProcessor's
+    // coalescing timer, transport threads). Every handler posts through this first.
     private readonly IUiDispatcher _ui;
     private bool _disposed;
 
-    // ── Lazy tab ViewModels ───────────────────────────────────────────────────
+    private ConnectionViewModel? _connectionViewModel;
+    private SlidersViewModel? _slidersViewModel;
+    private ButtonsViewModel? _buttonsViewModel;
+    private GeneralViewModel? _generalViewModel;
 
-    private ConnectionViewModel?    _connectionViewModel;
-    private SlidersViewModel?       _slidersViewModel;
-    private ButtonsViewModel?       _buttonsViewModel;
-    private OutputDevicesViewModel? _outputDevicesViewModel;
-    private GeneralViewModel?       _generalViewModel;
+    /// <summary>The window's one "… · Undo" message.</summary>
+    public UndoToastViewModel Toast { get; } = new();
 
     public ConnectionViewModel Connection =>
         _connectionViewModel ??= new ConnectionViewModel(_config, _runtime, _ui);
 
     public SlidersViewModel Sliders =>
-        _slidersViewModel ??= new SlidersViewModel(_config, _audio);
+        _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast);
 
     public ButtonsViewModel Buttons =>
-        _buttonsViewModel ??= new ButtonsViewModel(_config, _audio);
-
-    public OutputDevicesViewModel OutputDevices =>
-        _outputDevicesViewModel ??= new OutputDevicesViewModel(_config, _audio);
+        _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast);
 
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config);
 
-    // ── Constructor ───────────────────────────────────────────────────────────
-
     public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui)
     {
-        _config     = config;
-        _audio      = audio;
-        _runtime    = runtime;
-        _ui         = ui;
+        _config = config;
+        _audio = audio;
+        _runtime = runtime;
+        _ui = ui;
 
-        // Seed the device lookup used to resolve combo-box friendly names to DeviceRefConfig
-        // (id + name) BEFORE any child ViewModel is built — Sliders/Buttons construct item
-        // ViewModels that call DeviceRefLookup.DeviceRefFromName during their own construction.
+        // Seed the device lookup used to resolve picked friendly names to DeviceRefConfig (id +
+        // name) BEFORE any page ViewModel is built: their cards resolve names while constructing.
         DeviceRefLookup.Devices = audio.GetDevices(AudioFlow.Render);
 
-        _runtime.DevicesChanged     += OnDevicesChanged;
+        _runtime.DevicesChanged += OnDevicesChanged;
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
+        _runtime.ButtonActivity += OnButtonActivity;
+        _runtime.ActivePresetChanged += OnActivePresetChanged;
+        _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
 
-        // Rule (f): the firmware only reports a slider when it moves, so levels reported before
-        // this VM existed would never reach the bars. Seed from the runtime now; from here on the
-        // SliderLevelChanged subscription (kept for the VM's whole lifetime, even while the window
-        // is hidden) keeps them current, so no re-seed on window activation is needed.
+        // The controller only reports a slider when it moves, so levels reported before this VM
+        // existed would never reach the bars. Seed them now; the subscription above (kept for the
+        // VM's whole lifetime, even while the window is hidden) keeps them current.
         Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
     }
 
-    // ── Runtime event handlers (any thread) ───────────────────────────────────
+    // ── Runtime / engine event handlers (any thread) ──────────────────────────
 
-    /// <summary>
-    /// <see cref="VolcoRuntime.DevicesChanged"/> fires for every kind of device change
-    /// (added/removed/state/default), so a device plugged in or removed after this ViewModel was
-    /// created shows up in every open device picker. Marshals to the UI thread before mutating
-    /// any child ViewModel's bound state. Only already-constructed tab ViewModels are refreshed
-    /// (lazy ??=): an unopened tab builds its device list fresh the first time it is opened.
-    /// </summary>
+    /// <summary>Every kind of device change (added/removed/state/default) refreshes every open
+    /// device picker and the light previews. Unopened pages build fresh lists when opened.</summary>
     private void OnDevicesChanged(object? sender, DevicesChangedEventArgs e)
         => _ui.Post(() =>
         {
-            if (!_disposed) RefreshDevicesOnUiThread();
+            if (_disposed) return;
+            var devices = _audio.GetDevices(AudioFlow.Render);
+            DeviceRefLookup.Devices = devices;
+            _slidersViewModel?.RefreshDevices(devices);
+            _buttonsViewModel?.RefreshDevices(devices);
         });
 
     private void OnSliderLevelChanged(object? sender, SliderLevelEventArgs e)
@@ -92,22 +85,35 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             if (!_disposed) Sliders.UpdateLiveLevel(e.SliderIndex, e.Level);
         });
 
-    private void RefreshDevicesOnUiThread()
-    {
-        var devices = _audio.GetDevices(AudioFlow.Render);
-        DeviceRefLookup.Devices = devices;
-        _slidersViewModel?.RefreshDevices(devices);
-        _buttonsViewModel?.RefreshDevices(devices);
-        _outputDevicesViewModel?.RefreshDevices(devices);
-    }
+    private void OnButtonActivity(object? sender, int index)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) _buttonsViewModel?.Pulse(index);
+        });
 
-    /// <summary>Unsubscribes from the runtime and disposes the Connection ViewModel (carried rule d).</summary>
+    private void OnActivePresetChanged(object? sender, string presetId)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) _buttonsViewModel?.OnRuntimePresetChanged(presetId);
+        });
+
+    /// <summary>A mute flipped (from a button, the Windows mixer, anywhere): light previews follow.</summary>
+    private void OnDeviceVolumeChanged(object? sender, DeviceVolumeChangedEventArgs e)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) _buttonsViewModel?.RefreshLights();
+        });
+
+    /// <summary>Unsubscribes from the runtime and engine, and disposes the Connection ViewModel.</summary>
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        _runtime.DevicesChanged     -= OnDevicesChanged;
+        _runtime.DevicesChanged -= OnDevicesChanged;
         _runtime.SliderLevelChanged -= OnSliderLevelChanged;
+        _runtime.ButtonActivity -= OnButtonActivity;
+        _runtime.ActivePresetChanged -= OnActivePresetChanged;
+        _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
         _connectionViewModel?.Dispose();
     }
 }

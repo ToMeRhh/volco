@@ -22,7 +22,7 @@ public class ConfigMigratorTests
       ],
       "buttons": [
         { "index": 0, "singlePress": { "action": "MuteSpecificDevice", "deviceId": "Speakers" },
-                      "doublePress": { "action": "None" }, "longPress": { "action": "None" } }
+                      "doublePress": { "action": "ToggleOutputDevice" }, "longPress": { "action": "None" } }
       ],
       "outputDevices": { "device1": "Speakers", "device2": "Headphones" },
       "debugLogging": false
@@ -77,9 +77,10 @@ public class ConfigMigratorTests
         Assert.Equal(AppConfig.CurrentSchemaVersion, cm.Config.SchemaVersion);
         Assert.Equal("dev-2", cm.Config.Sliders[0].Device!.Id);
         Assert.Null(cm.Config.Sliders[1].Device);                 // Processes slider, no device
-        Assert.Equal("dev-1", cm.Config.OutputDevices.Device1.Id);
-        Assert.Equal("dev-2", cm.Config.OutputDevices.Device2.Id);
-        Assert.Equal("dev-1", cm.Config.Buttons[0].SinglePress.Device!.Id);
+        // The v1 global toggle pair lands on the toggle action (schema v3).
+        Assert.Equal("dev-1", cm.Config.Buttons[0].Default().DoublePress.Device!.Id);
+        Assert.Equal("dev-2", cm.Config.Buttons[0].Default().DoublePress.DeviceB!.Id);
+        Assert.Equal("dev-1", cm.Config.Buttons[0].Default().SinglePress.Device!.Id);
     }
 
     [Fact]
@@ -92,8 +93,9 @@ public class ConfigMigratorTests
 
         ConfigMigrator.MigrateFile(path, cm.Config, Devices);
 
-        Assert.Equal("", cm.Config.OutputDevices.Device1.Id);
-        Assert.Equal("Old Soundcard", cm.Config.OutputDevices.Device1.FriendlyName);
+        var toggle = cm.Config.Buttons[0].Default().DoublePress;
+        Assert.Equal("", toggle.Device!.Id);
+        Assert.Equal("Old Soundcard", toggle.Device.FriendlyName);
 
         // These name/id assertions alone would hold even if MigrateFile were a no-op, because
         // DeviceRefConfigJsonConverter already produces this exact shape at Load() time. Assert
@@ -168,18 +170,23 @@ public class ConfigMigratorTests
     // ── Fix C: HealDeviceIds ─────────────────────────────────────────────────
 
     [Fact]
-    public void HealDeviceIds_FillsBlankIdForOutputDevicePair_ByExactName()
+    public void HealDeviceIds_FillsBlankIdsForTogglePair_InEveryPreset_ByExactName()
     {
         var config = AppConfig.CreateDefault();
-        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers (Realtek High Definition Audio)" };
-        config.OutputDevices.Device2 = new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" };
+        config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        var toggle = config.Buttons[0].GetOrAddBinding("gaming").LongPress = Toggle(
+            new DeviceRefConfig { Id = "", FriendlyName = "Speakers (Realtek High Definition Audio)" },
+            new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" });
 
         var changed = ConfigMigrator.HealDeviceIds(config, Devices);
 
         Assert.True(changed);
-        Assert.Equal("dev-1", config.OutputDevices.Device1.Id);
-        Assert.Equal("dev-2", config.OutputDevices.Device2.Id);
+        Assert.Equal("dev-1", toggle.Device!.Id);
+        Assert.Equal("dev-2", toggle.DeviceB!.Id);
     }
+
+    private static ButtonActionConfig Toggle(DeviceRefConfig a, DeviceRefConfig? b = null)
+        => new() { Action = ButtonActionType.ToggleOutputDevice, Device = a, DeviceB = b };
 
     [Fact]
     public void HealDeviceIds_FillsBlankIdForSliderDevice_ByExactName()
@@ -197,17 +204,17 @@ public class ConfigMigratorTests
     public void HealDeviceIds_FillsBlankIdForButtonAction_ByExactName()
     {
         var config = AppConfig.CreateDefault();
-        config.Buttons[0].SinglePress = new ButtonActionConfig
+        config.Buttons[0].Default().SinglePress = new ButtonActionConfig
         {
             Action = ButtonActionType.MuteSpecificDevice,
             Device = new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" },
         };
-        config.Buttons[0].DoublePress = new ButtonActionConfig
+        config.Buttons[0].Default().DoublePress = new ButtonActionConfig
         {
             Action = ButtonActionType.MuteSpecificDevice,
             Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers (Realtek High Definition Audio)" },
         };
-        config.Buttons[0].LongPress = new ButtonActionConfig
+        config.Buttons[0].Default().LongPress = new ButtonActionConfig
         {
             Action = ButtonActionType.SetOutputDevice,
             Device = new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" },
@@ -216,9 +223,9 @@ public class ConfigMigratorTests
         var changed = ConfigMigrator.HealDeviceIds(config, Devices);
 
         Assert.True(changed);
-        Assert.Equal("dev-2", config.Buttons[0].SinglePress.Device!.Id);
-        Assert.Equal("dev-1", config.Buttons[0].DoublePress.Device!.Id);
-        Assert.Equal("dev-2", config.Buttons[0].LongPress.Device!.Id);
+        Assert.Equal("dev-2", config.Buttons[0].Default().SinglePress.Device!.Id);
+        Assert.Equal("dev-1", config.Buttons[0].Default().DoublePress.Device!.Id);
+        Assert.Equal("dev-2", config.Buttons[0].Default().LongPress.Device!.Id);
     }
 
     [Fact]
@@ -226,13 +233,13 @@ public class ConfigMigratorTests
     {
         var config = AppConfig.CreateDefault();
         // Id already points at dev-1, but the name (if it were consulted) matches dev-2.
-        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Headphones (USB Audio Device)" };
+        var a = (config.Buttons[0].Default().SinglePress = Toggle(new DeviceRefConfig { Id = "dev-1", FriendlyName = "Headphones (USB Audio Device)" })).Device!;
 
         var changed = ConfigMigrator.HealDeviceIds(config, Devices);
 
         Assert.False(changed);
-        Assert.Equal("dev-1", config.OutputDevices.Device1.Id);
-        Assert.Equal("Headphones (USB Audio Device)", config.OutputDevices.Device1.FriendlyName);
+        Assert.Equal("dev-1", a.Id);
+        Assert.Equal("Headphones (USB Audio Device)", a.FriendlyName);
     }
 
     [Fact]
@@ -241,13 +248,13 @@ public class ConfigMigratorTests
         var config = AppConfig.CreateDefault();
         // "Headphones" is a substring of "Headphones (USB Audio Device)" - ResolveName's v1
         // fallback would match this, but HealDeviceIds must not.
-        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Headphones" };
+        var a = (config.Buttons[0].Default().SinglePress = Toggle(new DeviceRefConfig { Id = "", FriendlyName = "Headphones" })).Device!;
 
         var changed = ConfigMigrator.HealDeviceIds(config, Devices);
 
         Assert.False(changed);
-        Assert.Equal("", config.OutputDevices.Device1.Id);
-        Assert.Equal("Headphones", config.OutputDevices.Device1.FriendlyName);
+        Assert.Equal("", a.Id);
+        Assert.Equal("Headphones", a.FriendlyName);
     }
 
     [Fact]
@@ -261,13 +268,13 @@ public class ConfigMigratorTests
             new("dev-3", "Speakers", AudioFlow.Render, false),
         };
         var config = AppConfig.CreateDefault();
-        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+        var a = (config.Buttons[0].Default().SinglePress = Toggle(new DeviceRefConfig { Id = "", FriendlyName = "Speakers" })).Device!;
 
         var changed = ConfigMigrator.HealDeviceIds(config, ambiguousDevices);
 
         Assert.False(changed);
-        Assert.Equal("", config.OutputDevices.Device1.Id);
-        Assert.Equal("Speakers", config.OutputDevices.Device1.FriendlyName);
+        Assert.Equal("", a.Id);
+        Assert.Equal("Speakers", a.FriendlyName);
     }
 
     [Fact]
@@ -275,20 +282,19 @@ public class ConfigMigratorTests
     {
         var config = AppConfig.CreateDefault();
         // Config carries the name in a different casing than the device reports.
-        config.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "speakers (realtek high definition audio)" };
+        var a = (config.Buttons[0].Default().SinglePress = Toggle(new DeviceRefConfig { Id = "", FriendlyName = "speakers (realtek high definition audio)" })).Device!;
 
         var changed = ConfigMigrator.HealDeviceIds(config, Devices);
 
         Assert.True(changed);
-        Assert.Equal("dev-1", config.OutputDevices.Device1.Id);
-        Assert.Equal("Speakers (Realtek High Definition Audio)", config.OutputDevices.Device1.FriendlyName);
+        Assert.Equal("dev-1", a.Id);
+        Assert.Equal("Speakers (Realtek High Definition Audio)", a.FriendlyName);
     }
 
     [Fact]
     public void HealDeviceIds_ReturnsFalse_WhenNothingChanges()
     {
-        // CreateDefault(): output pair and button actions have no FriendlyName to match on, and
-        // sliders default to Device=null.
+        // CreateDefault(): no button actions, and sliders default to Device=null.
         var config = AppConfig.CreateDefault();
 
         Assert.False(ConfigMigrator.HealDeviceIds(config, Devices));
@@ -354,9 +360,9 @@ public class ConfigMigratorTests
         Assert.Equal("dev-1", cm.Config.Sliders[0].Device!.Id);
         Assert.Null(cm.Config.Sliders[1].Device);
         Assert.Equal("dev-2", cm.Config.Sliders[2].Device!.Id);
-        Assert.Equal("dev-1", cm.Config.OutputDevices.Device1.Id);
-        Assert.Equal("dev-2", cm.Config.OutputDevices.Device2.Id);
-        Assert.Equal("dev-1", cm.Config.Buttons[0].SinglePress.Device!.Id);
+        Assert.Equal("dev-1", cm.Config.Buttons[0].Default().DoublePress.Device!.Id);   // toggle A
+        Assert.Equal("dev-2", cm.Config.Buttons[0].Default().DoublePress.DeviceB!.Id);  // toggle B
+        Assert.Equal("dev-1", cm.Config.Buttons[0].Default().SinglePress.Device!.Id);
 
         // Migration must not be a data-loss step: non-device settings survive intact.
         Assert.Equal(ConnectionType.Serial, cm.Config.Connection.Type);
@@ -370,8 +376,55 @@ public class ConfigMigratorTests
         Assert.Equal(new List<string> { "spotify.exe", "chrome.exe" }, cm.Config.Sliders[1].Processes);
         Assert.Equal(SliderMappingType.Device, cm.Config.Sliders[2].Type);
 
-        Assert.Equal(ButtonActionType.MuteSpecificDevice, cm.Config.Buttons[0].SinglePress.Action);
-        Assert.Equal(ButtonActionType.ToggleOutputDevice, cm.Config.Buttons[0].DoublePress.Action);
-        Assert.Equal(ButtonActionType.MuteCurrentOutput, cm.Config.Buttons[1].SinglePress.Action);
+        Assert.Equal(ButtonActionType.MuteSpecificDevice, cm.Config.Buttons[0].Default().SinglePress.Action);
+        Assert.Equal(ButtonActionType.ToggleOutputDevice, cm.Config.Buttons[0].Default().DoublePress.Action);
+        Assert.Equal(ButtonActionType.MuteCurrentOutput, cm.Config.Buttons[1].Default().SinglePress.Action);
+    }
+
+    // ── v2 → v3 shape upgrade ────────────────────────────────────────────────
+
+    [Fact]
+    public void UpgradeShapeToV3_IsIdempotent()
+    {
+        var root = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(ConfigManagerLoadSaveTests.V2Json)!;
+        ConfigMigrator.UpgradeShapeToV3(root);
+        var once = root.ToJsonString();
+        ConfigMigrator.UpgradeShapeToV3(root);
+
+        Assert.Equal(once, root.ToJsonString());
+    }
+
+    [Fact]
+    public void UpgradeShapeToV3_ToggleWithItsOwnDevice_IsNotOverwrittenByTheGlobalPair()
+    {
+        var root = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse("""
+        { "buttons": [ { "singlePress": { "action": "ToggleOutputDevice", "device": { "id": "mine", "friendlyName": "Mine" } } } ],
+          "outputDevices": { "device1": { "id": "g1", "friendlyName": "G1" }, "device2": { "id": "g2", "friendlyName": "G2" } } }
+        """)!;
+
+        ConfigMigrator.UpgradeShapeToV3(root);
+
+        var action = root["buttons"]![0]!["actions"]!["default"]!["singlePress"]!;
+        Assert.Equal("mine", (string?)action["device"]!["id"]);
+        Assert.Equal("g2", (string?)action["deviceB"]!["id"]);
+        Assert.Null(root["outputDevices"]);
+    }
+
+    [Fact]
+    public void EndToEnd_V1File_EndsAsV3_WithThePairOnTheToggleAction()
+    {
+        var path = WriteTempConfig(V1Json);
+        var cm = new ConfigManager(path);
+        cm.Load();
+        Assert.True(ConfigMigrator.NeedsMigration(cm.Config));   // still v1 until names are resolved
+
+        ConfigMigrator.MigrateFile(path, cm.Config, Devices);
+        cm.Save();
+
+        var reloaded = new ConfigManager(path);
+        reloaded.Load();
+        Assert.Equal(3, reloaded.Config.SchemaVersion);
+        Assert.Equal("dev-2", reloaded.Config.Buttons[0].Default().DoublePress.DeviceB!.Id);
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "config.v2.bak")));
     }
 }

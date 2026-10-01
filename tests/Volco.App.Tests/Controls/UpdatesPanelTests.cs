@@ -2,15 +2,22 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Volco.App.Views;
+using Volco.App.Controls;
 using Volco.Core.Config;
 using Volco.Core.Updates;
 using Xunit;
 
-namespace Volco.App.Tests.Shell;
+namespace Volco.App.Tests.Controls;
 
-public class UpdateWindowTests
+public class UpdatesPanelTests
 {
+    /// <summary>Shows the panel in a window (as the General page does) and returns it.</summary>
+    private static UpdatesPanel Host(UpdatesPanel panel)
+    {
+        new Window { Content = panel }.Show();
+        return panel;
+    }
+
     private static ConfigManager NewConfig()
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
@@ -21,51 +28,43 @@ public class UpdateWindowTests
     }
 
     [AvaloniaFact]
-    public void UpdateWindow_Renders_WithCurrentDisplayVersion()
+    public void UpdatesPanel_Renders_WithCurrentDisplayVersion()
     {
         // The default constructor builds a GitHubUpdater but never calls it: like the WinUI
         // window, nothing is checked until the user presses the button, so no network here.
-        var window = new UpdateWindow(NewConfig());
-        window.Show();
+        var window = Host(new UpdatesPanel(NewConfig()));
 
         Assert.Equal($"Current version: {BuildInfo.DisplayVersion}",
             window.FindControl<TextBlock>("CurrentVersionText")!.Text);
-        Assert.Equal(560, window.Width);
-        Assert.Equal(460, window.Height);
         Assert.False(window.FindControl<Button>("UpdateButton")!.IsEnabled);
         Assert.False(window.FindControl<ProgressBar>("Progress")!.IsVisible);
-        window.Close();
     }
 
     [AvaloniaFact]
-    public void UpdateWindow_CheckWithoutToken_PromptsForTokenWithoutNetwork()
+    public void UpdatesPanel_CheckWithoutToken_PromptsForTokenWithoutNetwork()
     {
-        var window = new UpdateWindow(NewConfig());
-        window.Show();
+        var window = Host(new UpdatesPanel(NewConfig()));
 
         window.FindControl<Button>("CheckButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
         Assert.Equal("Enter a GitHub token to check for updates.",
             window.FindControl<TextBlock>("StatusText")!.Text);
         Assert.True(window.FindControl<Button>("CheckButton")!.IsEnabled);
-        window.Close();
     }
 
     [AvaloniaFact]
-    public void UpdateWindow_SeedsTokenAndCiFlagFromConfig()
+    public void UpdatesPanel_SeedsTokenAndCiFlagFromConfig()
     {
         var config = NewConfig();
         config.Config.Updates.GitHubToken = "ghp_abc";
         config.Config.Updates.UseCiArtifact = true;
 
-        var window = new UpdateWindow(config);
-        window.Show();
+        var window = Host(new UpdatesPanel(config));
 
         var token = window.FindControl<TextBox>("TokenBox")!;
         Assert.Equal("ghp_abc", token.Text);
         Assert.NotEqual('\0', token.PasswordChar);
         Assert.True(window.FindControl<CheckBox>("UseCiCheckBox")!.IsChecked);
-        window.Close();
     }
 
     // ---- Check flow, driven against a stubbed GitHub API (no network) ----
@@ -87,17 +86,16 @@ public class UpdateWindowTests
             assets = new[] { new { name = "Volco.exe", url = "https://api.github.com/assets/1" } },
         });
 
-    private static UpdateWindow Open(Func<HttpResponseMessage> respond)
+    private static UpdatesPanel Open(Func<HttpResponseMessage> respond)
     {
         var updater = new GitHubUpdater(new HttpClient(new StubHandler(respond)));
-        var window = new UpdateWindow(NewConfig(), updater);
-        window.Show();
+        var window = Host(new UpdatesPanel(NewConfig(), updater));
         window.FindControl<TextBox>("TokenBox")!.Text = "ghp_test";
         return window;
     }
 
     /// <summary>Clicks Check and pumps the UI thread until the check finishes (bounded to 5s).</summary>
-    private static void ClickCheckAndWait(UpdateWindow window)
+    private static void ClickCheckAndWait(UpdatesPanel window)
     {
         var check = window.FindControl<Button>("CheckButton")!;
         check.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -111,11 +109,11 @@ public class UpdateWindowTests
         Assert.True(check.IsEnabled, "check did not finish within 5s");
     }
 
-    private static string Status(UpdateWindow w) => w.FindControl<TextBlock>("StatusText")!.Text!;
-    private static bool UpdateEnabled(UpdateWindow w) => w.FindControl<Button>("UpdateButton")!.IsEnabled;
+    private static string Status(UpdatesPanel w) => w.FindControl<TextBlock>("StatusText")!.Text!;
+    private static bool UpdateEnabled(UpdatesPanel w) => w.FindControl<Button>("UpdateButton")!.IsEnabled;
 
     [AvaloniaFact]
-    public void UpdateWindow_Check_NewerRelease_OffersUpdateWithNotes()
+    public void UpdatesPanel_Check_NewerRelease_OffersUpdateWithNotes()
     {
         var window = Open(() => Json(ReleaseJson("v99.0.0", "Fixes things")));
 
@@ -127,11 +125,10 @@ public class UpdateWindowTests
         Assert.True(notes.IsVisible);
         Assert.Equal("Fixes things", notes.Text);
         Assert.False(window.FindControl<ProgressBar>("Progress")!.IsVisible);
-        window.Close();
     }
 
     [AvaloniaFact]
-    public void UpdateWindow_Check_SameVersion_ReportsUpToDate()
+    public void UpdatesPanel_Check_SameVersion_ReportsUpToDate()
     {
         var window = Open(() => Json(ReleaseJson($"v{BuildInfo.Version}", "old notes")));
 
@@ -140,11 +137,10 @@ public class UpdateWindowTests
         Assert.Equal($"You're up to date ({BuildInfo.DisplayVersion}).", Status(window));
         Assert.False(UpdateEnabled(window));
         Assert.False(window.FindControl<TextBlock>("NotesText")!.IsVisible);
-        window.Close();
     }
 
     [AvaloniaFact]
-    public void UpdateWindow_Check_NoRelease_ReportsNoneFound()
+    public void UpdatesPanel_Check_NoRelease_ReportsNoneFound()
     {
         // No tag_name: GitHubUpdater returns null.
         var window = Open(() => Json("{}"));
@@ -153,11 +149,10 @@ public class UpdateWindowTests
 
         Assert.Equal("No published release was found.", Status(window));
         Assert.False(UpdateEnabled(window));
-        window.Close();
     }
 
     [AvaloniaFact]
-    public void UpdateWindow_Check_ServerError_ShowsFailureAndReenablesCheck()
+    public void UpdatesPanel_Check_ServerError_ShowsFailureAndReenablesCheck()
     {
         var window = Open(() => new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError));
 
@@ -166,11 +161,10 @@ public class UpdateWindowTests
         Assert.StartsWith("Update check failed:", Status(window));
         Assert.False(UpdateEnabled(window));
         Assert.True(window.FindControl<Button>("CheckButton")!.IsEnabled);
-        window.Close();
     }
 
     [AvaloniaFact]
-    public void UpdateWindow_TogglingCiAfterAvailable_DisablesUpdate()
+    public void UpdatesPanel_TogglingCiAfterAvailable_DisablesUpdate()
     {
         var window = Open(() => Json(ReleaseJson("v99.0.0", null)));
         ClickCheckAndWait(window);
@@ -179,6 +173,5 @@ public class UpdateWindowTests
         window.FindControl<CheckBox>("UseCiCheckBox")!.IsChecked = true;
 
         Assert.False(UpdateEnabled(window));
-        window.Close();
     }
 }

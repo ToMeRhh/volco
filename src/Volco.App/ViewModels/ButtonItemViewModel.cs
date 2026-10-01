@@ -1,127 +1,37 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
-using Volco.Core.Input.Actions;
-using static Volco.App.ViewModels.DeviceRefLookup;
 
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// Lightweight model for a single press-action slot (single/double/long).
+/// One button card. Its position (= <see cref="Index"/>) is the hardware input number. Timing is
+/// shared by every preset; the three action rows show the preset being edited, and the light
+/// preview shows what the controller shows now, for the live preset.
 /// </summary>
-public partial class PressActionViewModel : ObservableObject
+public sealed partial class ButtonItemViewModel : ObservableObject
 {
-    private readonly ButtonActionConfig _cfg;
-    private readonly Action _save;
-    private readonly IAudioEngine _audio;
-    private readonly ConfigManager _config;
+    private readonly IButtonCardOwner _owner;
+    private bool _loading;
+
+    internal ButtonConfig Config { get; private set; }
 
     [ObservableProperty]
-    private ButtonActionType _actionType;
+    [NotifyPropertyChangedFor(nameof(Title))]
+    private int _index;
+
+    public string Title => $"Button {Index}";
 
     [ObservableProperty]
-    private string _deviceId = "";
+    private bool _isLast;
 
-    // ── Derived ────────────────────────────────────────────────────────────────
+    public ActionSlotViewModel Press { get; }
+    public ActionSlotViewModel DoublePress { get; }
+    public ActionSlotViewModel Hold { get; }
 
-    /// <summary>True when the selected action requires a device selection.</summary>
-    public bool NeedsDevice =>
-        ActionType is ButtonActionType.MuteSpecificDevice or ButtonActionType.SetOutputDevice;
-
-    /// <summary>
-    /// Zero-based index for the action type ComboBox (TwoWay x:Bind to SelectedIndex).
-    /// Order matches XAML items and ButtonActionType enum declaration order:
-    /// 0=None, 1=MuteSpecificDevice, 2=MuteCurrentOutput, 3=MuteCurrentInput,
-    /// 4=ToggleOutputDevice, 5=SetOutputDevice.
-    /// </summary>
-    public int ActionTypeIndex
-    {
-        get => ActionType switch
-        {
-            ButtonActionType.None               => 0,
-            ButtonActionType.MuteSpecificDevice => 1,
-            ButtonActionType.MuteCurrentOutput  => 2,
-            ButtonActionType.MuteCurrentInput   => 3,
-            ButtonActionType.ToggleOutputDevice => 4,
-            ButtonActionType.SetOutputDevice    => 5,
-            _                                   => 0,
-        };
-        set => ActionType = value switch
-        {
-            0 => ButtonActionType.None,
-            1 => ButtonActionType.MuteSpecificDevice,
-            2 => ButtonActionType.MuteCurrentOutput,
-            3 => ButtonActionType.MuteCurrentInput,
-            4 => ButtonActionType.ToggleOutputDevice,
-            5 => ButtonActionType.SetOutputDevice,
-            _ => ButtonActionType.None,
-        };
-    }
-
-    public PressActionViewModel(ButtonActionConfig cfg, Action save, IAudioEngine audio, ConfigManager config)
-    {
-        _cfg    = cfg;
-        _save   = save;
-        _audio  = audio;
-        _config = config;
-        _actionType = cfg.Action;
-        _deviceId   = cfg.Device?.FriendlyName ?? "";
-    }
-
-    partial void OnActionTypeChanged(ButtonActionType value)
-    {
-        _cfg.Action = value;
-        OnPropertyChanged(nameof(NeedsDevice));
-        OnPropertyChanged(nameof(ActionTypeIndex));
-        _save();
-    }
-
-    partial void OnDeviceIdChanged(string value)
-    {
-        // Same trap as SliderItemViewModel.OnDeviceNameChanged (Bug 3 refresh) and Bug 2's
-        // ComPort refresh: an ItemsSource swap can transiently null this two-way-bound
-        // SelectedItem. There's no blank/"None" entry in this picker, so ignore it.
-        if (string.IsNullOrEmpty(value)) return;
-        _cfg.Device = DeviceRefFromName(value);
-        _save();
-    }
-
-    /// <summary>
-    /// Re-raises PropertyChanged for DeviceId only, so the ComboBox re-reads the still-correct
-    /// backing value and re-selects it against a freshly refreshed ItemsSource (see
-    /// ButtonItemViewModel.RefreshDevices). Does not touch _cfg or persist.
-    /// </summary>
-    public void ReassertDeviceSelection() => OnPropertyChanged(nameof(DeviceId));
-
-    /// <summary>
-    /// Builds and immediately executes the action for this press slot.
-    /// No-ops when the action is None.
-    /// </summary>
-    [RelayCommand]
-    private void Test()
-    {
-        ActionFactory.Create(_cfg, _audio, _config)?.Execute();
-    }
-}
-
-/// <summary>
-/// ViewModel for a single button entry in the Buttons settings tab.
-/// Exposes the three press actions, timing parameters, and available output devices.
-/// </summary>
-public partial class ButtonItemViewModel : ObservableObject
-{
-    private readonly ButtonConfig _cfg;
-    private readonly Action _save;
-
-    // ── Press action slots ─────────────────────────────────────────────────────
-
-    public PressActionViewModel SinglePress { get; }
-    public PressActionViewModel DoublePress { get; }
-    public PressActionViewModel LongPress   { get; }
-
-    // ── Timing parameters ─────────────────────────────────────────────────────
+    // ── Timing (shared by every preset) ───────────────────────────────────────
 
     [ObservableProperty]
     private int _longPressMs;
@@ -129,77 +39,164 @@ public partial class ButtonItemViewModel : ObservableObject
     [ObservableProperty]
     private int _doublePressWindowMs;
 
-    // ── Meta ──────────────────────────────────────────────────────────────────
-
-    public int Index { get; }
+    // ── Derived display ───────────────────────────────────────────────────────
 
     [ObservableProperty]
-    private bool _isExpanded = true;
+    private string _summary = "";
+
+    /// <summary>No action in any preset: the card is drawn as "Not set up".</summary>
+    [ObservableProperty]
+    private bool _isNotSetUp;
+
+    [ObservableProperty]
+    private string _lightDescription = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOnOffLight), nameof(IsPairLight), nameof(IsPresetLight), nameof(HasNoLight))]
+    private LightKind _lightKind;
+
+    public bool IsOnOffLight => LightKind == LightKind.OnOff;
+    public bool IsPairLight => LightKind == LightKind.Pair;
+    public bool IsPresetLight => LightKind == LightKind.Preset;
+    public bool HasNoLight => LightKind == LightKind.None;
+
+    /// <summary>The value the controller is sent for this button (spec §3.6).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LedOn), nameof(LedA), nameof(LedB))]
+    private byte _lightValue;
+
+    public bool LedOn => LightValue != 0;
+    public bool LedA => LightValue == 1;
+    public bool LedB => LightValue == 2;
+
+    /// <summary>One dot per preset for preset actions; the live one is lit.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<bool> _presetDots = Array.Empty<bool>();
+
+    // ── View state ────────────────────────────────────────────────────────────
+
+    [ObservableProperty]
+    private bool _isActive;
+
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    [ObservableProperty]
+    private bool _isAdvancedOpen;
 
     [RelayCommand]
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
-    /// <summary>Available output devices for device-picker combos.</summary>
-    public ObservableCollection<AudioDevice> OutputDevices { get; } = new();
+    [RelayCommand]
+    private void MoveUp() => _owner.MoveUp(this);
 
-    /// <summary>
-    /// Output device names for binding to ComboBox.ItemsSource (string list).
-    /// Mirrors <see cref="OutputDevices"/> as plain strings so SelectedItem can
-    /// bind directly to <see cref="PressActionViewModel.DeviceId"/>.
-    /// </summary>
-    public List<string> OutputDeviceNames { get; private set; } = new();
+    [RelayCommand]
+    private void MoveDown() => _owner.MoveDown(this);
 
-    // ── Constructor ───────────────────────────────────────────────────────────
+    [RelayCommand]
+    private void Reset() => _owner.Reset(this);
 
-    public ButtonItemViewModel(ButtonConfig cfg, IAudioEngine audio, IReadOnlyList<AudioDevice> outputDevices, ConfigManager config, Action save)
+    [RelayCommand]
+    private void RemoveLast() => _owner.RemoveLast();
+
+    internal ButtonItemViewModel(ButtonConfig cfg, int index, IReadOnlyList<AudioDevice> devices, IButtonCardOwner owner)
     {
-        _cfg  = cfg;
-        _save = save;
-
-        Index             = cfg.Index;
-        _longPressMs      = cfg.LongPressMs;
-        _doublePressWindowMs = cfg.DoublePressWindowMs;
-
-        SinglePress = new PressActionViewModel(cfg.SinglePress, save, audio, config);
-        DoublePress = new PressActionViewModel(cfg.DoublePress, save, audio, config);
-        LongPress   = new PressActionViewModel(cfg.LongPress,  save, audio, config);
-
-        foreach (var d in outputDevices)
-            OutputDevices.Add(d);
-
-        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
+        Config = cfg;
+        _owner = owner;
+        _index = index;
+        Press = new ActionSlotViewModel("Press", devices, owner.PresetChoices, owner.Execute, OnActionChanged);
+        DoublePress = new ActionSlotViewModel("Double press", devices, owner.PresetChoices, owner.Execute, OnActionChanged);
+        Hold = new ActionSlotViewModel("Hold", devices, owner.PresetChoices, owner.Execute, OnActionChanged);
+        Reload();
     }
 
-    // ── Timing change hooks ───────────────────────────────────────────────────
+    internal IEnumerable<ActionSlotViewModel> Slots
+    {
+        get { yield return Press; yield return DoublePress; yield return Hold; }
+    }
+
+    /// <summary>Re-reads timing and the edited preset's actions (after a preset switch, Reset or Undo).</summary>
+    internal void Reload()
+    {
+        _loading = true;
+        try
+        {
+            LongPressMs = Config.LongPressMs;
+            DoublePressWindowMs = Config.DoublePressWindowMs;
+        }
+        finally { _loading = false; }
+
+        var binding = Config.GetOrAddBinding(_owner.EditingPresetId);
+        Press.Bind(binding.SinglePress);
+        DoublePress.Bind(binding.DoublePress);
+        Hold.Bind(binding.LongPress);
+        Refresh();
+    }
+
+    /// <summary>Recomputes the summary and the light preview. Cheap; safe to call often.</summary>
+    internal void Refresh()
+    {
+        var edited = Config.BindingFor(_owner.EditingPresetId);
+        IsNotSetUp = Config.Actions.Values.All(b => b is null || b.IsEmpty);
+        var summary = ActionCatalog.Summary(edited, _owner.PresetName);
+        Summary = summary.Length > 0 ? summary : IsNotSetUp ? "Not set up" : "Nothing in this preset";
+        LightDescription = ActionCatalog.LightDescription(edited);
+
+        // The light preview is what the controller shows now, so it follows the live preset.
+        var live = Config.BindingFor(_owner.LivePresetId);
+        var source = ActionCatalog.LightSource(live);
+        LightKind = source is { } s ? ActionCatalog.LightKindOf(s.Action.Action) : LightKind.None;
+        LightValue = ButtonFeedback.ValueFor(live, _owner.AppConfig, _owner.LivePresetId, _owner.Audio) ?? 0;
+        PresetDots = LightKind == LightKind.Preset
+            ? _owner.AppConfig.Presets.Select((p, i) => LightValue == i + 1).ToList()
+            : Array.Empty<bool>();
+    }
+
+    private void OnActionChanged()
+    {
+        Refresh();
+        _owner.Changed(this);
+    }
 
     partial void OnLongPressMsChanged(int value)
     {
-        _cfg.LongPressMs = value;
-        _save();
+        if (_loading) return;
+        Config.LongPressMs = value;
+        _owner.Changed(this);
     }
 
     partial void OnDoublePressWindowMsChanged(int value)
     {
-        _cfg.DoublePressWindowMs = value;
-        _save();
+        if (_loading) return;
+        Config.DoublePressWindowMs = value;
+        _owner.Changed(this);
     }
 
-    /// <summary>
-    /// Re-seeds the shared device picker for all three press slots from a fresh device snapshot
-    /// (Bug 3). Callers must already be on the UI thread — see SliderItemViewModel.RefreshDevices
-    /// for the same note; <see cref="IAudioEngine.DevicesChanged"/> fires on the audio thread and
-    /// is marshalled once, in SettingsViewModel's DevicesChanged handler.
-    /// </summary>
-    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    public void Pulse()
     {
-        OutputDevices.Clear();
-        foreach (var d in devices)
-            OutputDevices.Add(d);
-        OutputDeviceNames = OutputDevices.Select(d => d.FriendlyName).ToList();
-        OnPropertyChanged(nameof(OutputDeviceNames));
-
-        SinglePress.ReassertDeviceSelection();
-        DoublePress.ReassertDeviceSelection();
-        LongPress.ReassertDeviceSelection();
+        IsActive = false;
+        IsActive = true;
     }
+
+    internal void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    {
+        foreach (var slot in Slots) slot.RefreshDevices(devices);
+    }
+}
+
+/// <summary>What a button card asks of the Buttons page that owns it.</summary>
+internal interface IButtonCardOwner
+{
+    string EditingPresetId { get; }
+    string LivePresetId { get; }
+    AppConfig AppConfig { get; }
+    IAudioEngine Audio { get; }
+    IReadOnlyList<PresetChoice> PresetChoices();
+    string? PresetName(string? id);
+    void Execute(ButtonActionConfig action);
+    void Changed(ButtonItemViewModel item);
+    void MoveUp(ButtonItemViewModel item);
+    void MoveDown(ButtonItemViewModel item);
+    void Reset(ButtonItemViewModel item);
+    void RemoveLast();
 }

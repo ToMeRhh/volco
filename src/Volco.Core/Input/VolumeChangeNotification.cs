@@ -5,9 +5,10 @@ namespace Volco.Core.Input;
 /// <see cref="Volume"/>: a slider moved. <see cref="Mute"/>: a mute button was pressed (the
 /// notification carries the target's real level; the OSD shows "Muted" while muted, the
 /// percentage otherwise). <see cref="Device"/>: a button switched the default output device
-/// (label = the new default's name, level/muted = that device's state).
+/// (label = the new default's name, level/muted = that device's state). <see cref="Preset"/>: a
+/// button switched the live preset (label = the new preset's name; level and muted unused).
 /// </remarks>
-public enum OsdKind { Volume, Mute, Device }
+public enum OsdKind { Volume, Mute, Device, Preset }
 
 /// <summary>
 /// Platform-neutral payload describing a volume/mute/output-device change that the OSD flyout

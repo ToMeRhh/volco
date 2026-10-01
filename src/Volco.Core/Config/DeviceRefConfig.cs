@@ -16,9 +16,9 @@ public class DeviceRefConfig
 }
 
 /// <summary>
-/// <see cref="OutputDevicesConfig.Device1"/>/<see cref="OutputDevicesConfig.Device2"/> kept
-/// their schema v1 JSON keys ("device1"/"device2") when their type changed from a bare
-/// string to <see cref="DeviceRefConfig"/>. Without this converter, every config.json written
+/// Schema v1 stored device references as bare strings (the toggle pair's "device1"/"device2",
+/// which <see cref="ConfigMigrator.UpgradeShapeToV3"/> copies onto each toggle action as
+/// "device"/"deviceB"). Without this converter, every config.json written
 /// before schema v2 throws <see cref="JsonException"/> on load. This converter reads both
 /// shapes losslessly (so a v1 file loads intact, ready for <c>ConfigMigrator</c> to patch in
 /// device ids) and always writes the v2 object shape.

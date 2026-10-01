@@ -6,129 +6,190 @@
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}"
                 Spacing="{StaticResource SpaceL}"
-                MaxWidth="{StaticResource SettingsCardMaxWidth}"
-                HorizontalAlignment="Left">
+                MaxWidth="{StaticResource PageMaxWidth}">
 
-      <TextBlock Text="Slider Mappings" Classes="SectionHeader"/>
+      <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Sliders" Classes="Title"/>
+          <TextBlock Classes="Secondary" TextWrapping="Wrap"
+                     Text="What each slider on your controller changes, in the order the controller numbers them. Drag a card to move its settings to a different physical slider."/>
+        </StackPanel>
+        <Button Name="AddButton" Grid.Column="1" Classes="Primary" Margin="16,0,0,0"
+                VerticalAlignment="Bottom" Command="{Binding AddCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource Icon.Plus}" Width="12" Height="12"/>
+            <TextBlock Text="Add slider"/>
+          </StackPanel>
+        </Button>
+      </Grid>
 
-      <ItemsControl Name="SliderRepeater" ItemsSource="{Binding Items}">
+      <ItemsControl Name="SliderList" ItemsSource="{Binding Items}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="8"/>
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:SliderItemViewModel">
-            <Border Padding="{StaticResource CardPadding}"
-                    Margin="0,0,0,8"
-                    CornerRadius="{StaticResource CardCornerRadius}"
-                    Background="{DynamicResource SurfaceCardBrush}"
-                    BorderBrush="{DynamicResource SurfaceStrokeBrush}"
-                    BorderThickness="1">
-              <StackPanel Spacing="{StaticResource SpaceS}">
-
-                <!-- Title row: "Slider N" + collapse chevron -->
-                <Button Name="ExpandButton"
-                        Command="{Binding ToggleExpandedCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Stretch"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="0">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding Index, StringFormat='Slider {0}'}"
-                               Classes="CardTitle"
-                               VerticalAlignment="Center"/>
-                    <Panel Grid.Column="1" VerticalAlignment="Center">
-                      <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
-                                IsVisible="{Binding IsExpanded}"/>
-                      <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
-                                IsVisible="{Binding !IsExpanded}"/>
-                    </Panel>
+            <Border Name="Card" Classes="Card"
+                    Classes.unset="{Binding IsNotSetUp}"
+                    Classes.active="{Binding IsActive}">
+              <Panel>
+                <StackPanel>
+                  <!-- Header: grip · "Slider N" · summary · level · ⋯ · chevron -->
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="4,8,8,8">
+                    <Border Name="Grip" Classes="Grip" Grid.Column="0" VerticalAlignment="Center"
+                            ToolTip.Tip="Drag to move these settings to another slider (Alt+Up / Alt+Down)">
+                      <PathIcon Data="{StaticResource Icon.Grip}" Width="12" Height="12"
+                                Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </Border>
+                    <Button Name="ExpandButton" Grid.Column="1" Classes="CardHeader"
+                            Command="{Binding ToggleExpandedCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Name="TitleText" Classes="Subtitle CardTitleText"
+                                   Text="{Binding Title}" VerticalAlignment="Center"/>
+                        <TextBlock Name="SummaryText" Classes="Secondary" Text="{Binding Summary}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Button>
+                    <ProgressBar Name="LiveLevelBar" Grid.Column="2" Classes="Level"
+                                 Width="96" Margin="8,0" VerticalAlignment="Center"
+                                 Minimum="0" Maximum="1" Value="{Binding LiveLevel}"
+                                 ToolTip.Tip="Live level"/>
+                    <Button Name="MenuButton" Grid.Column="3" Classes="Icon" ToolTip.Tip="More options">
+                      <PathIcon Data="{StaticResource Icon.More}" Width="14" Height="14"/>
+                      <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                          <MenuItem Name="MoveUpItem" Header="Move up" Command="{Binding MoveUpCommand}"/>
+                          <MenuItem Name="MoveDownItem" Header="Move down" Command="{Binding MoveDownCommand}"/>
+                          <Separator/>
+                          <MenuItem Name="ResetItem" Header="Reset" Command="{Binding ResetCommand}"/>
+                          <MenuItem Name="RemoveLastItem" Header="Remove last slider"
+                                    Command="{Binding RemoveLastCommand}" IsVisible="{Binding IsLast}"/>
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                    <Button Grid.Column="4" Classes="Icon" Focusable="False"
+                            Command="{Binding ToggleExpandedCommand}">
+                      <Panel>
+                        <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
+                                  IsVisible="{Binding !IsExpanded}"/>
+                        <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                                  IsVisible="{Binding IsExpanded}"/>
+                      </Panel>
+                    </Button>
                   </Grid>
-                </Button>
 
-                <!-- Collapsible body -->
-                <StackPanel Name="Body" Spacing="{StaticResource SpaceS}" IsVisible="{Binding IsExpanded}">
+                  <!-- Body -->
+                  <Border Name="Body" Classes="CardBody" IsVisible="{Binding IsExpanded}">
+                    <StackPanel Spacing="16">
+                      <Grid ColumnDefinitions="150,*">
+                        <TextBlock Text="Controls" Classes="Secondary" VerticalAlignment="Center"/>
+                        <Border Grid.Column="1" Classes="SegmentTrack">
+                          <StackPanel Orientation="Horizontal" Spacing="2">
+                            <RadioButton Name="AppsOption" Classes="Segment" Content="Apps"
+                                         IsChecked="{Binding IsApps, Mode=TwoWay}"/>
+                            <RadioButton Name="OtherAppsOption" Classes="Segment" Content="All other apps"
+                                         IsChecked="{Binding IsOtherApps, Mode=TwoWay}"/>
+                            <RadioButton Name="DeviceOption" Classes="Segment" Content="A device"
+                                         IsChecked="{Binding IsDevice, Mode=TwoWay}"/>
+                          </StackPanel>
+                        </Border>
+                      </Grid>
 
-                  <StackPanel Spacing="{StaticResource SpaceXs}">
-                    <TextBlock Text="Live Level" Classes="Caption"/>
-                    <ProgressBar Name="LiveLevelBar"
-                                 Minimum="0" Maximum="1"
-                                 Value="{Binding LiveLevel, Mode=OneWay}"
-                                 Height="6"
-                                 HorizontalAlignment="Stretch"/>
-                  </StackPanel>
+                      <TextBlock Name="NotSetUpHint" Classes="Caption" IsVisible="{Binding IsNotSetUp}"
+                                 Text="Not set up. Choose what this slider controls."/>
 
-                  <StackPanel Spacing="{StaticResource SpaceXs}">
-                    <TextBlock Text="Mapping Type" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <ComboBox Name="MappingCombo"
-                              SelectedIndex="{Binding MappingTypeIndex, Mode=TwoWay}"
-                              Width="{StaticResource ComboBoxStandardWidth}">
-                      <ComboBoxItem Content="Processes"/>
-                      <ComboBoxItem Content="Output Device"/>
-                      <ComboBoxItem Content="Unmapped"/>
-                    </ComboBox>
-                  </StackPanel>
+                      <Grid Name="AppsSection" ColumnDefinitions="150,*" IsVisible="{Binding IsApps}">
+                        <TextBlock Text="Apps" Classes="Secondary" Margin="0,8,0,0" VerticalAlignment="Top"/>
+                        <Border Grid.Column="1" Classes="ChipBox" MaxWidth="460" HorizontalAlignment="Left">
+                          <WrapPanel>
+                            <ItemsControl Name="AppChips" ItemsSource="{Binding Apps}">
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                  <WrapPanel/>
+                                </ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AppChip">
+                                  <Border Classes="Chip" Margin="2">
+                                    <StackPanel Orientation="Horizontal" Spacing="2">
+                                      <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                      <Button Name="RemoveChipButton" Classes="Icon" Padding="4,0"
+                                              Command="{Binding RemoveCommand}"
+                                              ToolTip.Tip="{Binding Name, StringFormat='Remove {0}'}"
+                                              Content="×"/>
+                                    </StackPanel>
+                                  </Border>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <AutoCompleteBox Name="ProcessBox" MinWidth="200" Margin="2"
+                                             PlaceholderText="Add an app, e.g. spotify.exe"
+                                             MinimumPrefixLength="1"
+                                             FilterMode="ContainsOrdinal"
+                                             AttachedToVisualTree="ProcessBox_Attached"/>
+                          </WrapPanel>
+                        </Border>
+                      </Grid>
 
-                  <StackPanel Name="ProcessesSection" Spacing="{StaticResource SpaceXs}"
-                              IsVisible="{Binding IsProcessesVisible}">
-                    <TextBlock Text="Processes (comma-separated)" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <AutoCompleteBox Name="ProcessBox"
-                                     Width="300"
-                                     HorizontalAlignment="Left"
-                                     Watermark="e.g. spotify.exe, chrome.exe"
-                                     MinimumPrefixLength="0"
-                                     Text="{Binding ProcessesText, Mode=TwoWay}"
-                                     AttachedToVisualTree="ProcessBox_Attached"/>
-                  </StackPanel>
+                      <TextBlock Name="OtherAppsHint" Classes="Caption" TextWrapping="Wrap"
+                                 IsVisible="{Binding IsOtherApps}" Text="{Binding OtherAppsHint}"/>
 
-                  <StackPanel Name="DeviceSection" Spacing="{StaticResource SpaceXs}"
-                              IsVisible="{Binding IsDeviceVisible}">
-                    <TextBlock Text="Output Device" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <ComboBox Name="DeviceCombo"
-                              ItemsSource="{Binding OutputDeviceNames}"
-                              SelectedItem="{Binding DeviceName, Mode=TwoWay}"
-                              Width="300"
-                              PlaceholderText="Select device…"/>
-                  </StackPanel>
+                      <Grid Name="DeviceSection" ColumnDefinitions="150,*" IsVisible="{Binding IsDevice}">
+                        <TextBlock Text="Device" Classes="Secondary" VerticalAlignment="Center"/>
+                        <ComboBox Name="DeviceCombo" Grid.Column="1" MinWidth="280"
+                                  ItemsSource="{Binding DeviceChoices}"
+                                  SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"/>
+                      </Grid>
 
-                  <CheckBox Name="InvertCheck" Content="Invert" IsChecked="{Binding Invert, Mode=TwoWay}"/>
+                      <ToggleButton Name="AdvancedToggle" Classes="Advanced"
+                                    IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <TextBlock Text="Advanced"/>
+                          <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="10" Height="10"/>
+                        </StackPanel>
+                      </ToggleButton>
 
-                  <TextBlock Text="Tuning" Classes="Caption" Margin="0,4,0,0"/>
-
-                  <StackPanel Spacing="{StaticResource SpaceXs}">
-                    <TextBlock Text="Response Curve" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <ComboBox Name="CurveCombo"
-                              SelectedIndex="{Binding CurveIndex, Mode=TwoWay}"
-                              Width="{StaticResource ComboBoxStandardWidth}">
-                      <ComboBoxItem Content="Linear"/>
-                      <ComboBoxItem Content="Logarithmic"/>
-                      <ComboBoxItem Content="Exponential"/>
-                      <ComboBoxItem Content="S-Curve"/>
-                    </ComboBox>
-                  </StackPanel>
-
-                  <StackPanel Spacing="{StaticResource SpaceXs}">
-                    <TextBlock Text="Dead Zone" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <Slider Name="DeadZoneSlider"
-                            Minimum="0" Maximum="0.45"
-                            Value="{Binding DeadZonePercent, Mode=TwoWay}"
-                            Width="{StaticResource SliderStandardWidth}"
-                            HorizontalAlignment="Left"
-                            TickFrequency="0.05"
-                            TickPlacement="BottomRight"/>
-                  </StackPanel>
-
-                  <StackPanel Spacing="{StaticResource SpaceXs}">
-                    <TextBlock Text="Smoothing" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <Slider Name="SmoothingSlider"
-                            Minimum="0" Maximum="0.95"
-                            Value="{Binding SmoothingFactor, Mode=TwoWay}"
-                            Width="{StaticResource SliderStandardWidth}"
-                            HorizontalAlignment="Left"
-                            TickFrequency="0.1"
-                            TickPlacement="BottomRight"/>
-                  </StackPanel>
-
+                      <Border Name="AdvancedSection" Classes="Indent" IsVisible="{Binding IsAdvancedOpen}">
+                        <StackPanel Spacing="12">
+                          <Grid ColumnDefinitions="150,*">
+                            <TextBlock Text="Invert direction" Classes="Secondary" VerticalAlignment="Center"/>
+                            <ToggleSwitch Name="InvertSwitch" Grid.Column="1"
+                                          IsChecked="{Binding Invert, Mode=TwoWay}"
+                                          OnContent="" OffContent=""/>
+                          </Grid>
+                          <Grid ColumnDefinitions="150,*">
+                            <TextBlock Text="Response curve" Classes="Secondary" VerticalAlignment="Center"/>
+                            <ComboBox Name="CurveCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
+                                      SelectedIndex="{Binding CurveIndex, Mode=TwoWay}">
+                              <ComboBoxItem Content="Linear"/>
+                              <ComboBoxItem Content="Logarithmic"/>
+                              <ComboBoxItem Content="Exponential"/>
+                              <ComboBoxItem Content="S-Curve"/>
+                            </ComboBox>
+                          </Grid>
+                          <Grid ColumnDefinitions="150,Auto,Auto">
+                            <TextBlock Text="Dead zone" Classes="Secondary" VerticalAlignment="Center"/>
+                            <Slider Name="DeadZoneSlider" Grid.Column="1" Width="{StaticResource SliderStandardWidth}"
+                                    Minimum="0" Maximum="0.45" Value="{Binding DeadZonePercent, Mode=TwoWay}"/>
+                            <TextBlock Grid.Column="2" Classes="Secondary" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding DeadZonePercent, StringFormat={}{0:P0}}"/>
+                          </Grid>
+                          <Grid ColumnDefinitions="150,Auto,Auto">
+                            <TextBlock Text="Smoothing" Classes="Secondary" VerticalAlignment="Center"/>
+                            <Slider Name="SmoothingSlider" Grid.Column="1" Width="{StaticResource SliderStandardWidth}"
+                                    Minimum="0" Maximum="0.95" Value="{Binding SmoothingFactor, Mode=TwoWay}"/>
+                            <TextBlock Grid.Column="2" Classes="Secondary" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding SmoothingFactor, StringFormat={}{0:P0}}"/>
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+                    </StackPanel>
+                  </Border>
                 </StackPanel>
-              </StackPanel>
+                <Border Classes="ActiveOutline"/>
+              </Panel>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>

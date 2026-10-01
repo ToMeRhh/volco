@@ -40,26 +40,19 @@ public class CompositionRootTests
     }
 
     [AvaloniaFact]
-    public void CompositionRoot_CheckForUpdates_ReusesAndReactivatesOneWindow()
+    public void CompositionRoot_CheckForUpdates_OpensSettingsOnTheGeneralPage()
     {
         var root = Create(new FakeAudioEngine(), audioReady: true);
         try
         {
             root.Start();
-            Assert.Null(root.UpdateWindow);
+            Assert.Null(root.SettingsWindow);
 
             root.CheckForUpdates();
-            var first = root.UpdateWindow;
-            Assert.NotNull(first);
-            Assert.True(first!.IsVisible);
 
-            root.CheckForUpdates();
-            Assert.Same(first, root.UpdateWindow);
-
-            first.Close();
-            Assert.Null(root.UpdateWindow);
-            root.CheckForUpdates();
-            Assert.NotSame(first, root.UpdateWindow);
+            Assert.NotNull(root.SettingsWindow);
+            Assert.True(root.SettingsWindow!.IsVisible);
+            Assert.IsType<Volco.App.Views.Pages.GeneralPage>(root.SettingsWindow.CurrentPage);
         }
         finally { root.Shutdown(); }
     }

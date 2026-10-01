@@ -4,15 +4,14 @@ public static class ProtocolEncoder
 {
     private const byte StartMarker = 0xAA;
 
-    public static byte[] EncodeMuteState(int buttonIndex, bool isMuted)
+    /// <summary>
+    /// <c>0x05 ButtonFeedback</c>: tells the controller what <paramref name="buttonIndex"/>'s
+    /// indicator shows. <paramref name="value"/> 0 = off/unknown, 1..N = on, or choice n (see
+    /// <see cref="ButtonFeedback"/>). The firmware decides how its hardware renders it.
+    /// </summary>
+    public static byte[] EncodeButtonFeedback(int buttonIndex, byte value)
     {
-        byte[] payload = { (byte)MessageType.MuteState, (byte)buttonIndex, (byte)(isMuted ? 1 : 0) };
-        return BuildFrame(payload);
-    }
-
-    public static byte[] EncodeActiveDevice(int deviceIndex)
-    {
-        byte[] payload = { (byte)MessageType.ActiveDevice, (byte)deviceIndex };
+        byte[] payload = { (byte)MessageType.ButtonFeedback, (byte)buttonIndex, value };
         return BuildFrame(payload);
     }
 

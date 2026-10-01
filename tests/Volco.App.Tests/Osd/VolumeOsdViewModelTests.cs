@@ -114,4 +114,30 @@ public class VolumeOsdViewModelTests
         Assert.True(vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Volume)));
         Assert.Equal(OsdGlyph.Volume, vm.Glyph);
     }
+
+    [Fact]
+    public void OsdViewModel_PresetKind_ShowsTheNameAndPreset_WithoutALevel()
+    {
+        var vm = new VolumeOsdViewModel();
+
+        vm.Apply(new VolumeChangeNotification("Gaming", 0f, false, OsdKind.Preset));
+
+        Assert.Equal("Gaming", vm.Label);
+        Assert.Equal("Preset", vm.ValueText);
+        Assert.Equal(OsdGlyph.Preset, vm.Glyph);
+        Assert.False(vm.ShowsLevel);
+    }
+
+    [Fact]
+    public void OsdViewModel_VolumeAfterPreset_ShowsTheLevelAgain()
+    {
+        var vm = new VolumeOsdViewModel();
+        vm.Apply(new VolumeChangeNotification("Gaming", 0f, false, OsdKind.Preset));
+
+        vm.Apply(new VolumeChangeNotification("Spotify", 0.5f, false, OsdKind.Volume));
+
+        Assert.True(vm.ShowsLevel);
+        Assert.Equal("50%", vm.ValueText);
+        Assert.Equal(OsdGlyph.Volume, vm.Glyph);
+    }
 }

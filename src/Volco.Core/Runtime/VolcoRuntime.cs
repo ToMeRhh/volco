@@ -21,8 +21,13 @@ namespace Volco.Core.Runtime;
 /// thread, the SliderProcessor coalescing timer, the ButtonPressDetector timers, or the
 /// post-connect re-push timers. Subscribers marshal to their UI thread themselves.
 /// </remarks>
-public sealed class VolcoRuntime : IDisposable
+public sealed class VolcoRuntime : IDisposable, IPresetController
 {
+    /// <summary>The live preset's id as last set; null until the first set. Read through
+    /// <see cref="ActivePresetId"/>, which falls back to the first preset when this one is gone
+    /// (deleted in the settings UI) or was never set.</summary>
+    private string? _activePresetId;
+
     private readonly bool _audioReady;
     private readonly Func<ConnectionConfig, IControllerConnection?> _connectionFactory;
     private readonly VolcoRuntimeOptions _options;
@@ -176,6 +181,65 @@ public sealed class VolcoRuntime : IDisposable
     /// <summary>Every <see cref="IAudioEngine.DevicesChanged"/>, of every kind, forwarded.</summary>
     public event EventHandler<DevicesChangedEventArgs>? DevicesChanged;
 
+    /// <summary>The live preset changed (argument: its id), from a button or from <see cref="SetActivePreset"/>.</summary>
+    public event EventHandler<string>? ActivePresetChanged;
+
+    /// <summary>A button on the controller was pressed down (argument: its hardware input),
+    /// whether or not it is configured. Lets a UI show which card is which physical button.</summary>
+    public event EventHandler<int>? ButtonActivity;
+
+    /// <inheritdoc/>
+    public string ActivePresetId
+    {
+        get
+        {
+            var presets = Config.Config.Presets;
+            var id = Volatile.Read(ref _activePresetId);
+            if (id != null && presets.Exists(p => p.Id == id)) return id;
+            return presets.Count > 0 ? presets[0].Id : AppConfig.DefaultPresetId;
+        }
+    }
+
+    /// <inheritdoc/>
+    public void SetActivePreset(string presetId)
+    {
+        if (IsDisposed) return;
+        if (!Config.Config.Presets.Exists(p => p.Id == presetId)) return;
+        var previous = ActivePresetId;
+        Volatile.Write(ref _activePresetId, presetId);
+        if (previous == presetId) return;
+
+        AppLog.Info($"Active preset: {presetId}");
+        ActivePresetChanged?.Invoke(this, presetId);
+        PushControllerState();
+    }
+
+    /// <inheritdoc/>
+    public void NextPreset()
+    {
+        var presets = Config.Config.Presets;
+        if (presets.Count == 0) return;
+        var index = presets.FindIndex(p => p.Id == ActivePresetId);
+        SetActivePreset(presets[(index + 1) % presets.Count].Id);
+    }
+
+    /// <summary>Drops the current transport and starts a fresh one from the current connection
+    /// config (the settings UI's Reconnect button).</summary>
+    public void Reconnect()
+    {
+        if (IsDisposed || !_started) return;
+        AppLog.Info("Reconnect requested");
+        StartConnection();
+    }
+
+    /// <summary>Runs one action now, as a button press would (the settings UI's Test button).
+    /// Preset actions change the live preset.</summary>
+    public void Execute(ButtonActionConfig action)
+    {
+        if (IsDisposed) return;
+        ActionFactory.Create(action, Audio, this)?.Execute();
+    }
+
     /// <summary>
     /// Migrates v1→v2 config if needed and audioReady; subscribes to the engine; creates
     /// SliderProcessor + ButtonPressDetector; starts the transport. Call once.
@@ -203,7 +267,7 @@ public sealed class VolcoRuntime : IDisposable
         // reduces to a no-op below anyway, but skipping the call here avoids depending on that.
         if (_audioReady && ConfigMigrator.NeedsMigration(Config.Config))
         {
-            AppLog.Info("Migrating config to schema v2");
+            AppLog.Info($"Migrating config to schema v{AppConfig.CurrentSchemaVersion}");
             ConfigMigrator.MigrateFile(Config.ConfigPath, Config.Config,
                                        Audio.GetDevices(AudioFlow.Render));
             Config.Save();
@@ -395,11 +459,13 @@ public sealed class VolcoRuntime : IDisposable
                 break;
             case ButtonMessage button:
                 AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
+                if (button.State == ButtonState.Pressed)
+                    ButtonActivity?.Invoke(this, button.ButtonIndex);
                 var bcfg = Config.Config.Buttons.ElementAtOrDefault(button.ButtonIndex);
-                // Fix A: no double-press action configured -> pass 0, which makes
-                // ButtonPressDetector fire Single synchronously on release instead of waiting out
-                // a double-press window that can never be satisfied. Long-press is unaffected.
-                var doublePressWindowMs = bcfg != null && bcfg.DoublePress.Action == ButtonActionType.None
+                // Fix A: no double-press action configured (in the live preset) -> pass 0, which
+                // makes ButtonPressDetector fire Single synchronously on release instead of waiting
+                // out a double-press window that can never be satisfied. Long-press is unaffected.
+                var doublePressWindowMs = bcfg != null && bcfg.BindingFor(ActivePresetId).DoublePress.Action == ButtonActionType.None
                     ? 0
                     : bcfg?.DoublePressWindowMs ?? 300;
                 _buttonPressDetector?.HandleButtonEvent(button.ButtonIndex, button.State,
@@ -416,17 +482,17 @@ public sealed class VolcoRuntime : IDisposable
         var config = Config.Config;
         if (e.ButtonIndex < 0 || e.ButtonIndex >= config.Buttons.Count) return;
 
-        var buttonConfig = config.Buttons[e.ButtonIndex];
+        var binding = config.Buttons[e.ButtonIndex].BindingFor(ActivePresetId);
         var actionConfig = e.PressType switch
         {
-            PressType.Single => buttonConfig.SinglePress,
-            PressType.Double => buttonConfig.DoublePress,
-            PressType.Long => buttonConfig.LongPress,
+            PressType.Single => binding.SinglePress,
+            PressType.Double => binding.DoublePress,
+            PressType.Long => binding.LongPress,
             _ => null
         };
 
         if (actionConfig == null) return;
-        var action = ActionFactory.Create(actionConfig, Audio, Config);
+        var action = ActionFactory.Create(actionConfig, Audio, this);
 
         // action.Execute() only posts a command to the audio thread - the write hasn't happened
         // yet when Execute() returns (review item 3). Reading TryGetDeviceState/GetDefaultDevice
@@ -450,7 +516,7 @@ public sealed class VolcoRuntime : IDisposable
             var current = Audio.GetDefaultDevice(AudioFlow.Render);
             var targetId = actionConfig.Action == ButtonActionType.SetOutputDevice
                 ? SetOutputDeviceAction.ResolveTargetId(actionConfig.Device)
-                : ToggleOutputDeviceAction.ResolveTargetId(current, Config.Config.OutputDevices);
+                : ToggleOutputDeviceAction.ResolveTargetId(current, actionConfig.Device, actionConfig.DeviceB);
             if (targetId is not null)
             {
                 // Already the default: Windows raises no change, so confirm right away.
@@ -466,9 +532,22 @@ public sealed class VolcoRuntime : IDisposable
         }
         Interlocked.Exchange(ref _pendingDeviceOsd, pendingSwitch);
 
+        var presetBefore = ActivePresetId;
         action?.Execute();
 
         if (alreadyCurrent is not null) ShowDeviceOsd(alreadyCurrent.Id, alreadyCurrent.FriendlyName);
+
+        // Preset actions run synchronously (no audio-thread round trip), so the new preset is
+        // already live here.
+        if (actionConfig.Action is ButtonActionType.NextPreset or ButtonActionType.GoToPreset)
+        {
+            var now = ActivePresetId;
+            if (now != presetBefore)
+            {
+                var name = config.Presets.Find(p => p.Id == now)?.Name ?? now;
+                RaiseVolumeChanged(new VolumeChangeNotification(name, 0f, false, OsdKind.Preset));
+            }
+        }
     }
 
     private static bool IsMuteAction(ButtonActionType type) => type is
@@ -648,8 +727,8 @@ public sealed class VolcoRuntime : IDisposable
     }
 
     /// <summary>
-    /// Sends the controller-state frames (mute LEDs + active-device LED — never volume level;
-    /// see ControllerStateReporter) if they differ from what was last actually sent, or
+    /// Sends the controller-state frames (one 0x05 ButtonFeedback per button — never volume level;
+    /// see <see cref="ButtonFeedback"/>) if they differ from what was last actually sent, or
     /// unconditionally when <paramref name="force"/> is true.
     /// </summary>
     /// <remarks>
@@ -672,7 +751,7 @@ public sealed class VolcoRuntime : IDisposable
 
         // BuildFrames only performs the read-only engine queries IAudioEngine documents as safe
         // from any thread (GetDefaultDevice/TryGetDeviceState) — no lock held here.
-        var frames = ControllerStateReporter.BuildFrames(Config.Config, Audio);
+        var frames = ButtonFeedback.BuildFrames(Config.Config, ActivePresetId, Audio);
 
         lock (_pushStateLock)
         {

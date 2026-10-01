@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Volco.App.Controls.UpdatesPanel">
+  <Border Classes="Panel">
+    <StackPanel Spacing="14">
+      <TextBlock Text="Updates" Classes="Subtitle"/>
+
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="2" VerticalAlignment="Center">
+          <TextBlock Name="CurrentVersionText" Text="Current version: v0.0.0"/>
+          <TextBlock Name="StatusText" Classes="Secondary" TextWrapping="Wrap"
+                     Text="Check for updates to see whether a newer Volco is available."/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Name="CheckButton" Content="Check for updates"/>
+          <Button Name="UpdateButton" Content="Update now" Classes="Primary" IsEnabled="False"/>
+        </StackPanel>
+      </Grid>
+
+      <ProgressBar Name="Progress" IsIndeterminate="False" Minimum="0" Maximum="1" Value="0" IsVisible="False"/>
+
+      <TextBlock Name="NotesText" Classes="Caption" TextWrapping="Wrap" IsVisible="False"/>
+
+      <Grid ColumnDefinitions="150,*">
+        <TextBlock Text="GitHub token" Classes="Secondary" VerticalAlignment="Top" Margin="0,6,0,0"/>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBox Name="TokenBox" PasswordChar="●" PlaceholderText="ghp_…" MaxWidth="340" HorizontalAlignment="Left" MinWidth="280"/>
+          <TextBlock Classes="Caption" TextWrapping="Wrap"
+                     Text="Required: Volco's repository is private, so updates need a token with repo and actions:read access. It is stored in your local config."/>
+        </StackPanel>
+      </Grid>
+
+      <ToggleButton Name="AdvancedToggle" Classes="Advanced">
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <TextBlock Text="Advanced"/>
+          <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="10" Height="10"/>
+        </StackPanel>
+      </ToggleButton>
+      <Border Name="AdvancedSection" Classes="Indent" IsVisible="False">
+        <CheckBox Name="UseCiCheckBox" Content="Update from development builds (the latest CI build instead of the latest release)"/>
+      </Border>
+    </StackPanel>
+  </Border>
+</UserControl>

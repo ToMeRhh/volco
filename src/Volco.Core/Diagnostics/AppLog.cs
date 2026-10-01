@@ -7,7 +7,8 @@ namespace Volco.Core.Diagnostics;
 
 public static class AppLog
 {
-    private static readonly string LogPath = Path.Combine(
+    /// <summary>Full path of volco.log.</summary>
+    public static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Volco", "volco.log");
 

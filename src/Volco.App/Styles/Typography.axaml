@@ -1,24 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Typography.axaml - ports SectionHeaderTextStyle / CardTitleTextStyle / CaptionTextStyle as
-    TextBlock classes: "SectionHeader", "CardTitle", "Caption". Sizes follow the WinUI styles
-    they were based on (Subtitle 20 semibold, BodyStrong 14 semibold, Caption 12).
+    Typography.axaml - the type ramp (spec §3.7): Title 20, Subtitle 14, Body 13, Caption 12, one
+    family. TextBlock classes "Title", "Subtitle", "Caption", "Secondary". The Step 2 names
+    "SectionHeader" and "CardTitle" stay as aliases of Title and Subtitle.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Style Selector="TextBlock.SectionHeader">
+  <Style Selector="TextBlock.Title, TextBlock.SectionHeader">
     <Setter Property="FontSize" Value="20"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-    <Setter Property="Margin" Value="0,0,0,8"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
   </Style>
-  <Style Selector="TextBlock.CardTitle">
+  <Style Selector="TextBlock.Subtitle, TextBlock.CardTitle">
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.Secondary">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
   </Style>
   <Style Selector="TextBlock.Caption">
     <Setter Property="FontSize" Value="12"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
   </Style>
 </Styles>

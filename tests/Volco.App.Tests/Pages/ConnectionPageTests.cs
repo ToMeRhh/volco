@@ -1,11 +1,13 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
-using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Communication;
+using Volco.Core.Config;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
@@ -22,26 +24,33 @@ public class ConnectionPageTests
         return (page, window, rig, vm);
     }
 
+    private static Color ThemeColor(string key)
+    {
+        var app = Application.Current!;
+        Assert.True(app.TryGetResource(key, app.ActualThemeVariant, out var value));
+        return Assert.IsAssignableFrom<ISolidColorBrush>(value).Color;
+    }
+
     [AvaloniaFact]
-    public void ConnectionPage_StatusChange_UpdatesIndicator()
+    public void ConnectionPage_StatusComesFirst_AndFollowsTheRuntime()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
         using var __ = vm;
         var dot = page.FindControl<Ellipse>("StatusDot")!;
         var label = page.FindControl<TextBlock>("StatusLabel")!;
-        Assert.Equal("Disconnected", label.Text);
+        Assert.Equal("Not connected", label.Text);
 
         rig.Connection!.SetStatus(ConnectionStatus.Connected);
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal("Connected", label.Text);
-        var brush = Assert.IsAssignableFrom<ISolidColorBrush>(dot.Fill);
-        Assert.Equal(Color.FromArgb(0xFF, 0x22, 0xB1, 0x4C), brush.Color);
+        Assert.Equal(ThemeColor("SuccessBrush"), Assert.IsAssignableFrom<ISolidColorBrush>(dot.Fill).Color);
+        Assert.StartsWith(rig.Config.Config.Connection.Serial.ComPort, page.FindControl<TextBlock>("TransportDetails")!.Text);
     }
 
     [AvaloniaFact]
-    public void ConnectionPage_TypeSelection_ShowsOnlyThatTransportsFields()
+    public void ConnectionPage_EachTypeShowsItsOwnSettings_Visibly()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
@@ -49,21 +58,53 @@ public class ConnectionPageTests
         var serial = page.FindControl<StackPanel>("SerialSection")!;
         var udp = page.FindControl<StackPanel>("UdpSection")!;
         var ws = page.FindControl<StackPanel>("WebSocketSection")!;
-        var combo = page.FindControl<ComboBox>("TypeCombo")!;
 
-        combo.SelectedIndex = 0;
+        page.FindControl<RadioButton>("SerialOption")!.IsChecked = true;
         Assert.True(serial.IsVisible);
         Assert.False(udp.IsVisible);
         Assert.False(ws.IsVisible);
+        Assert.True(page.FindControl<ComboBox>("BaudCombo")!.IsEffectivelyVisible);   // not under "Advanced"
 
-        combo.SelectedIndex = 1;
+        page.FindControl<RadioButton>("UdpOption")!.IsChecked = true;
+        Assert.Equal(ConnectionType.Udp, rig.Config.Config.Connection.Type);
         Assert.False(serial.IsVisible);
         Assert.True(udp.IsVisible);
         Assert.False(ws.IsVisible);
 
-        combo.SelectedIndex = 2;
+        page.FindControl<RadioButton>("WebSocketOption")!.IsChecked = true;
+        Assert.Equal(ConnectionType.WebSocket, rig.Config.Config.Connection.Type);
         Assert.False(serial.IsVisible);
         Assert.False(udp.IsVisible);
         Assert.True(ws.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ConnectionPage_PortsAndBaudRate_WriteThrough()
+    {
+        var (page, _, rig, vm) = Show();
+        using var _ = rig;
+        using var __ = vm;
+
+        page.FindControl<ComboBox>("BaudCombo")!.SelectedIndex = 0;
+        page.FindControl<NumericUpDown>("UdpPortBox")!.Value = 23456;
+        page.FindControl<NumericUpDown>("WebSocketPortBox")!.Value = 9876;
+
+        var c = rig.Config.Config.Connection;
+        Assert.Equal(9600, c.Serial.BaudRate);
+        Assert.Equal(23456, c.Udp.ListenPort);
+        Assert.Equal(9876, c.WebSocket.Port);
+    }
+
+    [AvaloniaFact]
+    public void ConnectionPage_Reconnect_StartsAFreshTransport()
+    {
+        var (page, _, rig, vm) = Show();
+        using var _ = rig;
+        using var __ = vm;
+        var first = rig.Connection;
+
+        page.FindControl<Button>("ReconnectButton")!.Command!.Execute(null);
+
+        Assert.NotSame(first, rig.Connection);
     }
 }

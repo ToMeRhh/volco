@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -14,14 +16,17 @@ namespace Volco.App.Tests.Pages;
 
 public class ButtonsPageTests
 {
-    private static FakeAudioEngine EngineWithAudio() => new()
+    private static FakeAudioEngine EngineWithAudio()
     {
-        Devices =
+        var speakers = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true);
+        var engine = new FakeAudioEngine
         {
-            new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true),
-            new AudioDevice("dev-2", "Headphones", AudioFlow.Render, false),
-        },
-    };
+            Devices = { speakers, new AudioDevice("dev-2", "Headphones", AudioFlow.Render, false) },
+            DefaultRender = speakers,
+        };
+        engine.DeviceStates["dev-1"] = (0.5f, false);
+        return engine;
+    }
 
     private static (ButtonsPage Page, TestRig Rig, SettingsViewModel Vm) Show(Action<AppConfig>? configure = null)
     {
@@ -29,60 +34,102 @@ public class ButtonsPageTests
         configure?.Invoke(rig.Config.Config);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var page = new ButtonsPage(vm.Buttons);
-        new Window { Content = page }.Show();
+        new Window { Content = page, Width = 900, Height = 900 }.Show();
         Dispatcher.UIThread.RunJobs();
         return (page, rig, vm);
     }
 
-    private static List<T> All<T>(ButtonsPage page, string name) where T : Control
-        => page.GetVisualDescendants().OfType<T>().Where(c => c.Name == name).ToList();
+    private static List<T> All<T>(Control root, string name) where T : Control
+        => root.GetVisualDescendants().OfType<T>().Where(c => c.Name == name).ToList();
 
-    private static T InRow<T>(ButtonsPage page, string slot, string name, int button = 0) where T : Control
-        => All<PressActionRow>(page, slot + "PressRow")[button]
-            .GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static Border Card(ButtonsPage page, int index) => All<Border>(page, "Card")[index];
+
+    private static T In<T>(Control root, string name) where T : Control
+        => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
+
+    /// <summary>A control inside one action row ("PressRow", "DoubleRow", "HoldRow") of a card.</summary>
+    private static T InRow<T>(ButtonsPage page, string row, string name, int button = 0) where T : Control
+        => In<T>(In<ActionRow>(Card(page, button), row), name);
+
+    private static void Expand(SettingsViewModel vm, int index)
+    {
+        vm.Buttons.Items[index].IsExpanded = true;
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static ButtonBindingConfig DefaultOf(AppConfig c, int button) => c.Buttons[button].Default();
+
+    // ── Rendering ─────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
-    public void ButtonsPage_RendersOneCardPerButton_WithThreePressRows()
+    public void ButtonsPage_RendersOneCardPerButton_WithThreeActionRows()
     {
         var (page, rig, vm) = Show();
         using var _ = rig; using var __ = vm;
         int buttons = rig.Config.Config.Buttons.Count;
+        Expand(vm, 0);
 
-        Assert.True(buttons > 0);
-        Assert.Equal(buttons, All<Border>(page, "ButtonCard").Count);
-        Assert.Equal(buttons, All<PressActionRow>(page, "SinglePressRow").Count);
-        Assert.Equal(buttons, All<PressActionRow>(page, "DoublePressRow").Count);
-        Assert.Equal(buttons, All<PressActionRow>(page, "LongPressRow").Count);
-        Assert.Equal(new[] { "Single Press", "Double Press", "Long Press" },
-            new[] { "Single", "Double", "Long" }
-                .Select(k => All<PressActionRow>(page, k + "PressRow")[0].Label).ToArray());
-        Assert.Equal(buttons, All<NumericUpDown>(page, "LongPressBox").Count);
-        Assert.Equal(buttons, All<NumericUpDown>(page, "DoublePressBox").Count);
+        Assert.Equal(buttons, All<Border>(page, "Card").Count);
+        Assert.Equal(new[] { "Button 0", "Button 1", "Button 2" },
+            All<TextBlock>(page, "TitleText").Select(t => t.Text).ToArray());
+        Assert.Equal(new[] { "Press", "Double press", "Hold" },
+            new[] { "PressRow", "DoubleRow", "HoldRow" }
+                .Select(r => In<TextBlock>(In<ActionRow>(Card(page, 0), r), "LabelText").Text).ToArray());
+        Assert.All(All<TextBlock>(page, "SummaryText"), t => Assert.Equal("Not set up", t.Text));
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_Summary_ListsTheEditedPresetsActions()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentInput;
+            DefaultOf(c, 0).LongPress.Action = ButtonActionType.NextPreset;
+            DefaultOf(c, 1).SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers (Realtek)" },
+                DeviceB = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" },
+            };
+        });
+        using var _ = rig; using var __ = vm;
+
+        Assert.Equal(new[] { "Mute mic · Hold: Next preset", "Toggle Speakers / Headphones", "Not set up" },
+            All<TextBlock>(page, "SummaryText").Select(t => t.Text).ToArray());
+    }
+
+    // ── Action rows ───────────────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void ButtonsPage_ActionPicker_IsGrouped_AndHeadersCannotBeChosen()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var picker = InRow<ComboBox>(page, "PressRow", "ActionCombo");
+
+        var items = Assert.IsAssignableFrom<IEnumerable<ActionChoice>>(picker.ItemsSource).ToList();
+        Assert.Equal(new[] { "Audio", "Presets", "Custom" }, items.Where(i => i.IsHeader).Select(i => i.Name));
+        Assert.False(items.Single(i => i.Name.StartsWith("Run a program")).IsSelectable);
+
+        picker.SelectedItem = items.First(i => i.IsHeader);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(ButtonActionType.None, DefaultOf(rig.Config.Config, 0).SinglePress.Action);
+        Assert.Equal("Do nothing", vm.Buttons.Items[0].Press.SelectedChoice.Name);
     }
 
     [AvaloniaFact]
     public void ButtonsPage_ActionNeedingDevice_ShowsDevicePicker()
     {
-        var (page, rig, vm) = Show(c => c.Buttons[0].SinglePress.Action = ButtonActionType.MuteSpecificDevice);
+        var (page, rig, vm) = Show(c => DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteSpecificDevice);
         using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
 
-        Assert.True(InRow<ComboBox>(page, "Single", "DeviceCombo").IsVisible);
-        // The other slots still have no action, so no picker.
-        Assert.False(InRow<ComboBox>(page, "Double", "DeviceCombo").IsVisible);
-        Assert.False(InRow<ComboBox>(page, "Long", "DeviceCombo").IsVisible);
-    }
-
-    [AvaloniaFact]
-    public void ButtonsPage_MuteCurrentOutput_HidesDevicePicker()
-    {
-        var (page, rig, vm) = Show(c => c.Buttons[0].SinglePress.Action = ButtonActionType.MuteCurrentOutput);
-        using var _ = rig; using var __ = vm;
-        var picker = InRow<ComboBox>(page, "Single", "DeviceCombo");
-        Assert.False(picker.IsVisible);
-
-        // Switching to a device-taking action reveals it.
-        InRow<ComboBox>(page, "Single", "ActionCombo").SelectedIndex = 5;
-        Assert.True(picker.IsVisible);
+        Assert.True(InRow<Border>(page, "PressRow", "DeviceParams").IsVisible);
+        Assert.False(InRow<Border>(page, "PressRow", "PairParams").IsVisible);
+        Assert.False(InRow<Border>(page, "DoubleRow", "DeviceParams").IsVisible);
+        Assert.False(InRow<Border>(page, "HoldRow", "DeviceParams").IsVisible);
     }
 
     [AvaloniaFact]
@@ -90,11 +137,12 @@ public class ButtonsPageTests
     {
         var (page, rig, vm) = Show(c =>
         {
-            c.Buttons[0].SinglePress.Action = ButtonActionType.SetOutputDevice;
-            c.Buttons[0].SinglePress.Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.SetOutputDevice;
+            DefaultOf(c, 0).SinglePress.Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
         });
         using var _ = rig; using var __ = vm;
-        var picker = InRow<ComboBox>(page, "Single", "DeviceCombo");
+        Expand(vm, 0);
+        var picker = InRow<ComboBox>(page, "PressRow", "DeviceCombo");
 
         Assert.True(picker.IsVisible);
         Assert.Equal("Speakers", picker.SelectedItem);
@@ -103,47 +151,371 @@ public class ButtonsPageTests
     }
 
     [AvaloniaFact]
-    public void ButtonsPage_ChangeAction_PersistsToConfig()
+    public void ButtonsPage_ChoosingActionAndDevice_PersistsIdAndNameToConfig()
     {
         var (page, rig, vm) = Show();
         using var _ = rig; using var __ = vm;
-        Assert.Equal(ButtonActionType.None, rig.Config.Config.Buttons[0].LongPress.Action);
+        Expand(vm, 0);
 
-        InRow<ComboBox>(page, "Long", "ActionCombo").SelectedIndex = 2;
-        Assert.Equal(ButtonActionType.MuteCurrentOutput, rig.Config.Config.Buttons[0].LongPress.Action);
+        vm.Buttons.Items[0].Press.SelectedChoice = ActionCatalog.For(ButtonActionType.SetOutputDevice);
+        Dispatcher.UIThread.RunJobs();
+        InRow<ComboBox>(page, "PressRow", "DeviceCombo").SelectedItem = "Headphones";
 
-        All<NumericUpDown>(page, "LongPressBox")[0].Value = 800;
-        Assert.Equal(800, rig.Config.Config.Buttons[0].LongPressMs);
-    }
-
-    [AvaloniaFact]
-    public void ButtonsPage_ChoosingDevice_PersistsIdAndNameToConfig()
-    {
-        var (page, rig, vm) = Show();
-        using var _ = rig; using var __ = vm;
-
-        InRow<ComboBox>(page, "Single", "ActionCombo").SelectedIndex = 5;
-        InRow<ComboBox>(page, "Single", "DeviceCombo").SelectedItem = "Headphones";
-
-        var cfg = rig.Config.Config.Buttons[0].SinglePress;
+        var cfg = DefaultOf(rig.Config.Config, 0).SinglePress;
         Assert.Equal(ButtonActionType.SetOutputDevice, cfg.Action);
         Assert.Equal("dev-2", cfg.Device!.Id);
         Assert.Equal("Headphones", cfg.Device.FriendlyName);
     }
 
+    // Ported from the Output Devices page: the toggle pair now lives on the action.
+
     [AvaloniaFact]
-    public void ButtonsPage_ExpandButton_TogglesBody()
+    public void ButtonsPage_TogglePair_PickersListRenderDevices_AndWriteAAndB()
+    {
+        var (page, rig, vm) = Show(c => DefaultOf(c, 2).SinglePress.Action = ButtonActionType.ToggleOutputDevice);
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 2);
+
+        Assert.True(InRow<Border>(page, "PressRow", "PairParams", 2).IsVisible);
+        foreach (var name in new[] { "DeviceACombo", "DeviceBCombo" })
+            Assert.Equal(new[] { "Speakers", "Headphones" },
+                Assert.IsAssignableFrom<IEnumerable<string>>(InRow<ComboBox>(page, "PressRow", name, 2).ItemsSource));
+
+        InRow<ComboBox>(page, "PressRow", "DeviceACombo", 2).SelectedItem = "Headphones";
+        InRow<ComboBox>(page, "PressRow", "DeviceBCombo", 2).SelectedItem = "Speakers";
+
+        var toggle = DefaultOf(rig.Config.Config, 2).SinglePress;
+        Assert.Equal("dev-2", toggle.Device!.Id);
+        Assert.Equal("Headphones", toggle.Device.FriendlyName);
+        Assert.Equal("dev-1", toggle.DeviceB!.Id);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_TogglePair_FriendlyNameOnlyDevicesAreSelected()
+    {
+        var (page, rig, vm) = Show(c => DefaultOf(c, 2).SinglePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.ToggleOutputDevice,
+            Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" },
+            DeviceB = new DeviceRefConfig { Id = "", FriendlyName = "Old Soundcard" },
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 2);
+
+        Assert.Equal("Speakers", InRow<ComboBox>(page, "PressRow", "DeviceACombo", 2).SelectedItem);
+        Assert.Equal("Old Soundcard", InRow<ComboBox>(page, "PressRow", "DeviceBCombo", 2).SelectedItem);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_TogglePair_DeviceAddedEvent_AppearsInPickers()
+    {
+        var (page, rig, vm) = Show(c => DefaultOf(c, 2).SinglePress.Action = ButtonActionType.ToggleOutputDevice);
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 2);
+
+        var added = new AudioDevice("dev-3", "USB DAC", AudioFlow.Render, false);
+        rig.Engine.Devices.Add(added);
+        rig.Engine.RaiseDeviceChanged(DeviceChangeKind.Added, added);
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (var name in new[] { "DeviceACombo", "DeviceBCombo" })
+            Assert.Contains("USB DAC",
+                Assert.IsAssignableFrom<IEnumerable<string>>(InRow<ComboBox>(page, "PressRow", name, 2).ItemsSource));
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_GoToPreset_OffersThePresets()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            DefaultOf(c, 0).LongPress.Action = ButtonActionType.GoToPreset;
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var picker = InRow<ComboBox>(page, "HoldRow", "PresetCombo");
+
+        Assert.True(InRow<Border>(page, "HoldRow", "PresetParams").IsVisible);
+        Assert.Equal(new[] { "Default", "Gaming" },
+            Assert.IsAssignableFrom<IEnumerable<PresetChoice>>(picker.ItemsSource).Select(p => p.Name));
+
+        picker.SelectedItem = new PresetChoice("gaming", "Gaming");
+        Assert.Equal("gaming", DefaultOf(rig.Config.Config, 0).LongPress.PresetId);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_Test_RunsTheActionNow()
+    {
+        var (page, rig, vm) = Show(c => DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput);
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+
+        var test = InRow<Button>(page, "PressRow", "TestButton");
+        Assert.True(test.IsEnabled);
+        test.Command!.Execute(null);
+
+        Assert.Single(rig.Engine.ToggleMuteCalls);
+        Assert.False(InRow<Button>(page, "DoubleRow", "TestButton").IsEnabled);   // nothing to test
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_Timing_IsUnderAdvanced_AndWritesThrough()
     {
         var (page, rig, vm) = Show();
         using var _ = rig; using var __ = vm;
-        var body = All<StackPanel>(page, "Body")[0];
-        Assert.True(body.IsVisible);
+        Expand(vm, 0);
+        Assert.False(In<Border>(Card(page, 0), "AdvancedSection").IsVisible);
 
-        var button = All<Button>(page, "ExpandButton")[0];
-        button.Command!.Execute(button.CommandParameter);
-        Assert.False(body.IsVisible);
+        In<ToggleButton>(Card(page, 0), "AdvancedToggle").IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        In<NumericUpDown>(Card(page, 0), "LongPressBox").Value = 800;
+        In<NumericUpDown>(Card(page, 0), "DoublePressBox").Value = 250;
 
-        button.Command!.Execute(button.CommandParameter);
-        Assert.True(body.IsVisible);
+        Assert.Equal(800, rig.Config.Config.Buttons[0].LongPressMs);
+        Assert.Equal(250, rig.Config.Config.Buttons[0].DoublePressWindowMs);
+    }
+
+    // ── Controller light preview ──────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void ButtonsPage_LightPreview_FollowsTheLiveState()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+            DefaultOf(c, 1).SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" },
+                DeviceB = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" },
+            };
+        });
+        using var _ = rig; using var __ = vm;
+
+        Assert.True(In<Ellipse>(Card(page, 0), "Led").IsVisible);
+        Assert.DoesNotContain("on", In<Ellipse>(Card(page, 0), "Led").Classes);
+        Assert.Contains("on", In<Ellipse>(Card(page, 1), "LedA").Classes);      // Speakers is A
+        Assert.DoesNotContain("on", In<Ellipse>(Card(page, 1), "LedB").Classes);
+
+        rig.Engine.DeviceStates["dev-1"] = (0.5f, true);
+        rig.Engine.RaiseDeviceVolumeChanged("dev-1", 0.5f, muted: true, isOwnChange: false);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains("on", In<Ellipse>(Card(page, 0), "Led").Classes);
+        Assert.Equal("On while muted. Follows the Press action.", vm.Buttons.Items[0].LightDescription);
+    }
+
+    // ── Presets ───────────────────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void ButtonsPage_OnePreset_ShowsOnlyAnAddLink()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+
+        Assert.True(page.FindControl<Button>("AddFirstPresetButton")!.IsEffectivelyVisible);
+        Assert.False(page.FindControl<ItemsControl>("PresetTabs")!.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_AddPreset_CopiesTheEditedPreset_AndEditsIt()
+    {
+        var (page, rig, vm) = Show(c => DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentInput);
+        using var _ = rig; using var __ = vm;
+
+        vm.Buttons.AddPresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        var c = rig.Config.Config;
+        Assert.Equal(2, c.Presets.Count);
+        var added = c.Presets[1];
+        Assert.Equal("Preset 2", added.Name);
+        Assert.Equal(added.Id, vm.Buttons.EditingPresetId);
+        Assert.Equal(ButtonActionType.MuteCurrentInput, c.Buttons[0].BindingFor(added.Id).SinglePress.Action);
+        Assert.NotSame(c.Buttons[0].Default().SinglePress, c.Buttons[0].BindingFor(added.Id).SinglePress);
+        Assert.True(page.FindControl<ItemsControl>("PresetTabs")!.IsEffectivelyVisible);
+        Assert.True(vm.Buttons.IsRenaming);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_EditingAPresetThatIsNotLive_ShowsTheBanner_AndMakeLiveSwitchesIt()
+    {
+        var (page, rig, vm) = Show(c => c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" }));
+        using var _ = rig; using var __ = vm;
+        var buttons = vm.Buttons;
+        Assert.Equal("Default is live on the controller.", page.FindControl<TextBlock>("BannerText")!.Text);
+        Assert.False(page.FindControl<Button>("MakeLiveButton")!.IsVisible);
+
+        buttons.Presets.Single(p => p.Id == "gaming").SelectCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("You are editing Gaming. The controller is using Default.",
+            page.FindControl<TextBlock>("BannerText")!.Text);
+        var makeLive = page.FindControl<Button>("MakeLiveButton")!;
+        Assert.True(makeLive.IsVisible);
+        Assert.Equal("Make Gaming live", makeLive.Content);
+
+        makeLive.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("gaming", rig.Runtime.ActivePresetId);
+        Assert.Equal("gaming", buttons.LivePresetId);
+        Assert.True(buttons.Presets.Single(p => p.Id == "gaming").IsLive);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_SwitchingTheEditedPreset_ShowsThatPresetsActions()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+            c.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
+        });
+        using var _ = rig; using var __ = vm;
+        Assert.Equal("Mute output", All<TextBlock>(page, "SummaryText")[0].Text);
+
+        vm.Buttons.EditingPresetId = "gaming";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Mute mic", All<TextBlock>(page, "SummaryText")[0].Text);
+        Assert.Equal(ButtonActionType.MuteCurrentInput, vm.Buttons.Items[0].Press.SelectedChoice.Type);
+
+        // Editing now writes to Gaming only.
+        vm.Buttons.Items[0].Press.SelectedChoice = ActionCatalog.For(ButtonActionType.NextPreset);
+        Assert.Equal(ButtonActionType.NextPreset, rig.Config.Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
+        Assert.Equal(ButtonActionType.MuteCurrentOutput, rig.Config.Config.Buttons[0].Default().SinglePress.Action);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_RenamePreset_CommitsTheNewName()
+    {
+        var (page, rig, vm) = Show(c => c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" }));
+        using var _ = rig; using var __ = vm;
+
+        vm.Buttons.StartRenameCommand.Execute(null);
+        vm.Buttons.RenameText = "Everyday";
+        vm.Buttons.CommitRenameCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Everyday", rig.Config.Config.Presets[0].Name);
+        Assert.Equal("Everyday", vm.Buttons.Presets[0].Name);
+        Assert.False(vm.Buttons.IsRenaming);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_DeleteLivePreset_FallsBackToTheFirst_AndUndoRestoresIt()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
+        });
+        using var _ = rig; using var __ = vm;
+        var buttons = vm.Buttons;
+        rig.Runtime.SetActivePreset("gaming");
+        Dispatcher.UIThread.RunJobs();
+        buttons.EditingPresetId = "gaming";
+
+        buttons.DeletePresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Single(rig.Config.Config.Presets);
+        Assert.False(rig.Config.Config.Buttons[0].Actions.ContainsKey("gaming"));
+        Assert.Equal(AppConfig.DefaultPresetId, rig.Runtime.ActivePresetId);
+        Assert.Equal(AppConfig.DefaultPresetId, buttons.LivePresetId);
+        Assert.False(buttons.HasMultiplePresets);
+        Assert.Equal("Preset “Gaming” deleted", vm.Toast.Message);
+
+        vm.Toast.UndoCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(2, rig.Config.Config.Presets.Count);
+        Assert.Equal(ButtonActionType.MuteCurrentInput, rig.Config.Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
+        Assert.Equal("gaming", rig.Runtime.ActivePresetId);
+    }
+
+    // ── Add / reset / reorder ─────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void ButtonsPage_Reset_ClearsActionsInEveryPreset_AndUndoRestoresThem()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            DefaultOf(c, 1).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+            c.Buttons[1].GetOrAddBinding("gaming").LongPress.Action = ButtonActionType.NextPreset;
+            c.Buttons[1].LongPressMs = 900;
+        });
+        using var _ = rig; using var __ = vm;
+        var cfg = rig.Config.Config.Buttons[1];
+
+        vm.Buttons.Items[1].ResetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(cfg.Actions.Values.All(b => b.IsEmpty));
+        Assert.Equal(500, cfg.LongPressMs);
+        Assert.Equal("Not set up", All<TextBlock>(page, "SummaryText")[1].Text);
+        Assert.Equal("Button 1 reset", vm.Toast.Message);
+
+        vm.Toast.UndoCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(ButtonActionType.MuteCurrentOutput, cfg.Default().SinglePress.Action);
+        Assert.Equal(ButtonActionType.NextPreset, cfg.BindingFor("gaming").LongPress.Action);
+        Assert.Equal(900, cfg.LongPressMs);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_Move_CarriesTheActionsOfEveryPreset()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+            c.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
+        });
+        using var _ = rig; using var __ = vm;
+
+        vm.Buttons.Move(0, 2);
+        Dispatcher.UIThread.RunJobs();
+
+        var moved = rig.Config.Config.Buttons[2];
+        Assert.Equal(ButtonActionType.MuteCurrentOutput, moved.Default().SinglePress.Action);
+        Assert.Equal(ButtonActionType.MuteCurrentInput, moved.BindingFor("gaming").SinglePress.Action);
+        Assert.Equal("Mute output", All<TextBlock>(page, "SummaryText")[2].Text);
+        Assert.Equal(new[] { "Button 0", "Button 1", "Button 2" },
+            All<TextBlock>(page, "TitleText").Select(t => t.Text).ToArray());
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_AddAndRemoveLast()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+
+        page.FindControl<Button>("AddButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(4, rig.Config.Config.Buttons.Count);
+        Assert.Equal("Button 3", All<TextBlock>(page, "TitleText")[3].Text);
+        Assert.True(vm.Buttons.Items[3].IsLast);
+
+        vm.Buttons.Items[3].RemoveLastCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, rig.Config.Config.Buttons.Count);
+        Assert.Equal("Button 3 removed", vm.Toast.Message);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_ButtonActivity_FlashesThatCard()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+
+        vm.Buttons.Pulse(2);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains("active", Card(page, 2).Classes);
+        Assert.DoesNotContain("active", Card(page, 0).Classes);
     }
 }

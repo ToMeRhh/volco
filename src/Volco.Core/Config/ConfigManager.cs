@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using Volco.Core.Diagnostics;
 
@@ -32,12 +33,30 @@ public class ConfigManager
 
     public void Load()
     {
+        var migratedFromV2 = false;
         if (File.Exists(_configPath))
         {
             AppLog.Info($"Loading config from {_configPath}");
             try
             {
                 var json = File.ReadAllText(_configPath);
+                if (JsonNode.Parse(json) is JsonObject root)
+                {
+                    var version = root["schemaVersion"] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 0;
+                    if (version < 3)
+                    {
+                        // v1 and v2 both get the v3 shape here. Only v2 is now fully v3; v1 keeps its
+                        // number until the runtime resolves its device names (ConfigMigrator.MigrateFile).
+                        ConfigMigrator.UpgradeShapeToV3(root);
+                        if (version == 2)
+                        {
+                            BackupBeforeMigration(json, "config.v2.bak");
+                            root["schemaVersion"] = AppConfig.CurrentSchemaVersion;
+                            migratedFromV2 = true;
+                        }
+                        json = root.ToJsonString();
+                    }
+                }
                 Config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? AppConfig.CreateDefault();
             }
             catch (Exception ex)
@@ -53,6 +72,7 @@ public class ConfigManager
                 // first.
                 AppLog.Error($"Config at {_configPath} could not be read ({ex.GetType().Name}: {ex.Message}); using defaults");
                 BackupCorruptConfig();
+                migratedFromV2 = false; // never overwrite an unreadable file with the defaults
                 Config = AppConfig.CreateDefault();
             }
         }
@@ -62,11 +82,35 @@ public class ConfigManager
             Config = AppConfig.CreateDefault();
         }
 
-        // Defensive: a valid-but-sparse config (hand-edited) must still have entries to index.
-        while (Config.Sliders.Count < 5) Config.Sliders.Add(new SliderConfig { Index = Config.Sliders.Count });
-        while (Config.Buttons.Count < 3) Config.Buttons.Add(new ButtonConfig { Index = Config.Buttons.Count });
+        // The number of sliders and buttons is the user's (position == hardware input), so a short
+        // list is not padded; Normalize only repairs invariants (a preset exists, Index == position).
+        Config.Normalize();
+
+        // Outside the try above: a failed write must not be mistaken for an unreadable file.
+        if (migratedFromV2)
+        {
+            AppLog.Info("Migrated config from schema v2 to v3");
+            try { WriteToDisk(); }
+            catch (Exception ex) { AppLog.Error($"Could not write the migrated config: {ex}"); }
+        }
 
         AppLog.IsDebugEnabled = Config.DebugLogging;
+    }
+
+    /// <summary>Keeps the pre-migration file as <paramref name="name"/> next to config.json, once
+    /// (an existing backup from an interrupted earlier run is never overwritten).</summary>
+    private void BackupBeforeMigration(string raw, string name)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_configPath);
+            var backup = string.IsNullOrEmpty(dir) ? name : Path.Combine(dir, name);
+            if (!File.Exists(backup)) File.WriteAllText(backup, raw);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Could not write {name}: {ex}");
+        }
     }
 
     /// <summary>Copies an unreadable config.json aside as "config.corrupt.&lt;timestamp&gt;.bak"
@@ -142,6 +186,9 @@ public class ConfigManager
         AppLog.Info($"Saving config to {_configPath}");
         var dir = Path.GetDirectoryName(_configPath);
         if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        // Position is identity: keep the readable Index fields in step with the list order.
+        for (int i = 0; i < Config.Sliders.Count; i++) Config.Sliders[i].Index = i;
+        for (int i = 0; i < Config.Buttons.Count; i++) Config.Buttons[i].Index = i;
         var json = JsonSerializer.Serialize(Config, JsonOptions);
         File.WriteAllText(_configPath, json);
     }

@@ -1,4 +1,6 @@
+using Volco.App.ViewModels;
 using Volco.Core.Audio;
+using Volco.Core.Config;
 using Volco.Core.Communication;
 using Volco.Core.Tests.Audio;
 using Xunit;
@@ -17,20 +19,19 @@ public class SettingsViewModelTests
         using var rig = new TestRig(engine);
         var ui = new RecordingDispatcher();
         using var vm = rig.CreateSettings(ui);
-        var outputs = vm.OutputDevices; // construct the tab VM so it has a picker to refresh
-        Assert.Equal(new[] { "Speakers" }, outputs.OutputDevices.Select(d => d.FriendlyName));
+        var slider = vm.Sliders.Items[0]; // a card with a device picker to refresh
+        Assert.Equal(new[] { SliderItemViewModel.CurrentDefaultOutput, "Speakers" }, slider.DeviceChoices);
 
         engine.Devices.Add(Headphones);
         await Task.Run(() => engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones));
 
         // Nothing mutated yet: the handler only queued work.
         Assert.True(ui.Pending > 0);
-        Assert.Equal(new[] { "Speakers" }, outputs.OutputDevices.Select(d => d.FriendlyName));
+        Assert.DoesNotContain("Headphones", slider.DeviceChoices);
 
         ui.RunAll();
 
-        Assert.Contains(outputs.OutputDevices, d => d.FriendlyName == "Headphones");
-        Assert.Contains("Headphones", outputs.OutputDeviceNames);
+        Assert.Contains("Headphones", slider.DeviceChoices);
     }
 
     [Fact]
@@ -98,7 +99,7 @@ public class SettingsViewModelTests
         using var rig = new TestRig(engine);
         var ui = new RecordingDispatcher();
         var vm = rig.CreateSettings(ui);
-        var outputs = vm.OutputDevices;
+        var slider = vm.Sliders.Items[0];
         var connection = vm.Connection;
 
         engine.Devices.Add(Headphones);
@@ -117,7 +118,58 @@ public class SettingsViewModelTests
         });
 
         Assert.Null(ex);
-        Assert.Equal(new[] { "Speakers" }, outputs.OutputDevices.Select(d => d.FriendlyName));
+        Assert.DoesNotContain("Headphones", slider.DeviceChoices);
         Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+    }
+
+    [Fact]
+    public async Task SettingsViewModel_ButtonPressFromWorkerThread_FlashesThatCard()
+    {
+        using var rig = new TestRig();
+        var ui = new RecordingDispatcher();
+        using var vm = rig.CreateSettings(ui);
+        var card = vm.Buttons.Items[1];
+
+        await Task.Run(() => rig.Connection!.RaiseMessage(new ButtonMessage(1, ButtonState.Pressed)));
+
+        Assert.False(card.IsActive);
+        ui.RunAll();
+        Assert.True(card.IsActive);
+        Assert.False(vm.Buttons.Items[0].IsActive);
+    }
+
+    [Fact]
+    public void SettingsViewModel_SliderReport_UpdatesLevelAndFlashesThatCard()
+    {
+        using var rig = new TestRig();
+        var ui = new RecordingDispatcher();
+        using var vm = rig.CreateSettings(ui);
+
+        rig.Connection!.RaiseMessage(new SliderMessage(2, 4095));
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (ui.Pending == 0 && DateTime.UtcNow < deadline) Thread.Sleep(10);
+        ui.RunAll();
+
+        Assert.Equal(1.0, vm.Sliders.Items[2].LiveLevel, 3);
+        Assert.True(vm.Sliders.Items[2].IsActive);
+        Assert.False(vm.Sliders.Items[0].IsActive);
+    }
+
+    [Fact]
+    public void SettingsViewModel_RuntimePresetChange_MovesTheLiveMarker()
+    {
+        using var rig = new TestRig();
+        rig.Config.Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        var ui = new RecordingDispatcher();
+        using var vm = rig.CreateSettings(ui);
+        var buttons = vm.Buttons;
+        Assert.Equal(AppConfig.DefaultPresetId, buttons.LivePresetId);
+
+        rig.Runtime.SetActivePreset("gaming");
+        ui.RunAll();
+
+        Assert.Equal("gaming", buttons.LivePresetId);
+        Assert.True(buttons.Presets.Single(p => p.Id == "gaming").IsLive);
+        Assert.False(buttons.Presets.Single(p => p.Id == AppConfig.DefaultPresetId).IsLive);
     }
 }

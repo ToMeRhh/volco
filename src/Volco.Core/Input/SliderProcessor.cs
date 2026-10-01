@@ -25,8 +25,9 @@ public class SliderProcessor : IDisposable
 {
     private readonly IAudioEngine _audio;
     private readonly ConfigManager _configManager;
-    private readonly ushort?[] _pendingValues = new ushort?[16];
-    private readonly float?[] _lastVolume = new float?[16];
+    // Keyed by hardware slider input. No fixed size: the number of sliders is the user's.
+    private readonly Dictionary<int, ushort> _pendingValues = new();
+    private readonly Dictionary<int, float> _lastVolume = new();
     private readonly Timer _coalesceTimer;
     private readonly object _lock = new();
 
@@ -143,7 +144,7 @@ public class SliderProcessor : IDisposable
 
     public void HandleSliderEvent(int sliderIndex, ushort adcValue)
     {
-        if (sliderIndex < 0 || sliderIndex >= _pendingValues.Length)
+        if (sliderIndex < 0)
             return;
 
         lock (_lock)
@@ -163,12 +164,9 @@ public class SliderProcessor : IDisposable
     /// </summary>
     public float? GetLastLevel(int sliderIndex)
     {
-        if (sliderIndex < 0 || sliderIndex >= _lastVolume.Length)
-            return null;
-
         lock (_lock)
         {
-            return _lastVolume[sliderIndex];
+            return _lastVolume.TryGetValue(sliderIndex, out var v) ? v : null;
         }
     }
 
@@ -176,15 +174,17 @@ public class SliderProcessor : IDisposable
     {
         var config = _configManager.Config;
 
-        for (int sliderIndex = 0; sliderIndex < _pendingValues.Length; sliderIndex++)
+        KeyValuePair<int, ushort>[] pending;
+        lock (_lock)
         {
-            ushort? value;
-            lock (_lock)
-            {
-                value = _pendingValues[sliderIndex];
-                if (value == null) continue;
-                _pendingValues[sliderIndex] = null;
-            }
+            if (_pendingValues.Count == 0) return;
+            pending = _pendingValues.ToArray();
+            _pendingValues.Clear();
+        }
+
+        foreach (var (sliderIndex, rawValue) in pending)
+        {
+            ushort? value = rawValue;
 
             if (sliderIndex >= config.Sliders.Count)
                 continue;
@@ -195,7 +195,7 @@ public class SliderProcessor : IDisposable
             float? prevVolume;
             lock (_lock)
             {
-                prevVolume = _lastVolume[sliderIndex];
+                prevVolume = _lastVolume.TryGetValue(sliderIndex, out var p) ? p : null;
             }
 
             if (sliderConfig.SmoothingFactor > 0 && prevVolume is { } prev)
@@ -219,6 +219,12 @@ public class SliderProcessor : IDisposable
 
             switch (sliderConfig.Type)
             {
+                case SliderMappingType.None:
+                    // "Not set up": changes nothing and shows no OSD, but still reports its level
+                    // below so the settings UI can show which card this physical slider is.
+                    deviceResolved = false;
+                    break;
+
                 case SliderMappingType.Device:
                     var deviceRef = DeviceRefFor(sliderConfig);
                     AppLog.Debug($"[Slider] index={sliderIndex} type=Device device={sliderConfig.DeviceName} adc={value} vol={volume:F3}");
@@ -273,7 +279,7 @@ public class SliderProcessor : IDisposable
         // by slider.Processes membership, independent of whether that slider has moved yet —
         // otherwise an unmoved-but-mapped slider would let the Unmapped slider (pass 2) steal
         // its process, which is exactly the bug this two-pass split prevents.
-        for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
+        for (int i = 0; i < config.Sliders.Count; i++)
         {
             var slider = config.Sliders[i];
             if (slider.Type != SliderMappingType.Processes) continue;
@@ -283,7 +289,7 @@ public class SliderProcessor : IDisposable
             float? level;
             lock (_lock)
             {
-                level = _lastVolume[i];
+                level = _lastVolume.TryGetValue(i, out var v) ? v : null;
             }
             if (level is { } lvl)
                 _audio.SetSessionVolume(new SessionFilter.ByImageNames(new[] { e.Session.ImageName }), lvl);
@@ -291,14 +297,14 @@ public class SliderProcessor : IDisposable
         }
 
         // Pass 2: genuinely unclaimed — an Unmapped slider owns it, if one exists and has moved.
-        for (int i = 0; i < config.Sliders.Count && i < _lastVolume.Length; i++)
+        for (int i = 0; i < config.Sliders.Count; i++)
         {
             if (config.Sliders[i].Type != SliderMappingType.Unmapped) continue;
 
             float? level;
             lock (_lock)
             {
-                level = _lastVolume[i];
+                level = _lastVolume.TryGetValue(i, out var v) ? v : null;
             }
             if (level is { } lvl)
             {

@@ -1,8 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="using:System"
+             xmlns:vm="using:Volco.App.ViewModels"
              xmlns:controls="using:Volco.App.Controls"
              xmlns:conv="using:Volco.App.Converters"
-             xmlns:vm="using:Volco.App.ViewModels"
              x:Class="Volco.App.Views.Pages.ButtonsPage"
              x:DataType="vm:ButtonsViewModel">
   <UserControl.Resources>
@@ -12,78 +13,214 @@
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}"
                 Spacing="{StaticResource SpaceL}"
-                MaxWidth="{StaticResource SettingsCardMaxWidth}"
-                HorizontalAlignment="Left">
+                MaxWidth="{StaticResource PageMaxWidth}">
 
-      <TextBlock Text="Button Actions" Classes="SectionHeader"/>
+      <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Buttons" Classes="Title"/>
+          <TextBlock Classes="Secondary" TextWrapping="Wrap"
+                     Text="What each button does when you press it, double-press it, or hold it, in the order the controller numbers them."/>
+        </StackPanel>
+        <Button Name="AddButton" Grid.Column="1" Classes="Primary" Margin="16,0,0,0"
+                VerticalAlignment="Bottom" Command="{Binding AddCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource Icon.Plus}" Width="12" Height="12"/>
+            <TextBlock Text="Add button"/>
+          </StackPanel>
+        </Button>
+      </Grid>
 
-      <ItemsControl Name="ButtonRepeater" ItemsSource="{Binding Items}">
+      <!-- Presets -->
+      <StackPanel Name="PresetBar" Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !HasMultiplePresets}">
+          <TextBlock Classes="Caption" VerticalAlignment="Center"
+                     Text="Presets let one button change what the other buttons do."/>
+          <Button Name="AddFirstPresetButton" Classes="Ghost" Command="{Binding AddPresetCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
+              <TextBlock Text="Add preset"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <StackPanel Spacing="10" IsVisible="{Binding HasMultiplePresets}">
+          <WrapPanel>
+            <Border Classes="SegmentTrack" Margin="0,0,8,0">
+              <ItemsControl Name="PresetTabs" ItemsSource="{Binding Presets}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="2"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PresetTabViewModel">
+                    <RadioButton Name="PresetTab" Classes="Segment"
+                                 IsChecked="{Binding IsEditing, Mode=OneWay}"
+                                 Command="{Binding SelectCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Name="LiveDot" Width="6" Height="6" VerticalAlignment="Center"
+                                 Fill="{DynamicResource SuccessBrush}" IsVisible="{Binding IsLive}"
+                                 ToolTip.Tip="Live on the controller"/>
+                        <TextBlock Text="{Binding Name}"/>
+                      </StackPanel>
+                    </RadioButton>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <Button Name="AddPresetButton" Classes="Ghost" Command="{Binding AddPresetCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
+                <TextBlock Text="Add preset"/>
+              </StackPanel>
+            </Button>
+            <Button Name="RenamePresetButton" Classes="Ghost" Content="Rename"
+                    Command="{Binding StartRenameCommand}" IsVisible="{Binding !IsRenaming}"/>
+            <TextBox Name="PresetNameBox" Width="180" IsVisible="{Binding IsRenaming}"
+                     Text="{Binding RenameText, Mode=TwoWay}"/>
+            <Button Name="DeletePresetButton" Classes="Ghost Danger" Content="Delete"
+                    Command="{Binding DeletePresetCommand}"/>
+          </WrapPanel>
+
+          <Border Name="Banner" Classes="Panel" Padding="12,8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
+                       Fill="{DynamicResource SuccessBrush}" IsVisible="{Binding IsEditingLive}"/>
+              <TextBlock Name="BannerText" Grid.Column="1" Classes="Secondary" TextWrapping="Wrap"
+                         VerticalAlignment="Center" Text="{Binding BannerText}"/>
+              <Button Name="MakeLiveButton" Grid.Column="2" Margin="12,0,0,0"
+                      Content="{Binding MakeLiveText}" Command="{Binding MakeLiveCommand}"
+                      IsVisible="{Binding !IsEditingLive}"/>
+            </Grid>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Button cards -->
+      <ItemsControl Name="ButtonList" ItemsSource="{Binding Items}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="8"/>
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ButtonItemViewModel">
-            <Border Name="ButtonCard"
-                    Padding="{StaticResource CardPadding}"
-                    Margin="0,0,0,8"
-                    CornerRadius="{StaticResource CardCornerRadius}"
-                    Background="{DynamicResource SurfaceCardBrush}"
-                    BorderBrush="{DynamicResource SurfaceStrokeBrush}"
-                    BorderThickness="1">
-              <StackPanel Spacing="{StaticResource SpaceS}">
+            <Border Name="Card" Classes="Card"
+                    Classes.unset="{Binding IsNotSetUp}"
+                    Classes.active="{Binding IsActive}">
+              <Panel>
+                <StackPanel>
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="4,8,8,8">
+                    <Border Name="Grip" Classes="Grip" Grid.Column="0" VerticalAlignment="Center"
+                            ToolTip.Tip="Drag to move these actions to another button (Alt+Up / Alt+Down)">
+                      <PathIcon Data="{StaticResource Icon.Grip}" Width="12" Height="12"
+                                Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </Border>
+                    <Button Name="ExpandButton" Grid.Column="1" Classes="CardHeader"
+                            Command="{Binding ToggleExpandedCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Name="TitleText" Classes="Subtitle CardTitleText"
+                                   Text="{Binding Title}" VerticalAlignment="Center"/>
+                        <TextBlock Name="SummaryText" Classes="Secondary" Text="{Binding Summary}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Button>
 
-                <!-- Title row: "Button N" + collapse chevron -->
-                <Button Name="ExpandButton"
-                        Command="{Binding ToggleExpandedCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Stretch"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="0">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding Index, StringFormat='Button {0}'}"
-                               Classes="CardTitle"
-                               VerticalAlignment="Center"/>
-                    <Panel Grid.Column="1" VerticalAlignment="Center">
-                      <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
-                                IsVisible="{Binding IsExpanded}"/>
-                      <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
-                                IsVisible="{Binding !IsExpanded}"/>
+                    <!-- What the controller's light shows for this button right now -->
+                    <Panel Name="LightPreview" Grid.Column="2" Margin="8,0" VerticalAlignment="Center"
+                           ToolTip.Tip="{Binding LightDescription}">
+                      <Ellipse Name="Led" Classes="Led" Classes.on="{Binding LedOn}"
+                               IsVisible="{Binding IsOnOffLight}"/>
+                      <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsPairLight}">
+                        <TextBlock Text="A" Classes="Caption" VerticalAlignment="Center"/>
+                        <Ellipse Name="LedA" Classes="Led" Classes.on="{Binding LedA}"/>
+                        <Ellipse Name="LedB" Classes="Led" Classes.on="{Binding LedB}"/>
+                        <TextBlock Text="B" Classes="Caption" VerticalAlignment="Center"/>
+                      </StackPanel>
+                      <ItemsControl Name="PresetDots" ItemsSource="{Binding PresetDots}"
+                                    IsVisible="{Binding IsPresetLight}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="4"/>
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="sys:Boolean">
+                            <Ellipse Classes="Led" Classes.on="{Binding}"/>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <Ellipse Classes="Led" Opacity="0.4" IsVisible="{Binding HasNoLight}"/>
                     </Panel>
+
+                    <Button Name="MenuButton" Grid.Column="3" Classes="Icon" ToolTip.Tip="More options">
+                      <PathIcon Data="{StaticResource Icon.More}" Width="14" Height="14"/>
+                      <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                          <MenuItem Name="MoveUpItem" Header="Move up" Command="{Binding MoveUpCommand}"/>
+                          <MenuItem Name="MoveDownItem" Header="Move down" Command="{Binding MoveDownCommand}"/>
+                          <Separator/>
+                          <MenuItem Name="ResetItem" Header="Reset" Command="{Binding ResetCommand}"/>
+                          <MenuItem Name="RemoveLastItem" Header="Remove last button"
+                                    Command="{Binding RemoveLastCommand}" IsVisible="{Binding IsLast}"/>
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                    <Button Grid.Column="4" Classes="Icon" Focusable="False"
+                            Command="{Binding ToggleExpandedCommand}">
+                      <Panel>
+                        <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
+                                  IsVisible="{Binding !IsExpanded}"/>
+                        <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                                  IsVisible="{Binding IsExpanded}"/>
+                      </Panel>
+                    </Button>
                   </Grid>
-                </Button>
 
-                <!-- Collapsible body -->
-                <StackPanel Name="Body" Spacing="{StaticResource SpaceS}" IsVisible="{Binding IsExpanded}">
+                  <Border Name="Body" Classes="CardBody" IsVisible="{Binding IsExpanded}">
+                    <StackPanel Spacing="12">
+                      <controls:ActionRow Name="PressRow" DataContext="{Binding Press}"/>
+                      <controls:ActionRow Name="DoubleRow" DataContext="{Binding DoublePress}"/>
+                      <controls:ActionRow Name="HoldRow" DataContext="{Binding Hold}"/>
 
-                  <controls:PressActionRow Name="SinglePressRow" Label="Single Press"
-                                           DataContext="{Binding SinglePress}"
-                                           DeviceNames="{Binding $parent[Border].((vm:ButtonItemViewModel)DataContext).OutputDeviceNames}"/>
-                  <controls:PressActionRow Name="DoublePressRow" Label="Double Press"
-                                           DataContext="{Binding DoublePress}"
-                                           DeviceNames="{Binding $parent[Border].((vm:ButtonItemViewModel)DataContext).OutputDeviceNames}"/>
-                  <controls:PressActionRow Name="LongPressRow" Label="Long Press"
-                                           DataContext="{Binding LongPress}"
-                                           DeviceNames="{Binding $parent[Border].((vm:ButtonItemViewModel)DataContext).OutputDeviceNames}"/>
+                      <Border Name="LightLine" Background="{DynamicResource SubtleBrush}"
+                              CornerRadius="{StaticResource ControlCornerRadius}" Padding="12,8">
+                        <TextBlock Name="LightDescriptionText" Classes="Secondary" TextWrapping="Wrap"
+                                   Text="{Binding LightDescription, StringFormat='Controller light: {0}'}"/>
+                      </Border>
 
-                  <!-- Timing thresholds -->
-                  <StackPanel Orientation="Horizontal"
-                              Spacing="{StaticResource SpaceM}"
-                              Margin="0,4,0,0">
-                    <StackPanel Spacing="{StaticResource SpaceXs}">
-                      <TextBlock Text="Long press (ms)" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                      <NumericUpDown Name="LongPressBox"
-                                     Value="{Binding LongPressMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"
-                                     Minimum="100" Maximum="5000" FormatString="0" Width="160"/>
+                      <ToggleButton Name="AdvancedToggle" Classes="Advanced"
+                                    IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <TextBlock Text="Advanced"/>
+                          <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="10" Height="10"/>
+                        </StackPanel>
+                      </ToggleButton>
+
+                      <Border Name="AdvancedSection" Classes="Indent" IsVisible="{Binding IsAdvancedOpen}">
+                        <StackPanel Spacing="12">
+                          <Grid ColumnDefinitions="150,Auto,Auto">
+                            <TextBlock Text="Hold after" Classes="Secondary" VerticalAlignment="Center"/>
+                            <NumericUpDown Name="LongPressBox" Grid.Column="1" Width="140"
+                                           Minimum="200" Maximum="2000" Increment="50" FormatString="0"
+                                           Value="{Binding LongPressMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+                            <TextBlock Grid.Column="2" Text="ms" Classes="Caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                          </Grid>
+                          <Grid ColumnDefinitions="150,Auto,Auto">
+                            <TextBlock Text="Double-press window" Classes="Secondary" VerticalAlignment="Center"/>
+                            <NumericUpDown Name="DoublePressBox" Grid.Column="1" Width="140"
+                                           Minimum="100" Maximum="1000" Increment="50" FormatString="0"
+                                           Value="{Binding DoublePressWindowMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+                            <TextBlock Grid.Column="2" Text="ms" Classes="Caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                          </Grid>
+                          <TextBlock Classes="Caption" Text="Timing and position are shared by every preset."/>
+                        </StackPanel>
+                      </Border>
                     </StackPanel>
-                    <StackPanel Spacing="{StaticResource SpaceXs}">
-                      <TextBlock Text="Double-press window (ms)" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                      <NumericUpDown Name="DoublePressBox"
-                                     Value="{Binding DoublePressWindowMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"
-                                     Minimum="50" Maximum="2000" FormatString="0" Width="160"/>
-                    </StackPanel>
-                  </StackPanel>
-
+                  </Border>
                 </StackPanel>
-              </StackPanel>
+                <Border Classes="ActiveOutline"/>
+              </Panel>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>

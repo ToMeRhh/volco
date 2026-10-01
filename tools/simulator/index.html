@@ -74,6 +74,16 @@
                 <input id="autoReconnect" type="checkbox" class="accent-blue-500">
                 Auto-reconnect
             </label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-400">
+                Sliders
+                <input id="sliderCount" type="number" min="0" max="16" value="5"
+                    class="w-14 bg-gray-700 border border-gray-600 rounded px-2 py-1">
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-400">
+                Buttons
+                <input id="buttonCount" type="number" min="0" max="16" value="3"
+                    class="w-14 bg-gray-700 border border-gray-600 rounded px-2 py-1">
+            </label>
         </div>
 
         <div class="flex flex-col md:flex-row gap-12 justify-center items-start">
@@ -111,11 +121,15 @@
         const buttonsContainer = document.getElementById('buttonsContainer');
         const sliderTemplate = document.getElementById('sliderTemplate');
 
-        // LED state references
-        const leds = {
-            mute: [null, null],      // mute button 0, 1
-            device: [null, null]     // device selector LED 0, 1
-        };
+        const sliderCountInput = document.getElementById('sliderCount');
+        const buttonCountInput = document.getElementById('buttonCount');
+
+        // Per-button feedback display: { a, b, value } elements, indexed by button input number.
+        // The app sends 0x05 ButtonFeedback with a value per button: 0 = off, 1..N = on / choice N.
+        // A one-LED button lights for any non-zero value; an LED-pair button lights A for 1 and B
+        // for 2. The simulator shows both views: LED A lights for 1 (and any value but 2), LED B
+        // for 2, and the raw value is printed next to them.
+        let feedback = [];
 
         // Throttle helper — sends at most once per interval, always sends final value
         function throttle(fn, ms) {
@@ -136,74 +150,87 @@
             };
         }
 
-        // Create 5 sliders
-        for (let i = 0; i < 5; i++) {
-            const clone = sliderTemplate.content.cloneNode(true);
-            const slider = clone.querySelector('input');
-            const label = clone.querySelector('span');
-            const display = clone.querySelector('.value-display');
+        function buildSliders(count) {
+            slidersContainer.replaceChildren();
+            for (let i = 0; i < count; i++) {
+                const clone = sliderTemplate.content.cloneNode(true);
+                const slider = clone.querySelector('input');
+                const label = clone.querySelector('span');
+                const display = clone.querySelector('.value-display');
 
-            label.textContent = `S${i}`;
-            slider.dataset.index = i;
+                label.textContent = `S${i}`;
+                slider.dataset.index = i;
 
-            const throttledSend = throttle((val) => sendSlider(i, val), 20);
+                const throttledSend = throttle((val) => sendSlider(i, val), 20);
 
-            slider.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
-                display.textContent = val;
-                throttledSend(val);
-            });
+                slider.addEventListener('input', (e) => {
+                    const val = parseInt(e.target.value);
+                    display.textContent = val;
+                    throttledSend(val);
+                });
 
-            slidersContainer.appendChild(clone);
-        }
-
-        // Create buttons with LED indicators
-        const buttonDefs = [
-            { index: 0, label: 'Mute 0', ledType: 'mute', ledIndex: 0 },
-            { index: 1, label: 'Mute 1', ledType: 'mute', ledIndex: 1 },
-            { index: 2, label: 'Device Sel', ledType: 'device' },
-        ];
-
-        for (const def of buttonDefs) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'flex items-center gap-3';
-
-            const btn = document.createElement('button');
-            btn.className = 'w-28 h-12 bg-gray-700 hover:bg-gray-600 active:bg-blue-600 rounded-lg border border-gray-600 font-bold transition-all flex items-center justify-center text-sm';
-            btn.textContent = def.label;
-
-            btn.addEventListener('pointerdown', () => { btn.dataset.pressed = '1'; sendButton(def.index, 1); });
-            btn.addEventListener('pointerup', () => { btn.dataset.pressed = '0'; sendButton(def.index, 0); });
-            btn.addEventListener('pointerleave', () => {
-                if (btn.dataset.pressed === '1') {
-                    btn.dataset.pressed = '0';
-                    sendButton(def.index, 0);
-                }
-            });
-
-            wrapper.appendChild(btn);
-
-            if (def.ledType === 'mute') {
-                const led = document.createElement('div');
-                led.className = 'led led-off';
-                led.title = 'Mute LED';
-                wrapper.appendChild(led);
-                leds.mute[def.ledIndex] = led;
-            } else if (def.ledType === 'device') {
-                const ledContainer = document.createElement('div');
-                ledContainer.className = 'flex gap-1.5';
-                for (let d = 0; d < 2; d++) {
-                    const led = document.createElement('div');
-                    led.className = 'led led-off';
-                    led.title = `Device ${d}`;
-                    ledContainer.appendChild(led);
-                    leds.device[d] = led;
-                }
-                wrapper.appendChild(ledContainer);
+                slidersContainer.appendChild(clone);
             }
-
-            buttonsContainer.appendChild(wrapper);
         }
+
+        function buildButtons(count) {
+            buttonsContainer.replaceChildren();
+            feedback = [];
+            for (let index = 0; index < count; index++) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex items-center gap-3';
+
+                const btn = document.createElement('button');
+                btn.className = 'w-28 h-12 bg-gray-700 hover:bg-gray-600 active:bg-blue-600 rounded-lg border border-gray-600 font-bold transition-all flex items-center justify-center text-sm';
+                btn.textContent = `Button ${index}`;
+
+                btn.addEventListener('pointerdown', () => { btn.dataset.pressed = '1'; sendButton(index, 1); });
+                btn.addEventListener('pointerup', () => { btn.dataset.pressed = '0'; sendButton(index, 0); });
+                btn.addEventListener('pointerleave', () => {
+                    if (btn.dataset.pressed === '1') {
+                        btn.dataset.pressed = '0';
+                        sendButton(index, 0);
+                    }
+                });
+                wrapper.appendChild(btn);
+
+                const ledContainer = document.createElement('div');
+                ledContainer.className = 'flex items-center gap-1.5 text-xs text-gray-400';
+                const a = document.createElement('div');
+                a.className = 'led led-off';
+                a.title = 'LED A (lit for any value but 0 and 2)';
+                const b = document.createElement('div');
+                b.className = 'led led-off';
+                b.title = 'LED B (lit for value 2)';
+                const value = document.createElement('span');
+                value.className = 'font-mono w-6';
+                value.textContent = '0';
+                ledContainer.append('A', a, b, 'B', value);
+                wrapper.appendChild(ledContainer);
+
+                feedback[index] = { a, b, value };
+                buttonsContainer.appendChild(wrapper);
+            }
+        }
+
+        function showFeedback(index, value) {
+            const f = feedback[index];
+            if (!f) return;
+            f.a.className = value !== 0 && value !== 2 ? 'led led-on-green' : 'led led-off';
+            f.b.className = value === 2 ? 'led led-on-green' : 'led led-off';
+            f.value.textContent = String(value);
+        }
+
+        function clampCount(input) {
+            const n = Math.max(0, Math.min(16, parseInt(input.value) || 0));
+            input.value = n;
+            return n;
+        }
+
+        sliderCountInput.addEventListener('change', () => buildSliders(clampCount(sliderCountInput)));
+        buttonCountInput.addEventListener('change', () => buildButtons(clampCount(buttonCountInput)));
+        buildSliders(clampCount(sliderCountInput));
+        buildButtons(clampCount(buttonCountInput));
 
         connectBtn.addEventListener('click', () => {
             if (ws) {
@@ -239,9 +266,8 @@
             connectBtn.textContent = 'Connect';
             connectBtn.className = 'bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition-colors';
             ws = null;
-            // Reset LEDs on disconnect
-            for (const led of leds.mute) if (led) led.className = 'led led-off';
-            for (const led of leds.device) if (led) led.className = 'led led-off';
+            // Reset feedback on disconnect
+            for (let i = 0; i < feedback.length; i++) showFeedback(i, 0);
         }
 
         function connect() {
@@ -317,25 +343,14 @@
         }
 
         function handleServerMessage(payload) {
-            if (payload.length < 2) return;
+            if (payload.length < 1) return;
             const type = payload[0];
 
-            if (type === 0x03 && payload.length >= 3) {
-                // Mute state: button_index, mute_state
-                const btnIndex = payload[1];
-                const muted = payload[2] !== 0;
-                if (btnIndex < 2 && leds.mute[btnIndex]) {
-                    leds.mute[btnIndex].className = muted ? 'led led-on-red' : 'led led-off';
-                }
-            } else if (type === 0x04 && payload.length >= 2) {
-                // Active device: device_index
-                const deviceIndex = payload[1];
-                for (let d = 0; d < 2; d++) {
-                    if (leds.device[d]) {
-                        leds.device[d].className = (d === deviceIndex) ? 'led led-on-green' : 'led led-off';
-                    }
-                }
+            if (type === 0x05 && payload.length >= 3) {
+                // Button feedback: button_index, value
+                showFeedback(payload[1], payload[2]);
             }
+            // Anything else is not for the controller: ignore it, as the firmware does.
         }
 
         // ============ Outgoing messages ============
