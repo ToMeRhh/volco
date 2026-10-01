@@ -216,6 +216,7 @@ public class SliderProcessor : IDisposable
             // write is a documented no-op - but must NOT claim an OSD-worthy volume change below.
             // Defaults to true for Processes/Unmapped, which have no single "device" to be absent.
             bool deviceResolved = true;
+            bool isMuted = false;
 
             switch (sliderConfig.Type)
             {
@@ -224,7 +225,7 @@ public class SliderProcessor : IDisposable
                     AppLog.Debug($"[Slider] index={sliderIndex} type=Device device={sliderConfig.DeviceName} adc={value} vol={volume:F3}");
                     _audio.SetDeviceVolume(deviceRef, volume);
                     // TryGetDeviceState is an O(1) cached read, documented safe from any thread.
-                    deviceResolved = _audio.TryGetDeviceState(deviceRef, out _, out _);
+                    deviceResolved = _audio.TryGetDeviceState(deviceRef, out _, out isMuted);
                     break;
 
                 case SliderMappingType.Processes:
@@ -253,7 +254,7 @@ public class SliderProcessor : IDisposable
                     ? _audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName
                     : null;
                 var label = BuildSliderLabel(sliderConfig, currentOutput);
-                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, Muted: false, OsdKind.Volume));
+                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, Muted: isMuted, OsdKind.Volume));
             }
         }
     }

@@ -246,6 +246,33 @@ public class SliderProcessorTests
         Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
     }
 
+    [Fact]
+    public async Task DeviceSlider_MutedDevice_RaisesVolumeChangedWithMutedTrue()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "muted-dev", FriendlyName = "Headphones" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["muted-dev"] = (0.5f, true);
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var volumeTcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.VolumeChanged += (_, e) => volumeTcs.TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+
+        var completedVolume = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
+        Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a muted device slider");
+        var notification = await volumeTcs.Task;
+        Assert.True(notification.Muted, "Notification should have Muted = true for a muted device");
+    }
+
     // ── Fix D: GetLastLevel ──────────────────────────────────────────────────
 
     [Fact]

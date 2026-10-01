@@ -36,13 +36,15 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_VolumeKindWhileMuted_ShowsPercentWithMutedGlyph()
+    public void OsdViewModel_VolumeKindWhileMuted_ShowsMutedTextAndMutedGlyph()
     {
         var vm = new VolumeOsdViewModel();
         vm.Apply(new VolumeChangeNotification("Output", 0.5f, true, OsdKind.Volume));
 
-        Assert.Equal("50%", vm.ValueText);
+        Assert.Equal("Muted", vm.ValueText);
         Assert.Equal(OsdGlyph.Muted, vm.Glyph);
+        Assert.Equal(50, vm.Level, 1);
+        Assert.Equal(0.4, vm.LevelBarOpacity);
     }
 
     [Fact]
