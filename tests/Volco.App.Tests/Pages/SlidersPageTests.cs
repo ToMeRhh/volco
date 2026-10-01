@@ -105,7 +105,7 @@ public class SlidersPageTests
         var (page, rig, vm) = Show(c => c.Sliders[0].Type = SliderMappingType.Processes);
         using var _ = rig; using var __ = vm;
         var box = All<AutoCompleteBox>(page, "ProcessBox")[0];
-        var window = (Window)page.GetVisualRoot()!;
+        var window = (Window)TopLevel.GetTopLevel(page)!;
 
         // Real commit path: type, let the dropdown populate, arrow to the suggestion, press Enter.
         box.Focus();
