@@ -223,6 +223,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         SetActivePreset(presets[(index + 1) % presets.Count].Id);
     }
 
+    /// <summary>Drops the current transport and starts a fresh one from the current connection
+    /// config (the settings UI's Reconnect button).</summary>
+    public void Reconnect()
+    {
+        if (IsDisposed || !_started) return;
+        AppLog.Info("Reconnect requested");
+        StartConnection();
+    }
+
     /// <summary>Runs one action now, as a button press would (the settings UI's Test button).
     /// Preset actions change the live preset.</summary>
     public void Execute(ButtonActionConfig action)

@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Controls.ActionRow"
+             x:DataType="vm:ActionSlotViewModel">
+  <Grid ColumnDefinitions="110,*">
+    <TextBlock Name="LabelText" Text="{Binding Label}" Classes="Secondary"
+               Margin="0,6,0,0" VerticalAlignment="Top"/>
+    <StackPanel Grid.Column="1" Spacing="8">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <ComboBox Name="ActionCombo" MinWidth="260"
+                  ItemsSource="{Binding Choices}"
+                  SelectedItem="{Binding SelectedChoice, Mode=TwoWay}">
+          <ComboBox.Styles>
+            <Style Selector="ComboBoxItem" x:DataType="vm:ActionChoice">
+              <Setter Property="IsEnabled" Value="{Binding IsSelectable}"/>
+            </Style>
+            <Style Selector="TextBlock.GroupHeader">
+              <Setter Property="FontSize" Value="11"/>
+              <Setter Property="FontWeight" Value="SemiBold"/>
+              <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+            </Style>
+          </ComboBox.Styles>
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ActionChoice">
+              <TextBlock Text="{Binding Name}" Classes.GroupHeader="{Binding IsHeader}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Name="TestButton" Content="Test" Command="{Binding TestCommand}"
+                IsEnabled="{Binding CanTest}" ToolTip.Tip="Run this action once now"/>
+      </StackPanel>
+
+      <Border Name="DeviceParams" Classes="Indent" IsVisible="{Binding NeedsDevice}">
+        <ComboBox Name="DeviceCombo" MinWidth="240" PlaceholderText="Choose a device"
+                  ItemsSource="{Binding DeviceNames}"
+                  SelectedItem="{Binding Device, Mode=TwoWay}"/>
+      </Border>
+
+      <Border Name="PairParams" Classes="Indent" IsVisible="{Binding NeedsPair}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="A" Classes="Caption" VerticalAlignment="Center"/>
+          <ComboBox Name="DeviceACombo" MinWidth="200" PlaceholderText="Choose a device"
+                    ItemsSource="{Binding DeviceNames}"
+                    SelectedItem="{Binding Device, Mode=TwoWay}"/>
+          <TextBlock Text="B" Classes="Caption" VerticalAlignment="Center" Margin="8,0,0,0"/>
+          <ComboBox Name="DeviceBCombo" MinWidth="200" PlaceholderText="Choose a device"
+                    ItemsSource="{Binding DeviceNames}"
+                    SelectedItem="{Binding DeviceB, Mode=TwoWay}"/>
+        </StackPanel>
+      </Border>
+
+      <Border Name="PresetParams" Classes="Indent" IsVisible="{Binding NeedsPreset}">
+        <ComboBox Name="PresetCombo" MinWidth="200" PlaceholderText="Choose a preset"
+                  ItemsSource="{Binding PresetChoices}"
+                  SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"/>
+      </Border>
+    </StackPanel>
+  </Grid>
+</UserControl>

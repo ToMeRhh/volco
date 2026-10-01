@@ -1,21 +1,25 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Volco.App.ViewModels;
 
 namespace Volco.App.Views.Pages;
 
 /// <summary>
-/// Slider mappings and tuning. Bindings do the work; the code-behind only configures each process
-/// <see cref="AutoCompleteBox"/>: it holds the live process names (<see cref="SliderItemViewModel.GetLiveProcessNames"/>),
-/// filters them on the last comma-separated token (<see cref="SliderItemViewModel.MatchesLastToken"/>), and replaces
-/// that token when a suggestion is chosen.
+/// Slider cards. Bindings do most of the work; the code-behind wires drag-to-reorder and the app
+/// chip input: an <see cref="AutoCompleteBox"/> suggesting live audio sessions, where Enter or a
+/// picked suggestion adds a chip and clears the box.
 /// </summary>
 public partial class SlidersPage : UserControl
 {
     public SlidersPage()
     {
         AvaloniaXamlLoader.Load(this);
+        var list = this.FindControl<ItemsControl>("SliderList")!;
+        Reorder = CardReorder.Attach(list, () => DataContext as IReorderableList);
     }
 
     public SlidersPage(SlidersViewModel viewModel) : this()
@@ -23,35 +27,24 @@ public partial class SlidersPage : UserControl
         DataContext = viewModel;
     }
 
-    /// <summary>
-    /// Text the box shows after <paramref name="suggestion"/> is chosen while the user had typed
-    /// <paramref name="typed"/>: earlier tokens are kept, the last one is replaced.
-    /// </summary>
-    internal static string ReplaceLastToken(string? typed, string? suggestion)
-    {
-        if (string.IsNullOrEmpty(suggestion)) return typed ?? "";
-        var parts = (typed ?? "").Split(',').Select(p => p.Trim()).ToList();
-        parts[^1] = suggestion;
-        return string.Join(", ", parts.Where(p => p.Length > 0));
-    }
+    internal CardReorder Reorder { get; }
 
     private void ProcessBox_Attached(object? sender, VisualTreeAttachmentEventArgs e)
     {
         if (sender is not AutoCompleteBox box) return;
 
-        // Built-in selection would put the bare suggestion in the box and drop earlier tokens.
-        box.TextSelector = (search, item) => ReplaceLastToken(search, item);
-
-        // The box filters the full live list itself (on the last token). Reassigning ItemsSource while
-        // a suggestion is being committed clears the dropdown selection, which makes the box revert
-        // the pick to the typed text. So the list is only refreshed when the user types (Populating,
-        // which never fires on a commit) or the dropdown is opened by key (DropDownOpening), and only
-        // when the set of names actually changed.
-        box.ItemFilter = (search, item) => SliderItemViewModel.MatchesLastToken(search, item as string);
+        // The box filters the full live list itself. Reassigning ItemsSource while a suggestion is
+        // being committed clears the dropdown selection and reverts the pick, so the list is only
+        // refreshed when the user types (Populating, which never fires on a commit) or opens the
+        // dropdown by key, and only when the set of names actually changed.
         box.Populating -= ProcessBox_Refresh;
         box.Populating += ProcessBox_Refresh;
         box.DropDownOpening -= ProcessBox_Refresh;
         box.DropDownOpening += ProcessBox_Refresh;
+        box.DropDownClosed -= ProcessBox_DropDownClosed;
+        box.DropDownClosed += ProcessBox_DropDownClosed;
+        box.RemoveHandler(KeyDownEvent, ProcessBox_KeyDown);
+        box.AddHandler(KeyDownEvent, ProcessBox_KeyDown, RoutingStrategies.Tunnel);
     }
 
     private void ProcessBox_Refresh(object? sender, EventArgs e)
@@ -67,5 +60,33 @@ public partial class SlidersPage : UserControl
         if (box.ItemsSource is IEnumerable<string> current
             && new HashSet<string>(current, StringComparer.OrdinalIgnoreCase).SetEquals(names)) return;
         box.ItemsSource = names;
+    }
+
+    /// <summary>A suggestion was picked (keyboard or pointer): it becomes a chip.</summary>
+    private void ProcessBox_DropDownClosed(object? sender, EventArgs e)
+    {
+        if (sender is not AutoCompleteBox box || box.SelectedItem is not string picked) return;
+        Commit(box, picked);
+    }
+
+    /// <summary>Enter with the dropdown closed adds whatever was typed.</summary>
+    private void ProcessBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not AutoCompleteBox box || box.IsDropDownOpen) return;
+        if (string.IsNullOrWhiteSpace(box.Text)) return;
+        Commit(box, box.Text);
+        e.Handled = true;
+    }
+
+    private static void Commit(AutoCompleteBox box, string? app)
+    {
+        if (box.DataContext is not SliderItemViewModel vm) return;
+        vm.AddApp(app);
+        // After the box has finished its own commit, so it does not put the text back.
+        Dispatcher.UIThread.Post(() =>
+        {
+            box.SelectedItem = null;
+            box.Text = "";
+        });
     }
 }

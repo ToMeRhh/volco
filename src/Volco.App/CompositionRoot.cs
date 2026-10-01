@@ -31,7 +31,6 @@ internal sealed class CompositionRoot : IDisposable
     private VolcoRuntime? _runtime;
     private SettingsWindow? _settingsWindow;
     private SettingsViewModel? _settingsViewModel;
-    private UpdateWindow? _updateWindow;
     private VolumeOsdWindow? _osd;
     private TrayIcon? _trayIcon;
     private EventHandler<VolumeChangeNotification>? _osdHandler;
@@ -167,29 +166,13 @@ internal sealed class CompositionRoot : IDisposable
         }
     }
 
-    /// <summary>Menu target for "Check for Updates...". Reuses one window and re-activates it.</summary>
+    /// <summary>Menu target for "Check for Updates…": the Updates panel lives on the General page.</summary>
     public void CheckForUpdates()
     {
-        AppLog.Info("ShowUpdates called");
-        try
-        {
-            if (_config is null) return;
-            if (_updateWindow is null)
-            {
-                _updateWindow = new UpdateWindow(_config);
-                _updateWindow.Closed += (_, _) => _updateWindow = null;
-                AppLog.Info("UpdateWindow created");
-            }
-            if (!_updateWindow.IsVisible) _updateWindow.Show();
-            _updateWindow.Activate();
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error($"ShowUpdates failed: {ex}");
-        }
+        AppLog.Info("Check for updates requested");
+        ShowSettings();
+        _settingsWindow?.ShowPage("general");
     }
-
-    internal UpdateWindow? UpdateWindow => _updateWindow;
 
     public void Shutdown()
     {
@@ -214,12 +197,6 @@ internal sealed class CompositionRoot : IDisposable
         {
             _osd = null;
             osdWindow.Close();
-        }
-
-        if (_updateWindow is { } uw)
-        {
-            _updateWindow = null;
-            uw.Close();
         }
 
         if (_settingsWindow is { } w)

@@ -15,7 +15,7 @@ public partial class VolcoApplication : Application
     /// <summary>Set by <see cref="VolcoAppHost.Run"/> before the framework starts.</summary>
     internal static Func<PlatformServices>? CreatePlatform { get; set; }
 
-    /// Replaces WinUI's App.RequestExit/App.IsExiting (used by UpdateWindow and SettingsWindow).
+    /// Replaces WinUI's App.RequestExit/App.IsExiting (used by the Updates panel and SettingsWindow).
     public static bool IsExiting => _isExiting;
 
     public static void RequestExit()

@@ -11,25 +11,31 @@
         ShowInTaskbar="False"
         Focusable="False"
         IsHitTestVisible="False">
+  <!-- Always dark, whatever the app theme (Osd* tokens): solid surface, hairline border. -->
   <Border Name="Root"
-          Background="#F0202020"
-          CornerRadius="12"
+          Background="{DynamicResource OsdBackgroundBrush}"
+          BorderBrush="{DynamicResource OsdBorderBrush}"
+          BorderThickness="1"
+          CornerRadius="8"
           IsHitTestVisible="False">
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
       <Panel Width="20" Height="20" VerticalAlignment="Center">
         <PathIcon Name="VolumeIcon" Data="{StaticResource Icon.Volume}" Width="20" Height="20"
-                  Foreground="White"/>
+                  Foreground="{DynamicResource OsdTextBrush}"/>
         <PathIcon Name="SpeakerIcon" Data="{StaticResource Icon.Speaker}" Width="20" Height="20"
-                  Foreground="White" IsVisible="False"/>
+                  Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
         <PathIcon Name="MutedIcon" Data="{StaticResource Icon.Muted}" Width="20" Height="20"
-                  Foreground="White" IsVisible="False"/>
+                  Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
+        <PathIcon Name="PresetIcon" Data="{StaticResource Icon.Preset}" Width="20" Height="20"
+                  Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
       </Panel>
       <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="12,0,0,0" Width="210">
-        <TextBlock Name="LabelText" Text="Output" Foreground="White" FontSize="12"
+        <TextBlock Name="LabelText" Text="Output" Foreground="{DynamicResource OsdTextBrush}" FontSize="12"
                    TextTrimming="CharacterEllipsis" MaxLines="1"/>
-        <ProgressBar Name="LevelBar" Minimum="0" Maximum="100" Value="0" Height="4" Margin="0,4,0,0"/>
+        <ProgressBar Name="LevelBar" Minimum="0" Maximum="100" Value="0" Height="4" MinHeight="4" Margin="0,4,0,0"
+                     Foreground="{DynamicResource OsdAccentBrush}" Background="{DynamicResource OsdBorderBrush}"/>
       </StackPanel>
-      <TextBlock Name="ValueText" Text="0%" Foreground="White" FontSize="13"
+      <TextBlock Name="ValueText" Text="0%" Foreground="{DynamicResource OsdTextBrush}" FontSize="13"
                  VerticalAlignment="Center" TextAlignment="Right" Width="52" Margin="12,0,4,0"/>
     </StackPanel>
   </Border>

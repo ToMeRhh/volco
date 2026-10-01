@@ -1,29 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Colors.axaml - semantic color tokens, theme-scoped. Values ported 1:1 from the WinUI Colors.xaml.
-    WinUI "Default" (dark) -> Avalonia "Dark"; "Light" -> "Light". Avalonia has no HighContrast
-    theme variant, so the WinUI HighContrast dictionary has no equivalent here.
+    Colors.axaml - the colour tokens of the UX redesign spec (docs/superpowers/specs/2026-10-01-volco-ux-redesign.md §3.7),
+    one set per theme. Contrast ratios against Surface are listed there; ColorTokenTests checks them.
+    The Step 2 names (SurfaceColor, SurfaceCardColor, SurfaceStrokeColor, TextPrimaryColor, IconAccentColor)
+    are kept as aliases so older views keep working.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ResourceDictionary.ThemeDictionaries>
-    <ResourceDictionary x:Key="Dark">
-      <Color x:Key="AccentColor">#FF1E64C8</Color>
-      <Color x:Key="SurfaceColor">#FF1C1C1C</Color>
-      <Color x:Key="SurfaceCardColor">#FF2D2D2D</Color>
-      <Color x:Key="SurfaceStrokeColor">#FF3D3D3D</Color>
-      <Color x:Key="TextPrimaryColor">#FFFFFFFF</Color>
-      <Color x:Key="TextSecondaryColor">#99FFFFFF</Color>
-      <Color x:Key="IconAccentColor">#FF5B8FD8</Color>
-    </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
-      <Color x:Key="AccentColor">#FF1E64C8</Color>
-      <Color x:Key="SurfaceColor">#FFF3F3F3</Color>
+      <Color x:Key="BgColor">#FFF6F6F7</Color>
+      <Color x:Key="SurfaceColor">#FFFFFFFF</Color>
+      <Color x:Key="SubtleColor">#FFEFEFF1</Color>
+      <Color x:Key="BorderColor">#FFE4E4E7</Color>
+      <Color x:Key="BorderStrongColor">#FF8E8E96</Color>
+      <Color x:Key="TextColor">#FF18181B</Color>
+      <Color x:Key="TextSecondaryColor">#FF52525B</Color>
+      <Color x:Key="TextTertiaryColor">#FF6B6B74</Color>
+      <Color x:Key="AccentColor">#FF3358C4</Color>
+      <Color x:Key="AccentSoftColor">#FFE6ECFA</Color>
+      <Color x:Key="OnAccentColor">#FFFFFFFF</Color>
+      <Color x:Key="SuccessColor">#FF1F7A45</Color>
+      <Color x:Key="WarningColor">#FF9A5B00</Color>
+      <Color x:Key="DangerColor">#FFB42318</Color>
+      <!-- Step 2 names, kept as aliases -->
       <Color x:Key="SurfaceCardColor">#FFFFFFFF</Color>
-      <Color x:Key="SurfaceStrokeColor">#FFD0D0D0</Color>
-      <Color x:Key="TextPrimaryColor">#FF1A1A1A</Color>
-      <Color x:Key="TextSecondaryColor">#99000000</Color>
-      <Color x:Key="IconAccentColor">#FF1E64C8</Color>
+      <Color x:Key="SurfaceStrokeColor">#FFE4E4E7</Color>
+      <Color x:Key="TextPrimaryColor">#FF18181B</Color>
+      <Color x:Key="IconAccentColor">#FF3358C4</Color>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="BgColor">#FF111113</Color>
+      <Color x:Key="SurfaceColor">#FF1A1A1D</Color>
+      <Color x:Key="SubtleColor">#FF222226</Color>
+      <Color x:Key="BorderColor">#FF2C2C31</Color>
+      <Color x:Key="BorderStrongColor">#FF6A6A73</Color>
+      <Color x:Key="TextColor">#FFF4F4F5</Color>
+      <Color x:Key="TextSecondaryColor">#FFA8A8B0</Color>
+      <Color x:Key="TextTertiaryColor">#FF8E8E97</Color>
+      <Color x:Key="AccentColor">#FF8AA6F2</Color>
+      <Color x:Key="AccentSoftColor">#FF232B40</Color>
+      <Color x:Key="OnAccentColor">#FF111113</Color>
+      <Color x:Key="SuccessColor">#FF5CC98A</Color>
+      <Color x:Key="WarningColor">#FFE7B04F</Color>
+      <Color x:Key="DangerColor">#FFF4877C</Color>
+      <!-- Step 2 names, kept as aliases -->
+      <Color x:Key="SurfaceCardColor">#FF1A1A1D</Color>
+      <Color x:Key="SurfaceStrokeColor">#FF2C2C31</Color>
+      <Color x:Key="TextPrimaryColor">#FFF4F4F5</Color>
+      <Color x:Key="IconAccentColor">#FF8AA6F2</Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
+
+  <!-- The OSD is always dark, whatever the app theme. -->
+  <Color x:Key="OsdBackgroundColor">#FF1A1A1D</Color>
+  <Color x:Key="OsdBorderColor">#FF2C2C31</Color>
+  <Color x:Key="OsdTextColor">#FFF4F4F5</Color>
+  <Color x:Key="OsdAccentColor">#FF8AA6F2</Color>
 </ResourceDictionary>

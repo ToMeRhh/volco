@@ -37,7 +37,7 @@ public class SettingsWindowTests
         window.Show();
         Assert.True(window.IsVisible);
         var host = window.FindControl<ContentControl>("PageHost")!;
-        Assert.IsType<ConnectionPage>(host.Content);
+        Assert.IsType<SlidersPage>(host.Content);
     }
 
     [AvaloniaFact]
@@ -50,28 +50,70 @@ public class SettingsWindowTests
 
         var expected = new[]
         {
-            typeof(ConnectionPage), typeof(SlidersPage), typeof(ButtonsPage),
-            typeof(OutputDevicesPage), typeof(GeneralPage),
+            typeof(SlidersPage), typeof(ButtonsPage), typeof(ConnectionPage), typeof(GeneralPage),
         };
-        Assert.Equal(5, nav.ItemCount);
+        Assert.Equal(4, nav.ItemCount);
         for (var i = 0; i < expected.Length; i++)
         {
             nav.SelectedIndex = i;
             Assert.IsType(expected[i], host.Content);
         }
         Assert.Equal(
-            new[] { "Connection", "Sliders", "Buttons", "Output Devices", "General" },
+            new[] { "Sliders", "Buttons", "Connection", "General" },
             nav.Items.Cast<NavItem>().Select(n => n.Label).ToArray());
     }
 
     [AvaloniaFact]
-    public void SettingsWindow_MinSize_Is680x560()
+    public void SettingsWindow_ShowPage_SwitchesByTag()
+    {
+        var window = Create();
+        window.Show();
+
+        window.ShowPage("general");
+
+        Assert.IsType<GeneralPage>(window.CurrentPage);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_FooterShowsTheConnectionState()
+    {
+        var window = Create();
+        window.Show();
+
+        Assert.Equal("Not connected", window.FindControl<TextBlock>("FooterText")!.Text);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_UndoMessage_ShowsAndUndoes()
+    {
+        var window = Create();
+        window.Show();
+        var vm = Assert.IsType<SettingsViewModel>(window.DataContext);
+        var toast = window.FindControl<Border>("Toast")!;
+        Assert.False(toast.IsVisible);
+        var undone = false;
+
+        vm.Toast.Show("Slider 2 reset", () => undone = true);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.True(toast.IsVisible);
+        Assert.Equal("Slider 2 reset", window.FindControl<TextBlock>("ToastText")!.Text);
+
+        window.FindControl<Button>("UndoButton")!.Command!.Execute(null);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.True(undone);
+        Assert.False(toast.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_Size()
     {
         var window = Create();
         Assert.Equal(680, window.MinWidth);
-        Assert.Equal(560, window.MinHeight);
-        Assert.Equal(720, window.Width);
-        Assert.Equal(600, window.Height);
+        Assert.Equal(520, window.MinHeight);
+        Assert.Equal(860, window.Width);
+        Assert.Equal(660, window.Height);
     }
 
     [Theory]

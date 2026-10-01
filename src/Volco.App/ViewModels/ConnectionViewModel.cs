@@ -28,10 +28,54 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ConnectionType _connectionType;
 
-    // Derived visibility helpers (bool; views convert to Visibility)
-    public bool IsSerial    => ConnectionType == ConnectionType.Serial;
-    public bool IsUdp       => ConnectionType == ConnectionType.Udp;
-    public bool IsWebSocket => ConnectionType == ConnectionType.WebSocket;
+    // One per segment of the "Connect using" control; setting one true selects it.
+    public bool IsSerial
+    {
+        get => ConnectionType == ConnectionType.Serial;
+        set { if (value) ConnectionType = ConnectionType.Serial; }
+    }
+
+    public bool IsUdp
+    {
+        get => ConnectionType == ConnectionType.Udp;
+        set { if (value) ConnectionType = ConnectionType.Udp; }
+    }
+
+    public bool IsWebSocket
+    {
+        get => ConnectionType == ConnectionType.WebSocket;
+        set { if (value) ConnectionType = ConnectionType.WebSocket; }
+    }
+
+    /// <summary>What the status panel says under the state, e.g. "COM3 · 115,200 baud".</summary>
+    public string TransportDetails => ConnectionType switch
+    {
+        ConnectionType.Serial => string.IsNullOrEmpty(ComPort)
+            ? "USB cable · no port selected"
+            : $"{ComPort} · {BaudRate.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} baud",
+        ConnectionType.Udp => $"Wi-Fi (UDP) · port {UdpListenPort}",
+        ConnectionType.WebSocket => $"WebSocket · port {WebSocketPort}",
+        _ => "",
+    };
+
+    public bool IsConnected => Status == ConnectionStatus.Connected;
+
+    /// <summary>The navigation footer's text: "Connected · COM3", "Not connected", …</summary>
+    public string FooterText => Status switch
+    {
+        ConnectionStatus.Connected => ConnectionType switch
+        {
+            ConnectionType.Serial => $"Connected · {ComPort}",
+            ConnectionType.Udp => "Connected · Wi-Fi",
+            _ => "Connected · WebSocket",
+        },
+        ConnectionStatus.Error => "Connection error",
+        _ => "Not connected",
+    };
+
+    /// <summary>Starts the connection again with the current settings.</summary>
+    [RelayCommand]
+    private void Reconnect() => _runtime.Reconnect();
 
     // ── ComboBox index helpers (x:Bind two-way to ComboBox.SelectedIndex) ─────
 
@@ -178,13 +222,19 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _runtime.ConnectionStatusChanged -= OnConnectionStatusChanged;
     }
 
+    partial void OnStatusChanged(ConnectionStatus value)
+    {
+        OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(FooterText));
+    }
+
     private void UpdateStatus(ConnectionStatus status)
     {
         Status = status;
         StatusText = status switch
         {
             ConnectionStatus.Connected    => "Connected",
-            ConnectionStatus.Disconnected => "Disconnected",
+            ConnectionStatus.Disconnected => "Not connected",
             ConnectionStatus.Error        => "Error",
             _                             => status.ToString()
         };
@@ -199,6 +249,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsUdp));
         OnPropertyChanged(nameof(IsWebSocket));
         OnPropertyChanged(nameof(ConnectionTypeIndex));
+        OnPropertyChanged(nameof(TransportDetails));
+        OnPropertyChanged(nameof(FooterText));
         Persist();
     }
 
@@ -210,6 +262,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // has no blank/"None" entry. Ignore it: no persist, no connection restart.
         if (string.IsNullOrEmpty(value)) return;
         _config.Config.Connection.Serial.ComPort = value;
+        OnPropertyChanged(nameof(TransportDetails));
+        OnPropertyChanged(nameof(FooterText));
         Persist();
     }
 
@@ -217,18 +271,21 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     {
         _config.Config.Connection.Serial.BaudRate = value;
         OnPropertyChanged(nameof(BaudRateIndex));
+        OnPropertyChanged(nameof(TransportDetails));
         Persist();
     }
 
     partial void OnUdpListenPortChanged(int value)
     {
         _config.Config.Connection.Udp.ListenPort = value;
+        OnPropertyChanged(nameof(TransportDetails));
         Persist();
     }
 
     partial void OnWebSocketPortChanged(int value)
     {
         _config.Config.Connection.WebSocket.Port = value;
+        OnPropertyChanged(nameof(TransportDetails));
         Persist();
     }
 

@@ -2,8 +2,9 @@
 <!--
     VolcoStyles.axaml - the one shared styles entry point. Include with
       <StyleInclude Source="avares://Volco.App/Styles/VolcoStyles.axaml"/>
-    Merges Colors, Tokens, Brushes, Icons and the SettingsCard theme, and ports Controls.xaml's
-    StackPanel styles as classes "SectionContainer" and "SettingsGroup".
+    Merges Colors, Tokens, Brushes, Icons and the SettingsCard theme, then styles the redesign's
+    components (spec §3.7): cards, the segmented choice, ghost / primary / icon buttons, chips,
+    the "Advanced" toggle, the activity flash and the navigation list.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -21,6 +22,7 @@
 
   <StyleInclude Source="avares://Volco.App/Styles/Typography.axaml"/>
 
+  <!-- ── Layout helpers (Step 2 names) ─────────────────────────────────── -->
   <Style Selector="StackPanel.SectionContainer">
     <Setter Property="Orientation" Value="Vertical"/>
     <Setter Property="Spacing" Value="16"/>
@@ -30,4 +32,251 @@
     <Setter Property="Orientation" Value="Vertical"/>
     <Setter Property="Spacing" Value="4"/>
   </Style>
+
+  <!-- ── Window and pages ──────────────────────────────────────────────── -->
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="FontSize" Value="13"/>
+  </Style>
+
+  <!-- ── Cards ─────────────────────────────────────────────────────────── -->
+  <Style Selector="Border.Card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}"/>
+  </Style>
+  <!-- "Not set up": no fill, a quieter outline and a muted title. -->
+  <Style Selector="Border.Card.unset">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+  </Style>
+  <Style Selector="Border.Card.unset TextBlock.CardTitleText">
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <!-- Activity flash: each card has a Border.ActiveOutline (accent, normally invisible) that
+       fades out once each time the card gets the "active" class. -->
+  <Style Selector="Border.ActiveOutline">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Border.Card.active Border.ActiveOutline">
+    <Style.Animations>
+      <Animation Duration="0:0:0.6" FillMode="None">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="1"/>
+        </KeyFrame>
+        <KeyFrame Cue="40%">
+          <Setter Property="Opacity" Value="1"/>
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0"/>
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector="Border.CardBody">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,1,0,0"/>
+    <Setter Property="Padding" Value="{StaticResource CardBodyPadding}"/>
+  </Style>
+  <!-- A plain panel (Connection, General). -->
+  <Style Selector="Border.Panel">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}"/>
+    <Setter Property="Padding" Value="{StaticResource CardPadding}"/>
+  </Style>
+  <!-- An indented block under a choice (action settings, "Advanced"). -->
+  <Style Selector="Border.Indent">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="2,0,0,0"/>
+    <Setter Property="Padding" Value="12,0,0,0"/>
+  </Style>
+
+  <!-- ── Buttons ───────────────────────────────────────────────────────── -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
+  </Style>
+  <Style Selector="Button.Primary">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+  </Style>
+  <Style Selector="Button.Primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+    <Setter Property="Opacity" Value="0.9"/>
+  </Style>
+  <Style Selector="Button.Ghost">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Padding" Value="6,4"/>
+  </Style>
+  <Style Selector="Button.Ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Button.Danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+  </Style>
+  <Style Selector="Button.Icon">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="6"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.Icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <!-- A card header: the whole row toggles the card. -->
+  <Style Selector="Button.CardHeader">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="4"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="Button.CardHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+
+  <!-- The drag handle: quiet until the card is hovered or the handle has focus. -->
+  <Style Selector="Border.Grip">
+    <Setter Property="Width" Value="22"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Cursor" Value="SizeNorthSouth"/>
+    <Setter Property="Focusable" Value="True"/>
+    <Setter Property="Opacity" Value="0.45"/>
+  </Style>
+  <Style Selector="Border.Card:pointerover Border.Grip, Border.Grip:focus">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <Style Selector="Border.Grip:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+  </Style>
+
+  <!-- ── Segmented choice (RadioButton.Segment inside Border.SegmentTrack) ── -->
+  <Style Selector="Border.SegmentTrack">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
+    <Setter Property="Padding" Value="3"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+  </Style>
+  <Style Selector="RadioButton.Segment">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="RadioButton">
+        <Border Name="PART_Segment"
+                Background="Transparent"
+                BorderBrush="Transparent"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="12,4">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.Segment:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="RadioButton.Segment:checked">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="RadioButton.Segment:checked /template/ Border#PART_Segment">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+  </Style>
+  <Style Selector="RadioButton.Segment:focus-visible /template/ Border#PART_Segment">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
+  <!-- ── "Advanced" toggle ─────────────────────────────────────────────── -->
+  <Style Selector="ToggleButton.Advanced">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="2"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="ToggleButton.Advanced:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="ToggleButton.Advanced:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <!-- ── Chips ─────────────────────────────────────────────────────────── -->
+  <Style Selector="Border.Chip">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
+    <Setter Property="Padding" Value="10,2,4,2"/>
+  </Style>
+  <Style Selector="Border.ChipBox">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
+    <Setter Property="Padding" Value="4"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  </Style>
+
+  <!-- ── Level bar and lights ──────────────────────────────────────────── -->
+  <Style Selector="ProgressBar.Level">
+    <Setter Property="Height" Value="4"/>
+    <Setter Property="MinHeight" Value="4"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="CornerRadius" Value="2"/>
+  </Style>
+  <Style Selector="Ellipse.Led">
+    <Setter Property="Width" Value="10"/>
+    <Setter Property="Height" Value="10"/>
+    <Setter Property="Stroke" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="Fill" Value="Transparent"/>
+  </Style>
+  <Style Selector="Ellipse.Led.on">
+    <Setter Property="Stroke" Value="{DynamicResource SuccessBrush}"/>
+    <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+  </Style>
+
+  <!-- ── Navigation ────────────────────────────────────────────────────── -->
+  <Style Selector="ListBox.Nav">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="ListBox.Nav ListBoxItem">
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
+    <Setter Property="Padding" Value="12,8"/>
+    <Setter Property="Margin" Value="0,1"/>
+  </Style>
+  <Style Selector="ListBox.Nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="ListBox.Nav ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <Style Selector="ListBox.Nav ListBoxItem Border.NavMarker">
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="ListBox.Nav ListBoxItem:selected Border.NavMarker">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+
 </Styles>

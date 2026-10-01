@@ -6,15 +6,15 @@ using Volco.Core.Config;
 using Volco.Core.Diagnostics;
 using Volco.Core.Updates;
 
-namespace Volco.App.Views;
+namespace Volco.App.Controls;
 
 /// <summary>
-/// Self-contained updater dialog: checks GitHub for a newer release (or the latest CI artifact
-/// when the advanced option is enabled), downloads it, and relaunches into the new build.
-/// Only reachable from the tray menu on release builds (see <see cref="BuildInfo.IsRelease"/>).
-/// Like the WinUI original it does not check on open; the user presses "Check for Updates".
+/// The General page's Updates panel (it was the separate update window): checks GitHub for a
+/// newer release (or the latest CI artifact when the advanced option is enabled), downloads it,
+/// and relaunches into the new build. Shown on release builds only (see
+/// <see cref="BuildInfo.IsRelease"/>). It does not check on open; the user presses "Check for updates".
 /// </summary>
-public partial class UpdateWindow : Window
+public partial class UpdatesPanel : UserControl
 {
     private readonly ConfigManager _configManager;
     private readonly GitHubUpdater _updater;
@@ -30,7 +30,7 @@ public partial class UpdateWindow : Window
     private UpdateInfo? _available;
 
     // Updater and installer are injectable so tests never touch the network.
-    public UpdateWindow(ConfigManager configManager, GitHubUpdater? updater = null, UpdateInstaller? installer = null)
+    public UpdatesPanel(ConfigManager configManager, GitHubUpdater? updater = null, UpdateInstaller? installer = null)
     {
         _configManager = configManager;
         _updater = updater ?? new GitHubUpdater();
@@ -51,6 +51,12 @@ public partial class UpdateWindow : Window
         var cfg = _configManager.Config.Updates;
         _useCiCheckBox.IsChecked = cfg.UseCiArtifact;
         _tokenBox.Text = cfg.GitHubToken ?? "";
+
+        var advanced = this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("AdvancedToggle")!;
+        var advancedSection = this.FindControl<Border>("AdvancedSection")!;
+        advanced.IsCheckedChanged += (_, _) => advancedSection.IsVisible = advanced.IsChecked == true;
+        // Already using development builds: show where that is set.
+        advanced.IsChecked = cfg.UseCiArtifact;
 
         // Subscribe after seeding so the initial IsChecked does not look like a user change.
         _useCiCheckBox.IsCheckedChanged += OnUseCiChanged;

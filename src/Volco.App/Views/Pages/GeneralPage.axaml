@@ -1,28 +1,41 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="using:Volco.App.Controls"
              xmlns:vm="using:Volco.App.ViewModels"
              x:Class="Volco.App.Views.Pages.GeneralPage"
              x:DataType="vm:GeneralViewModel">
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}"
-                Spacing="{StaticResource SpaceL}"
-                MaxWidth="{StaticResource SettingsCardMaxWidth}"
-                HorizontalAlignment="Left">
+                Spacing="{StaticResource SpaceM}"
+                MaxWidth="{StaticResource PageMaxWidth}">
 
-      <TextBlock Text="General Settings" Classes="SectionHeader"/>
+      <TextBlock Text="General" Classes="Title" Margin="0,8,0,4"/>
 
-      <controls:SettingsCard Header="Debug Logging"
-                             Description="Write verbose diagnostic output to the app log file">
-        <controls:SettingsCard.HeaderIcon>
-          <PathIcon Data="{StaticResource Icon.Debug}" Width="20" Height="20"
-                    Foreground="{DynamicResource IconAccentBrush}"/>
-        </controls:SettingsCard.HeaderIcon>
-        <ToggleSwitch Name="DebugToggle"
-                      IsChecked="{Binding DebugLogging, Mode=TwoWay}"
-                      OnContent="Enabled"
-                      OffContent="Disabled"/>
-      </controls:SettingsCard>
+      <!-- The Updates panel goes here on release builds (code-behind). -->
+      <ContentControl Name="UpdatesHost"/>
+
+      <Border Name="TroubleshootingPanel" Classes="Panel">
+        <StackPanel Spacing="14">
+          <TextBlock Text="Troubleshooting" Classes="Subtitle"/>
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Detailed logging"/>
+              <TextBlock Classes="Caption" Text="Writes extra detail to the log file."/>
+            </StackPanel>
+            <ToggleSwitch Name="DebugToggle" Grid.Column="1" VerticalAlignment="Center"
+                          IsChecked="{Binding DebugLogging, Mode=TwoWay}"
+                          OnContent="On" OffContent="Off"/>
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Log file"/>
+              <TextBlock Name="LogPathText" Classes="Caption" Text="{Binding LogPath}"
+                         TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <Button Name="OpenLogFolderButton" Grid.Column="1" VerticalAlignment="Center"
+                    Content="Open folder" Command="{Binding OpenLogFolderCommand}"/>
+          </Grid>
+        </StackPanel>
+      </Border>
 
     </StackPanel>
   </ScrollViewer>
