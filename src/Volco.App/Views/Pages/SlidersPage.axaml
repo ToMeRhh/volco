@@ -125,7 +125,7 @@
                               </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <AutoCompleteBox Name="ProcessBox" MinWidth="200" Margin="2"
-                                             Watermark="Add an app, e.g. spotify.exe"
+                                             PlaceholderText="Add an app, e.g. spotify.exe"
                                              MinimumPrefixLength="1"
                                              FilterMode="ContainsOrdinal"
                                              AttachedToVisualTree="ProcessBox_Attached"/>

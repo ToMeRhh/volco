@@ -24,7 +24,7 @@
       <Grid ColumnDefinitions="150,*">
         <TextBlock Text="GitHub token" Classes="Secondary" VerticalAlignment="Top" Margin="0,6,0,0"/>
         <StackPanel Grid.Column="1" Spacing="4">
-          <TextBox Name="TokenBox" PasswordChar="●" Watermark="ghp_…" MaxWidth="340" HorizontalAlignment="Left" MinWidth="280"/>
+          <TextBox Name="TokenBox" PasswordChar="●" PlaceholderText="ghp_…" MaxWidth="340" HorizontalAlignment="Left" MinWidth="280"/>
           <TextBlock Classes="Caption" TextWrapping="Wrap"
                      Text="Required: Volco's repository is private, so updates need a token with repo and actions:read access. It is stored in your local config."/>
         </StackPanel>
