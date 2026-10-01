@@ -1,7 +1,7 @@
 # Volco UX Redesign — Design Spec
 
 **Date:** 2026-10-01
-**Status:** Draft, awaiting user approval (Step 3, Task 1 of `docs/superpowers/plans/2026-09-29-step3-ux-redesign.md`)
+**Status:** Approved 2026-10-01 (Step 3, Task 1 of `docs/superpowers/plans/2026-09-29-step3-ux-redesign.md`)
 **Mockup:** `docs/superpowers/mockups/2026-10-01-ux-redesign-mockup.html`. Open it in a browser. It is the visual reference for this spec; where the two disagree, this spec wins.
 
 ## 0. Scope change from the Step 3 plan
