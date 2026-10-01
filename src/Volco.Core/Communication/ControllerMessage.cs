@@ -4,8 +4,9 @@ public enum MessageType : byte
 {
     Slider = 0x01,
     Button = 0x02,
-    MuteState = 0x03,
-    ActiveDevice = 0x04
+    // 0x03 (mute state) and 0x04 (active device) were retired in schema v3 / protocol v2.
+    /// <summary>Host → controller: what one button's indicator should show.</summary>
+    ButtonFeedback = 0x05
 }
 
 public enum ButtonState : byte
@@ -41,27 +42,5 @@ public class ButtonMessage : ControllerMessage
     {
         ButtonIndex = buttonIndex;
         State = state;
-    }
-}
-
-public class MuteStateMessage : ControllerMessage
-{
-    public int ButtonIndex { get; }
-    public bool IsMuted { get; }
-
-    public MuteStateMessage(int buttonIndex, bool isMuted) : base(MessageType.MuteState)
-    {
-        ButtonIndex = buttonIndex;
-        IsMuted = isMuted;
-    }
-}
-
-public class ActiveDeviceMessage : ControllerMessage
-{
-    public int DeviceIndex { get; }
-
-    public ActiveDeviceMessage(int deviceIndex) : base(MessageType.ActiveDevice)
-    {
-        DeviceIndex = deviceIndex;
     }
 }

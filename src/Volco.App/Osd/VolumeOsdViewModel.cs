@@ -31,18 +31,21 @@ internal sealed class VolumeOsdViewModel
     {
         var level = Math.Clamp(n.Level * 100.0, 0, 100);
 
-        var valueText = (n.Kind is OsdKind.Mute or OsdKind.Device) && n.Muted
+        var valueText = n.Kind == OsdKind.Preset ? ""
+            : (n.Kind is OsdKind.Mute or OsdKind.Device) && n.Muted
             ? "Muted"
             : $"{Math.Round(level, MidpointRounding.AwayFromZero):0}%";
+        // A preset switch has no level: "Preset: Gaming" with an empty bar until the OSD redesign.
+        var label = n.Kind == OsdKind.Preset ? $"Preset: {n.Label}" : n.Label;
 
         var glyph = n.Muted ? OsdGlyph.Muted
             : n.Kind == OsdKind.Device ? OsdGlyph.Speaker
             : OsdGlyph.Volume;
         var barOpacity = n.Muted ? 0.4 : 1.0;
 
-        var changed = Label != n.Label || Level != level || ValueText != valueText
+        var changed = Label != label || Level != level || ValueText != valueText
                       || Glyph != glyph || LevelBarOpacity != barOpacity;
-        Label = n.Label;
+        Label = label;
         Level = level;
         ValueText = valueText;
         Glyph = glyph;

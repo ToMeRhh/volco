@@ -28,16 +28,30 @@ public class ConfigManagerTests
                 new()
                 {
                     Index = 0,
-                    SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput },
-                    DoublePress = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice },
-                    LongPress = new ButtonActionConfig { Action = ButtonActionType.None }
+                    Actions =
+                    {
+                        [AppConfig.DefaultPresetId] = new ButtonBindingConfig
+                        {
+                            SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput },
+                            DoublePress = new ButtonActionConfig
+                            {
+                                Action = ButtonActionType.ToggleOutputDevice,
+                                Device = new DeviceRefConfig { FriendlyName = "Speakers" },
+                                DeviceB = new DeviceRefConfig { FriendlyName = "Headphones" },
+                            },
+                        },
+                        ["gaming"] = new ButtonBindingConfig
+                        {
+                            LongPress = new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "default" },
+                        },
+                    },
                 }
             },
-            OutputDevices = new OutputDevicesConfig
+            Presets =
             {
-                Device1 = new DeviceRefConfig { FriendlyName = "Speakers" },
-                Device2 = new DeviceRefConfig { FriendlyName = "Headphones" }
-            }
+                new PresetConfig { Id = AppConfig.DefaultPresetId, Name = "Default" },
+                new PresetConfig { Id = "gaming", Name = "Gaming" },
+            },
         };
 
         var options = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -50,8 +64,10 @@ public class ConfigManagerTests
         Assert.Equal(3, deserialized.Sliders.Count);
         Assert.Equal(SliderMappingType.Unmapped, deserialized.Sliders[2].Type);
         Assert.True(deserialized.Sliders[2].Invert);
-        Assert.Equal(ButtonActionType.MuteCurrentOutput, deserialized.Buttons[0].SinglePress.Action);
-        Assert.Equal("Headphones", deserialized.OutputDevices.Device2.FriendlyName);
+        Assert.Equal(ButtonActionType.MuteCurrentOutput, deserialized.Buttons[0].Default().SinglePress.Action);
+        Assert.Equal("Headphones", deserialized.Buttons[0].Default().DoublePress.DeviceB!.FriendlyName);
+        Assert.Equal("default", deserialized.Buttons[0].BindingFor("gaming").LongPress.PresetId);
+        Assert.Equal(new[] { "Default", "Gaming" }, deserialized.Presets.Select(p => p.Name));
     }
 
     [Fact]
@@ -83,6 +99,17 @@ public class ConfigManagerTests
             Assert.Equal(i, config.Sliders[i].Index);
         for (int i = 0; i < 3; i++)
             Assert.Equal(i, config.Buttons[i].Index);
+    }
+
+    [Fact]
+    public void AppConfig_DefaultConfig_IsNotSetUp_AndHasOnePreset()
+    {
+        var config = AppConfig.CreateDefault();
+
+        Assert.All(config.Sliders, s => Assert.Equal(SliderMappingType.None, s.Type));
+        Assert.All(config.Buttons, b => Assert.Empty(b.Actions));
+        var preset = Assert.Single(config.Presets);
+        Assert.Equal(AppConfig.DefaultPresetId, preset.Id);
     }
 }
 
@@ -120,14 +147,18 @@ public class ConfigManagerLoadSaveTests : IDisposable
         var manager = new ConfigManager(_configPath);
         manager.Load();
         manager.Config.Connection.Type = ConnectionType.Udp;
-        manager.Config.OutputDevices.Device1 = new DeviceRefConfig { FriendlyName = "Speakers" };
+        manager.Config.Buttons[1].Default().SinglePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.SetOutputDevice,
+            Device = new DeviceRefConfig { FriendlyName = "Speakers" },
+        };
         manager.Save();
 
         var manager2 = new ConfigManager(_configPath);
         manager2.Load();
 
         Assert.Equal(ConnectionType.Udp, manager2.Config.Connection.Type);
-        Assert.Equal("Speakers", manager2.Config.OutputDevices.Device1.FriendlyName);
+        Assert.Equal("Speakers", manager2.Config.Buttons[1].Default().SinglePress.Device!.FriendlyName);
     }
 
     [Fact]
@@ -219,14 +250,14 @@ public class ConfigManagerLoadSaveTests : IDisposable
 
         var cm = new ConfigManager(path);
         cm.Load();
-        cm.Config.OutputDevices.Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
+        cm.Config.Sliders[0].Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
         cm.Save();
 
         var reloaded = new ConfigManager(path);
         reloaded.Load();
 
-        Assert.Equal("dev-1", reloaded.Config.OutputDevices.Device1.Id);
-        Assert.Equal("Speakers", reloaded.Config.OutputDevices.Device1.FriendlyName);
+        Assert.Equal("dev-1", reloaded.Config.Sliders[0].Device!.Id);
+        Assert.Equal("Speakers", reloaded.Config.Sliders[0].Device!.FriendlyName);
     }
 
     [Fact]
@@ -264,10 +295,12 @@ public class ConfigManagerLoadSaveTests : IDisposable
         // CurrentSchemaVersion — that's what lets ConfigMigrator detect it.
         Assert.Equal(0, cm.Config.SchemaVersion);
 
-        // The device string was read losslessly into the id-less v2 shape.
-        Assert.Equal("Speakers", cm.Config.OutputDevices.Device1.FriendlyName);
-        Assert.Equal("", cm.Config.OutputDevices.Device1.Id);
-        Assert.Equal("Headphones", cm.Config.OutputDevices.Device2.FriendlyName);
+        // The global toggle pair's bare strings were read losslessly into the id-less shape, on
+        // the toggle action itself (schema v3 keeps the pair on the action).
+        var toggle = cm.Config.Buttons[0].Default().DoublePress;
+        Assert.Equal("Speakers", toggle.Device!.FriendlyName);
+        Assert.Equal("", toggle.Device.Id);
+        Assert.Equal("Headphones", toggle.DeviceB!.FriendlyName);
 
         // Regression guard: everything else in the real config must survive — the old
         // blanket catch used to replace the WHOLE config with CreateDefault() here.
@@ -275,27 +308,25 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(55555, cm.Config.Connection.Udp.ListenPort);
         Assert.True(cm.Config.DebugLogging);
 
-        // Load() pads sparse lists up to the minimum 5 sliders / 3 buttons (Step 5's defensive
-        // behavior) — the two real sliders and one real button from the file must still be the
-        // ones at index 0/1/0, unmolested; the padding is additive, not destructive.
-        Assert.True(cm.Config.Sliders.Count >= 2);
+        // Schema v3: the number of controls is the user's, so a short list is not padded.
+        Assert.Equal(2, cm.Config.Sliders.Count);
         Assert.Equal(SliderMappingType.Processes, cm.Config.Sliders[0].Type);
         Assert.Equal(new List<string> { "spotify.exe" }, cm.Config.Sliders[0].Processes);
         Assert.Equal(SliderMappingType.Device, cm.Config.Sliders[1].Type);
 
-        Assert.True(cm.Config.Buttons.Count >= 1);
-        Assert.Equal(ButtonActionType.MuteSpecificDevice, cm.Config.Buttons[0].SinglePress.Action);
-        Assert.Equal(ButtonActionType.ToggleOutputDevice, cm.Config.Buttons[0].DoublePress.Action);
-        Assert.Equal(ButtonActionType.None, cm.Config.Buttons[0].LongPress.Action);
+        Assert.Single(cm.Config.Buttons);
+        Assert.Equal(ButtonActionType.MuteSpecificDevice, cm.Config.Buttons[0].Default().SinglePress.Action);
+        Assert.Equal(ButtonActionType.ToggleOutputDevice, cm.Config.Buttons[0].Default().DoublePress.Action);
+        Assert.Equal(ButtonActionType.None, cm.Config.Buttons[0].Default().LongPress.Action);
     }
 
     [Fact]
     public void DeviceRefConfig_WrittenAsObject_ReadsBackAsObject()
     {
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var config = new OutputDevicesConfig
+        var config = new ButtonActionConfig
         {
-            Device1 = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" }
+            Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" }
         };
 
         var json = JsonSerializer.Serialize(config, options);
@@ -303,14 +334,140 @@ public class ConfigManagerLoadSaveTests : IDisposable
         // Written as a v2 object (id + friendlyName), never as a bare string.
         using (var doc = JsonDocument.Parse(json))
         {
-            var device1 = doc.RootElement.GetProperty("device1");
-            Assert.Equal(JsonValueKind.Object, device1.ValueKind);
-            Assert.Equal("dev-1", device1.GetProperty("id").GetString());
-            Assert.Equal("Speakers", device1.GetProperty("friendlyName").GetString());
+            var device = doc.RootElement.GetProperty("device");
+            Assert.Equal(JsonValueKind.Object, device.ValueKind);
+            Assert.Equal("dev-1", device.GetProperty("id").GetString());
+            Assert.Equal("Speakers", device.GetProperty("friendlyName").GetString());
         }
 
-        var roundTripped = JsonSerializer.Deserialize<OutputDevicesConfig>(json, options)!;
-        Assert.Equal("dev-1", roundTripped.Device1.Id);
-        Assert.Equal("Speakers", roundTripped.Device1.FriendlyName);
+        var roundTripped = JsonSerializer.Deserialize<ButtonActionConfig>(json, options)!;
+        Assert.Equal("dev-1", roundTripped.Device!.Id);
+        Assert.Equal("Speakers", roundTripped.Device.FriendlyName);
+    }
+
+    // ── Schema v3 ────────────────────────────────────────────────────────────
+
+    /// <summary>A v2 config.json as the v2 app wrote it (camelCase, device objects, global toggle pair).</summary>
+    internal const string V2Json = """
+    {
+      "schemaVersion": 2,
+      "connection": { "type": "Serial", "serial": { "comPort": "COM3", "baudRate": 115200 } },
+      "sliders": [
+        { "index": 0, "type": "Device", "processes": [], "device": null, "invert": false, "curve": "Linear", "deadZonePercent": 0, "smoothingFactor": 0 },
+        { "index": 1, "type": "Processes", "processes": [ "spotify.exe" ], "device": null, "invert": false, "curve": "Logarithmic", "deadZonePercent": 0.02, "smoothingFactor": 0.2 },
+        { "index": 2, "type": "Unmapped", "processes": [], "device": null },
+        { "index": 3, "type": "Device", "processes": [], "device": { "id": "dev-2", "friendlyName": "Headphones" } },
+        { "index": 4, "type": "Processes", "processes": [ "discord.exe" ], "device": null }
+      ],
+      "buttons": [
+        { "index": 0, "singlePress": { "action": "MuteCurrentInput", "device": null },
+                      "doublePress": { "action": "None", "device": null },
+                      "longPress": { "action": "None", "device": null },
+                      "longPressMs": 600, "doublePressWindowMs": 250 },
+        { "index": 1, "singlePress": { "action": "MuteSpecificDevice", "device": { "id": "dev-1", "friendlyName": "Speakers" } },
+                      "doublePress": { "action": "None", "device": null },
+                      "longPress": { "action": "None", "device": null },
+                      "longPressMs": 500, "doublePressWindowMs": 300 },
+        { "index": 2, "singlePress": { "action": "ToggleOutputDevice", "device": null },
+                      "doublePress": { "action": "None", "device": null },
+                      "longPress": { "action": "SetOutputDevice", "device": { "id": "dev-2", "friendlyName": "Headphones" } },
+                      "longPressMs": 500, "doublePressWindowMs": 300 }
+      ],
+      "outputDevices": { "device1": { "id": "dev-1", "friendlyName": "Speakers" },
+                         "device2": { "id": "dev-2", "friendlyName": "Headphones" } },
+      "updates": { "gitHubToken": "ghp_x", "useCiArtifact": true },
+      "debugLogging": true
+    }
+    """;
+
+    [Fact]
+    public void Load_V2Config_MigratesToV3_WithoutLosingAnything()
+    {
+        File.WriteAllText(_configPath, V2Json);
+
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+        var c = cm.Config;
+
+        Assert.Equal(3, c.SchemaVersion);
+        Assert.Equal(ConnectionType.Serial, c.Connection.Type);
+        Assert.Equal("COM3", c.Connection.Serial.ComPort);
+        Assert.True(c.DebugLogging);
+        Assert.Equal("ghp_x", c.Updates.GitHubToken);
+        Assert.True(c.Updates.UseCiArtifact);
+
+        Assert.Equal(5, c.Sliders.Count);
+        Assert.Equal(SliderMappingType.Unmapped, c.Sliders[2].Type);
+        Assert.Equal("dev-2", c.Sliders[3].Device!.Id);
+        Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
+        Assert.Equal(0.2, c.Sliders[1].SmoothingFactor);
+
+        var preset = Assert.Single(c.Presets);
+        Assert.Equal(AppConfig.DefaultPresetId, preset.Id);
+
+        Assert.Equal(3, c.Buttons.Count);
+        Assert.Equal(600, c.Buttons[0].LongPressMs);
+        Assert.Equal(250, c.Buttons[0].DoublePressWindowMs);
+        Assert.Equal(ButtonActionType.MuteCurrentInput, c.Buttons[0].Default().SinglePress.Action);
+        Assert.Equal("dev-1", c.Buttons[1].Default().SinglePress.Device!.Id);
+
+        // The global toggle pair moved onto the toggle action.
+        var toggle = c.Buttons[2].Default().SinglePress;
+        Assert.Equal(ButtonActionType.ToggleOutputDevice, toggle.Action);
+        Assert.Equal("dev-1", toggle.Device!.Id);
+        Assert.Equal("dev-2", toggle.DeviceB!.Id);
+        Assert.Equal("dev-2", c.Buttons[2].Default().LongPress.Device!.Id);
+    }
+
+    [Fact]
+    public void Load_V2Config_WritesV3ToDisk_AndKeepsAV2Backup()
+    {
+        File.WriteAllText(_configPath, V2Json);
+
+        new ConfigManager(_configPath).Load();
+
+        var onDisk = File.ReadAllText(_configPath);
+        Assert.Contains("\"schemaVersion\": 3", onDisk);
+        Assert.DoesNotContain("outputDevices", onDisk);
+        Assert.Contains("\"actions\"", onDisk);
+
+        var backup = Path.Combine(_tempDir, "config.v2.bak");
+        Assert.Equal(V2Json, File.ReadAllText(backup));
+
+        // Loading the migrated file again is a no-op.
+        var again = new ConfigManager(_configPath);
+        again.Load();
+        Assert.Equal("dev-2", again.Config.Buttons[2].Default().SinglePress.DeviceB!.Id);
+        Assert.Equal(V2Json, File.ReadAllText(backup));
+    }
+
+    [Fact]
+    public void Save_RewritesIndexToListPosition()
+    {
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+        var moved = cm.Config.Sliders[4];
+        cm.Config.Sliders.RemoveAt(4);
+        cm.Config.Sliders.Insert(0, moved);
+        cm.Save();
+
+        var reloaded = new ConfigManager(_configPath);
+        reloaded.Load();
+        for (int i = 0; i < reloaded.Config.Sliders.Count; i++)
+            Assert.Equal(i, reloaded.Config.Sliders[i].Index);
+        Assert.Contains("\"index\": 0", File.ReadAllText(_configPath));
+    }
+
+    [Fact]
+    public void Load_V3ConfigWithNoPresets_GetsTheDefaultPreset()
+    {
+        File.WriteAllText(_configPath, """{ "schemaVersion": 3, "sliders": [], "buttons": [ { "index": 0 } ], "presets": [] }""");
+
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+
+        Assert.Single(cm.Config.Presets);
+        Assert.Empty(cm.Config.Sliders);
+        Assert.NotNull(cm.Config.Buttons[0].Actions);
     }
 }

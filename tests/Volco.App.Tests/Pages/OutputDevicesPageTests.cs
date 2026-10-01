@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Audio;
+using Volco.Core.Config;
 using Volco.Core.Tests.Audio;
 using Xunit;
 
@@ -24,6 +25,8 @@ public class OutputDevicesPageTests
             },
         };
         var rig = new TestRig(engine);
+        // Schema v3 keeps the pair on each toggle action; this page edits every toggle action.
+        rig.Config.Config.Buttons[2].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice };
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var page = new OutputDevicesPage(vm.OutputDevices);
         new Window { Content = page }.Show();
@@ -48,8 +51,9 @@ public class OutputDevicesPageTests
 
         // Picking writes through to the config (id and name).
         Combo(page, "Device1Combo").SelectedItem = "Headphones";
-        Assert.Equal("dev-2", rig.Config.Config.OutputDevices.Device1.Id);
-        Assert.Equal("Headphones", rig.Config.Config.OutputDevices.Device1.FriendlyName);
+        var toggle = rig.Config.Config.Buttons[2].Default().SinglePress;
+        Assert.Equal("dev-2", toggle.Device!.Id);
+        Assert.Equal("Headphones", toggle.Device.FriendlyName);
     }
 
     [AvaloniaFact]

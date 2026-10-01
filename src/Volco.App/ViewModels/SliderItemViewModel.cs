@@ -65,15 +65,19 @@ public partial class SliderItemViewModel : ObservableObject
             SliderMappingType.Processes => 0,
             SliderMappingType.Device    => 1,
             SliderMappingType.Unmapped  => 2,
-            _                           => 1,
+            _                           => -1, // None ("Not set up"): nothing selected
         };
-        set => MappingType = value switch
+        set
         {
-            0 => SliderMappingType.Processes,
-            1 => SliderMappingType.Device,
-            2 => SliderMappingType.Unmapped,
-            _ => SliderMappingType.Device,
-        };
+            if (value < 0) return; // a cleared selection never un-sets a slider
+            MappingType = value switch
+            {
+                0 => SliderMappingType.Processes,
+                1 => SliderMappingType.Device,
+                2 => SliderMappingType.Unmapped,
+                _ => SliderMappingType.Device,
+            };
+        }
     }
 
     /// <summary>

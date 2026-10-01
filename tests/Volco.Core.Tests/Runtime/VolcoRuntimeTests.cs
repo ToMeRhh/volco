@@ -72,8 +72,9 @@ public sealed class VolcoRuntimeTests : IDisposable
         lock (_connections) return _connections[index];
     }
 
-    /// <summary>A loaded ConfigManager over a fresh temp dir, with buttons 0/1 muting the
-    /// default output/input, the toggle pair set to speakers/headphones, and a short
+    /// <summary>A loaded ConfigManager over a fresh temp dir, with every slider on the default
+    /// output, buttons 0/1 muting the default output/input, every toggle action's pair defaulting
+    /// to speakers/headphones, and a short
     /// double-press window so single presses classify quickly.</summary>
     private ConfigManager NewConfig(Action<AppConfig>? configure = null)
     {
@@ -82,15 +83,25 @@ public sealed class VolcoRuntimeTests : IDisposable
         _tempDirs.Add(dir);
 
         var cm = new ConfigManager(Path.Combine(dir, "config.json"));
-        cm.Load(); // no file -> defaults (schema v2, 5 sliders, 3 buttons)
+        cm.Load(); // no file -> defaults (5 sliders, 3 buttons, all not set up)
 
         var c = cm.Config;
-        c.Buttons[0].SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
-        c.Buttons[1].SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+        // The schema v2 defaults these tests were written against: every slider drives the default
+        // output device.
+        foreach (var slider in c.Sliders) slider.Type = SliderMappingType.Device;
+        c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
+        c.Buttons[1].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
         foreach (var b in c.Buttons) b.DoublePressWindowMs = 30;
-        c.OutputDevices.Device1 = new DeviceRefConfig { Id = Speakers, FriendlyName = "Speakers" };
-        c.OutputDevices.Device2 = new DeviceRefConfig { Id = Headphones, FriendlyName = "Headphones" };
         configure?.Invoke(c);
+
+        // Schema v3 keeps the toggle pair on the action: give every toggle action that names no
+        // devices the speakers/headphones pair the old global setting carried.
+        foreach (var action in c.Buttons.SelectMany(b => b.Actions.Values).SelectMany(x => x.All()))
+        {
+            if (action.Action != ButtonActionType.ToggleOutputDevice) continue;
+            action.Device ??= new DeviceRefConfig { Id = Speakers, FriendlyName = "Speakers" };
+            action.DeviceB ??= new DeviceRefConfig { Id = Headphones, FriendlyName = "Headphones" };
+        }
         return cm;
     }
 
@@ -211,8 +222,8 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig(c =>
         {
-            c.Buttons[0].DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
-            c.Buttons[0].DoublePressWindowMs = 60;
+            c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+            c.Buttons[0].Default().DoublePressWindowMs = 60;
         });
         StartRuntime(config);
         var connection = Connection(0);
@@ -319,7 +330,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     [InlineData("absent-id", "Unplugged Headset")]
     public void MutePress_UnresolvableDevice_NeverShowsOsd(string id, string friendlyName)
     {
-        var config = NewConfig(c => c.Buttons[0].SinglePress = new ButtonActionConfig
+        var config = NewConfig(c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig
         {
             Action = ButtonActionType.MuteSpecificDevice,
             Device = new DeviceRefConfig { Id = id, FriendlyName = friendlyName },
@@ -355,7 +366,7 @@ public sealed class VolcoRuntimeTests : IDisposable
 
     private (VolcoRuntime Runtime, Recorder<VolumeChangeNotification> Osd) StartWithButton0(ButtonActionConfig action)
     {
-        var runtime = StartRuntime(NewConfig(c => c.Buttons[0].SinglePress = action));
+        var runtime = StartRuntime(NewConfig(c => c.Buttons[0].Default().SinglePress = action));
         var osd = new Recorder<VolumeChangeNotification>();
         runtime.VolumeChanged += osd.Handler;
         return (runtime, osd);
@@ -510,8 +521,8 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig(c =>
         {
-            c.Buttons[0].SinglePress = SetDevice("");   // unconfigured (no id, no name, so HealDeviceIds cannot fill it): a no-op
-            c.Buttons[2].SinglePress = SetDevice(Headphones, "Headphones");
+            c.Buttons[0].Default().SinglePress = SetDevice("");   // unconfigured (no id, no name, so HealDeviceIds cannot fill it): a no-op
+            c.Buttons[2].Default().SinglePress = SetDevice(Headphones, "Headphones");
         });
         var runtime = StartRuntime(config);
         var osd = new Recorder<VolumeChangeNotification>();
@@ -535,8 +546,8 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig(c =>
         {
-            c.Buttons[0].SinglePress = SetDevice(Headphones, "Headphones");
-            c.Buttons[2].SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+            c.Buttons[0].Default().SinglePress = SetDevice(Headphones, "Headphones");
+            c.Buttons[2].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
         });
         var runtime = StartRuntime(config);
         var osd = new Recorder<VolumeChangeNotification>();
@@ -562,8 +573,8 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig(c =>
         {
-            c.Buttons[0].SinglePress = SetDevice("absent-id", "Unplugged Headset");
-            c.Buttons[2].SinglePress = SetDevice(Headphones, "Headphones");
+            c.Buttons[0].Default().SinglePress = SetDevice("absent-id", "Unplugged Headset");
+            c.Buttons[2].Default().SinglePress = SetDevice(Headphones, "Headphones");
         });
         var runtime = StartRuntime(config);
         var osd = new Recorder<VolumeChangeNotification>();
@@ -592,7 +603,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         {
             PendingSwitchTimeout = TimeSpan.FromMilliseconds(100),
         };
-        var runtime = StartRuntime(NewConfig(c => c.Buttons[0].SinglePress = SetDevice(Headphones, "Headphones")),
+        var runtime = StartRuntime(NewConfig(c => c.Buttons[0].Default().SinglePress = SetDevice(Headphones, "Headphones")),
                                    options: options);
         var osd = new Recorder<VolumeChangeNotification>();
         runtime.VolumeChanged += osd.Handler;
@@ -624,9 +635,9 @@ public sealed class VolcoRuntimeTests : IDisposable
         Connection(0).SetStatus(ConnectionStatus.Connected);
 
         var frames = Connection(0).SentFrames;
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeMuteState(0, false)), "button 0 mute frame missing");
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeMuteState(1, false)), "button 1 mute frame missing");
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeActiveDevice(0)), "active-device frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(0, 0)), "button 0 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(1, 0)), "button 1 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(2, 0)), "button 2 feedback frame missing");
         Assert.Equal(ConnectionStatus.Connected, runtime.ConnectionStatus);
         Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
     }
@@ -665,7 +676,7 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Assert.True(connection.SentCount > baseline, "mute flip did not resend frames");
         var newFrames = connection.SentFrames.Skip(baseline);
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeMuteState(0, true)), "muted frame not sent");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(0, 1)), "muted frame not sent");
     }
 
     [Fact]
@@ -675,7 +686,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         StartRuntime(config, options: new VolcoRuntimeOptions(
             new[] { TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(60) }));
         var connection = Connection(0);
-        var framesPerPush = ControllerStateReporter.BuildFrames(config.Config, _engine).Count;
+        var framesPerPush = ButtonFeedback.BuildFrames(config.Config, AppConfig.DefaultPresetId, _engine).Count;
         Assert.True(framesPerPush > 0);
 
         connection.SetStatus(ConnectionStatus.Connected);
@@ -830,49 +841,48 @@ public sealed class VolcoRuntimeTests : IDisposable
     [Fact]
     public void Start_HealsBlankOutputDeviceId_WhenNameMatchesAPresentDevice()
     {
-        var config = NewConfig(c =>
-        {
-            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
-        });
+        var config = NewConfig(c => c.Buttons[2].Default().SinglePress = ToggleWithA("", "Speakers"));
         var path = config.ConfigPath;
 
         StartRuntime(config);
 
-        Assert.Equal(Speakers, config.Config.OutputDevices.Device1.Id);
+        Assert.Equal(Speakers, ToggleA(config).Id);
         Assert.Contains(Speakers, File.ReadAllText(path)); // saved to disk, not just in memory
     }
 
     [Fact]
     public void Start_AudioNotReady_DoesNotHealDeviceIds()
     {
-        var config = NewConfig(c =>
-        {
-            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
-        });
+        var config = NewConfig(c => c.Buttons[2].Default().SinglePress = ToggleWithA("", "Speakers"));
 
         StartRuntime(config, audioReady: false);
 
-        Assert.Equal("", config.Config.OutputDevices.Device1.Id);
+        Assert.Equal("", ToggleA(config).Id);
     }
+
+    private static ButtonActionConfig ToggleWithA(string id, string name) => new()
+    {
+        Action = ButtonActionType.ToggleOutputDevice,
+        Device = new DeviceRefConfig { Id = id, FriendlyName = name },
+    };
+
+    private static DeviceRefConfig ToggleA(ConfigManager config) => config.Config.Buttons[2].Default().SinglePress.Device!;
 
     [Fact]
     public void DeviceAdded_HealsBlankDeviceId_ForADeviceThatWasAbsentAtStart()
     {
         const string NewDeviceId = "new-dev";
-        var config = NewConfig(c =>
-        {
-            // Not in _engine.Devices yet - Start()'s heal pass must leave this unhealed.
-            c.OutputDevices.Device1 = new DeviceRefConfig { Id = "", FriendlyName = "New Speakers" };
-        });
+        // Not in _engine.Devices yet - Start()'s heal pass must leave this unhealed.
+        var config = NewConfig(c => c.Buttons[2].Default().SinglePress = ToggleWithA("", "New Speakers"));
 
         StartRuntime(config);
-        Assert.Equal("", config.Config.OutputDevices.Device1.Id);
+        Assert.Equal("", ToggleA(config).Id);
 
         var newDevice = new AudioDevice(NewDeviceId, "New Speakers", AudioFlow.Render, false);
         _engine.Devices.Add(newDevice);
         _engine.RaiseDeviceChanged(DeviceChangeKind.Added, newDevice);
 
-        Assert.True(WaitUntil(() => config.Config.OutputDevices.Device1.Id == NewDeviceId),
+        Assert.True(WaitUntil(() => ToggleA(config).Id == NewDeviceId),
                     "device id was not healed after DevicesChanged(Added)");
     }
 
@@ -881,13 +891,16 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig(c =>
         {
-            c.OutputDevices.Device1 = new DeviceRefConfig { Id = Speakers, FriendlyName = "Speakers" };
-            c.OutputDevices.Device2 = new DeviceRefConfig { Id = "", FriendlyName = "Headphones" };
-            c.Buttons[2].SinglePress = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice };
+            c.Buttons[2].Default().SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { Id = Speakers, FriendlyName = "Speakers" },
+                DeviceB = new DeviceRefConfig { Id = "", FriendlyName = "Headphones" },
+            };
         });
 
         StartRuntime(config);
-        Assert.Equal(Headphones, config.Config.OutputDevices.Device2.Id); // healed at Start()
+        Assert.Equal(Headphones, config.Config.Buttons[2].Default().SinglePress.DeviceB!.Id); // healed at Start()
 
         Press(Connection(0), 2);
 
@@ -962,5 +975,162 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Equal(0, Volatile.Read(ref events));
         Assert.Equal(sentAtDispose, connection.SentCount);
         Assert.Empty(_engine.DeviceVolumeCalls);
+    }
+
+    // ---- presets (schema v3) ---------------------------------------------------------------
+
+    /// <summary>Two presets: Default (button 0 mutes the output, button 2 holds for "next preset")
+    /// and Gaming (button 0 mutes the input, button 2 jumps back to Default).</summary>
+    private ConfigManager TwoPresetConfig() => NewConfig(c =>
+    {
+        c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        c.Buttons[2].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.NextPreset };
+        var gaming0 = c.Buttons[0].GetOrAddBinding("gaming");
+        gaming0.SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+        c.Buttons[2].GetOrAddBinding("gaming").SinglePress =
+            new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = AppConfig.DefaultPresetId };
+    });
+
+    [Fact]
+    public void ActivePreset_StartsAtTheFirstPreset()
+    {
+        var runtime = StartRuntime(TwoPresetConfig());
+        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+    }
+
+    [Fact]
+    public void ButtonDispatch_FollowsTheActivePreset()
+    {
+        var runtime = StartRuntime(TwoPresetConfig());
+
+        runtime.SetActivePreset("gaming");
+        Press(Connection(0), 0);
+
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "press never executed");
+        Assert.Equal(DeviceRef.DefaultInput(), Assert.Single(Snapshot(_engine.ToggleMuteCalls)));
+    }
+
+    [Fact]
+    public void NextPresetButton_SwitchesAndWraps_RaisingEventsAndAPresetOsd()
+    {
+        var runtime = StartRuntime(TwoPresetConfig());
+        var changes = new Recorder<string>();
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.ActivePresetChanged += changes.Handler;
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 2);   // Default: next preset -> Gaming
+        Assert.True(WaitUntil(() => runtime.ActivePresetId == "gaming"), "next preset never ran");
+        Press(Connection(0), 2);   // Gaming: go to Default
+        Assert.True(WaitUntil(() => runtime.ActivePresetId == AppConfig.DefaultPresetId), "go-to preset never ran");
+
+        Assert.Equal(new[] { "gaming", AppConfig.DefaultPresetId }, changes.Items);
+        Assert.Equal(new[] { "Gaming", "Default" }, osd.Items.Where(n => n.Kind == OsdKind.Preset).Select(n => n.Label));
+    }
+
+    [Fact]
+    public void NextPreset_WrapsToTheFirst()
+    {
+        var runtime = StartRuntime(TwoPresetConfig());
+        runtime.NextPreset();
+        runtime.NextPreset();
+        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+    }
+
+    [Fact]
+    public void SetActivePreset_UnknownId_IsIgnored()
+    {
+        var runtime = StartRuntime(TwoPresetConfig());
+        var changes = new Recorder<string>();
+        runtime.ActivePresetChanged += changes.Handler;
+
+        runtime.SetActivePreset("nope");
+
+        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+        Assert.Empty(changes.Items);
+    }
+
+    [Fact]
+    public void DeletingTheActivePreset_FallsBackToTheFirst()
+    {
+        var config = TwoPresetConfig();
+        var runtime = StartRuntime(config);
+        runtime.SetActivePreset("gaming");
+
+        config.Config.Presets.RemoveAll(p => p.Id == "gaming");
+
+        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+    }
+
+    [Fact]
+    public void PresetChange_PushesTheNewPresetsFeedback()
+    {
+        var runtime = StartRuntime(TwoPresetConfig());
+        var connection = Connection(0);
+        connection.SetStatus(ConnectionStatus.Connected);
+        _engine.DeviceStates[Microphone] = (0.5f, true);   // muted mic: lit only under Gaming
+        var baseline = connection.SentCount;
+
+        runtime.SetActivePreset("gaming");
+
+        var newFrames = connection.SentFrames.Skip(baseline).ToList();
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(0, 1)), "button 0 not lit for the muted mic");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(1, 0)), "button 1 has nothing in Gaming, so its light must go off");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(2, 2)), "preset indicator not on preset 2");
+    }
+
+    [Fact]
+    public void Execute_RunsAnActionOutsideAButtonPress()
+    {
+        var runtime = StartRuntime(TwoPresetConfig());
+
+        runtime.Execute(new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "gaming" });
+
+        Assert.Equal("gaming", runtime.ActivePresetId);
+    }
+
+    [Fact]
+    public void ButtonActivity_IsRaisedOnPressDown_EvenForUnconfiguredButtons()
+    {
+        var runtime = StartRuntime();
+        var activity = new Recorder<int>();
+        runtime.ButtonActivity += activity.Handler;
+
+        Press(Connection(0), 2);
+        Press(Connection(0), 9);   // beyond the configured buttons
+
+        Assert.Equal(new[] { 2, 9 }, activity.Items);
+    }
+
+    [Fact]
+    public void NotSetUpSlider_ChangesNoVolume_ButStillReportsItsLevel()
+    {
+        var runtime = StartRuntime(NewConfig(c => c.Sliders[0].Type = SliderMappingType.None));
+        var levels = new Recorder<SliderLevelEventArgs>();
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.SliderLevelChanged += levels.Handler;
+        runtime.VolumeChanged += osd.Handler;
+
+        Connection(0).RaiseMessage(new SliderMessage(0, 4095));
+
+        Assert.True(WaitUntil(() => levels.Count > 0), "no level event");
+        Assert.Empty(Snapshot(_engine.DeviceVolumeCalls));
+        Assert.Empty(osd.Items);
+    }
+
+    [Fact]
+    public void MoreThanSixteenSliders_AreAllRouted()
+    {
+        var runtime = StartRuntime(NewConfig(c =>
+        {
+            while (c.Sliders.Count < 20) c.Sliders.Add(new SliderConfig { Type = SliderMappingType.Device });
+        }));
+        var levels = new Recorder<SliderLevelEventArgs>();
+        runtime.SliderLevelChanged += levels.Handler;
+
+        Connection(0).RaiseMessage(new SliderMessage(19, 4095));
+
+        Assert.True(WaitUntil(() => levels.Items.Any(e => e.SliderIndex == 19)), "slider 19 never processed");
+        Assert.Equal(1f, runtime.GetSliderLevel(19)!.Value);
     }
 }

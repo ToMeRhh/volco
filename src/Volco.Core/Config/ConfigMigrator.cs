@@ -1,15 +1,26 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Volco.Core.Audio;
 using Volco.Core.Diagnostics;
 
 namespace Volco.Core.Config;
 
 /// <summary>
-/// Migrates config from schema v1 (device references stored as bare friendly-name
-/// substrings) to v2 (endpoint ids, with the name kept for display and fallback).
+/// Config schema migrations.
 ///
-/// Reads the raw JSON rather than the deserialized <see cref="AppConfig"/>, because the
-/// v1 property names no longer exist on the v2 types and System.Text.Json drops them
+/// <list type="bullet">
+/// <item>v1 → v2: device references stored as bare friendly-name substrings become endpoint
+/// ids (with the name kept for display and fallback). Needs the live device list, so the
+/// runtime runs it (<see cref="MigrateFile"/>) once audio is up.</item>
+/// <item>v2 → v3: button actions move under a preset (<c>buttons[i].actions["default"]</c>)
+/// and the global toggle pair (<c>outputDevices</c>) moves into each ToggleOutputDevice
+/// action. Purely structural, so <see cref="ConfigManager.Load"/> runs it
+/// (<see cref="UpgradeShapeToV3"/>) on the raw JSON before deserialising - for v1 files too,
+/// which then still carry their old schema number until the v1 → v2 name resolution runs.</item>
+/// </list>
+///
+/// Both read raw JSON rather than the deserialized <see cref="AppConfig"/>, because the old
+/// property names no longer exist on the current types and System.Text.Json drops them
 /// silently on load.
 /// </summary>
 public static class ConfigMigrator
@@ -106,27 +117,104 @@ public static class ConfigMigrator
             }
         }
 
-        if (root.TryGetProperty("outputDevices", out var od))
-        {
-            if (od.TryGetProperty("device1", out var d1))
-                config.OutputDevices.Device1 = Preserve(d1.GetString(), devices);
-            if (od.TryGetProperty("device2", out var d2))
-                config.OutputDevices.Device2 = Preserve(d2.GetString(), devices);
-        }
-
         if (root.TryGetProperty("buttons", out var buttons) && buttons.ValueKind == JsonValueKind.Array)
         {
             int i = 0;
             foreach (var button in buttons.EnumerateArray())
             {
                 if (i >= config.Buttons.Count) break;
-                MigrateAction(button, "singlePress", config.Buttons[i].SinglePress, devices);
-                MigrateAction(button, "doublePress", config.Buttons[i].DoublePress, devices);
-                MigrateAction(button, "longPress",   config.Buttons[i].LongPress,   devices);
+                var binding = config.Buttons[i].GetOrAddBinding(AppConfig.DefaultPresetId);
+                MigrateAction(button, "singlePress", binding.SinglePress, devices);
+                MigrateAction(button, "doublePress", binding.DoublePress, devices);
+                MigrateAction(button, "longPress",   binding.LongPress,   devices);
                 i++;
             }
         }
+
+        // v1 kept the toggle pair globally; v3 keeps it on each toggle action (Device = A,
+        // DeviceB = B). UpgradeShapeToV3 already copied the bare names there at load time;
+        // resolve them to ids now.
+        if (root.TryGetProperty("outputDevices", out var od))
+        {
+            DeviceRefConfig? a = od.TryGetProperty("device1", out var d1) ? Preserve(d1.GetString(), devices) : null;
+            DeviceRefConfig? b = od.TryGetProperty("device2", out var d2) ? Preserve(d2.GetString(), devices) : null;
+            foreach (var button in config.Buttons)
+                foreach (var binding in button.Actions.Values)
+                    foreach (var action in binding.All())
+                    {
+                        if (action.Action != ButtonActionType.ToggleOutputDevice) continue;
+                        if (a != null) action.Device = Clone(a);
+                        if (b != null) action.DeviceB = Clone(b);
+                    }
+        }
     }
+
+    private static DeviceRefConfig Clone(DeviceRefConfig d) => new() { Id = d.Id, FriendlyName = d.FriendlyName };
+
+    /// <summary>
+    /// v2 → v3 structural upgrade on the raw config JSON (camelCase keys, as
+    /// <see cref="ConfigManager"/> writes them). In place; idempotent. Does not touch
+    /// <c>schemaVersion</c> - the caller decides whether this file is now v3 (it was v2) or
+    /// still needs the v1 device-name resolution.
+    /// <list type="bullet">
+    /// <item><c>buttons[i].singlePress/doublePress/longPress</c> move to
+    /// <c>buttons[i].actions["default"]</c>.</item>
+    /// <item>Each ToggleOutputDevice action gets <c>device</c> = <c>outputDevices.device1</c> and
+    /// <c>deviceB</c> = <c>outputDevices.device2</c>; <c>outputDevices</c> is dropped.</item>
+    /// <item><c>presets</c> is added with the single Default preset when absent.</item>
+    /// <item><c>index</c> of every slider and button is set to its list position.</item>
+    /// </list>
+    /// </summary>
+    public static void UpgradeShapeToV3(JsonObject root)
+    {
+        var outputDevices = root["outputDevices"] as JsonObject;
+        var deviceA = outputDevices?["device1"];
+        var deviceB = outputDevices?["device2"];
+
+        if (root["buttons"] is JsonArray buttons)
+        {
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                if (buttons[i] is not JsonObject button) continue;
+                button["index"] = i;
+                if (button.ContainsKey("actions")) continue;
+
+                var binding = new JsonObject();
+                foreach (var key in new[] { "singlePress", "doublePress", "longPress" })
+                {
+                    if (button[key] is JsonObject action)
+                    {
+                        button.Remove(key);
+                        if (IsAction(action, "ToggleOutputDevice"))
+                        {
+                            // v2 wrote "device": null on toggle actions; null and absent both mean "unset".
+                            if (action["device"] is null && deviceA != null) action["device"] = deviceA.DeepClone();
+                            if (action["deviceB"] is null && deviceB != null) action["deviceB"] = deviceB.DeepClone();
+                        }
+                        binding[key] = action;
+                    }
+                    else
+                    {
+                        button.Remove(key);
+                    }
+                }
+                button["actions"] = new JsonObject { [AppConfig.DefaultPresetId] = binding };
+            }
+        }
+
+        if (root["sliders"] is JsonArray sliders)
+            for (int i = 0; i < sliders.Count; i++)
+                if (sliders[i] is JsonObject slider) slider["index"] = i;
+
+        root.Remove("outputDevices");
+
+        if (root["presets"] is not JsonArray presets || presets.Count == 0)
+            root["presets"] = new JsonArray(new JsonObject { ["id"] = AppConfig.DefaultPresetId, ["name"] = "Default" });
+    }
+
+    private static bool IsAction(JsonObject action, string name)
+        => action["action"] is JsonValue v && v.TryGetValue<string>(out var s)
+           && string.Equals(s, name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Fix C: fills in the endpoint id for any <see cref="DeviceRefConfig"/> that has an empty
@@ -149,18 +237,19 @@ public static class ConfigMigrator
     {
         var changed = false;
 
-        changed |= Heal(config.OutputDevices.Device1, devices);
-        changed |= Heal(config.OutputDevices.Device2, devices);
-
         foreach (var slider in config.Sliders)
             changed |= Heal(slider.Device, devices);
 
         foreach (var button in config.Buttons)
-        {
-            changed |= Heal(button.SinglePress.Device, devices);
-            changed |= Heal(button.DoublePress.Device, devices);
-            changed |= Heal(button.LongPress.Device, devices);
-        }
+            foreach (var binding in button.Actions.Values)
+            {
+                if (binding == null) continue;
+                foreach (var action in binding.All())
+                {
+                    changed |= Heal(action.Device, devices);
+                    changed |= Heal(action.DeviceB, devices);
+                }
+            }
 
         return changed;
     }

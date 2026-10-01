@@ -102,7 +102,7 @@ public partial class PressActionViewModel : ObservableObject
     [RelayCommand]
     private void Test()
     {
-        ActionFactory.Create(_cfg, _audio, _config)?.Execute();
+        ActionFactory.Create(_cfg, _audio, presets: null)?.Execute();
     }
 }
 
@@ -160,9 +160,11 @@ public partial class ButtonItemViewModel : ObservableObject
         _longPressMs      = cfg.LongPressMs;
         _doublePressWindowMs = cfg.DoublePressWindowMs;
 
-        SinglePress = new PressActionViewModel(cfg.SinglePress, save, audio, config);
-        DoublePress = new PressActionViewModel(cfg.DoublePress, save, audio, config);
-        LongPress   = new PressActionViewModel(cfg.LongPress,  save, audio, config);
+        // Edits the first preset's actions; the per-preset Buttons page replaces this.
+        var binding = cfg.GetOrAddBinding(config.Config.Presets.Count > 0 ? config.Config.Presets[0].Id : AppConfig.DefaultPresetId);
+        SinglePress = new PressActionViewModel(binding.SinglePress, save, audio, config);
+        DoublePress = new PressActionViewModel(binding.DoublePress, save, audio, config);
+        LongPress   = new PressActionViewModel(binding.LongPress,  save, audio, config);
 
         foreach (var d in outputDevices)
             OutputDevices.Add(d);

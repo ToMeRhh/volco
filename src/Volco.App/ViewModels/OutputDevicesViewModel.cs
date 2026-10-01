@@ -12,6 +12,11 @@ namespace Volco.App.ViewModels;
 /// ViewModel for the Output Devices settings tab.
 /// Exposes the two toggle-able output devices and the available device list.
 /// </summary>
+/// <remarks>
+/// Schema v3 keeps the pair on each ToggleOutputDevice action (Device = A, DeviceB = B). Until the
+/// Buttons page edits it per action, this page shows the first toggle action's pair and writes the
+/// pair to every toggle action, which is what the old global pair meant.
+/// </remarks>
 public partial class OutputDevicesViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
@@ -32,9 +37,9 @@ public partial class OutputDevicesViewModel : ObservableObject
     {
         _config = config;
 
-        var cfg = config.Config.OutputDevices;
-        _device1 = cfg.Device1.FriendlyName;
-        _device2 = cfg.Device2.FriendlyName;
+        var first = ToggleActions(config.Config).FirstOrDefault();
+        _device1 = first?.Device?.FriendlyName ?? "";
+        _device2 = first?.DeviceB?.FriendlyName ?? "";
 
         foreach (var d in audio.GetDevices(AudioFlow.Render))
             OutputDevices.Add(d);
@@ -48,16 +53,24 @@ public partial class OutputDevicesViewModel : ObservableObject
         // ComPort refresh: an ItemsSource swap can transiently null this two-way-bound
         // SelectedItem. There's no blank/"None" entry in this picker, so ignore it.
         if (string.IsNullOrEmpty(value)) return;
-        _config.Config.OutputDevices.Device1 = DeviceRefFromName(value) ?? new DeviceRefConfig();
+        foreach (var action in ToggleActions(_config.Config))
+            action.Device = DeviceRefFromName(value) ?? new DeviceRefConfig();
         Persist();
     }
 
     partial void OnDevice2Changed(string value)
     {
         if (string.IsNullOrEmpty(value)) return;
-        _config.Config.OutputDevices.Device2 = DeviceRefFromName(value) ?? new DeviceRefConfig();
+        foreach (var action in ToggleActions(_config.Config))
+            action.DeviceB = DeviceRefFromName(value) ?? new DeviceRefConfig();
         Persist();
     }
+
+    private static IEnumerable<ButtonActionConfig> ToggleActions(AppConfig config)
+        => config.Buttons
+            .SelectMany(b => b.Actions.Values)
+            .SelectMany(binding => binding.All())
+            .Where(a => a.Action == ButtonActionType.ToggleOutputDevice);
 
     private void Persist() => _config.RequestSave();
 

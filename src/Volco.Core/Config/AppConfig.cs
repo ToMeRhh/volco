@@ -9,7 +9,15 @@ public enum ConnectionType { Serial, Udp, WebSocket }
 public enum ResponseCurve { Linear, Logarithmic, Exponential, SCurve }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum SliderMappingType { Processes, Device, Unmapped }
+public enum SliderMappingType
+{
+    Processes,
+    Device,
+    /// <summary>Every app that no Processes slider lists ("All other apps" in the UI).</summary>
+    Unmapped,
+    /// <summary>"Not set up": the slider changes nothing.</summary>
+    None
+}
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ButtonActionType
@@ -19,7 +27,9 @@ public enum ButtonActionType
     MuteCurrentOutput,
     MuteCurrentInput,
     ToggleOutputDevice,
-    SetOutputDevice
+    SetOutputDevice,
+    NextPreset,
+    GoToPreset
 }
 
 public class SerialConfig
@@ -68,23 +78,69 @@ public partial class SliderConfig
 public class ButtonActionConfig
 {
     public ButtonActionType Action { get; set; } = ButtonActionType.None;
+
+    /// <summary>The device for MuteSpecificDevice/SetOutputDevice; output A for ToggleOutputDevice.</summary>
     public DeviceRefConfig? Device { get; set; }
+
+    /// <summary>Output B for ToggleOutputDevice.</summary>
+    public DeviceRefConfig? DeviceB { get; set; }
+
+    /// <summary>The target <see cref="PresetConfig.Id"/> for GoToPreset.</summary>
+    public string? PresetId { get; set; }
+}
+
+/// <summary>What one button does in one preset.</summary>
+public class ButtonBindingConfig
+{
+    public ButtonActionConfig SinglePress { get; set; } = new();
+    public ButtonActionConfig DoublePress { get; set; } = new();
+    public ButtonActionConfig LongPress { get; set; } = new();
+
+    [JsonIgnore]
+    public bool IsEmpty => SinglePress.Action == ButtonActionType.None
+                           && DoublePress.Action == ButtonActionType.None
+                           && LongPress.Action == ButtonActionType.None;
+
+    /// <summary>Single, double, long: the order the controller-feedback rule walks them in.</summary>
+    public IEnumerable<ButtonActionConfig> All()
+    {
+        yield return SinglePress;
+        yield return DoublePress;
+        yield return LongPress;
+    }
+}
+
+public class PresetConfig
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
 }
 
 public class ButtonConfig
 {
+    /// <summary>Always equal to the button's position in <see cref="AppConfig.Buttons"/>, which is
+    /// its hardware input number. Rewritten on save; never read for routing.</summary>
     public int Index { get; set; }
-    public ButtonActionConfig SinglePress { get; set; } = new();
-    public ButtonActionConfig DoublePress { get; set; } = new();
-    public ButtonActionConfig LongPress { get; set; } = new();
+
+    /// <summary>Per-preset actions, keyed by <see cref="PresetConfig.Id"/>. A missing key means the
+    /// button does nothing in that preset. Timing below is shared by every preset.</summary>
+    public Dictionary<string, ButtonBindingConfig> Actions { get; set; } = new();
+
     public int LongPressMs { get; set; } = 500;
     public int DoublePressWindowMs { get; set; } = 300;
-}
 
-public class OutputDevicesConfig
-{
-    public DeviceRefConfig Device1 { get; set; } = new();
-    public DeviceRefConfig Device2 { get; set; } = new();
+    /// <summary>The binding for <paramref name="presetId"/>, or an empty one (not stored) when the
+    /// preset has none.</summary>
+    public ButtonBindingConfig BindingFor(string presetId)
+        => Actions.TryGetValue(presetId, out var b) && b != null ? b : new ButtonBindingConfig();
+
+    /// <summary>The stored binding for <paramref name="presetId"/>, created if missing.</summary>
+    public ButtonBindingConfig GetOrAddBinding(string presetId)
+    {
+        if (!Actions.TryGetValue(presetId, out var b) || b == null)
+            Actions[presetId] = b = new ButtonBindingConfig();
+        return b;
+    }
 }
 
 public class UpdateConfig
@@ -101,7 +157,10 @@ public class UpdateConfig
 
 public class AppConfig
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
+
+    /// <summary>Id of the preset every migrated or new config starts with.</summary>
+    public const string DefaultPresetId = "default";
 
     /// <summary>
     /// Absent or 0 means schema v1 (device references stored as bare names). Defaults to 0
@@ -115,7 +174,9 @@ public class AppConfig
     public ConnectionConfig Connection { get; set; } = new();
     public List<SliderConfig> Sliders { get; set; } = new();
     public List<ButtonConfig> Buttons { get; set; } = new();
-    public OutputDevicesConfig OutputDevices { get; set; } = new();
+
+    /// <summary>Button presets, in tab order. The first one is live when the app starts.</summary>
+    public List<PresetConfig> Presets { get; set; } = new();
     public UpdateConfig Updates { get; set; } = new();
     public bool DebugLogging { get; set; } = false;
 
@@ -123,9 +184,29 @@ public class AppConfig
     {
         var config = new AppConfig { SchemaVersion = CurrentSchemaVersion };
         for (int i = 0; i < 5; i++)
-            config.Sliders.Add(new SliderConfig { Index = i });
+            config.Sliders.Add(new SliderConfig { Index = i, Type = SliderMappingType.None });
         for (int i = 0; i < 3; i++)
             config.Buttons.Add(new ButtonConfig { Index = i });
+        config.Presets.Add(new PresetConfig { Id = DefaultPresetId, Name = "Default" });
         return config;
+    }
+
+    /// <summary>Repairs invariants a hand-edited or older file may break: at least one preset,
+    /// no null action maps, and Index equal to list position.</summary>
+    public void Normalize()
+    {
+        // A hand-edited "sliders": null (etc.) deserialises to null despite the initialisers.
+        Sliders ??= new();
+        Buttons ??= new();
+        Presets ??= new();
+        if (Presets.Count == 0)
+            Presets.Add(new PresetConfig { Id = DefaultPresetId, Name = "Default" });
+        for (int i = 0; i < Sliders.Count; i++)
+            Sliders[i].Index = i;
+        for (int i = 0; i < Buttons.Count; i++)
+        {
+            Buttons[i].Index = i;
+            Buttons[i].Actions ??= new();
+        }
     }
 }

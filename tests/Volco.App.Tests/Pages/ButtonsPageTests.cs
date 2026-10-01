@@ -63,7 +63,7 @@ public class ButtonsPageTests
     [AvaloniaFact]
     public void ButtonsPage_ActionNeedingDevice_ShowsDevicePicker()
     {
-        var (page, rig, vm) = Show(c => c.Buttons[0].SinglePress.Action = ButtonActionType.MuteSpecificDevice);
+        var (page, rig, vm) = Show(c => c.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteSpecificDevice);
         using var _ = rig; using var __ = vm;
 
         Assert.True(InRow<ComboBox>(page, "Single", "DeviceCombo").IsVisible);
@@ -75,7 +75,7 @@ public class ButtonsPageTests
     [AvaloniaFact]
     public void ButtonsPage_MuteCurrentOutput_HidesDevicePicker()
     {
-        var (page, rig, vm) = Show(c => c.Buttons[0].SinglePress.Action = ButtonActionType.MuteCurrentOutput);
+        var (page, rig, vm) = Show(c => c.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput);
         using var _ = rig; using var __ = vm;
         var picker = InRow<ComboBox>(page, "Single", "DeviceCombo");
         Assert.False(picker.IsVisible);
@@ -90,8 +90,8 @@ public class ButtonsPageTests
     {
         var (page, rig, vm) = Show(c =>
         {
-            c.Buttons[0].SinglePress.Action = ButtonActionType.SetOutputDevice;
-            c.Buttons[0].SinglePress.Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
+            c.Buttons[0].Default().SinglePress.Action = ButtonActionType.SetOutputDevice;
+            c.Buttons[0].Default().SinglePress.Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
         });
         using var _ = rig; using var __ = vm;
         var picker = InRow<ComboBox>(page, "Single", "DeviceCombo");
@@ -107,10 +107,10 @@ public class ButtonsPageTests
     {
         var (page, rig, vm) = Show();
         using var _ = rig; using var __ = vm;
-        Assert.Equal(ButtonActionType.None, rig.Config.Config.Buttons[0].LongPress.Action);
+        Assert.Equal(ButtonActionType.None, rig.Config.Config.Buttons[0].Default().LongPress.Action);
 
         InRow<ComboBox>(page, "Long", "ActionCombo").SelectedIndex = 2;
-        Assert.Equal(ButtonActionType.MuteCurrentOutput, rig.Config.Config.Buttons[0].LongPress.Action);
+        Assert.Equal(ButtonActionType.MuteCurrentOutput, rig.Config.Config.Buttons[0].Default().LongPress.Action);
 
         All<NumericUpDown>(page, "LongPressBox")[0].Value = 800;
         Assert.Equal(800, rig.Config.Config.Buttons[0].LongPressMs);
@@ -125,7 +125,7 @@ public class ButtonsPageTests
         InRow<ComboBox>(page, "Single", "ActionCombo").SelectedIndex = 5;
         InRow<ComboBox>(page, "Single", "DeviceCombo").SelectedItem = "Headphones";
 
-        var cfg = rig.Config.Config.Buttons[0].SinglePress;
+        var cfg = rig.Config.Config.Buttons[0].Default().SinglePress;
         Assert.Equal(ButtonActionType.SetOutputDevice, cfg.Action);
         Assert.Equal("dev-2", cfg.Device!.Id);
         Assert.Equal("Headphones", cfg.Device.FriendlyName);
