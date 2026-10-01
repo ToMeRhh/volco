@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Controls.PressActionRow"
+             x:Name="Root"
+             x:DataType="vm:PressActionViewModel">
+  <StackPanel Orientation="Horizontal"
+              Spacing="{StaticResource SpaceS}"
+              VerticalAlignment="Center">
+    <TextBlock Text="{Binding Label, ElementName=Root}"
+               Width="120"
+               VerticalAlignment="Center"
+               Foreground="{DynamicResource TextSecondaryBrush}"/>
+    <ComboBox Name="ActionCombo"
+              SelectedIndex="{Binding ActionTypeIndex, Mode=TwoWay}"
+              Width="{StaticResource ComboBoxStandardWidth}">
+      <ComboBoxItem Content="None"/>
+      <ComboBoxItem Content="Mute Specific Device"/>
+      <ComboBoxItem Content="Mute Current Output"/>
+      <ComboBoxItem Content="Mute Current Input"/>
+      <ComboBoxItem Content="Toggle Output Device"/>
+      <ComboBoxItem Content="Set Output Device"/>
+    </ComboBox>
+    <ComboBox Name="DeviceCombo"
+              ItemsSource="{Binding DeviceNames, ElementName=Root}"
+              SelectedItem="{Binding DeviceId, Mode=TwoWay}"
+              Width="{StaticResource ComboBoxStandardWidth}"
+              PlaceholderText="Select device…"
+              IsVisible="{Binding NeedsDevice}"/>
+    <Button Name="TestButton"
+            Command="{Binding TestCommand}"
+            Content="Test"
+            ToolTip.Tip="Execute this press action now"/>
+  </StackPanel>
+</UserControl>

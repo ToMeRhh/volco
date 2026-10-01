@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Audio;
@@ -36,6 +37,10 @@ public class ButtonsPageTests
     private static List<T> All<T>(ButtonsPage page, string name) where T : Control
         => page.GetVisualDescendants().OfType<T>().Where(c => c.Name == name).ToList();
 
+    private static T InRow<T>(ButtonsPage page, string slot, string name, int button = 0) where T : Control
+        => All<PressActionRow>(page, slot + "PressRow")[button]
+            .GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+
     [AvaloniaFact]
     public void ButtonsPage_RendersOneCardPerButton_WithThreePressRows()
     {
@@ -45,9 +50,12 @@ public class ButtonsPageTests
 
         Assert.True(buttons > 0);
         Assert.Equal(buttons, All<Border>(page, "ButtonCard").Count);
-        Assert.Equal(buttons, All<ComboBox>(page, "SingleActionCombo").Count);
-        Assert.Equal(buttons, All<ComboBox>(page, "DoubleActionCombo").Count);
-        Assert.Equal(buttons, All<ComboBox>(page, "LongActionCombo").Count);
+        Assert.Equal(buttons, All<PressActionRow>(page, "SinglePressRow").Count);
+        Assert.Equal(buttons, All<PressActionRow>(page, "DoublePressRow").Count);
+        Assert.Equal(buttons, All<PressActionRow>(page, "LongPressRow").Count);
+        Assert.Equal(new[] { "Single Press", "Double Press", "Long Press" },
+            new[] { "Single", "Double", "Long" }
+                .Select(k => All<PressActionRow>(page, k + "PressRow")[0].Label).ToArray());
         Assert.Equal(buttons, All<NumericUpDown>(page, "LongPressBox").Count);
         Assert.Equal(buttons, All<NumericUpDown>(page, "DoublePressBox").Count);
     }
@@ -58,10 +66,10 @@ public class ButtonsPageTests
         var (page, rig, vm) = Show(c => c.Buttons[0].SinglePress.Action = ButtonActionType.MuteSpecificDevice);
         using var _ = rig; using var __ = vm;
 
-        Assert.True(All<ComboBox>(page, "SingleDeviceCombo")[0].IsVisible);
+        Assert.True(InRow<ComboBox>(page, "Single", "DeviceCombo").IsVisible);
         // The other slots still have no action, so no picker.
-        Assert.False(All<ComboBox>(page, "DoubleDeviceCombo")[0].IsVisible);
-        Assert.False(All<ComboBox>(page, "LongDeviceCombo")[0].IsVisible);
+        Assert.False(InRow<ComboBox>(page, "Double", "DeviceCombo").IsVisible);
+        Assert.False(InRow<ComboBox>(page, "Long", "DeviceCombo").IsVisible);
     }
 
     [AvaloniaFact]
@@ -69,11 +77,11 @@ public class ButtonsPageTests
     {
         var (page, rig, vm) = Show(c => c.Buttons[0].SinglePress.Action = ButtonActionType.MuteCurrentOutput);
         using var _ = rig; using var __ = vm;
-        var picker = All<ComboBox>(page, "SingleDeviceCombo")[0];
+        var picker = InRow<ComboBox>(page, "Single", "DeviceCombo");
         Assert.False(picker.IsVisible);
 
         // Switching to a device-taking action reveals it.
-        All<ComboBox>(page, "SingleActionCombo")[0].SelectedIndex = 5;
+        InRow<ComboBox>(page, "Single", "ActionCombo").SelectedIndex = 5;
         Assert.True(picker.IsVisible);
     }
 
@@ -86,10 +94,11 @@ public class ButtonsPageTests
             c.Buttons[0].SinglePress.Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" };
         });
         using var _ = rig; using var __ = vm;
-        var picker = All<ComboBox>(page, "SingleDeviceCombo")[0];
+        var picker = InRow<ComboBox>(page, "Single", "DeviceCombo");
 
         Assert.True(picker.IsVisible);
         Assert.Equal("Speakers", picker.SelectedItem);
+        Assert.True(picker.SelectedIndex >= 0);
         Assert.Contains("Speakers", Assert.IsAssignableFrom<IEnumerable<string>>(picker.ItemsSource));
     }
 
@@ -100,10 +109,41 @@ public class ButtonsPageTests
         using var _ = rig; using var __ = vm;
         Assert.Equal(ButtonActionType.None, rig.Config.Config.Buttons[0].LongPress.Action);
 
-        All<ComboBox>(page, "LongActionCombo")[0].SelectedIndex = 2;
+        InRow<ComboBox>(page, "Long", "ActionCombo").SelectedIndex = 2;
         Assert.Equal(ButtonActionType.MuteCurrentOutput, rig.Config.Config.Buttons[0].LongPress.Action);
 
         All<NumericUpDown>(page, "LongPressBox")[0].Value = 800;
         Assert.Equal(800, rig.Config.Config.Buttons[0].LongPressMs);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_ChoosingDevice_PersistsIdAndNameToConfig()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+
+        InRow<ComboBox>(page, "Single", "ActionCombo").SelectedIndex = 5;
+        InRow<ComboBox>(page, "Single", "DeviceCombo").SelectedItem = "Headphones";
+
+        var cfg = rig.Config.Config.Buttons[0].SinglePress;
+        Assert.Equal(ButtonActionType.SetOutputDevice, cfg.Action);
+        Assert.Equal("dev-2", cfg.Device!.Id);
+        Assert.Equal("Headphones", cfg.Device.FriendlyName);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_ExpandButton_TogglesBody()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        var body = All<StackPanel>(page, "Body")[0];
+        Assert.True(body.IsVisible);
+
+        var button = All<Button>(page, "ExpandButton")[0];
+        button.Command!.Execute(button.CommandParameter);
+        Assert.False(body.IsVisible);
+
+        button.Command!.Execute(button.CommandParameter);
+        Assert.True(body.IsVisible);
     }
 }
