@@ -223,7 +223,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         var config = NewConfig(c =>
         {
             c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
-            c.Buttons[0].Default().DoublePressWindowMs = 60;
+            c.Buttons[0].DoublePressWindowMs = 60;
         });
         StartRuntime(config);
         var connection = Connection(0);
