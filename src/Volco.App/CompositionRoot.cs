@@ -8,6 +8,7 @@ using Volco.App.Views;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Diagnostics;
+using Volco.Core.Input;
 using Volco.Core.Runtime;
 using Volco.Core.Updates;
 
@@ -33,6 +34,7 @@ internal sealed class CompositionRoot : IDisposable
     private UpdateWindow? _updateWindow;
     private VolumeOsdWindow? _osd;
     private TrayIcon? _trayIcon;
+    private EventHandler<VolumeChangeNotification>? _osdHandler;
     private bool _shutDown;
 
     public CompositionRoot(string configPath, Func<PlatformServices> createPlatform,
@@ -64,7 +66,8 @@ internal sealed class CompositionRoot : IDisposable
         // thread itself (rule b), so the handler calls it directly.
         _osd = new VolumeOsdWindow(_platform.WindowEffects);
         var osd = _osd;
-        _runtime.VolumeChanged += (_, n) => osd.Show(n);
+        _osdHandler = (_, n) => osd.Show(n);
+        _runtime.VolumeChanged += _osdHandler;
 
         // Every handler is subscribed above; only now may the runtime start raising events.
         _runtime.Start();
@@ -197,6 +200,10 @@ internal sealed class CompositionRoot : IDisposable
         // The settings ViewModel owns runtime subscriptions; drop them before the runtime goes.
         _settingsViewModel?.Dispose();
         _settingsViewModel = null;
+
+        // Unsubscribe the OSD before closing it; a never-shown window may not raise Closed.
+        if (_runtime is not null && _osdHandler is not null) _runtime.VolumeChanged -= _osdHandler;
+        _osdHandler = null;
 
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.

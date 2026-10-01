@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Volco.Core.Diagnostics;
 
 namespace Volco.App;
@@ -24,6 +25,16 @@ public partial class VolcoApplication : Application
         (Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
     }
 
+    /// <summary>
+    /// OS logoff/shutdown: run the same teardown as <see cref="RequestExit"/> so the runtime and
+    /// engine dispose cleanly. The lifetime is already shutting down, so it is not asked again.
+    /// </summary>
+    internal static void OnSessionEnding()
+    {
+        _isExiting = true;
+        _root?.Shutdown();
+    }
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
@@ -31,6 +42,17 @@ public partial class VolcoApplication : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                AppLog.Info("Shutdown requested by the OS or platform");
+                OnSessionEnding();
+            };
+            // Replaces the WinUI App constructor's UnhandledException handler: log and keep running.
+            Dispatcher.UIThread.UnhandledException += (_, e) =>
+            {
+                AppLog.Error($"Unhandled UI-thread exception: {e.Exception}");
+                e.Handled = true;
+            };
             try
             {
                 var factory = CreatePlatform

@@ -73,4 +73,17 @@ public class SettingsWindowTests
         Assert.Equal(720, window.Width);
         Assert.Equal(600, window.Height);
     }
+
+    [Theory]
+    [InlineData(WindowCloseReason.WindowClosing, false, false, true)]
+    [InlineData(WindowCloseReason.Undefined, false, false, true)]
+    [InlineData(WindowCloseReason.ApplicationShutdown, false, false, false)]
+    [InlineData(WindowCloseReason.OSShutdown, false, false, false)]
+    [InlineData(WindowCloseReason.WindowClosing, true, false, false)]
+    [InlineData(WindowCloseReason.WindowClosing, false, true, false)]
+    public void SettingsWindow_ShouldHideInsteadOfClose_HonoursShutdownReasons(
+        WindowCloseReason reason, bool allowClose, bool isExiting, bool expectedHide)
+    {
+        Assert.Equal(expectedHide, SettingsWindow.ShouldHideInsteadOfClose(reason, allowClose, isExiting));
+    }
 }

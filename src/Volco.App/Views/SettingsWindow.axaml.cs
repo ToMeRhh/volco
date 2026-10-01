@@ -66,8 +66,13 @@ public partial class SettingsWindow : Window
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         // Hide instead of close so the tray's Open Settings can bring the same window back.
-        if (AllowClose || VolcoApplication.IsExiting) return;
+        if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
         Hide();
     }
+
+    /// <summary>Never cancel an application or OS shutdown, or the session cannot end.</summary>
+    internal static bool ShouldHideInsteadOfClose(WindowCloseReason reason, bool allowClose, bool isExiting)
+        => !(allowClose || isExiting
+             || reason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown);
 }

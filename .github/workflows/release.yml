@@ -46,23 +46,16 @@ jobs:
         cache: true
         cache-dependency-path: Volco.sln
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v3
-
     - name: Publish
       run: |
-        msbuild src/Volco/Volco.csproj `
-          -t:Publish `
-          -m `
-          -restore `
-          -p:Configuration=Release `
-          -p:Platform=x64 `
-          -p:PublishDir=../../publish/ `
-          -p:RuntimeIdentifier=win-x64 `
-          -p:SelfContained=true `
+        dotnet publish src/Volco.Windows/Volco.Windows.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained true `
           -p:PublishSingleFile=true `
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true `
+          -o ./publish/ `
           -p:VolcoVersion=${{ steps.ver.outputs.version }} `
           -p:VolcoReleaseChannel=release
 
