@@ -95,7 +95,15 @@ opinion, not a pass/fail.
     versus WinUI's ~8 (*judgement*; report if it looks wrong).
 
 12. **OSD mute text.** Mute then unmute.
-    *Expected:* muted shows "Muted"; unmuted shows "On".
+    *Expected:* muted shows "Muted"; unmuted shows the device's volume
+    percentage (e.g. "42%").
+
+12a. **OSD output-device switch.** Press a Set Output Device and a Toggle
+    Output Device button. Then switch the default output in Windows Sound
+    settings.
+    *Expected:* each button press shows the new device's name, the speaker icon
+    and its volume (or the muted icon and "Muted" if it is muted). A switch
+    made in Windows Sound settings shows no OSD.
 
 13. **Controller I/O.** With the ESP32 over serial, then with
     `tools/simulator/index.html` over WebSocket: move sliders, press buttons,

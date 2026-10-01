@@ -107,6 +107,8 @@ public class VolumeOsdViewModelTests
         Assert.Equal(OsdGlyph.Volume, vm.Glyph);
         vm.Apply(new VolumeChangeNotification("A", 0.5f, true, OsdKind.Volume));
         Assert.Equal(OsdGlyph.Muted, vm.Glyph);
+        vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Mute));
+        Assert.Equal(OsdGlyph.Volume, vm.Glyph);
         vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Device));
         // Same label/level/text, only the glyph differs: still reported as a change.
         Assert.True(vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Volume)));

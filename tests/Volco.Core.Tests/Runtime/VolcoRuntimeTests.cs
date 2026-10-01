@@ -485,7 +485,9 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         // The same pending record is still live: the matching event now produces the OSD.
         _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
-        Assert.Single(osd.Items);
+        var n = Assert.Single(osd.Items);
+        Assert.Equal(OsdKind.Device, n.Kind);
+        Assert.Equal("Headphones", n.Label);
     }
 
     [Fact]
@@ -547,6 +549,66 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
         Assert.Empty(osd.Items);
+
+        // Prove the path can fire: a fresh switch press works after the replaced one.
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 1), "third press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Equal(OsdKind.Device, Assert.Single(osd.Items).Kind);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_TargetNotPresent_RaisesNoOsdEvenIfItLaterBecomesDefault()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].SinglePress = SetDevice("absent-id", "Unplugged Headset");
+            c.Buttons[2].SinglePress = SetDevice(Headphones, "Headphones");
+        });
+        var runtime = StartRuntime(config);
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+
+        // The headset is plugged in later and becomes default by some other means.
+        var headset = new AudioDevice("absent-id", "Unplugged Headset", AudioFlow.Render, false);
+        _engine.Devices.Add(headset);
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, headset);
+        Assert.Empty(osd.Items);
+
+        // Prove the path can fire with a present target.
+        Press(Connection(0), 2);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 1), "second press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Single(osd.Items);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_SwitchNeverLands_ExpiresAndRaisesNoOsd()
+    {
+        var options = new VolcoRuntimeOptions(Array.Empty<TimeSpan>())
+        {
+            PendingSwitchTimeout = TimeSpan.FromMilliseconds(100),
+        };
+        var runtime = StartRuntime(NewConfig(c => c.Buttons[0].SinglePress = SetDevice(Headphones, "Headphones")),
+                                   options: options);
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        Thread.Sleep(250);   // past the 100 ms deadline
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Empty(osd.Items);
+
+        // Prove the path can fire: a fresh press inside the window does.
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 1), "second press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Single(osd.Items);
     }
 
     // ---- controller-state pushes -----------------------------------------------------------

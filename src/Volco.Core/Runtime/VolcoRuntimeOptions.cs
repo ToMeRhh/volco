@@ -11,4 +11,8 @@ public sealed record VolcoRuntimeOptions(IReadOnlyList<TimeSpan> PostConnectRepu
 {
     public static VolcoRuntimeOptions Default { get; } =
         new(new[] { TimeSpan.FromMilliseconds(750), TimeSpan.FromMilliseconds(2500) });
+
+    /// <summary>How long a device-switch press waits for its DefaultChanged before the pending
+    /// OSD is discarded (a switch that never lands must not claim a later, unrelated change).</summary>
+    public TimeSpan PendingSwitchTimeout { get; init; } = TimeSpan.FromSeconds(3);
 }

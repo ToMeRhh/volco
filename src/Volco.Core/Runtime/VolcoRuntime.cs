@@ -74,7 +74,7 @@ public sealed class VolcoRuntime : IDisposable
     /// detector and audio threads, no lock) so that of the up-to-3 per-role DefaultChanged events
     /// exactly one wins the compare-exchange and raises the OSD.
     /// </summary>
-    private sealed record PendingDeviceOsd(string TargetId);
+    private sealed record PendingDeviceOsd(string TargetId, long DeadlineTickMs);
     private PendingDeviceOsd? _pendingDeviceOsd;
 
     /// <summary>
@@ -456,8 +456,12 @@ public sealed class VolcoRuntime : IDisposable
                 // Already the default: Windows raises no change, so confirm right away.
                 if (current is not null && string.Equals(current.Id, targetId, StringComparison.OrdinalIgnoreCase))
                     alreadyCurrent = current;
-                else
-                    pendingSwitch = new PendingDeviceOsd(targetId);
+                else if (Audio.GetDevices(AudioFlow.Render)
+                             .Any(d => string.Equals(d.Id, targetId, StringComparison.OrdinalIgnoreCase)))
+                    // Only a target that is present can land. An absent one (unplugged headset)
+                    // would leave the record dangling and claim a later external switch.
+                    pendingSwitch = new PendingDeviceOsd(
+                        targetId, Environment.TickCount64 + (long)_options.PendingSwitchTimeout.TotalMilliseconds);
             }
         }
         Interlocked.Exchange(ref _pendingDeviceOsd, pendingSwitch);
@@ -559,6 +563,12 @@ public sealed class VolcoRuntime : IDisposable
             // Device-switch OSD. Clear the pending record FIRST (compare-exchange: only one of
             // the per-role DefaultChanged events wins), then raise. No lock is held.
             var pendingSwitch = Volatile.Read(ref _pendingDeviceOsd);
+            if (pendingSwitch is not null && Environment.TickCount64 > pendingSwitch.DeadlineTickMs)
+            {
+                // Expired: the switch never landed. Discard without raising.
+                Interlocked.CompareExchange(ref _pendingDeviceOsd, null, pendingSwitch);
+                pendingSwitch = null;
+            }
             if (pendingSwitch is not null
                 && e.Device.Flow == AudioFlow.Render
                 && string.Equals(pendingSwitch.TargetId, e.Device.Id, StringComparison.OrdinalIgnoreCase)

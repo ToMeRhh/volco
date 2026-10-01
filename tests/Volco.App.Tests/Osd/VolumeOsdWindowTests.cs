@@ -140,12 +140,14 @@ public class VolumeOsdWindowTests
         Assert.Equal("Muted", osd.ValueBlock.Text);
         Assert.True(osd.MutedGlyph.IsVisible);
         Assert.False(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.SpeakerGlyph.IsVisible);
 
         osd.Show(new VolumeChangeNotification("Output", 0.42f, false, OsdKind.Mute));
         PumpUntil(() => osd.ValueBlock.Text == "42%");
         Assert.Equal("42%", osd.ValueBlock.Text);
         Assert.False(osd.MutedGlyph.IsVisible);
         Assert.True(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.SpeakerGlyph.IsVisible);
         osd.Close();
     }
 
