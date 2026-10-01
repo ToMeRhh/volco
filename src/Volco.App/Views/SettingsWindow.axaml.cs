@@ -32,7 +32,7 @@ public partial class SettingsWindow : Window
         _navList.ItemsSource = new[]
         {
             Nav("Connection", "connection", "Icon.Connection", () => new ConnectionPage(vm.Connection)),
-            Nav("Sliders", "sliders", "Icon.Sliders", () => new SlidersPage()),
+            Nav("Sliders", "sliders", "Icon.Sliders", () => new SlidersPage(vm.Sliders)),
             Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage()),
             Nav("Output Devices", "outputdevices", "Icon.Speaker", () => new OutputDevicesPage()),
             Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),

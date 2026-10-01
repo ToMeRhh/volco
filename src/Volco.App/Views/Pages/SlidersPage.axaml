@@ -1,4 +1,141 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Volco.App.Views.Pages.SlidersPage">
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Views.Pages.SlidersPage"
+             x:DataType="vm:SlidersViewModel">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{StaticResource PagePadding}"
+                Spacing="{StaticResource SpaceL}"
+                MaxWidth="{StaticResource SettingsCardMaxWidth}"
+                HorizontalAlignment="Left">
+
+      <TextBlock Text="Slider Mappings" Classes="SectionHeader"/>
+
+      <ItemsControl Name="SliderRepeater" ItemsSource="{Binding Items}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:SliderItemViewModel">
+            <Border Padding="{StaticResource CardPadding}"
+                    Margin="0,0,0,8"
+                    CornerRadius="{StaticResource CardCornerRadius}"
+                    Background="{DynamicResource SurfaceCardBrush}"
+                    BorderBrush="{DynamicResource SurfaceStrokeBrush}"
+                    BorderThickness="1">
+              <StackPanel Spacing="{StaticResource SpaceS}">
+
+                <!-- Title row: "Slider N" + collapse chevron -->
+                <Button Name="ExpandButton"
+                        Command="{Binding ToggleExpandedCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Index, StringFormat='Slider {0}'}"
+                               Classes="CardTitle"
+                               VerticalAlignment="Center"/>
+                    <Panel Grid.Column="1" VerticalAlignment="Center">
+                      <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                                IsVisible="{Binding IsExpanded}"/>
+                      <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
+                                IsVisible="{Binding !IsExpanded}"/>
+                    </Panel>
+                  </Grid>
+                </Button>
+
+                <!-- Collapsible body -->
+                <StackPanel Name="Body" Spacing="{StaticResource SpaceS}" IsVisible="{Binding IsExpanded}">
+
+                  <StackPanel Spacing="{StaticResource SpaceXs}">
+                    <TextBlock Text="Live Level" Classes="Caption"/>
+                    <ProgressBar Name="LiveLevelBar"
+                                 Minimum="0" Maximum="1"
+                                 Value="{Binding LiveLevel, Mode=OneWay}"
+                                 Height="6"
+                                 HorizontalAlignment="Stretch"/>
+                  </StackPanel>
+
+                  <StackPanel Spacing="{StaticResource SpaceXs}">
+                    <TextBlock Text="Mapping Type" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Name="MappingCombo"
+                              SelectedIndex="{Binding MappingTypeIndex, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}">
+                      <ComboBoxItem Content="Processes"/>
+                      <ComboBoxItem Content="Output Device"/>
+                      <ComboBoxItem Content="Unmapped"/>
+                    </ComboBox>
+                  </StackPanel>
+
+                  <StackPanel Name="ProcessesSection" Spacing="{StaticResource SpaceXs}"
+                              IsVisible="{Binding IsProcessesVisible}">
+                    <TextBlock Text="Processes (comma-separated)" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <AutoCompleteBox Name="ProcessBox"
+                                     Width="300"
+                                     HorizontalAlignment="Left"
+                                     Watermark="e.g. spotify.exe, chrome.exe"
+                                     FilterMode="None"
+                                     MinimumPrefixLength="0"
+                                     Text="{Binding ProcessesText, Mode=TwoWay}"
+                                     TextChanged="ProcessBox_TextChanged"
+                                     AttachedToVisualTree="ProcessBox_Attached"/>
+                  </StackPanel>
+
+                  <StackPanel Name="DeviceSection" Spacing="{StaticResource SpaceXs}"
+                              IsVisible="{Binding IsDeviceVisible}">
+                    <TextBlock Text="Output Device" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Name="DeviceCombo"
+                              ItemsSource="{Binding OutputDeviceNames}"
+                              SelectedItem="{Binding DeviceName, Mode=TwoWay}"
+                              Width="300"
+                              PlaceholderText="Select device…"/>
+                  </StackPanel>
+
+                  <CheckBox Name="InvertCheck" Content="Invert" IsChecked="{Binding Invert, Mode=TwoWay}"/>
+
+                  <TextBlock Text="Tuning" Classes="Caption" Margin="0,4,0,0"/>
+
+                  <StackPanel Spacing="{StaticResource SpaceXs}">
+                    <TextBlock Text="Response Curve" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Name="CurveCombo"
+                              SelectedIndex="{Binding CurveIndex, Mode=TwoWay}"
+                              Width="{StaticResource ComboBoxStandardWidth}">
+                      <ComboBoxItem Content="Linear"/>
+                      <ComboBoxItem Content="Logarithmic"/>
+                      <ComboBoxItem Content="Exponential"/>
+                      <ComboBoxItem Content="S-Curve"/>
+                    </ComboBox>
+                  </StackPanel>
+
+                  <StackPanel Spacing="{StaticResource SpaceXs}">
+                    <TextBlock Text="Dead Zone" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Slider Name="DeadZoneSlider"
+                            Minimum="0" Maximum="0.45"
+                            Value="{Binding DeadZonePercent, Mode=TwoWay}"
+                            Width="{StaticResource SliderStandardWidth}"
+                            HorizontalAlignment="Left"
+                            TickFrequency="0.05"
+                            TickPlacement="BottomRight"/>
+                  </StackPanel>
+
+                  <StackPanel Spacing="{StaticResource SpaceXs}">
+                    <TextBlock Text="Smoothing" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Slider Name="SmoothingSlider"
+                            Minimum="0" Maximum="0.95"
+                            Value="{Binding SmoothingFactor, Mode=TwoWay}"
+                            Width="{StaticResource SliderStandardWidth}"
+                            HorizontalAlignment="Left"
+                            TickFrequency="0.1"
+                            TickPlacement="BottomRight"/>
+                  </StackPanel>
+
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>
