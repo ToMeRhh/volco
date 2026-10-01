@@ -215,18 +215,35 @@ public partial class SliderItemViewModel : ObservableObject
     /// <summary>Returns process-name suggestions matching the last typed token.</summary>
     public List<string> GetProcessSuggestions(string currentText)
     {
-        var parts = currentText.Split(',');
-        var lastPart = parts.LastOrDefault()?.Trim() ?? "";
-        if (string.IsNullOrEmpty(lastPart))
+        if (LastToken(currentText).Length == 0)
             return new List<string>();
 
-        return _audio.GetSessions()
+        return GetLiveProcessNames()
+            .Where(n => MatchesLastToken(currentText, n))
+            .ToList();
+    }
+
+    /// <summary>Distinct image names of every live audio session, case-insensitively de-duplicated.</summary>
+    public List<string> GetLiveProcessNames()
+        => _audio.GetSessions()
             .Select(s => s.ImageName)
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(p => p.Contains(lastPart, StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+    /// <summary>
+    /// The suggestion rule: the last comma-separated token of <paramref name="text"/> is non-empty and
+    /// <paramref name="processName"/> contains it, ignoring case.
+    /// </summary>
+    public static bool MatchesLastToken(string? text, string? processName)
+    {
+        var last = LastToken(text);
+        return last.Length > 0 && processName != null
+            && processName.Contains(last, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string LastToken(string? text)
+        => (text ?? "").Split(',').LastOrDefault()?.Trim() ?? "";
 
     private void Persist() => _save();
 

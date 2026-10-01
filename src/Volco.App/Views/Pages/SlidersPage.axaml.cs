@@ -36,17 +36,33 @@ public partial class SlidersPage : UserControl
 
     private void ProcessBox_Attached(object? sender, VisualTreeAttachmentEventArgs e)
     {
+        if (sender is not AutoCompleteBox box) return;
+
         // Built-in selection would put the bare suggestion in the box and drop earlier tokens.
-        if (sender is AutoCompleteBox box)
-            box.TextSelector = (search, item) => ReplaceLastToken(search, item);
+        box.TextSelector = (search, item) => ReplaceLastToken(search, item);
+
+        // The box filters the full live list itself (on the last token). Reassigning ItemsSource while
+        // a suggestion is being committed clears the dropdown selection, which makes the box revert
+        // the pick to the typed text, so the list is only refreshed on focus / dropdown open.
+        box.ItemFilter = (search, item) => SliderItemViewModel.MatchesLastToken(search, item as string);
+        RefreshProcessNames(box);
+        box.GotFocus -= ProcessBox_Refresh;
+        box.GotFocus += ProcessBox_Refresh;
+        box.DropDownOpened -= ProcessBox_Refresh;
+        box.DropDownOpened += ProcessBox_Refresh;
     }
 
-    private void ProcessBox_TextChanged(object? sender, TextChangedEventArgs e)
+    private void ProcessBox_Refresh(object? sender, EventArgs e)
     {
-        if (sender is AutoCompleteBox { DataContext: SliderItemViewModel vm } box)
-        {
-            var suggestions = vm.GetProcessSuggestions(box.Text ?? "");
-            box.ItemsSource = suggestions.Count > 0 ? suggestions : null;
-        }
+        if (sender is AutoCompleteBox box) RefreshProcessNames(box);
+    }
+
+    private static void RefreshProcessNames(AutoCompleteBox box)
+    {
+        if (box.DataContext is not SliderItemViewModel vm) return;
+        var names = vm.GetLiveProcessNames();
+        // Skip no-op reassignments: they would reset the dropdown view and selection.
+        if (box.ItemsSource is IEnumerable<string> current && current.SequenceEqual(names)) return;
+        box.ItemsSource = names;
     }
 }

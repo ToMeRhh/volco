@@ -89,10 +89,11 @@ public class SlidersPageTests
         box.Text = "discord.exe, ch";
         Dispatcher.UIThread.RunJobs();
 
-        var suggestions = Assert.IsAssignableFrom<IEnumerable<string>>(box.ItemsSource).ToList();
-        Assert.Equal(new[] { "chrome.exe" }, suggestions);
+        // The box holds the full live list; the ItemFilter narrows it to the last token.
+        Assert.True(SliderItemViewModel.MatchesLastToken(box.Text, "chrome.exe"));
+        Assert.False(SliderItemViewModel.MatchesLastToken(box.Text, "spotify.exe"));
 
-        // Choosing a suggestion replaces only the last token.
+        // Programmatic selection; the real commit path is covered by the test below.
         box.SelectedItem = "chrome.exe";
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("discord.exe, chrome.exe", box.Text);
