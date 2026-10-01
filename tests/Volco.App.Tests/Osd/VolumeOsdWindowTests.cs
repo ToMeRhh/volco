@@ -34,7 +34,10 @@ public class VolumeOsdWindowTests
         TimeSpan.FromMilliseconds(visibleMs), TimeSpan.FromMilliseconds(fadeMs),
         TimeSpan.FromMilliseconds(16), TimeSpan.FromMilliseconds(5));
 
-    /// <summary>Pumps the dispatcher (jobs and timers) until the condition holds or time runs out.</summary>
+    /// <summary>
+    /// Pumps the dispatcher until the condition holds or time runs out. RunJobs alone never fires
+    /// DispatcherTimers on the headless platform, so run short slices of the real dispatcher loop.
+    /// </summary>
     private static bool PumpUntil(Func<bool> condition, int timeoutMs = 5000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
@@ -42,7 +45,9 @@ public class VolumeOsdWindowTests
         {
             Dispatcher.UIThread.RunJobs();
             if (condition()) return true;
-            Thread.Sleep(2);
+            using var slice = new CancellationTokenSource();
+            slice.CancelAfter(10);
+            Dispatcher.UIThread.MainLoop(slice.Token);
         }
         Dispatcher.UIThread.RunJobs();
         return condition();
