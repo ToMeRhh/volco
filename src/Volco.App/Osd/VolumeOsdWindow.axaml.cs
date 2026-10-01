@@ -18,7 +18,7 @@ internal sealed record OsdTimings(TimeSpan Visible, TimeSpan Fade, TimeSpan Coal
 
 /// <summary>
 /// Borderless, click-through, never-activating pill shown bottom-centre when a slider moves or a
-/// mute button is pressed. Created once, kept hidden, re-shown. Portable Avalonia code; the only
+/// mute button is pressed or the output device is switched. Created once, kept hidden, re-shown. Portable Avalonia code; the only
 /// platform part is <see cref="IWindowEffects.MakeClickThrough"/>, applied once from the first Opened.
 /// </summary>
 public sealed partial class VolumeOsdWindow : Window
@@ -34,6 +34,7 @@ public sealed partial class VolumeOsdWindow : Window
     private readonly ProgressBar _bar;
     private readonly PathIcon _volumeIcon;
     private readonly PathIcon _mutedIcon;
+    private readonly PathIcon _speakerIcon;
     private readonly DispatcherTimer _hideTimer;
     private readonly DispatcherTimer _fadeTimer;
     private readonly Stopwatch _fadeClock = new();
@@ -61,6 +62,7 @@ public sealed partial class VolumeOsdWindow : Window
         _bar = this.FindControl<ProgressBar>("LevelBar")!;
         _volumeIcon = this.FindControl<PathIcon>("VolumeIcon")!;
         _mutedIcon = this.FindControl<PathIcon>("MutedIcon")!;
+        _speakerIcon = this.FindControl<PathIcon>("SpeakerIcon")!;
 
         _hideTimer = new DispatcherTimer { Interval = _timings.Visible };
         _hideTimer.Tick += (_, _) => { _hideTimer.Stop(); BeginFade(); };
@@ -90,6 +92,7 @@ public sealed partial class VolumeOsdWindow : Window
     internal ProgressBar LevelBarControl => _bar;
     internal PathIcon VolumeGlyph => _volumeIcon;
     internal PathIcon MutedGlyph => _mutedIcon;
+    internal PathIcon SpeakerGlyph => _speakerIcon;
 
     /// <summary>Shows the notification. Safe to call from any thread; posts to the UI thread itself.</summary>
     public void Show(VolumeChangeNotification n)
@@ -157,8 +160,9 @@ public sealed partial class VolumeOsdWindow : Window
         _value.Text = _vm.ValueText;
         _bar.Value = _vm.Level;
         _bar.Opacity = _vm.LevelBarOpacity;
-        _mutedIcon.IsVisible = _vm.IsMutedGlyph;
-        _volumeIcon.IsVisible = !_vm.IsMutedGlyph;
+        _mutedIcon.IsVisible = _vm.Glyph == OsdGlyph.Muted;
+        _speakerIcon.IsVisible = _vm.Glyph == OsdGlyph.Speaker;
+        _volumeIcon.IsVisible = _vm.Glyph == OsdGlyph.Volume;
     }
 
     private void Reposition()

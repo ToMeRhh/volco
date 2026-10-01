@@ -135,17 +135,40 @@ public class VolumeOsdWindowTests
     {
         var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000));
 
-        osd.Show(new VolumeChangeNotification("Output", 1.0f, true, OsdKind.Mute));
+        osd.Show(new VolumeChangeNotification("Output", 0.42f, true, OsdKind.Mute));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Muted", osd.ValueBlock.Text);
         Assert.True(osd.MutedGlyph.IsVisible);
         Assert.False(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.SpeakerGlyph.IsVisible);
 
-        osd.Show(new VolumeChangeNotification("Output", 1.0f, false, OsdKind.Mute));
-        PumpUntil(() => osd.ValueBlock.Text == "On");
-        Assert.Equal("On", osd.ValueBlock.Text);
+        osd.Show(new VolumeChangeNotification("Output", 0.42f, false, OsdKind.Mute));
+        PumpUntil(() => osd.ValueBlock.Text == "42%");
+        Assert.Equal("42%", osd.ValueBlock.Text);
         Assert.False(osd.MutedGlyph.IsVisible);
         Assert.True(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.SpeakerGlyph.IsVisible);
+        osd.Close();
+    }
+
+    [AvaloniaFact]
+    public void OsdWindow_DeviceNotification_ShowsSpeakerGlyphAndPercent()
+    {
+        var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000));
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.37f, false, OsdKind.Device));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Headphones", osd.LabelBlock.Text);
+        Assert.Equal("37%", osd.ValueBlock.Text);
+        Assert.True(osd.SpeakerGlyph.IsVisible);
+        Assert.False(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.MutedGlyph.IsVisible);
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.37f, true, OsdKind.Device));
+        PumpUntil(() => osd.ValueBlock.Text == "Muted");
+        Assert.Equal("Muted", osd.ValueBlock.Text);
+        Assert.True(osd.MutedGlyph.IsVisible);
+        Assert.False(osd.SpeakerGlyph.IsVisible);
         osd.Close();
     }
 

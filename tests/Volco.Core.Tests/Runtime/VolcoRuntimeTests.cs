@@ -253,6 +253,45 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void MutePress_OwnChangeLandsUnmuted_RaisesMuteOsdWithRealLevel()
+    {
+        var runtime = StartRuntime();
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+        _engine.DeviceStates[Speakers] = (0.42f, true);   // muted before the press
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "press never executed");
+
+        _engine.DeviceStates[Speakers] = (0.42f, false);
+        _engine.RaiseDeviceVolumeChanged(Speakers, 0.42f, muted: false, isOwnChange: true);
+
+        var n = Assert.Single(osd.Items);
+        Assert.Equal(OsdKind.Mute, n.Kind);
+        Assert.False(n.Muted);
+        Assert.Equal(0.42f, n.Level);
+    }
+
+    [Fact]
+    public void MutePress_OwnChangeLandsMuted_RaisesMuteOsdWithRealLevel()
+    {
+        var runtime = StartRuntime();
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+        _engine.DeviceStates[Speakers] = (0.42f, false);
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "press never executed");
+
+        _engine.DeviceStates[Speakers] = (0.42f, true);
+        _engine.RaiseDeviceVolumeChanged(Speakers, 0.42f, muted: true, isOwnChange: true);
+
+        var n = Assert.Single(osd.Items);
+        Assert.True(n.Muted);
+        Assert.Equal(0.42f, n.Level);
+    }
+
+    [Fact]
     public void MutePress_ExternalChange_DoesNotRaiseOsd()
     {
         var runtime = StartRuntime();
@@ -300,6 +339,276 @@ public sealed class VolcoRuntimeTests : IDisposable
         _engine.RaiseDeviceVolumeChanged(Headphones, 0.3f, muted: false, isOwnChange: true);
 
         Assert.Empty(osd.Items);
+    }
+
+    // ---- output-device switch OSD ----------------------------------------------------------
+
+    private static ButtonActionConfig SetDevice(string id, string name = "") => new()
+    {
+        Action = ButtonActionType.SetOutputDevice,
+        Device = new DeviceRefConfig { Id = id, FriendlyName = name },
+    };
+
+    private static ButtonActionConfig ToggleDevice() => new() { Action = ButtonActionType.ToggleOutputDevice };
+
+    private AudioDevice DeviceById(string id) => _engine.Devices.First(d => d.Id == id);
+
+    private (VolcoRuntime Runtime, Recorder<VolumeChangeNotification> Osd) StartWithButton0(ButtonActionConfig action)
+    {
+        var runtime = StartRuntime(NewConfig(c => c.Buttons[0].SinglePress = action));
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+        return (runtime, osd);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_RaisesDeviceOsdOnlyAfterDefaultChanged_AndOnlyOnce()
+    {
+        _engine.DeviceStates[Headphones] = (0.3f, false);
+        var (_, osd) = StartWithButton0(SetDevice(Headphones, "Headphones"));
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        Assert.Equal(Headphones, Snapshot(_engine.SetDefaultCalls)[0].EndpointId);
+        Assert.Empty(osd.Items);   // the switch has not landed yet
+
+        // Windows raises DefaultChanged once per role.
+        for (var i = 0; i < 3; i++)
+            _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+
+        var n = Assert.Single(osd.Items);
+        Assert.Equal(OsdKind.Device, n.Kind);
+        Assert.Equal("Headphones", n.Label);
+        Assert.Equal(0.3f, n.Level);
+        Assert.False(n.Muted);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_TargetMuted_CarriesMuteFlag()
+    {
+        _engine.DeviceStates[Headphones] = (0.3f, true);
+        var (_, osd) = StartWithButton0(SetDevice(Headphones));
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+
+        var n = Assert.Single(osd.Items);
+        Assert.True(n.Muted);
+        Assert.Equal(0.3f, n.Level);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_StateUnreadable_StillShowsNameAtLevelZero()
+    {
+        _engine.DeviceStates.Remove(Headphones);
+        var (_, osd) = StartWithButton0(SetDevice(Headphones));
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+
+        var n = Assert.Single(osd.Items);
+        Assert.Equal("Headphones", n.Label);
+        Assert.Equal(0f, n.Level);
+        Assert.False(n.Muted);
+    }
+
+    [Fact]
+    public void ToggleOutputDevicePress_OnDevice1_TargetsDevice2()
+    {
+        _engine.DeviceStates[Headphones] = (0.6f, false);
+        var (_, osd) = StartWithButton0(ToggleDevice());   // default render is Speakers (Device1)
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        Assert.Equal(Headphones, Snapshot(_engine.SetDefaultCalls)[0].EndpointId);
+        Assert.Empty(osd.Items);
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+
+        var n = Assert.Single(osd.Items);
+        Assert.Equal(OsdKind.Device, n.Kind);
+        Assert.Equal("Headphones", n.Label);
+        Assert.Equal(0.6f, n.Level);
+    }
+
+    [Fact]
+    public void ToggleOutputDevicePress_OnAnotherDevice_TargetsDevice1()
+    {
+        _engine.DefaultRender = DeviceById(Headphones);   // Device2 is current -> back to Device1
+        var (_, osd) = StartWithButton0(ToggleDevice());
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        Assert.Equal(Speakers, Snapshot(_engine.SetDefaultCalls)[0].EndpointId);
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Speakers));
+
+        Assert.Equal("Speakers", Assert.Single(osd.Items).Label);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_TargetAlreadyDefault_RaisesDeviceOsdImmediately()
+    {
+        _engine.DeviceStates[Speakers] = (0.8f, false);
+        var (_, osd) = StartWithButton0(SetDevice(Speakers, "Speakers"));   // Speakers is already default
+
+        Press(Connection(0), 0);
+
+        Assert.True(WaitUntil(() => osd.Count > 0), "no confirmation OSD for a no-op switch");
+        var n = Assert.Single(osd.Items);
+        Assert.Equal(OsdKind.Device, n.Kind);
+        Assert.Equal("Speakers", n.Label);
+        Assert.Equal(0.8f, n.Level);
+
+        // Nothing is left pending: a later DefaultChanged to the same device stays silent.
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Speakers));
+        Assert.Single(osd.Items);
+    }
+
+    [Fact]
+    public void DefaultChanged_ThatDoesNotMatchPendingTarget_RaisesNoOsd()
+    {
+        var (_, osd) = StartWithButton0(SetDevice(Headphones, "Headphones"));
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+
+        // Different device, and the right id on the wrong flow.
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Speakers));
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged,
+            new AudioDevice(Headphones, "Headphones", AudioFlow.Capture, false));
+        // Right device, wrong change kind.
+        _engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, DeviceById(Headphones));
+        Assert.Empty(osd.Items);
+
+        // The same pending record is still live: the matching event now produces the OSD.
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        var n = Assert.Single(osd.Items);
+        Assert.Equal(OsdKind.Device, n.Kind);
+        Assert.Equal("Headphones", n.Label);
+    }
+
+    [Fact]
+    public void ExternalDefaultChanged_WithNoPress_RaisesNoOsd()
+    {
+        var (_, osd) = StartWithButton0(SetDevice(Headphones, "Headphones"));
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Empty(osd.Items);
+
+        // Prove the path can fire: the same event after a press does.
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Single(osd.Items);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_WithEmptyTargetId_RaisesNoOsd()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].SinglePress = SetDevice("");   // unconfigured (no id, no name, so HealDeviceIds cannot fill it): a no-op
+            c.Buttons[2].SinglePress = SetDevice(Headphones, "Headphones");
+        });
+        var runtime = StartRuntime(config);
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);
+        Assert.True(StaysUnchanged(() => osd.Count));
+        Assert.Empty(Snapshot(_engine.SetDefaultCalls));
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Empty(osd.Items);
+
+        // Prove the path can fire with a real target.
+        Press(Connection(0), 2);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Single(osd.Items);
+    }
+
+    [Fact]
+    public void LaterPress_ReplacesPendingSwitch()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].SinglePress = SetDevice(Headphones, "Headphones");
+            c.Buttons[2].SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+        });
+        var runtime = StartRuntime(config);
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        Press(Connection(0), 2);
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "second press never executed");
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Empty(osd.Items);
+
+        // Prove the path can fire: a fresh switch press works after the replaced one.
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 1), "third press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Equal(OsdKind.Device, Assert.Single(osd.Items).Kind);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_TargetNotPresent_RaisesNoOsdEvenIfItLaterBecomesDefault()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].SinglePress = SetDevice("absent-id", "Unplugged Headset");
+            c.Buttons[2].SinglePress = SetDevice(Headphones, "Headphones");
+        });
+        var runtime = StartRuntime(config);
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+
+        // The headset is plugged in later and becomes default by some other means.
+        var headset = new AudioDevice("absent-id", "Unplugged Headset", AudioFlow.Render, false);
+        _engine.Devices.Add(headset);
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, headset);
+        Assert.Empty(osd.Items);
+
+        // Prove the path can fire with a present target.
+        Press(Connection(0), 2);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 1), "second press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Single(osd.Items);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_SwitchNeverLands_ExpiresAndRaisesNoOsd()
+    {
+        var options = new VolcoRuntimeOptions(Array.Empty<TimeSpan>())
+        {
+            PendingSwitchTimeout = TimeSpan.FromMilliseconds(100),
+        };
+        var runtime = StartRuntime(NewConfig(c => c.Buttons[0].SinglePress = SetDevice(Headphones, "Headphones")),
+                                   options: options);
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        Thread.Sleep(250);   // past the 100 ms deadline
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Empty(osd.Items);
+
+        // Prove the path can fire: a fresh press inside the window does.
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 1), "second press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+        Assert.Single(osd.Items);
     }
 
     // ---- controller-state pushes -----------------------------------------------------------

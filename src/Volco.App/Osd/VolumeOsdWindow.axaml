@@ -19,6 +19,8 @@
       <Panel Width="20" Height="20" VerticalAlignment="Center">
         <PathIcon Name="VolumeIcon" Data="{StaticResource Icon.Volume}" Width="20" Height="20"
                   Foreground="White"/>
+        <PathIcon Name="SpeakerIcon" Data="{StaticResource Icon.Speaker}" Width="20" Height="20"
+                  Foreground="White" IsVisible="False"/>
         <PathIcon Name="MutedIcon" Data="{StaticResource Icon.Muted}" Width="20" Height="20"
                   Foreground="White" IsVisible="False"/>
       </Panel>

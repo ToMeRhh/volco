@@ -16,15 +16,20 @@ public class ToggleOutputDeviceAction : IButtonAction
 
     public void Execute()
     {
-        var devices = _configManager.Config.OutputDevices;
-        var current = _audio.GetDefaultDevice(AudioFlow.Render);
+        var id = ResolveTargetId(_audio.GetDefaultDevice(AudioFlow.Render), _configManager.Config.OutputDevices);
+        if (id is null) return;
+        _audio.SetDefaultDevice(id, AudioFlow.Render);
+    }
 
+    /// <summary>The endpoint id a toggle press switches to, or null when that slot has no id.
+    /// Shared with <see cref="Runtime.VolcoRuntime"/>, which needs the target before Execute()
+    /// for the OSD.</summary>
+    internal static string? ResolveTargetId(AudioDevice? current, OutputDevicesConfig devices)
+    {
         // On device 1 -> go to 2. Anywhere else (including a third device) -> go to 1.
         var onDevice1 = current != null && DeviceMatches(current, devices.Device1);
         var target = onDevice1 ? devices.Device2 : devices.Device1;
-
-        if (string.IsNullOrEmpty(target?.Id)) return;
-        _audio.SetDefaultDevice(target.Id, AudioFlow.Render);
+        return target?.Id is { Length: > 0 } id ? id : null;
     }
 
     internal static bool DeviceMatches(AudioDevice device, DeviceRefConfig? cfg)

@@ -16,8 +16,13 @@ public class SetOutputDeviceAction : IButtonAction
 
     public void Execute()
     {
-        var id = _device?.Id;
-        if (string.IsNullOrEmpty(id)) return;    // unconfigured -> no-op
+        var id = ResolveTargetId(_device);
+        if (id is null) return;    // unconfigured -> no-op
         _audio.SetDefaultDevice(id, AudioFlow.Render);
     }
+
+    /// <summary>The endpoint id this action switches to, or null when unconfigured. Shared with
+    /// <see cref="Runtime.VolcoRuntime"/>, which needs the target before Execute() for the OSD.</summary>
+    internal static string? ResolveTargetId(DeviceRefConfig? device)
+        => device?.Id is { Length: > 0 } id ? id : null;
 }
