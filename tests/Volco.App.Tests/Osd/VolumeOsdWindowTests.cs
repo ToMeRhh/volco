@@ -135,15 +135,15 @@ public class VolumeOsdWindowTests
     {
         var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000));
 
-        osd.Show(new VolumeChangeNotification("Output", 1.0f, true, OsdKind.Mute));
+        osd.Show(new VolumeChangeNotification("Output", 0.42f, true, OsdKind.Mute));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Muted", osd.ValueBlock.Text);
         Assert.True(osd.MutedGlyph.IsVisible);
         Assert.False(osd.VolumeGlyph.IsVisible);
 
-        osd.Show(new VolumeChangeNotification("Output", 1.0f, false, OsdKind.Mute));
-        PumpUntil(() => osd.ValueBlock.Text == "On");
-        Assert.Equal("On", osd.ValueBlock.Text);
+        osd.Show(new VolumeChangeNotification("Output", 0.42f, false, OsdKind.Mute));
+        PumpUntil(() => osd.ValueBlock.Text == "42%");
+        Assert.Equal("42%", osd.ValueBlock.Text);
         Assert.False(osd.MutedGlyph.IsVisible);
         Assert.True(osd.VolumeGlyph.IsVisible);
         osd.Close();

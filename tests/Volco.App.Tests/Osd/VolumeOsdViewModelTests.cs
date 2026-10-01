@@ -19,17 +19,20 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_MuteKind_ShowsMutedOrOn()
+    public void OsdViewModel_MuteKind_ShowsMutedOrPercent()
     {
         var vm = new VolumeOsdViewModel();
 
-        vm.Apply(new VolumeChangeNotification("Output", 1.0f, true, OsdKind.Mute));
-        Assert.Equal("Muted", vm.ValueText);   // never "100%" for a muted device
+        vm.Apply(new VolumeChangeNotification("Output", 0.42f, true, OsdKind.Mute));
+        Assert.Equal("Muted", vm.ValueText);   // never a percentage for a muted device
         Assert.True(vm.IsMutedGlyph);
+        Assert.Equal(42, vm.Level, 1);         // the bar keeps the real level...
+        Assert.Equal(0.4, vm.LevelBarOpacity); // ...dimmed
 
-        vm.Apply(new VolumeChangeNotification("Output", 1.0f, false, OsdKind.Mute));
-        Assert.Equal("On", vm.ValueText);
+        vm.Apply(new VolumeChangeNotification("Output", 0.42f, false, OsdKind.Mute));
+        Assert.Equal("42%", vm.ValueText);     // unmute shows the level, not "On"
         Assert.False(vm.IsMutedGlyph);
+        Assert.Equal(1.0, vm.LevelBarOpacity);
     }
 
     [Fact]

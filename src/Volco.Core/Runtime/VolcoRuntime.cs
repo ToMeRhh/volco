@@ -531,34 +531,42 @@ public sealed class VolcoRuntime : IDisposable
     }
 
     /// <summary>Raises <see cref="VolumeChanged"/> with an <see cref="OsdKind.Mute"/>
-    /// notification reflecting the target device's post-write state.</summary>
+    /// notification reflecting the target device's post-write mute flag and real level (the
+    /// OSD shows "Muted", or the percentage on unmute).</summary>
     private void ShowMuteOsd(ButtonActionConfig actionConfig)
     {
         string? label;
         bool muted;
+        float level;
         switch (actionConfig.Action)
         {
             case ButtonActionType.MuteCurrentOutput:
                 label = Audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName ?? "Output";
-                muted = Audio.TryGetDeviceState(
-                    DeviceRef.DefaultOutput(), out _, out var outputMuted) && outputMuted;
+                muted = ReadState(DeviceRef.DefaultOutput(), out level);
                 break;
             case ButtonActionType.MuteSpecificDevice:
                 var specificDevice = ActionFactory.Resolve(actionConfig.Device);
                 if (specificDevice == null) return; // unresolvable device config; nothing to show
                 label = actionConfig.Device?.FriendlyName ?? "Output";
-                muted = Audio.TryGetDeviceState(specificDevice.Value, out _, out var specificMuted) && specificMuted;
+                muted = ReadState(specificDevice.Value, out level);
                 break;
             case ButtonActionType.MuteCurrentInput:
                 label = "Microphone";
-                muted = Audio.TryGetDeviceState(
-                    DeviceRef.DefaultInput(), out _, out var inputMuted) && inputMuted;
+                muted = ReadState(DeviceRef.DefaultInput(), out level);
                 break;
             default:
                 return; // non-mute actions don't show the OSD
         }
 
-        RaiseVolumeChanged(new VolumeChangeNotification(label, muted ? 0f : 1f, muted, OsdKind.Mute));
+        RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Mute));
+    }
+
+    /// <summary>Reads a device's level and mute flag; level 0 and not muted when unreadable.</summary>
+    private bool ReadState(DeviceRef device, out float level)
+    {
+        if (Audio.TryGetDeviceState(device, out level, out var muted)) return muted;
+        level = 0f;
+        return false;
     }
 
     private void OnSliderVolumeChanged(object? sender, VolumeChangeNotification n) => RaiseVolumeChanged(n);

@@ -13,7 +13,7 @@ internal sealed class VolumeOsdViewModel
     /// <summary>0 to 100, for the level bar.</summary>
     public double Level { get; private set; }
 
-    /// <summary>"37%", or "Muted"/"On" for a mute-button notification.</summary>
+    /// <summary>"37%", or "Muted" for a muted mute-button notification (unmuted shows the percentage).</summary>
     public string ValueText { get; private set; } = "0%";
 
     /// <summary>True when the muted glyph (not the volume glyph) is shown.</summary>
@@ -27,11 +27,9 @@ internal sealed class VolumeOsdViewModel
     {
         var level = Math.Clamp(n.Level * 100.0, 0, 100);
 
-        string valueText;
-        if (n.Kind == OsdKind.Mute)
-            valueText = n.Muted ? "Muted" : "On";
-        else
-            valueText = $"{Math.Round(level, MidpointRounding.AwayFromZero):0}%";
+        var valueText = n.Kind == OsdKind.Mute && n.Muted
+            ? "Muted"
+            : $"{Math.Round(level, MidpointRounding.AwayFromZero):0}%";
 
         var mutedGlyph = n.Muted;
         var barOpacity = n.Muted ? 0.4 : 1.0;

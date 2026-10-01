@@ -253,6 +253,45 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void MutePress_OwnChangeLandsUnmuted_RaisesMuteOsdWithRealLevel()
+    {
+        var runtime = StartRuntime();
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+        _engine.DeviceStates[Speakers] = (0.42f, true);   // muted before the press
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "press never executed");
+
+        _engine.DeviceStates[Speakers] = (0.42f, false);
+        _engine.RaiseDeviceVolumeChanged(Speakers, 0.42f, muted: false, isOwnChange: true);
+
+        var n = Assert.Single(osd.Items);
+        Assert.Equal(OsdKind.Mute, n.Kind);
+        Assert.False(n.Muted);
+        Assert.Equal(0.42f, n.Level);
+    }
+
+    [Fact]
+    public void MutePress_OwnChangeLandsMuted_RaisesMuteOsdWithRealLevel()
+    {
+        var runtime = StartRuntime();
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+        _engine.DeviceStates[Speakers] = (0.42f, false);
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "press never executed");
+
+        _engine.DeviceStates[Speakers] = (0.42f, true);
+        _engine.RaiseDeviceVolumeChanged(Speakers, 0.42f, muted: true, isOwnChange: true);
+
+        var n = Assert.Single(osd.Items);
+        Assert.True(n.Muted);
+        Assert.Equal(0.42f, n.Level);
+    }
+
+    [Fact]
     public void MutePress_ExternalChange_DoesNotRaiseOsd()
     {
         var runtime = StartRuntime();
