@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:Volco.App.Views"
+        x:Class="Volco.App.Views.SettingsWindow"
+        Title="Volco Settings"
+        Width="720" Height="600" MinWidth="680" MinHeight="560"
+        WindowStartupLocation="CenterScreen">
+  <Grid ColumnDefinitions="200,*">
+    <ListBox x:Name="NavList" Grid.Column="0" Margin="8">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="views:NavItem">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <PathIcon Data="{Binding Icon}" Width="16" Height="16"/>
+            <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <ContentControl x:Name="PageHost" Grid.Column="1"/>
+  </Grid>
+</Window>

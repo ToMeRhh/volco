@@ -1,0 +1,10 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:themes="using:Avalonia.Themes.Fluent"
+             x:Class="Volco.App.VolcoApplication"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <themes:FluentTheme/>
+    <StyleInclude Source="avares://Volco.App/Styles/VolcoStyles.axaml"/>
+  </Application.Styles>
+</Application>
