@@ -198,8 +198,7 @@ on the same machine, same controller, one at a time.
 | Cold start to tray icon (s) | < 1 | | |
 | AppLog "App launch complete" (s) | | | |
 | Working set at idle (WS) | | | |
-| Exe size (bytes) | | not recorded | 53,005,077 (~50.6 MiB) |
+| Exe size (bytes) | | 66,568,009 (~63.5 MiB) | 53,005,077 (~50.6 MiB) |
 
-The `main` WinUI exe size is not recorded anywhere in this file; measure it in step 5. OSD
-latency (section 6) should also be re-checked on this build, including the Step 2 manual
-checklist's OSD items.
+The `main` WinUI exe size is from Step 1's Windows build artifact. OSD latency (section 6)
+should also be re-checked on this build, including the Step 2 manual checklist's OSD items.

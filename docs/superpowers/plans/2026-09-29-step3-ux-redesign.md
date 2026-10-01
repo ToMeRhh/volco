@@ -12,6 +12,23 @@
 
 **Prerequisite:** Step 2 merged. Hand-off surface per the end of `docs/superpowers/plans/2026-09-29-step2-avalonia-cutover.md`.
 
+## Known constraints from Step 2's final review
+
+**Out of Step 3's App-only scope, because they need Core or Windows changes.** List these as "needs engine work" in the UX spec; do not build them in Step 3:
+- Following the cursor's monitor for the OSD (needs a new platform seam).
+- Any new persisted UX preference (OSD on/off or position, theme choice): `AppConfig` lives in Core and has no UI section. An alternative is an App-owned `ui.json`.
+- Native-only UX such as Mica or start-with-Windows.
+
+**The updater is Windows-only.** `UpdateInstaller` writes a `.bat` and the release asset is `Volco.exe`. A future OS would need an `IUpdateApplier` seam. Not for Step 3.
+
+**First-commit candidates for Step 3** (all App or tests only):
+- A `CompositionRoot` test that the OSD is subscribed before `runtime.Start()`.
+- Replace `PressActionRow`'s fragile `$parent[Border]` cast binding.
+- De-static `DeviceRefLookup`, then re-enable test parallelism in `Volco.App.Tests`.
+- A test that the `SettingsCard` HeaderIcon is visible.
+- The HighContrast palette.
+- Distinct `Icon.Volume` and `Icon.Speaker` glyphs.
+
 ## Global Constraints
 
 - **The PR may modify only `src/Volco.App/**` and `tests/Volco.App.Tests/**`** (plus the UX spec, plan, checklist and screenshots under `docs/`). This is the test of the decoupling. If a change seems to require touching `Volco.Core` or `Volco.Windows`, **stop and report it to the user** with the reason. That report is a finding, not a failure to hide.

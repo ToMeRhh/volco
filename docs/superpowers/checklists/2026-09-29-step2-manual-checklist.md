@@ -149,9 +149,39 @@ opinion, not a pass/fail.
     *Expected:* only `Volco.exe` plus the 3 small `Volco*.pdb` files; no
     native `lib*.pdb`, no `svcl.exe`, no Windows App SDK DLLs.
 
+19. **OSD on a second monitor with different DPI.** Attach a second monitor at a
+    different scaling than the primary (e.g. primary 100%, second 150%), then
+    trigger the OSD.
+    *Expected:* the OSD is correctly scaled and positioned on the primary
+    monitor.
+
+20. **OSD re-show.** Trigger the OSD, let it auto-hide, trigger it again. Then
+    open and close Settings and trigger it once more. (The product reuses one
+    OSD window; the spike did not.)
+    *Expected:* it shows again each time and, each time, stays click-through,
+    does not take focus, and keeps transparent corners.
+
+21. **Live level bars on first open.** Right after launch, before ever opening
+    Settings, move the sliders on the controller. Then open Settings for the
+    first time and go to the Sliders page.
+    *Expected:* the level bars are correct immediately, without moving the
+    sliders again.
+
+22. **Typing a port.** On the Connection page, type a new UDP or WebSocket
+    port with the keyboard (e.g. `12000`), then check
+    `%APPDATA%/Volco/config.json`.
+    *Expected:* the saved value is the full number (`12000`), not an
+    intermediate like `1200`.
+
+23. **Light theme.** Switch Windows to Light mode (Settings > Personalization >
+    Colors), launch or restart `Volco.exe`, and open every Settings page.
+    *Expected:* the app follows the OS theme and everything is readable
+    (text, cards, level bars, icons, borders). Switch back to Dark and check
+    again.
+
 ---
 
 ## Done when
 
-All 18 items pass (or failures are explicitly accepted), and the results table
+All 23 items pass (or failures are explicitly accepted), and the results table
 in `MEASUREMENTS.md` is filled in, before the Step 2 PR is merged.
