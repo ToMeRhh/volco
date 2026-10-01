@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.Core.Config;
 using Volco.Core.Diagnostics;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// ViewModel for the General settings tab.

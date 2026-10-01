@@ -4,9 +4,9 @@ using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Input.Actions;
-using static Volco.UI.ViewModels.DeviceRefLookup;
+using static Volco.App.ViewModels.DeviceRefLookup;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// Lightweight model for a single press-action slot (single/double/long).

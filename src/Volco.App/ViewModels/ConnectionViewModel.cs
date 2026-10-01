@@ -2,12 +2,11 @@ using System.Collections.ObjectModel;
 using System.IO.Ports;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.UI.Dispatching;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Runtime;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// ViewModel for the Connection settings tab.
@@ -15,14 +14,14 @@ namespace Volco.UI.ViewModels;
 /// live connection-status display. All writes call
 /// <c>RequestSave(connectionChanged: true)</c> so the runtime restarts the hardware connection.
 /// </summary>
-public partial class ConnectionViewModel : ObservableObject
+public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
 {
     private readonly ConfigManager _config;
     private readonly VolcoRuntime _runtime;
 
-    // Captured on construction (UI thread) so ConnectionStatusChanged callbacks can marshal
-    // back to the UI thread via TryEnqueue.
-    private readonly DispatcherQueue? _dispatcher;
+    // ConnectionStatusChanged can fire on any thread; the handler marshals through this.
+    private readonly IUiDispatcher _ui;
+    private bool _disposed;
 
     // ── Connection type ────────────────────────────────────────────────────────
 
@@ -114,14 +113,12 @@ public partial class ConnectionViewModel : ObservableObject
 
     // ── Constructor ────────────────────────────────────────────────────────────
 
-    public ConnectionViewModel(ConfigManager config, VolcoRuntime runtime)
+    public ConnectionViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui)
     {
         _config = config;
         _runtime = runtime;
 
-        // Capture the UI-thread dispatcher so background ConnectionStatusChanged events
-        // can be marshalled safely (DispatcherQueue is not a XAML visual type).
-        _dispatcher = DispatcherQueue.GetForCurrentThread();
+        _ui = ui;
 
         var cfg = config.Config.Connection;
         _connectionType  = cfg.Type;
@@ -167,10 +164,18 @@ public partial class ConnectionViewModel : ObservableObject
     {
         // ConnectionStatusChanged may fire on any thread (audio thread, transport threads, timer
         // threads, the config debounce thread); marshal to the UI thread without blocking.
-        if (_dispatcher != null)
-            _dispatcher.TryEnqueue(() => UpdateStatus(status));
-        else
-            UpdateStatus(status);
+        _ui.Post(() =>
+        {
+            if (!_disposed) UpdateStatus(status);
+        });
+    }
+
+    /// <summary>Unsubscribes from the runtime (carried rule d).</summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _runtime.ConnectionStatusChanged -= OnConnectionStatusChanged;
     }
 
     private void UpdateStatus(ConnectionStatus status)

@@ -2,6 +2,7 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
+using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -27,6 +28,7 @@ internal sealed class CompositionRoot : IDisposable
     private PlatformServices? _platform;
     private VolcoRuntime? _runtime;
     private SettingsWindow? _settingsWindow;
+    private SettingsViewModel? _settingsViewModel;
     private TrayIcon? _trayIcon;
     private bool _shutDown;
 
@@ -139,8 +141,14 @@ internal sealed class CompositionRoot : IDisposable
             if (_runtime is null) return;
             if (_settingsWindow is null)
             {
-                _settingsWindow = new SettingsWindow(_runtime);
-                _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+                _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher());
+                _settingsWindow = new SettingsWindow(_settingsViewModel, _runtime);
+                _settingsWindow.Closed += (_, _) =>
+                {
+                    _settingsWindow = null;
+                    _settingsViewModel?.Dispose();
+                    _settingsViewModel = null;
+                };
                 AppLog.Info("SettingsWindow created");
             }
             if (!_settingsWindow.IsVisible) _settingsWindow.Show();
@@ -160,6 +168,10 @@ internal sealed class CompositionRoot : IDisposable
         if (_shutDown) return;
         _shutDown = true;
         AppLog.Info("Shutting down");
+
+        // The settings ViewModel owns runtime subscriptions; drop them before the runtime goes.
+        _settingsViewModel?.Dispose();
+        _settingsViewModel = null;
 
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.

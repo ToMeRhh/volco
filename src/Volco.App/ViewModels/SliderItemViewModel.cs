@@ -3,9 +3,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
-using static Volco.UI.ViewModels.DeviceRefLookup;
+using static Volco.App.ViewModels.DeviceRefLookup;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// ViewModel for a single slider entry in the Sliders settings tab.

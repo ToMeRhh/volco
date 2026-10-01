@@ -1,10 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Microsoft.UI.Dispatching;
+using Volco.Core.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Runtime;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// Root ViewModel for the Settings window.
@@ -12,16 +12,17 @@ namespace Volco.UI.ViewModels;
 /// persist across tab switches. Holds the injected services and exposes
 /// them to child VMs on demand.
 /// </summary>
-public partial class SettingsViewModel : ObservableObject
+public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
     private readonly VolcoRuntime _runtime;
 
-    // Captured on construction (UI thread, same as ConnectionViewModel._dispatcher) so
-    // RefreshDevices — invoked off VolcoRuntime.DevicesChanged, which fires on the audio
-    // thread — can marshal safely before touching any child ViewModel's bound state.
-    private readonly DispatcherQueue? _dispatcher;
+    // Runtime events (DevicesChanged, SliderLevelChanged) fire on arbitrary threads (audio thread,
+    // SliderProcessor's coalescing timer, transport threads). This VM owns those subscriptions
+    // and marshals every handler through the injected dispatcher before touching bound state.
+    private readonly IUiDispatcher _ui;
+    private bool _disposed;
 
     // ── Lazy tab ViewModels ───────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ public partial class SettingsViewModel : ObservableObject
     private GeneralViewModel?       _generalViewModel;
 
     public ConnectionViewModel Connection =>
-        _connectionViewModel ??= new ConnectionViewModel(_config, _runtime);
+        _connectionViewModel ??= new ConnectionViewModel(_config, _runtime, _ui);
 
     public SlidersViewModel Sliders =>
         _slidersViewModel ??= new SlidersViewModel(_config, _audio);
@@ -48,40 +49,42 @@ public partial class SettingsViewModel : ObservableObject
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime)
+    public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui)
     {
         _config     = config;
         _audio      = audio;
         _runtime    = runtime;
-        _dispatcher = DispatcherQueue.GetForCurrentThread();
+        _ui         = ui;
 
         // Seed the device lookup used to resolve combo-box friendly names to DeviceRefConfig
         // (id + name) BEFORE any child ViewModel is built — Sliders/Buttons construct item
         // ViewModels that call DeviceRefLookup.DeviceRefFromName during their own construction.
         DeviceRefLookup.Devices = audio.GetDevices(AudioFlow.Render);
+
+        _runtime.DevicesChanged     += OnDevicesChanged;
+        _runtime.SliderLevelChanged += OnSliderLevelChanged;
     }
 
-    // ── Device-list refresh (Bug 3) ─────────────────────────────────────────────
+    // ── Runtime event handlers (any thread) ───────────────────────────────────
 
     /// <summary>
-    /// Called by SettingsWindow when <see cref="VolcoRuntime.DevicesChanged"/> fires, so a device
-    /// plugged in (or removed) after this settings window was first opened shows up without
-    /// requiring a restart. DeviceRefLookup.Devices was otherwise only ever seeded once, in the
-    /// constructor above, and each tab's OutputDeviceNames/OutputDevices only ever built once, in
-    /// its own constructor — so nothing previously refreshed either. DevicesChanged can be raised
-    /// on any thread (the audio thread, transport threads, timer threads), so this marshals via
-    /// the dispatcher captured above before mutating any child ViewModel's bound state, the same
-    /// pattern ConnectionViewModel already uses for its own background-thread callback.
-    /// Only already-constructed tab ViewModels are refreshed (lazy ??=): an unopened tab builds
-    /// its device list fresh, from the current engine snapshot, whenever it's first opened.
+    /// <see cref="VolcoRuntime.DevicesChanged"/> fires for every kind of device change
+    /// (added/removed/state/default), so a device plugged in or removed after this ViewModel was
+    /// created shows up in every open device picker. Marshals to the UI thread before mutating
+    /// any child ViewModel's bound state. Only already-constructed tab ViewModels are refreshed
+    /// (lazy ??=): an unopened tab builds its device list fresh the first time it is opened.
     /// </summary>
-    public void RefreshDevices()
-    {
-        if (_dispatcher != null)
-            _dispatcher.TryEnqueue(RefreshDevicesOnUiThread);
-        else
-            RefreshDevicesOnUiThread();
-    }
+    private void OnDevicesChanged(object? sender, DevicesChangedEventArgs e)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) RefreshDevicesOnUiThread();
+        });
+
+    private void OnSliderLevelChanged(object? sender, SliderLevelEventArgs e)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) Sliders.UpdateLiveLevel(e.SliderIndex, e.Level);
+        });
 
     private void RefreshDevicesOnUiThread()
     {
@@ -90,5 +93,15 @@ public partial class SettingsViewModel : ObservableObject
         _slidersViewModel?.RefreshDevices(devices);
         _buttonsViewModel?.RefreshDevices(devices);
         _outputDevicesViewModel?.RefreshDevices(devices);
+    }
+
+    /// <summary>Unsubscribes from the runtime and disposes the Connection ViewModel (carried rule d).</summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _runtime.DevicesChanged     -= OnDevicesChanged;
+        _runtime.SliderLevelChanged -= OnSliderLevelChanged;
+        _connectionViewModel?.Dispose();
     }
 }

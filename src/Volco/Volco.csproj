@@ -28,7 +28,13 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.3" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.1.240916" />
- </ItemGroup>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The ViewModels live in Volco.App (UI-framework-free). Compile-linked rather than
+         referenced so the WinUI exe never loads Avalonia. Removed with src/Volco in Task 9. -->
+    <Compile Include="..\Volco.App\ViewModels\**\*.cs" Link="UI\ViewModels\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Volco.Core\Volco.Core.csproj" />

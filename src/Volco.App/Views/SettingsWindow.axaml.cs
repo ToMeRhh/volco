@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Runtime;
 
@@ -11,6 +12,7 @@ public sealed record NavItem(string Label, string Tag, Geometry? Icon, Func<Cont
 
 public partial class SettingsWindow : Window
 {
+    private readonly SettingsViewModel _vm;
     private readonly VolcoRuntime _runtime;
     private readonly ListBox _navList;
     private readonly ContentControl _pageHost;
@@ -19,10 +21,9 @@ public partial class SettingsWindow : Window
     /// <summary>Set by the composition root at shutdown so Closing is not cancelled.</summary>
     internal bool AllowClose { get; set; }
 
-    public SettingsWindow() : this(null!) { }
-
-    public SettingsWindow(VolcoRuntime runtime)
+    public SettingsWindow(SettingsViewModel vm, VolcoRuntime runtime)
     {
+        _vm = vm;
         _runtime = runtime;
         AvaloniaXamlLoader.Load(this);
         _navList = this.FindControl<ListBox>("NavList")!;
@@ -30,16 +31,21 @@ public partial class SettingsWindow : Window
 
         _navList.ItemsSource = new[]
         {
-            Nav("Connection", "connection", "Icon.Connection", () => new ConnectionPage()),
+            Nav("Connection", "connection", "Icon.Connection", () => new ConnectionPage(vm.Connection)),
             Nav("Sliders", "sliders", "Icon.Sliders", () => new SlidersPage()),
             Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage()),
             Nav("Output Devices", "outputdevices", "Icon.Speaker", () => new OutputDevicesPage()),
-            Nav("General", "general", "Icon.Settings", () => new GeneralPage()),
+            Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
         };
         _navList.SelectionChanged += OnNavSelectionChanged;
         _navList.SelectedIndex = 0;
 
         Closing += OnClosing;
+
+        // Rule (f): the firmware only reports a slider when it moves, so seed live levels now and
+        // whenever the (hidden/shown, never recreated) window is activated again.
+        _vm.Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
+        Activated += (_, _) => _vm.Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
     }
 
     private static NavItem Nav(string label, string tag, string iconKey, Func<Control> create)

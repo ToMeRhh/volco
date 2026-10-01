@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using Volco.UI.ViewModels;
+using Volco.App.ViewModels;
 
 namespace Volco.UI;
 

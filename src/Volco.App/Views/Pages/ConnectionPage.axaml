@@ -1,4 +1,103 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Volco.App.Views.Pages.ConnectionPage">
+             xmlns:controls="using:Volco.App.Controls"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Views.Pages.ConnectionPage"
+             x:DataType="vm:ConnectionViewModel">
+  <UserControl.Resources>
+    <conv:ConnectionStatusToBrushConverter x:Key="StatusToBrush"/>
+    <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
+  </UserControl.Resources>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{StaticResource PagePadding}"
+                Spacing="{StaticResource SpaceL}"
+                MaxWidth="{StaticResource SettingsCardMaxWidth}"
+                HorizontalAlignment="Left">
+
+      <TextBlock Text="Connection" Classes="SectionHeader"/>
+
+      <!-- Live status -->
+      <StackPanel Orientation="Horizontal" Spacing="{StaticResource SpaceS}" VerticalAlignment="Center">
+        <Ellipse Name="StatusDot" Width="12" Height="12"
+                 Fill="{Binding Status, Converter={StaticResource StatusToBrush}}"/>
+        <TextBlock Name="StatusLabel" Text="{Binding StatusText}"
+                   Foreground="{DynamicResource TextSecondaryBrush}"
+                   VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <!-- Connection type -->
+      <controls:SettingsCard Header="Connection Type"
+                             Description="Choose how Volco connects to the hardware controller">
+        <controls:SettingsCard.HeaderIcon>
+          <PathIcon Data="{StaticResource Icon.Connection}" Width="20" Height="20"
+                    Foreground="{DynamicResource IconAccentBrush}"/>
+        </controls:SettingsCard.HeaderIcon>
+        <ComboBox Name="TypeCombo"
+                  SelectedIndex="{Binding ConnectionTypeIndex, Mode=TwoWay}"
+                  Width="{StaticResource ComboBoxStandardWidth}">
+          <ComboBoxItem Content="Serial (USB)"/>
+          <ComboBoxItem Content="UDP (Wireless)"/>
+          <ComboBoxItem Content="WebSocket"/>
+        </ComboBox>
+      </controls:SettingsCard>
+
+      <!-- Serial -->
+      <StackPanel Name="SerialSection" Spacing="{StaticResource SpaceXs}" IsVisible="{Binding IsSerial}">
+        <TextBlock Text="Serial Settings" Classes="CardTitle" Margin="0,0,0,4"/>
+
+        <controls:SettingsCard Header="COM Port" Description="Select the serial port for the controller">
+          <StackPanel Orientation="Horizontal" Spacing="{StaticResource SpaceS}">
+            <ComboBox Name="PortCombo"
+                      ItemsSource="{Binding ComPorts}"
+                      SelectedItem="{Binding ComPort, Mode=TwoWay}"
+                      Width="{StaticResource ComboBoxStandardWidth}"
+                      PlaceholderText="Select port…"/>
+            <Button Name="RefreshPortsButton"
+                    Command="{Binding RefreshComPortsCommand}"
+                    ToolTip.Tip="Refresh port list">
+              <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
+            </Button>
+          </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard Header="Baud Rate" Description="Must match the firmware setting">
+          <ComboBox Name="BaudCombo"
+                    SelectedIndex="{Binding BaudRateIndex, Mode=TwoWay}"
+                    Width="{StaticResource ComboBoxStandardWidth}">
+            <ComboBoxItem Content="9600"/>
+            <ComboBoxItem Content="19200"/>
+            <ComboBoxItem Content="38400"/>
+            <ComboBoxItem Content="57600"/>
+            <ComboBoxItem Content="115200"/>
+          </ComboBox>
+        </controls:SettingsCard>
+      </StackPanel>
+
+      <!-- UDP -->
+      <StackPanel Name="UdpSection" Spacing="{StaticResource SpaceXs}" IsVisible="{Binding IsUdp}">
+        <TextBlock Text="UDP Settings" Classes="CardTitle" Margin="0,0,0,4"/>
+
+        <controls:SettingsCard Header="Listen Port"
+                               Description="Local UDP port to receive controller data (1024–65535)">
+          <NumericUpDown Name="UdpPortBox"
+                         Value="{Binding UdpListenPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"
+                         Minimum="1024" Maximum="65535" FormatString="0" Width="160"/>
+        </controls:SettingsCard>
+      </StackPanel>
+
+      <!-- WebSocket -->
+      <StackPanel Name="WebSocketSection" Spacing="{StaticResource SpaceXs}" IsVisible="{Binding IsWebSocket}">
+        <TextBlock Text="WebSocket Settings" Classes="CardTitle" Margin="0,0,0,4"/>
+
+        <controls:SettingsCard Header="Port" Description="WebSocket server port (1024–65535)">
+          <NumericUpDown Name="WebSocketPortBox"
+                         Value="{Binding WebSocketPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"
+                         Minimum="1024" Maximum="65535" FormatString="0" Width="160"/>
+        </controls:SettingsCard>
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

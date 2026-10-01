@@ -1,9 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Volco.Core.Audio;
-using Volco.Core.Input;
 using Volco.Core.Runtime;
-using Volco.UI.ViewModels;
+using Volco.App.ViewModels;
 using Windows.Graphics;
 
 namespace Volco.UI;
@@ -18,7 +16,7 @@ public sealed partial class SettingsWindow : Window
         InitializeComponent();
 
         _runtime = runtime;
-        _viewModel = new SettingsViewModel(runtime.Config, runtime.Audio, runtime);
+        _viewModel = new SettingsViewModel(runtime.Config, runtime.Audio, runtime, new WinUiDispatcher(DispatcherQueue));
 
         // Fix D: seed every slider row's live level from state the runtime already holds. The
         // firmware only reports a slider's value when it moves, so right after app start (or
@@ -40,11 +38,8 @@ public sealed partial class SettingsWindow : Window
         // is freely resizable with a sensible 720x600 default.
         appWindow.Closing += AppWindow_Closing;
 
-        // Subscribe to live slider level updates and device-list changes. Both can be raised on
-        // any thread (the audio thread, SliderProcessor's coalescing timer, or a transport
-        // thread), so marshal to the UI thread via TryEnqueue rather than handling synchronously.
-        _runtime.SliderLevelChanged += OnSliderLevel;
-        _runtime.DevicesChanged += OnDevicesChanged;
+        // SettingsViewModel owns the SliderLevelChanged/DevicesChanged subscriptions and marshals
+        // them through the WinUiDispatcher above; nothing to subscribe to here.
 
         // Fix D: AppWindow_Closing below hides rather than closes this window (see its comment),
         // so it is only ever constructed once — re-showing it never re-runs the seeding above.
@@ -58,9 +53,6 @@ public sealed partial class SettingsWindow : Window
         NavView.SelectedItem = NavView.MenuItems[0];
     }
 
-    private void OnSliderLevel(object? sender, SliderLevelEventArgs e)
-        => DispatcherQueue.TryEnqueue(() => _viewModel.Sliders.UpdateLiveLevel(e.SliderIndex, e.Level));
-
     /// <summary>Fix D: re-seed live levels whenever this window becomes active again (not on
     /// the Deactivated transition Activated also reports).</summary>
     private void OnActivated(object sender, WindowActivatedEventArgs args)
@@ -68,14 +60,6 @@ public sealed partial class SettingsWindow : Window
         if (args.WindowActivationState != WindowActivationState.Deactivated)
             _viewModel.Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
     }
-
-    /// <summary>
-    /// Raised by <see cref="VolcoRuntime.DevicesChanged"/> for every kind of device change
-    /// (added/removed/state/default — Bug 3), so a replugged/removed device shows up in every
-    /// open device picker.
-    /// </summary>
-    private void OnDevicesChanged(object? sender, DevicesChangedEventArgs e)
-        => DispatcherQueue.TryEnqueue(() => _viewModel.RefreshDevices());
 
     private void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
@@ -86,8 +70,7 @@ public sealed partial class SettingsWindow : Window
         }
         else
         {
-            _runtime.SliderLevelChanged -= OnSliderLevel;
-            _runtime.DevicesChanged -= OnDevicesChanged;
+            _viewModel.Dispose();
         }
     }
 

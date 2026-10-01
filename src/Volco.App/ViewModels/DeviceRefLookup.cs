@@ -1,7 +1,7 @@
 using Volco.Core.Audio;
 using Volco.Core.Config;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// Bridges the settings combo boxes (which bind to friendly-name strings) and the v2

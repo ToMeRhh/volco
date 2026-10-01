@@ -1,10 +1,18 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Volco.App.ViewModels;
 
 namespace Volco.App.Views.Pages;
 
-/// <summary>Empty placeholder; the real page arrives in a later task.</summary>
 public partial class GeneralPage : UserControl
 {
-    public GeneralPage() => AvaloniaXamlLoader.Load(this);
+    public GeneralPage()
+    {
+        AvaloniaXamlLoader.Load(this);
+    }
+
+    public GeneralPage(GeneralViewModel viewModel) : this()
+    {
+        DataContext = viewModel;
+    }
 }

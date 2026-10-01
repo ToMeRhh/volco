@@ -1,4 +1,29 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Volco.App.Views.Pages.GeneralPage">
+             xmlns:controls="using:Volco.App.Controls"
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Views.Pages.GeneralPage"
+             x:DataType="vm:GeneralViewModel">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{StaticResource PagePadding}"
+                Spacing="{StaticResource SpaceL}"
+                MaxWidth="{StaticResource SettingsCardMaxWidth}"
+                HorizontalAlignment="Left">
+
+      <TextBlock Text="General Settings" Classes="SectionHeader"/>
+
+      <controls:SettingsCard Header="Debug Logging"
+                             Description="Write verbose diagnostic output to the app log file">
+        <controls:SettingsCard.HeaderIcon>
+          <PathIcon Data="{StaticResource Icon.Debug}" Width="20" Height="20"
+                    Foreground="{DynamicResource IconAccentBrush}"/>
+        </controls:SettingsCard.HeaderIcon>
+        <ToggleSwitch Name="DebugToggle"
+                      IsChecked="{Binding DebugLogging, Mode=TwoWay}"
+                      OnContent="Enabled"
+                      OffContent="Disabled"/>
+      </controls:SettingsCard>
+
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

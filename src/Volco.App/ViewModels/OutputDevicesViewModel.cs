@@ -4,9 +4,9 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.Core.Audio;
 using Volco.Core.Config;
-using static Volco.UI.ViewModels.DeviceRefLookup;
+using static Volco.App.ViewModels.DeviceRefLookup;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// ViewModel for the Output Devices settings tab.

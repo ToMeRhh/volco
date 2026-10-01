@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 
-namespace Volco.UI.ViewModels;
+namespace Volco.App.ViewModels;
 
 /// <summary>
 /// ViewModel for the Buttons settings tab.

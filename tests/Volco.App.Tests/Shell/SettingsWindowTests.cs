@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
 using Volco.Core.Config;
@@ -18,7 +19,8 @@ public class SettingsWindowTests
         var config = new ConfigManager(Path.Combine(dir, "config.json"));
         config.Load();
         var runtime = new VolcoRuntime(config, new FakeAudioEngine(), audioReady: true);
-        return new SettingsWindow(runtime);
+        var vm = new SettingsViewModel(config, runtime.Audio, runtime, new AvaloniaUiDispatcher());
+        return new SettingsWindow(vm, runtime);
     }
 
     [AvaloniaFact]
