@@ -37,7 +37,7 @@ Controller (hardware)
 │  ├─ DeviceRegistry (device state/events) │
 │  └─ SessionRegistry (session events)     │
 ├──────────────────────────────────────────┤
-│  Config (JSON) + WinUI 3 Settings UI     │
+│  Config (JSON) + Avalonia Settings UI    │
 └──────────────────────────────────────────┘
 ```
 
@@ -96,20 +96,24 @@ Settings are stored in `%APPDATA%/Volco/config.json` and applied immediately whe
 
 ## Tech Stack
 
-- **C# / .NET 8 / WinUI 3** (Windows App SDK)
+- **C# / .NET 8 / Avalonia 12** — cross-platform UI; only the audio engine and a click-through shim are Windows-specific
 - **Windows Core Audio API (WASAPI)** — device and per-process session volume/mute, driven directly via COM interop with no polling
 - **COM `IPolicyConfig`** — default audio device switching
-- **H.NotifyIcon.WinUI** — system tray icon
+- **Avalonia `TrayIcon`** — system tray icon
 - **System.IO.Ports** — serial communication
 - **xUnit** — tests
 
 ## Building
 
-Requires Windows with .NET 8 SDK and MSBuild (Visual Studio Build Tools).
+Requires the .NET 10 SDK (pinned in `global.json`; projects still target net8.0) and, for the Windows exe, Windows.
 
 ```bash
-msbuild Volco.sln -p:Configuration=Release -p:Platform=x64 -restore
+dotnet publish src/Volco.Windows/Volco.Windows.csproj -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:EnableCompressionInSingleFile=true -o ./publish/
 ```
+
+The tests build and run on any OS: `dotnet test tests/Volco.Core.Tests` and `dotnet test tests/Volco.App.Tests`.
 
 Or use the GitHub Actions CI workflow which builds, tests, and produces a downloadable artifact on every push to `main`.
 
@@ -152,12 +156,18 @@ src/Volco.Core/              # Platform-neutral (net8.0, builds/tests on Linux)
 ├── Diagnostics/               # AppLog
 └── Runtime/                   # VolcoRuntime — orchestrates everything above
 
-src/Volco.Windows/            # Windows class library (net8.0-windows)
-└── Audio/                     # AudioEngine, DeviceRegistry, SessionRegistry (Core Audio, event-driven)
+src/Volco.App/                # Avalonia UI (net8.0, platform-free, builds/tests on Linux)
+├── VolcoApplication, CompositionRoot   # App shell: startup/shutdown, tray, windows
+├── Views/                     # SettingsWindow + 5 pages (Connection, Sliders, Buttons, Output Devices, General), UpdateWindow
+├── Osd/                       # Volume OSD pill
+├── ViewModels/, Styles/, Controls/
+└── Platform/                  # IWindowEffects seam
 
-src/Volco/                    # WinUI 3 exe
-├── App.xaml/.cs               # Entry point, tray icon; wires up a VolcoRuntime
-└── UI/                        # SettingsWindow + 4 tab pages (Connection, Sliders, Buttons, Output Devices)
+src/Volco.Windows/            # Windows exe (net8.0-windows) — ships as Volco.exe
+├── Program.cs                 # Entry point: builds the engine, calls VolcoAppHost.Run
+├── Audio/                     # AudioEngine, DeviceRegistry, SessionRegistry (Core Audio, event-driven)
+└── Platform/                  # Win32WindowEffects (click-through OSD)
 
 tests/Volco.Core.Tests/       # xUnit tests for parser, button detection, slider mapping, config, actions, VolcoRuntime
+tests/Volco.App.Tests/        # Avalonia headless tests for ViewModels, pages, windows, OSD
 ```

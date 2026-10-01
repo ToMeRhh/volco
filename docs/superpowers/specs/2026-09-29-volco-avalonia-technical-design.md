@@ -414,9 +414,12 @@ shipping default until AOT is proven.
     dotnet test tests/Volco.App.Tests/Volco.App.Tests.csproj  --configuration Release
 ```
 
-This job **is** the decoupling enforcement. Neither test project references
-`Volco.Windows`, so a Windows API landing in `Volco.App` or `Volco.Core` fails the
-Linux build. Goal 1 is expressed as a build rule, not a convention.
+This job **is** the decoupling enforcement, in two parts. Neither test project references
+`Volco.Windows`, so a WinRT or Windows SDK projection landing in `Volco.App` or `Volco.Core`
+fails the Linux build. `[DllImport]`, `LibraryImport` and CsWin32 all compile on Linux, so
+`tests/Volco.App.Tests/ArchitectureTests.cs` reflects over both assemblies and fails on any
+P/Invoke method or Windows assembly reference. Goal 1 is expressed as a build rule, not a
+convention.
 
 **Build job (`windows-latest`)** — `microsoft/setup-msbuild` is removed along with the
 Windows App SDK restore:
@@ -449,7 +452,9 @@ tests on all branches, build and publish only on `main` or an explicit
    Linux.
 3. `Volco.App` contains no `[DllImport]` and no `Microsoft.UI.*` / `Windows.*`
    reference; `Volco.Core` contains neither those nor any UI-toolkit reference.
-   Enforced by the Linux job, not by review.
+   Enforced by the Linux job, not by review: the Linux compile (WinRT and Windows SDK
+   projections) plus `ArchitectureTests` (P/Invoke and Windows assembly references; these
+   compile on Linux, so compiling alone does not catch them).
 4. All 14 existing test files pass, plus new `VolcoRuntime` tests.
 5. Idle CPU average < 0.1 %; idle GPU 0; handle count flat across a 60 s sweep. Cold
    start to tray icon < 1 s. Recorded in `MEASUREMENTS.md`.

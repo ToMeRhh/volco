@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Colors.axaml - semantic color tokens, theme-scoped. Values ported 1:1 from the WinUI Colors.xaml.
+    WinUI "Default" (dark) -> Avalonia "Dark"; "Light" -> "Light". Avalonia has no HighContrast
+    theme variant, so the WinUI HighContrast dictionary has no equivalent here.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="AccentColor">#FF1E64C8</Color>
+      <Color x:Key="SurfaceColor">#FF1C1C1C</Color>
+      <Color x:Key="SurfaceCardColor">#FF2D2D2D</Color>
+      <Color x:Key="SurfaceStrokeColor">#FF3D3D3D</Color>
+      <Color x:Key="TextPrimaryColor">#FFFFFFFF</Color>
+      <Color x:Key="TextSecondaryColor">#99FFFFFF</Color>
+      <Color x:Key="IconAccentColor">#FF5B8FD8</Color>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Light">
+      <Color x:Key="AccentColor">#FF1E64C8</Color>
+      <Color x:Key="SurfaceColor">#FFF3F3F3</Color>
+      <Color x:Key="SurfaceCardColor">#FFFFFFFF</Color>
+      <Color x:Key="SurfaceStrokeColor">#FFD0D0D0</Color>
+      <Color x:Key="TextPrimaryColor">#FF1A1A1A</Color>
+      <Color x:Key="TextSecondaryColor">#99000000</Color>
+      <Color x:Key="IconAccentColor">#FF1E64C8</Color>
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

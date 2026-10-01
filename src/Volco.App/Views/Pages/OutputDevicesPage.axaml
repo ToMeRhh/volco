@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Volco.App.Controls"
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Views.Pages.OutputDevicesPage"
+             x:DataType="vm:OutputDevicesViewModel">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{StaticResource PagePadding}"
+                Spacing="{StaticResource SpaceL}"
+                MaxWidth="{StaticResource SettingsCardMaxWidth}"
+                HorizontalAlignment="Left">
+
+      <TextBlock Text="Output Device Toggle" Classes="SectionHeader"/>
+
+      <TextBlock Text="Configure the two devices to switch between when using the Toggle Output Device action."
+                 TextWrapping="Wrap"
+                 Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+      <controls:SettingsCard Header="Device 1"
+                             Description="First output device in the toggle pair">
+        <controls:SettingsCard.HeaderIcon>
+          <PathIcon Data="{StaticResource Icon.Speaker}" Width="20" Height="20"
+                    Foreground="{DynamicResource IconAccentBrush}"/>
+        </controls:SettingsCard.HeaderIcon>
+        <ComboBox Name="Device1Combo"
+                  ItemsSource="{Binding OutputDeviceNames}"
+                  SelectedItem="{Binding Device1, Mode=TwoWay}"
+                  Width="{StaticResource ComboBoxStandardWidth}"
+                  PlaceholderText="Select device…"/>
+      </controls:SettingsCard>
+
+      <controls:SettingsCard Header="Device 2"
+                             Description="Second output device in the toggle pair">
+        <controls:SettingsCard.HeaderIcon>
+          <PathIcon Data="{StaticResource Icon.Speaker}" Width="20" Height="20"
+                    Foreground="{DynamicResource IconAccentBrush}"/>
+        </controls:SettingsCard.HeaderIcon>
+        <ComboBox Name="Device2Combo"
+                  ItemsSource="{Binding OutputDeviceNames}"
+                  SelectedItem="{Binding Device2, Mode=TwoWay}"
+                  Width="{StaticResource ComboBoxStandardWidth}"
+                  PlaceholderText="Select device…"/>
+      </controls:SettingsCard>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

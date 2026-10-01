@@ -157,3 +157,48 @@ are **not** in the spec.
       `NullReferenceException` from this exact call shape on some Windows versions. It would
       surface as a crash at startup. If it happens, the fix is passing `new PROPVARIANT()`
       instead of `null` in `DeviceRegistry.BuildHandle`'s two `Activate` calls.
+
+---
+
+# Step 2 — Avalonia exe vs `main` (WinUI)
+
+Same protocol as above (spec §8), now for the Avalonia cutover build. Needs the Windows
+machine with the controller attached. **Do not fill any result cell until you have run it.**
+
+**Build under test:** `Volco-win-x64` from Windows run `36849004610` on `step2-avalonia`
+(expires about 2026-10-08; re-dispatch with
+`gh workflow run build.yml --ref step2-avalonia --field run_build=true` if gone, and use the
+newest `run_build` artifact if the branch has moved). **Baseline:** a `main` (WinUI) build, run
+on the same machine, same controller, one at a time.
+
+## Procedure
+
+1. Launch the build, controller connected, settings window closed, no audio playing.
+2. **Idle (60 s):** run the `Get-Counter` command from section 1 above; record CPU average and
+   max. Record Volco's GPU column in Task Manager's Details tab over the same window. Capture
+   `WS` from `Get-Process Volco` at the same time.
+3. **Handle sweep:** run `Get-Process Volco | Select-Object HandleCount, NPM, PM, WS` before,
+   move all 5 sliders continuously for 60 s (sample CPU as in section 2), then run it again.
+   Handle count should be flat.
+4. **Cold start:** quit, relaunch, stopwatch from launch to tray icon visible; also note the
+   AppLog "App launch complete" timestamp.
+5. **Exe size:** `(Get-Item Volco.exe).Length`.
+6. Repeat 1-5 for `main`.
+
+## Results
+
+| Metric | Target | `main` (WinUI) | `step2-avalonia` |
+|---|---|---|---|
+| Idle CPU average (%) | < 0.1 | | |
+| Idle CPU max (%) | | | |
+| Idle GPU | 0 | | |
+| Sweep CPU average / max (%) | | | |
+| HandleCount before / after 60 s sweep | flat | | |
+| Handle count flat? (yes/no) | yes | | |
+| Cold start to tray icon (s) | < 1 | | |
+| AppLog "App launch complete" (s) | | | |
+| Working set at idle (WS) | | | |
+| Exe size (bytes) | | 66,568,009 (~63.5 MiB) | 53,005,077 (~50.6 MiB) |
+
+The `main` WinUI exe size is from Step 1's Windows build artifact. OSD latency (section 6)
+should also be re-checked on this build, including the Step 2 manual checklist's OSD items.

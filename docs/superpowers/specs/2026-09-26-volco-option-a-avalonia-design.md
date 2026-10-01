@@ -219,7 +219,7 @@ General), ~1,500 lines of XAML. The port is close to mechanical. Substitutions:
 | `x:Bind` | `{CompiledBinding}` | with `x:DataType` on the template |
 | `StaticResource` token dictionaries | `ResourceDictionary` / `ResourceInclude` | `Styles/Colors|Tokens|Typography|Brushes.xaml` port almost line-for-line |
 
-Theme: `FluentTheme` with `RequestedThemeVariant="Dark"`, plus the ported token
+Theme: `FluentTheme` with `RequestedThemeVariant="Default"` (follows the OS), plus the ported token
 dictionaries. Avalonia supports Mica/Acrylic on Windows via `TransparencyLevelHint`
 if a translucent settings window is wanted — optional, not required.
 

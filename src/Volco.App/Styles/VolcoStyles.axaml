@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    VolcoStyles.axaml - the one shared styles entry point. Include with
+      <StyleInclude Source="avares://Volco.App/Styles/VolcoStyles.axaml"/>
+    Merges Colors, Tokens, Brushes, Icons and the SettingsCard theme, and ports Controls.xaml's
+    StackPanel styles as classes "SectionContainer" and "SettingsGroup".
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://Volco.App/Styles/Tokens.axaml"/>
+        <ResourceInclude Source="avares://Volco.App/Styles/Colors.axaml"/>
+        <ResourceInclude Source="avares://Volco.App/Styles/Brushes.axaml"/>
+        <ResourceInclude Source="avares://Volco.App/Styles/Icons.axaml"/>
+        <ResourceInclude Source="avares://Volco.App/Controls/SettingsCard.axaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <StyleInclude Source="avares://Volco.App/Styles/Typography.axaml"/>
+
+  <Style Selector="StackPanel.SectionContainer">
+    <Setter Property="Orientation" Value="Vertical"/>
+    <Setter Property="Spacing" Value="16"/>
+    <Setter Property="Margin" Value="0,0,0,24"/>
+  </Style>
+  <Style Selector="StackPanel.SettingsGroup">
+    <Setter Property="Orientation" Value="Vertical"/>
+    <Setter Property="Spacing" Value="4"/>
+  </Style>
+</Styles>

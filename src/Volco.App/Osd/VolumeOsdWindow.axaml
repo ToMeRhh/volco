@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Volco.App.Osd.VolumeOsdWindow"
+        Title="Volco OSD"
+        Width="360" Height="56"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="True"
+        ShowActivated="False"
+        ShowInTaskbar="False"
+        Focusable="False"
+        IsHitTestVisible="False">
+  <Border Name="Root"
+          Background="#F0202020"
+          CornerRadius="12"
+          IsHitTestVisible="False">
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
+      <Panel Width="20" Height="20" VerticalAlignment="Center">
+        <PathIcon Name="VolumeIcon" Data="{StaticResource Icon.Volume}" Width="20" Height="20"
+                  Foreground="White"/>
+        <PathIcon Name="MutedIcon" Data="{StaticResource Icon.Muted}" Width="20" Height="20"
+                  Foreground="White" IsVisible="False"/>
+      </Panel>
+      <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="12,0,0,0" Width="210">
+        <TextBlock Name="LabelText" Text="Output" Foreground="White" FontSize="12"
+                   TextTrimming="CharacterEllipsis" MaxLines="1"/>
+        <ProgressBar Name="LevelBar" Minimum="0" Maximum="100" Value="0" Height="4" Margin="0,4,0,0"/>
+      </StackPanel>
+      <TextBlock Name="ValueText" Text="0%" Foreground="White" FontSize="13"
+                 VerticalAlignment="Center" TextAlignment="Right" Width="52" Margin="12,0,4,0"/>
+    </StackPanel>
+  </Border>
+</Window>

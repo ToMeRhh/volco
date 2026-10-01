@@ -105,8 +105,18 @@ public sealed class FakeAudioEngine : IAudioEngine
     public void RaiseDeviceVolumeChanged(string deviceId, float level, bool muted, bool isOwnChange)
         => DeviceVolumeChanged?.Invoke(this, new DeviceVolumeChangedEventArgs(deviceId, level, muted, isOwnChange));
 
-    /// <summary>True once <see cref="Dispose"/> has been called. Dispose has no other effect.</summary>
+    /// <summary>True once <see cref="Dispose"/> has been called. Dispose has no other effect than the optional hook.</summary>
     public bool Disposed { get; private set; }
 
-    public void Dispose() => Disposed = true;
+    /// <summary>Optional test hook, invoked from <see cref="Dispose"/> after <see cref="Disposed"/> is set.</summary>
+    public Action? OnDispose { get; set; }
+
+    /// <summary>How many handlers are currently subscribed to <see cref="DeviceVolumeChanged"/>.</summary>
+    public int DeviceVolumeChangedSubscriberCount => DeviceVolumeChanged?.GetInvocationList().Length ?? 0;
+
+    public void Dispose()
+    {
+        Disposed = true;
+        OnDispose?.Invoke();
+    }
 }

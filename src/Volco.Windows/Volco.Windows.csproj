@@ -1,13 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>Volco</AssemblyName>
+    <RootNamespace>Volco.Windows</RootNamespace>
     <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
-    <Platforms>x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>volco.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.335">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -16,5 +21,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Volco.Core\Volco.Core.csproj" />
+    <ProjectReference Include="..\Volco.App\Volco.App.csproj" />
   </ItemGroup>
 </Project>
