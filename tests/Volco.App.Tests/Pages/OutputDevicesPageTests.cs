@@ -49,6 +49,7 @@ public class OutputDevicesPageTests
         // Picking writes through to the config (id and name).
         Combo(page, "Device1Combo").SelectedItem = "Headphones";
         Assert.Equal("dev-2", rig.Config.Config.OutputDevices.Device1.Id);
+        Assert.Equal("Headphones", rig.Config.Config.OutputDevices.Device1.FriendlyName);
     }
 
     [AvaloniaFact]
