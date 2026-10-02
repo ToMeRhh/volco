@@ -99,13 +99,14 @@ void transport_send(const uint8_t* data, size_t len) {
 
 int transport_receive(uint8_t* buf, size_t maxLen) {
   wsClient.loop();  // drive the WebSocket event pump
-  if (wsBufLen == 0) return 0;
-  size_t toRead = min(wsBufLen, maxLen);
+  size_t avail = wsBufLen;
+  if (avail == 0) return 0;
+  size_t toRead = min(avail, maxLen);
   memcpy(buf, wsBuf, toRead);
-  if (toRead < wsBufLen) {
-    memmove(wsBuf, wsBuf + toRead, wsBufLen - toRead);
+  if (toRead < avail) {
+    memmove(wsBuf, wsBuf + toRead, avail - toRead);
   }
-  wsBufLen -= toRead;
+  wsBufLen = avail - toRead;
   return (int)toRead;
 }
 
