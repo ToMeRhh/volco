@@ -59,11 +59,11 @@ public static class ButtonFeedback
         switch (action.Action)
         {
             case ButtonActionType.MuteCurrentOutput:
-                return Muted(audio, DeviceRef.DefaultOutput());
+                return MuteValue(audio.IsMuted(DeviceRef.DefaultOutput()));
             case ButtonActionType.MuteCurrentInput:
-                return Muted(audio, DeviceRef.DefaultInput());
+                return MuteValue(audio.IsMuted(DeviceRef.DefaultInput()));
             case ButtonActionType.MuteSpecificDevice:
-                return ActionFactory.Resolve(action.Device) is { } r ? Muted(audio, r) : (byte)0;
+                return ActionFactory.Resolve(action.Device) is { } r ? MuteValue(audio.IsMuted(r)) : (byte)0;
             case ButtonActionType.SetOutputDevice:
             {
                 var current = audio.GetDefaultDevice(AudioFlow.Render);
@@ -88,6 +88,5 @@ public static class ButtonFeedback
         }
     }
 
-    private static byte Muted(IAudioEngine audio, DeviceRef device)
-        => audio.TryGetDeviceState(device, out _, out var muted) && muted ? (byte)1 : (byte)0;
+    private static byte MuteValue(bool muted) => muted ? (byte)1 : (byte)0;
 }

@@ -246,12 +246,10 @@ public class SliderProcessorTests
         Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
     }
 
-    // ── Issue #48: a Device slider's OSD carries the target's mute flag ──────────────────────
+    // ── Issue #48: the slider OSD carries the governing device's mute flag ─────────────────
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task DeviceSlider_VolumeChanged_CarriesDeviceMuteState(bool muted)
+    [Fact]
+    public async Task DeviceSlider_MutedDevice_RaisesVolumeChangedWithMutedTrue()
     {
         var configManager = NewConfigManager();
         configManager.Config.Sliders.Clear();
@@ -259,11 +257,11 @@ public class SliderProcessorTests
         {
             Index = 0,
             Type = SliderMappingType.Device,
-            Device = new DeviceRefConfig { Id = "dev", FriendlyName = "Headphones" },
+            Device = new DeviceRefConfig { Id = "muted-dev", FriendlyName = "Headphones" },
         });
 
         using var audio = new FakeAudioEngine();
-        audio.DeviceStates["dev"] = (0.5f, muted);
+        audio.DeviceStates["muted-dev"] = (0.5f, true);
         using var processor = new SliderProcessor(audio, configManager);
 
         var volumeTcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -271,14 +269,66 @@ public class SliderProcessorTests
 
         processor.HandleSliderEvent(0, 2048);
 
-        var completed = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
-        Assert.True(completed == volumeTcs.Task, "VolumeChanged did not fire");
-        var n = await volumeTcs.Task;
-        Assert.Equal(OsdKind.Volume, n.Kind);
-        Assert.Equal(muted, n.Muted);
+        var completedVolume = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
+        Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a muted device slider");
+        var notification = await volumeTcs.Task;
+        Assert.True(notification.Muted, "Notification should have Muted = true for a muted device");
         // Moving the slider never unmutes the device.
         Assert.Empty(audio.Snapshot(audio.SetMuteCalls));
         Assert.Empty(audio.Snapshot(audio.ToggleMuteCalls));
+    }
+
+    [Fact]
+    public async Task DeviceSlider_DefaultOutputMuted_RaisesMutedTrue()
+    {
+        using var audio = EngineWithDefaultOutput(defaultMuted: true);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Device, Device = null });
+        Assert.True(n.Muted);
+    }
+
+    [Fact]
+    public async Task DeviceSlider_DefaultOutputUnmuted_RaisesMutedFalse()
+    {
+        using var audio = EngineWithDefaultOutput(defaultMuted: false);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Device, Device = null });
+        Assert.False(n.Muted);
+    }
+
+    [Fact]
+    public async Task DeviceSlider_OwnDeviceUnmuted_IgnoresMutedDefault()
+    {
+        using var audio = EngineWithDefaultOutput(defaultMuted: true);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "hp", FriendlyName = "Headphones" },
+        });
+        Assert.False(n.Muted);
+    }
+
+    [Fact]
+    public async Task ProcessesSlider_DefaultOutputMuted_RaisesMutedTrue()
+    {
+        using var audio = EngineWithDefaultOutput(defaultMuted: true);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Processes, Processes = { "spotify.exe" } });
+        Assert.True(n.Muted);
+    }
+
+    [Fact]
+    public async Task ProcessesSlider_DefaultOutputUnmuted_RaisesMutedFalse()
+    {
+        using var audio = EngineWithDefaultOutput(defaultMuted: false);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Processes, Processes = { "spotify.exe" } });
+        Assert.False(n.Muted);
+    }
+
+    [Fact]
+    public async Task UnmappedSlider_DefaultOutputMuted_RaisesMutedTrue()
+    {
+        using var audio = EngineWithDefaultOutput(defaultMuted: true);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Unmapped });
+        Assert.True(n.Muted);
     }
 
     // ── Fix D: GetLastLevel ──────────────────────────────────────────────────
@@ -326,6 +376,31 @@ public class SliderProcessorTests
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    private static FakeAudioEngine EngineWithDefaultOutput(bool defaultMuted)
+    {
+        var audio = new FakeAudioEngine();
+        audio.DefaultRender = new AudioDevice("spk", "Speakers", AudioFlow.Render, true);
+        audio.DeviceStates["spk"] = (0.5f, defaultMuted);
+        audio.DeviceStates["hp"] = (0.5f, false);
+        return audio;
+    }
+
+    private static async Task<VolumeChangeNotification> MoveSliderAndCaptureOsd(FakeAudioEngine audio, SliderConfig slider)
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(slider);
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var tcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.VolumeChanged += (_, e) => tcs.TrySetResult(e);
+        processor.HandleSliderEvent(0, 2048);
+
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(500));
+        Assert.True(completed == tcs.Task, "VolumeChanged did not fire");
+        return await tcs.Task;
+    }
 
     private static ConfigManager NewConfigManager()
     {

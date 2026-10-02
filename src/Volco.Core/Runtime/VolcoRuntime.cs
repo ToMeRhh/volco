@@ -675,17 +675,17 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         {
             case ButtonActionType.MuteCurrentOutput:
                 label = Audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName ?? "Output";
-                muted = ReadState(DeviceRef.DefaultOutput(), out level);
+                (level, muted) = Audio.GetStateOrDefault(DeviceRef.DefaultOutput());
                 break;
             case ButtonActionType.MuteSpecificDevice:
                 var specificDevice = ActionFactory.Resolve(actionConfig.Device);
                 if (specificDevice == null) return; // unresolvable device config; nothing to show
                 label = actionConfig.Device?.FriendlyName ?? "Output";
-                muted = ReadState(specificDevice.Value, out level);
+                (level, muted) = Audio.GetStateOrDefault(specificDevice.Value);
                 break;
             case ButtonActionType.MuteCurrentInput:
                 label = "Microphone";
-                muted = ReadState(DeviceRef.DefaultInput(), out level);
+                (level, muted) = Audio.GetStateOrDefault(DeviceRef.DefaultInput());
                 break;
             default:
                 return; // non-mute actions don't show the OSD
@@ -699,17 +699,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     /// (level 0, not muted when the state cannot be read).</summary>
     private void ShowDeviceOsd(string deviceId, string friendlyName)
     {
-        var muted = ReadState(DeviceRef.ById(deviceId), out var level);
+        var (level, muted) = Audio.GetStateOrDefault(DeviceRef.ById(deviceId));
         var label = string.IsNullOrEmpty(friendlyName) ? "Output" : friendlyName;
         RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Device));
-    }
-
-    /// <summary>Reads a device's level and mute flag; level 0 and not muted when unreadable.</summary>
-    private bool ReadState(DeviceRef device, out float level)
-    {
-        if (Audio.TryGetDeviceState(device, out level, out var muted)) return muted;
-        level = 0f;
-        return false;
     }
 
     private void OnSliderVolumeChanged(object? sender, VolumeChangeNotification n) => RaiseVolumeChanged(n);

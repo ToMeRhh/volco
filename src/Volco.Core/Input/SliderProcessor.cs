@@ -94,6 +94,14 @@ public class SliderProcessor : IDisposable
         return DeviceRef.DefaultOutput();
     }
 
+    /// <summary>
+    /// The device whose mute flag the OSD shows for this slider: a Device slider's own device;
+    /// for Processes/Unmapped, the default output, since muting it silences every app session
+    /// (Volco has no per-app mute).
+    /// </summary>
+    internal static DeviceRef MuteSourceFor(SliderConfig slider)
+        => slider.Type == SliderMappingType.Device ? DeviceRefFor(slider) : DeviceRef.DefaultOutput();
+
     /// <summary>Every process name claimed by a Processes-type slider.</summary>
     internal static List<string> MappedProcessNames(AppConfig config)
     {
@@ -216,9 +224,6 @@ public class SliderProcessor : IDisposable
             // write is a documented no-op - but must NOT claim an OSD-worthy volume change below.
             // Defaults to true for Processes/Unmapped, which have no single "device" to be absent.
             bool deviceResolved = true;
-            // A volume write never unmutes on Windows, so the OSD must keep showing a muted
-            // target as muted. Only Device sliders have a mute flag to read.
-            bool muted = false;
 
             switch (sliderConfig.Type)
             {
@@ -233,7 +238,7 @@ public class SliderProcessor : IDisposable
                     AppLog.Debug($"[Slider] index={sliderIndex} type=Device device={sliderConfig.DeviceName} adc={value} vol={volume:F3}");
                     _audio.SetDeviceVolume(deviceRef, volume);
                     // TryGetDeviceState is an O(1) cached read, documented safe from any thread.
-                    deviceResolved = _audio.TryGetDeviceState(deviceRef, out _, out muted);
+                    deviceResolved = _audio.TryGetDeviceState(deviceRef, out _, out _);
                     break;
 
                 case SliderMappingType.Processes:
@@ -262,6 +267,7 @@ public class SliderProcessor : IDisposable
                     ? _audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName
                     : null;
                 var label = BuildSliderLabel(sliderConfig, currentOutput);
+                var muted = _audio.IsMuted(MuteSourceFor(sliderConfig));
                 VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume));
             }
         }

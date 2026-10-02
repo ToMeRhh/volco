@@ -36,16 +36,15 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_VolumeKindWhileMuted_ShowsMutedState()
+    public void OsdViewModel_VolumeKindWhileMuted_ShowsPercentWithMutedGlyph()
     {
-        // Issue #48: moving a muted device's slider does not unmute it, so the OSD stays muted.
         var vm = new VolumeOsdViewModel();
         vm.Apply(new VolumeChangeNotification("Output", 0.5f, true, OsdKind.Volume));
 
-        Assert.Equal("Muted", vm.ValueText);
-        Assert.Equal(OsdGlyph.Muted, vm.Glyph);
-        Assert.Equal(50, vm.Level, 1);          // the bar still tracks the slider...
-        Assert.Equal(0.4, vm.LevelBarOpacity);  // ...dimmed
+        Assert.Equal("50%", vm.ValueText);      // a drag shows the level being set...
+        Assert.Equal(OsdGlyph.Muted, vm.Glyph); // ...while the glyph...
+        Assert.Equal(50, vm.Level, 1);
+        Assert.Equal(0.4, vm.LevelBarOpacity);  // ...and the dimmed bar show the mute
     }
 
     [Fact]

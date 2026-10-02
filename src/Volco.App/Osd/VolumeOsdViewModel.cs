@@ -16,8 +16,8 @@ internal sealed class VolumeOsdViewModel
     /// <summary>0 to 100, for the level bar.</summary>
     public double Level { get; private set; }
 
-    /// <summary>"37%", or "Muted" whenever the target is muted, including a slider moving a muted
-    /// device (Windows keeps it muted, so the OSD does too).</summary>
+    /// <summary>"37%", or "Muted" for a muted Mute/Device notification. A slider drag (Volume)
+    /// always shows the percentage, even while muted - the glyph and dimmed bar show the mute.</summary>
     public string ValueText { get; private set; } = "0%";
 
     /// <summary>The icon: muted whenever the target is muted, else speaker for an output-device
@@ -36,7 +36,8 @@ internal sealed class VolumeOsdViewModel
         var level = Math.Clamp(n.Level * 100.0, 0, 100);
 
         var valueText = n.Kind == OsdKind.Preset ? ""
-            : n.Muted ? "Muted"
+            : (n.Kind is OsdKind.Mute or OsdKind.Device) && n.Muted
+            ? "Muted"
             : $"{Math.Round(level, MidpointRounding.AwayFromZero):0}%";
         // A preset switch has no level: the preset's name, "Preset" on the right, and no bar.
         var label = n.Label;
