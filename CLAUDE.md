@@ -29,7 +29,11 @@ CI runs tests on Ubuntu (net8.0) and builds/publishes on Windows (net8.0-windows
 cd firmware && pio run              # build
 cd firmware && pio run -t upload    # flash
 cd firmware && pio device monitor   # serial monitor
+cd firmware && pio test -e native   # host-side tests of firmware/lib (no hardware)
+python3 firmware/tools/gen_assets.py  # regenerate icons and fonts (needs Pillow >= 10)
 ```
+
+The `firmware-test` CI job runs `pio test -e native` and builds both ESP32 environments (`denky32` plus the build-only `denky32_screens_check`, `denky32_udp_check` and `denky32_websocket_check` checks). `gen_assets.py` regenerates the firmware icons and fonts, the C# `ScreenIcon` enum and the simulator's `icons.js` from `firmware/assets`; its outputs are committed.
 
 ## Architecture
 
@@ -38,12 +42,13 @@ Volco is a Windows system tray app that controls PC audio via an external hardwa
 ### `src/Volco.Core/` — platform-neutral, `net8.0`, builds and tests on Linux
 
 No UI, no platform APIs. Holds the protocol, config, input, and orchestration layers:
-- `Communication/` — `IControllerConnection` (transport interface: Serial, UDP, WebSocket, all bidirectional `Send`/receive), `ProtocolParser` (stateful byte stream parser; finds `0xAA` start markers, validates XOR checksums, emits `ControllerMessage` events), `ProtocolEncoder` (static class building outbound frames — mute state, active device).
+- `Communication/` — `IControllerConnection` (transport interface: Serial, UDP, WebSocket, all bidirectional `Send`/receive), `ProtocolParser` (stateful byte stream parser; finds `0xAA` start markers, validates XOR checksums, emits `ControllerMessage` events), `ProtocolEncoder` (static class building outbound frames: HelloRequest, Heartbeat, Led, Screen, Begin, Commit), `ControllerDisplay` (decides what each button shows: its LED value or screen content, from its action in the live preset; replaces `ButtonFeedback`).
 - `Input/` — `ButtonPressDetector` (classifies raw press/release into single, double, long press; 300ms/500ms thresholds), `SliderProcessor` (maps 12-bit ADC values 0–4095 to volume, coalesces at 20ms intervals), `Actions/` — `ActionFactory` maps button config to `IButtonAction` implementations.
 - `Audio/` — `IAudioEngine`, the platform-neutral audio interface (the seam that lets everything else build and test on Linux), plus its DTOs: `AudioDevice`, `DeviceRef`, `AudioFlow` (`Render`/`Capture`). There is no `AudioRole` in this API — Core Audio's Console/Multimedia/Communications roles never varied per call site, so the public surface only exposes flow (`GetDefaultDevice(AudioFlow flow)`, no role parameter). `AudioRole` still exists, but only as an internal detail of the Windows engine.
 - `Config/`, `Updates/` — `ConfigManager`/`ConfigMigrator`, `BuildInfo`/`GitHubUpdater`.
+- `Devices/` — `DeviceDisplay`, the display name (nickname, else friendly name) and icon of a device, used by the OSD, the pickers and the controller screens.
 - `Diagnostics/` — `Volco.Core.Diagnostics.AppLog`.
-- `Runtime/` — `VolcoRuntime`, the UI-facing orchestrator. This is what used to be ~350 lines of `App.xaml.cs`: it owns transport construction/`Connect()`/restart-on-config-change, routing `IControllerConnection.MessageReceived` to `SliderProcessor`/`ButtonPressDetector`, `ActionFactory` dispatch on detected presses, the pending-mute-OSD correlation, `PushControllerState` (with dedup against the last-pushed frame so slider drags don't flood the controller), and the post-connect re-push timers. It exposes only `Volco.Core` types (`IAudioEngine`, `ConfigManager`, `ConnectionStatus`, etc.) — nothing UI or Windows-specific leaks through it. Constructed headless (e.g. with a fake `IAudioEngine`), the whole app's behavior is driveable from Linux tests with no UI process.
+- `Runtime/` — `VolcoRuntime`, the UI-facing orchestrator. This is what used to be ~350 lines of `App.xaml.cs`: it owns transport construction/`Connect()`/restart-on-config-change, routing `IControllerConnection.MessageReceived` to `SliderProcessor`/`ButtonPressDetector`, `ActionFactory` dispatch on detected presses, the pending-mute-OSD correlation, and `PushControllerState`, which delegates to `ControllerLink`. `ControllerLink` owns the controller protocol session: HelloRequest retries, the Hello handshake (nothing is pushed before it), keepalive, dedup against the last-sent content per button, and Begin/Commit bursts for preset changes. It computes, dedups and enqueues under its lock but sends through a single-consumer outbox outside it, dropping frames for a retired connection. It exposes only `Volco.Core` types (`IAudioEngine`, `ConfigManager`, `ConnectionStatus`, etc.) — nothing UI or Windows-specific leaks through it. Constructed headless (e.g. with a fake `IAudioEngine`), the whole app's behavior is driveable from Linux tests with no UI process.
 
 ### `src/Volco.App/` — Avalonia 12 UI, `net8.0`, builds and tests on Linux
 
@@ -53,7 +58,7 @@ The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (s
 
 `WinExe` with `<AssemblyName>Volco</AssemblyName>`, referencing `Volco.Core` and `Volco.App`. Entry point is `Program.Main`: it hooks the AppDomain/TaskScheduler exception loggers, builds the `AudioEngine`, and calls `VolcoAppHost.Run(args, () => new PlatformServices(engine, ready, new Win32WindowEffects()))`. Holds the Windows implementations of the two seams, in namespace `Volco.Windows.*`:
 - `Audio/AudioEngine` — the real Core Audio engine. Owns one dedicated MTA thread and a struct-command work queue; all COM activation, registration, and writes happen on that thread. `Start()` returns `bool` (whether the engine came up), which `VolcoRuntime` uses to skip config migration if audio isn't ready.
-- `Audio/DeviceRegistry` — caches every live endpoint and its COM objects, kept current by `IMMNotificationClient` instead of re-enumeration.
+- `Audio/DeviceRegistry` — caches every live endpoint and its COM objects, kept current by `IMMNotificationClient` instead of re-enumeration; it also reads each endpoint's form factor (`PKEY_AudioEndpoint_FormFactor`), which picks a device's default icon.
 - `Audio/SessionRegistry` — caches every live per-app audio session across all render devices, driven by `IAudioSessionNotification`; volume writes are an O(1) dictionary lookup, never an enumeration.
 - `Audio/DefaultDevicePolicy` — switches the Windows default output device via the undocumented `IPolicyConfig` COM interface.
 - `Platform/Win32WindowEffects` — `IWindowEffects` via Win32 extended styles; the only UI P/Invoke in the repo.
@@ -63,24 +68,35 @@ The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (s
 
 ### ESP32 Firmware (`firmware/`)
 
-PlatformIO / Arduino framework / C++17. `main.cpp` + `config.h` + `hardware.h`; `firmware/README.md` explains the code structure.
+PlatformIO / Arduino framework / C++17. `src/` (`main.cpp`, `config.h`, `hardware.h`, `transport.*`, `indicators.*`, `screens.*`) plus pure-C++ libraries in `lib/` (`volco_protocol`, `volco_bidi`, `volco_screen_state`, `volco_render`) that are tested on the host with `pio test -e native`; `firmware/README.md` explains the code structure. Rendering uses Volco's own 1-bit canvas, with U8g2 only as the SSD1306 driver.
 
-Transport is selected at compile time via `#define TRANSPORT_SERIAL|WEBSOCKET|UDP` in `config.h`. The hardware is described by two tables in `config.h`: `SLIDER_PINS` and `BUTTONS` (`{ pin, indicator }`, indicator = `IND_NONE` / `IND_LED` / `IND_LED_PAIR`). A table's order is the input number the app sees. The firmware has no notion of mute or devices; it only reports raw input and renders `0x05` feedback values.
+Transport is selected at compile time via `#define TRANSPORT_SERIAL|WEBSOCKET|UDP` in `config.h`. The hardware is described by two tables in `config.h`: `SLIDER_PINS` and `BUTTONS` (`{ pin, indicator }`, indicator = `IND_NONE` / `IND_LED` / `IND_LED_PAIR` / `IND_SCREEN(bus, address)`). A table's order is the input number the app sees. The firmware has no notion of mute or devices; it reports raw input and its hardware (Hello), and renders the LED values and screen descriptions the PC sends.
 
 ### Wire Protocol
 
-Bidirectional binary protocol. Frame: `0xAA | length | payload | XOR checksum`.
+Bidirectional binary protocol. Frame: `0xAA | length | type | body | XOR checksum`. The high bit of `type` is the direction; integers are big-endian. Full details (Screen body, behaviour rules) are in `firmware/README.md`.
 
-- `0x01` Slider (controller→server): index + 16-bit value
-- `0x02` Button (controller→server): index + state
-- `0x05` Button Feedback (server→controller): button index + value (0 = off/unknown, 1..N = on / choice N). `Communication/ButtonFeedback` derives each button's value from its action in the live preset; the firmware's per-button indicator table decides how to show it. (`0x03` mute state and `0x04` active device were retired with config schema v3.)
+| Type | Name | Direction | Body |
+|---|---|---|---|
+| `0x01` | Hello | controller→PC | version, slider count, button count, one kind per button (0 none, 1 LED, 2 LED pair, 3 screen) |
+| `0x02` | Alive | controller→PC | none (keepalive) |
+| `0x03` | Slider | controller→PC | index + 16-bit value |
+| `0x04` | Button | controller→PC | index + pressed |
+| `0x81` | HelloRequest | PC→controller | none |
+| `0x82` | Heartbeat | PC→controller | none (keepalive) |
+| `0x83` | Led | PC→controller | button + value |
+| `0x84` | Screen | PC→controller | button, transition, layout, top, icon, flags, main text |
+| `0x85` | Begin | PC→controller | none (hold updates) |
+| `0x86` | Commit | PC→controller | none (apply held updates together) |
+
+`Communication/ControllerDisplay` decides what each button shows (its LED value or screen content) from its action in the live preset. `Runtime/ControllerLink` runs the session: Hello, keepalive, dedup, and the Begin/Commit bursts for preset changes. (The old `0x03` mute state, `0x04` active device and `0x05` feedback messages are gone with protocol v1.)
 
 ### Web Simulator (`tools/simulator/`)
 
-`index.html` — browser-based controller simulator using WebSocket. Supports full bidirectional protocol including LED state feedback. Open directly in a browser, no build step.
+`index.html` — browser-based controller simulator using WebSocket. Supports the full bidirectional protocol, with a controller type selector (LED controller or screen controller) and layout 1 screen rendering, including slides. Open directly in a browser, no build step.
 
 ## Config
 
-Runtime config stored at `%APPDATA%/Volco/config.json`. Managed by `ConfigManager` (load/save/change events). Includes connection settings, slider mappings, button presets and button actions. A slider's or button's **position in its list is its hardware input number** (`Index` is rewritten to match on save). Schema v3: each button keeps its actions per preset (`buttons[i].actions[presetId]`), and the toggle action carries its own A/B devices (`device`/`deviceB`); there is no global output pair. Devices are stored as endpoint IDs with the friendly name kept for display and fallback. `ConfigManager.Load` upgrades v1/v2 JSON to the v3 shape (v2 is rewritten with a `config.v2.bak`); v1's device-name resolution still runs in `VolcoRuntime.Start` once audio is up.
+Runtime config stored at `%APPDATA%/Volco/config.json`. Managed by `ConfigManager` (load/save/change events). Includes connection settings, slider mappings, button presets and button actions. A slider's or button's **position in its list is its hardware input number** (`Index` is rewritten to match on save). Schema v4 adds `devices` (per-device nicknames and icons) and `controller` (the last Hello's hardware summary). Schema v3: each button keeps its actions per preset (`buttons[i].actions[presetId]`), and the toggle action carries its own A/B devices (`device`/`deviceB`); there is no global output pair. Devices are stored as endpoint IDs with the friendly name kept for display and fallback. `ConfigManager.Load` upgrades v1/v2 JSON to the v3 shape (v2 is rewritten with a `config.v2.bak`); v1's device-name resolution still runs in `VolcoRuntime.Start` once audio is up.
 
 App log at `%APPDATA%/Volco/volco.log` via `AppLog` (async file writer with 500ms flush).

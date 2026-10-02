@@ -1,7 +1,7 @@
 # Volco Per-Button OLED Screens — Design Spec
 
 **Date:** 2026-10-02
-**Status:** Draft for review (revision 2: subagent review round applied)
+**Status:** Approved; implemented by `docs/superpowers/plans/2026-10-02-oled-screens.md`
 **Mockups** (open in a browser; where a mockup and this spec disagree, this spec wins):
 - `docs/superpowers/mockups/2026-10-02-oled-screens-mockup.html`: screen layouts at real 128×64 resolution, and a pressable controller showing the preset-change slide. The chosen layout is "C nudged" with the synchronized "Slide".
 - `docs/superpowers/mockups/2026-10-02-devices-page-mockup.html`: the new Devices settings page.
@@ -249,7 +249,7 @@ There is no compatibility handling beyond that.
 With the option off, the same Led and Screen messages go out without Begin/Commit. Each screen then slides as soon as its message arrives. This is a test switch for judging the delay.
 
 **Ordering and dedup**
-- **One sender at a time:** all outbound frames go through **one serialized path** (§5.5). A burst (Begin … Commit, or the full push after Hello) is never interleaved with another push, and a push computed from older state can never be sent after a newer one.
+- **One sender at a time:** all outbound frames go through **one serialized path** (§5.5): `ControllerLink` computes, dedups and enqueues frames under a single lock, and a single-consumer outbox sends them outside that lock. A burst (Begin … Commit, or the full push after Hello) is therefore never interleaved with another push, and a push computed from older state can never be sent after a newer one. Frames queued for a connection that has since been replaced are dropped, and a `Send` that throws is logged and dropped.
 - **Dedup:** the PC remembers the last Led value and Screen content it sent per button. Outside a preset change, it only sends a button whose content changed. The transition is not part of the comparison.
 
 ### 3.5 Transport requirements
@@ -278,14 +278,14 @@ A preset change on 4 screens is a burst of about 560 bytes. Every transport must
 | `src/hardware.h` | Table types (`ButtonDef`, `Indicator`) and macros `IND_NONE`, `IND_LED`, `IND_LED_PAIR`, **`IND_SCREEN(bus, address)`**. |
 | `src/transport.h/.cpp` | The four `TRANSPORT_*` implementations: `transport_init / connected / send / receive / reconnect`, with the §3.5 buffers. |
 | `src/indicators.h/.cpp` | LED rendering (today's `initIndicator` / `showIndicator`). |
-| `src/screens.h/.cpp` | U8g2 drivers and drawing: layout 1, scrolling, transitions, the local screen. Driven by `screen_state`. |
+| `src/screens.h/.cpp` | The U8g2 SSD1306 drivers and the per-panel loop: asks `screen_state` what to show, has `volco_render` draw it, and sends the buffer to the panel. |
 | `src/main.cpp` | `setup()` and `loop()` only: sliders → buttons → drain receive → protocol tick → screens tick → connection check. |
-| `src/icons.h`, `src/fonts/*.h` | **Generated.** The icon bitmaps and ID table; the two U8g2 fonts. |
+| `lib/volco_render/` | Volco's own 1-bit canvas and the layout 1 renderer: text, icons, scrolling, the slide and pixel shift. It also holds the **generated** `volco_icons.*` and `volco_fonts.*` (icon bitmaps and ID table; the two bitmap fonts). Pure C++. |
 | `lib/volco_protocol/` | Frame parser and encoder, message decoding, Hello encoding from a button table, Begin/Commit holding, keepalive and host-timeout tracking. Pure C++; time is passed in. |
 | `lib/volco_bidi/` | Logical → visual reordering of UTF-8 text (§4.4). Pure C++. |
 | `lib/volco_screen_state/` | The pure state machine for each screen and for the panels: current, previous and pending content, transition progress, mid-slide snapping, dim, off, pixel shift, and wake-swallow decisions. Pure C++; time is passed in. |
 | `assets/icons/manifest.txt`, `assets/icons/*.png`, `assets/fonts/*.ttf` (+ licence) | Asset sources. |
-| `tools/gen_assets.py` | Generates `icons.h`, `fonts/*.h`, the Core icon enum (§5.4) and the simulator's icon data (§7). The outputs are checked in, so a normal build needs no Python. |
+| `tools/gen_assets.py` | Generates `lib/volco_render/src/volco_icons.*` and `volco_fonts.*`, the Core icon enum (§5.4) and the simulator's icon data (§7). The outputs are checked in, so a normal build needs no Python. |
 | `test/` | PlatformIO `native` tests (§8.3). |
 
 **`platformio.ini`**
@@ -330,29 +330,28 @@ The current hardware tables are unchanged. Hello derives each button's kind from
 
 ### 4.3 Rendering
 
-- **Drivers:** U8g2 full-buffer mode, one 1 KB frame buffer per screen. Bus 0 uses `U8G2_SSD1306_128X64_NONAME_F_HW_I2C` and bus 1 uses `…_F_2ND_HW_I2C`, with `setI2CAddress(address << 1)` and `setBusClock(I2C_CLOCK_HZ)`.
+- **Rendering is Volco's own.** Content is drawn into a 1-bit canvas (`lib/volco_render`), one 1 KB buffer per screen, and U8g2 is used only as the SSD1306 driver that sends the finished buffer. Slides and pixel shift are therefore buffer copies, and the renderer is unit-tested natively (§8.3).
+- **Drivers:** U8g2 in full-buffer mode. Bus 0 uses `U8G2_SSD1306_128X64_NONAME_F_HW_I2C` and bus 1 uses `…_F_2ND_HW_I2C`, with `setI2CAddress(address << 1)` and `setBusClock(I2C_CLOCK_HZ)`.
 - **Redraw only on change:** new content, a scroll step, a transition frame, a pixel-shift step, or a local-state change. Static screens cost no I2C time.
 - **Transitions.** Each transition is a function `draw(screen, old, new, progress 0–1)` in a table indexed by transition ID. Adding a transition means adding a function, a table entry, and a value in the shared enum.
   - The slide draws the old content offset by `−p·128` and the new content offset by `(1−p)·128` (mirrored for slide right), with an ease-in-out curve.
   - **Progress is time-based:** each frame draws the position for the current time, so a slow bus drops frames instead of stretching the slide.
 - **Frame-rate expectation.** A full frame takes about 25–30 ms per panel at 400 kHz, because Wire sends in 32-byte chunks, and panels are updated one after another. A 360 ms slide on 4 screens therefore gets only about 3 frames per panel. The README recommends `I2C_CLOCK_HZ 1000000` (about 2.5× faster) once screens are wired, and the manual checklist judges the result.
 - **The firmware keeps each screen's previous content** so it can draw the old side of a transition.
-- **Text** is drawn with `drawUTF8` after `bidi` reordering (§4.4).
+- **Text** is drawn by the Volco renderer after `bidi` reordering (§4.4).
 
 ### 4.4 Fonts and right-to-left text
 
 **Fonts**
-- **Typeface:** Arimo, Regular and Bold (Apache 2.0, the font licence goes in `firmware/assets/fonts/`). It covers Latin and Hebrew in one consistent design.
-- `gen_assets.py` turns it into two U8g2 fonts, rendered at an **exact pixel size** passed to `otf2bdf -p`:
+- **Typeface:** Arimo, Regular and Bold (SIL Open Font License 1.1, the licence text is `firmware/assets/fonts/OFL.txt`). It covers Latin and Hebrew in one consistent design.
+- `gen_assets.py` renders it with Pillow at an **exact pixel size**, straight into a small Volco bitmap-font format (`lib/volco_render/src/volco_fonts.*`):
   - **top:** 10 px Regular;
   - **main:** 14 px Bold.
 
   The app preview uses the same TTF at the same pixel sizes.
 - **Glyph subset:** ASCII, Latin-1 Supplement, Hebrew letters (U+05D0–U+05EA, U+05F0–U+05F4), and `…`, `–`, `—`, `•`. Expected size is under 10 KB each.
-- **Toolchain:**
-  - `otf2bdf` (a pinned version, installed from the distribution package) → U8g2's `bdfconv`, built from a pinned U8g2 release tag;
-  - `gen_assets.py` documents both versions and fails clearly when either tool is missing.
-- **Missing glyphs** render as nothing (U8g2's behaviour).
+- **Toolchain:** Python 3 and Pillow ≥ 10. There is no `otf2bdf` or `bdfconv` step.
+- **Missing glyphs** render as nothing.
 
 **`bidi` (a deliberately small subset of the Unicode bidi algorithm)**
 1. **Classify each code point:**
@@ -506,7 +505,7 @@ The UI reads both: the transport status ("Connected · COM3") and the controller
 5. Push everything.
 
 **Pushing**
-- **One serialized outbound path.** A single lock (or a single-consumer send queue) is held across **compute → dedup → send** for every push, every preset-change burst and every keepalive. A push computed from older state can therefore never follow a newer one, and Begin … Commit is never interleaved. Today `PushControllerState` sends outside `_pushStateLock` (`VolcoRuntime.cs:746-758`); that changes.
+- **One serialized outbound path, implemented as a single-consumer send queue.** `ControllerLink` holds one lock across **compute → dedup → enqueue** for every push, every preset-change burst and every keepalive, and the queue is drained outside that lock by whichever thread finds it idle (`Send` and `Tick` are guarded). A push computed from older state can therefore never follow a newer one, and Begin … Commit is never interleaved. Sending outside the lock keeps a slow or re-entrant transport from deadlocking the link. Frames for a retired connection are dropped. Before this work `PushControllerState` sent outside `_pushStateLock` (`VolcoRuntime.cs:746-758`); that changed.
 - **What triggers a re-push:**
   - today's triggers: device list changes, mute and volume changes, default-output changes, preset changes;
   - **plus a new subscription to `ConfigManager.ConfigChanged`.** Today only `ConnectionConfigChanged` is subscribed (`VolcoRuntime.cs:286`), so action edits never reach the LEDs. With it, edits to actions, presets, nicknames and icons reach the controller. Dedup keeps the push cheap.
@@ -586,8 +585,8 @@ Edits save as you make them, as on every page.
 - A `VersionMismatch` controller state shows the §3.4 error in the status panel and the nav footer.
 
 **Screen preview rendering**
-- `Volco.App` draws layout 1 into a 128×64 bitmap and shows it with nearest-neighbour scaling, white on black.
-- It uses the **same icon PNGs**, linked from `firmware/assets/icons` as Avalonia resources, and the **same Arimo TTF at the same pixel sizes**. Text is thresholded to 1-bit.
+- `Volco.App` shows layout 1 in an Avalonia control, white on black.
+- It uses the **same icon PNGs**, linked from `firmware/assets/icons` as Avalonia resources, and the **same Arimo TTF at the same pixel sizes**. Text is **not** thresholded to 1-bit.
 - The result is close, not pixel-identical:
   - Avalonia uses the full Unicode bidi algorithm, so mixed Hebrew/Latin text with unusual punctuation can be ordered slightly differently than on the controller;
   - this is an accepted difference and is noted in a code comment.
@@ -679,7 +678,8 @@ Changing the type disconnects. Hello is built from the selected type.
 **CI.** A new job in `.github/workflows/build.yml` on `ubuntu-latest`:
 - `actions/setup-python`;
 - `pip install platformio==<pinned>`;
-- `pio test -e native` in `firmware/`.
+- `pio test -e native` in `firmware/`;
+- builds `denky32` and the build-only `denky32_screens_check`, `denky32_udp_check` and `denky32_websocket_check` environments.
 
 It runs on every push, like the existing test job.
 
