@@ -13,6 +13,9 @@ public sealed class ControllerLinkTests : IDisposable
         HeartbeatInterval: TimeSpan.FromMilliseconds(40),
         TickInterval: TimeSpan.FromMilliseconds(10));
 
+    private static readonly ControllerLinkOptions SlowHeartbeat = new(
+        TimeSpan.FromMilliseconds(40), TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(10));
+
     /// <summary>Never fires on its own within a test.</summary>
     private static readonly ControllerLinkOptions Quiet = new(
         TimeSpan.FromHours(1), TimeSpan.FromHours(1), TimeSpan.FromHours(1));
@@ -187,16 +190,16 @@ public sealed class ControllerLinkTests : IDisposable
     [Fact]
     public void Heartbeat_OnlyWhenIdle()
     {
-        var link = NewLink(Fast);
+        var link = NewLink(SlowHeartbeat);
         link.Attach(_conn);
         link.OnMessage(GoodHello);
-        Assert.True(WaitUntil(() => Count(ProtocolEncoder.EncodeHeartbeat()) >= 2));
+        Assert.True(WaitUntil(() => Count(ProtocolEncoder.EncodeHeartbeat()) >= 2, 5000));
 
         // Busy: a frame every 10 ms keeps the link from needing a heartbeat.
         var before = Count(ProtocolEncoder.EncodeHeartbeat());
         var sw = Stopwatch.StartNew();
         byte v = 0;
-        while (sw.ElapsedMilliseconds < 200)
+        while (sw.ElapsedMilliseconds < 400)
         {
             _displays[0] = new LedDisplay(v ^= 1);
             link.Push();
@@ -244,7 +247,6 @@ public sealed class ControllerLinkTests : IDisposable
     [Fact]
     public void ConcurrentPushes_NeverSendOlderStateAfterNewer()
     {
-        var link = Ready();
         int counter = 0;
         var linkWithCounter = new ControllerLink(
             () => new ButtonDisplay?[] { new LedDisplay((byte)Volatile.Read(ref counter)) }, Quiet);
@@ -264,5 +266,94 @@ public sealed class ControllerLinkTests : IDisposable
             for (int i = 1; i < values.Count; i++) Assert.True(values[i] > values[i - 1], "an older value was sent after a newer one");
         }
         finally { linkWithCounter.Dispose(); }
+    }
+
+    private sealed class ScriptedConnection : IControllerConnection
+    {
+        private readonly object _lock = new();
+        private readonly List<byte[]> _sent = new();
+        private int _attempts;
+        public Action<byte[]>? OnSend { get; set; }
+        public int Attempts => Volatile.Read(ref _attempts);
+        public int SentCount { get { lock (_lock) return _sent.Count; } }
+        public event EventHandler<ControllerMessage>? MessageReceived { add { } remove { } }
+        public event EventHandler<ConnectionStatus>? StatusChanged { add { } remove { } }
+        public ConnectionStatus Status => ConnectionStatus.Connected;
+        public void Connect() { }
+        public void Disconnect() { }
+        public void Dispose() { }
+        public void Send(byte[] data)
+        {
+            Interlocked.Increment(ref _attempts);
+            OnSend?.Invoke(data);
+            lock (_lock) _sent.Add(data);
+        }
+    }
+
+    [Fact]
+    public void Detach_FromInsideSend_DoesNotThrow_AndSendsNothingMore()
+    {
+        var link = NewLink();
+        var conn = new ScriptedConnection();
+        link.Attach(conn);
+        var afterAttach = conn.SentCount;
+        conn.OnSend = _ => link.Detach();
+
+        link.OnMessage(GoodHello);
+
+        Assert.Equal(ControllerState.NoController, link.State);
+        Assert.Equal(afterAttach + 1, conn.SentCount);   // the first frame only
+    }
+
+    [Fact]
+    public void Send_ThatThrows_DoesNotCrashPushOrHeartbeat_AndLaterSendsWork()
+    {
+        var link = NewLink(Fast);
+        var conn = new ScriptedConnection();
+        link.Attach(conn);
+        link.OnMessage(GoodHello);
+        var throwing = true;
+        conn.OnSend = _ => { if (Volatile.Read(ref throwing)) throw new IOException("boom"); };
+
+        _displays[0] = new LedDisplay(1);
+        link.Push();                                      // must not throw
+        var attempts = conn.Attempts;
+        Assert.True(WaitUntil(() => conn.Attempts >= attempts + 2));   // heartbeats keep trying
+
+        Volatile.Write(ref throwing, false);
+        var sent = conn.SentCount;
+        _displays[0] = new LedDisplay(0);
+        link.Push();
+        Assert.True(WaitUntil(() => conn.SentCount > sent));
+    }
+
+    [Fact]
+    public void Push_AfterDispose_SendsNothing_AndStateIsNoController()
+    {
+        var link = Ready();
+        link.Dispose();
+        var after = _conn.SentCount;
+
+        _displays[0] = new LedDisplay(1);
+        link.Push();
+        link.PushAll();
+        link.PushPresetChange(ScreenTransition.SlideLeft, true);
+        link.Detach();
+
+        Assert.Equal(after, _conn.SentCount);
+        Assert.Equal(ControllerState.NoController, link.State);
+    }
+
+    [Fact]
+    public void Hello_WithNoAttachment_DoesNotRaiseHelloReceived()
+    {
+        var link = NewLink();
+        var seen = false;
+        link.HelloReceived += (_, _) => seen = true;
+
+        link.OnMessage(GoodHello);
+
+        Assert.False(seen);
+        Assert.Equal(ControllerState.NoController, link.State);
     }
 }

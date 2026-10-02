@@ -11,9 +11,17 @@ public sealed record ControllerLinkOptions(TimeSpan HelloRetryInterval, TimeSpan
 
 /// <summary>
 /// One controller session (spec §3.4, §5.5): HelloRequest until Hello, the controller state,
-/// keepalive, per-button dedup, and the only path frames take to the controller. A single lock
-/// is held across compute → dedup → send, so frames always leave in the order their state was
-/// computed and a Begin … Commit burst is never interleaved. Events are raised outside it.
+/// keepalive, per-button dedup, and the only path frames take to the controller.
+/// <para>
+/// A single lock (<c>_gate</c>) is held across compute → dedup → enqueue, so frames are queued in
+/// the order their state was computed and a Begin … Commit burst is enqueued contiguously. The
+/// frames are then sent <b>outside</b> that lock by a single-consumer outbox: whichever thread
+/// finds the outbox idle drains it, and every other thread just enqueues and returns. So a slow or
+/// re-entrant transport (one that raises <c>StatusChanged</c> from <c>Send</c>, or whose own lock
+/// is held by a thread waiting for ours) can never deadlock the link, and a Send that throws is
+/// logged and dropped. Events are raised outside every lock. For a single-threaded caller the
+/// frames have all been sent by the time a public method returns.
+/// </para>
 /// </summary>
 public sealed class ControllerLink : IDisposable
 {
@@ -22,8 +30,13 @@ public sealed class ControllerLink : IDisposable
     private readonly ControllerLinkOptions _options;
     private readonly Timer _timer;
 
-    // Guarded by _gate.
-    private IControllerConnection? _connection;
+    // Outbox: guarded by _outLock only (never take _gate while holding it).
+    private readonly object _outLock = new();
+    private readonly Queue<(IControllerConnection Connection, byte[] Frame)> _outbox = new();
+    private bool _draining;
+
+    // Guarded by _gate. _connection is also read lock-free by the drain loop.
+    private volatile IControllerConnection? _connection;
     private ControllerState _state = ControllerState.NoController;
     private ButtonDisplay?[] _sent = Array.Empty<ButtonDisplay?>();
     private long _lastSendMs;
@@ -55,12 +68,14 @@ public sealed class ControllerLink : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
+            ClearOutbox();
             _connection = connection;
             _sent = Array.Empty<ButtonDisplay?>();
             changed = SetState(ControllerState.AwaitingHello);
             SendHelloRequest();
         }
         Raise(changed);
+        Drain();
     }
 
     /// <summary>The transport went away.</summary>
@@ -69,9 +84,8 @@ public sealed class ControllerLink : IDisposable
         ControllerState? changed;
         lock (_gate)
         {
-            _connection = null;
-            _sent = Array.Empty<ButtonDisplay?>();
-            changed = SetState(ControllerState.NoController);
+            if (_disposed) return;
+            changed = Detached();
         }
         Raise(changed);
     }
@@ -81,6 +95,10 @@ public sealed class ControllerLink : IDisposable
     {
         if (message is not HelloMessage hello) return;
         var ok = hello.Version == ProtocolVersion.Current;
+        lock (_gate)
+        {
+            if (_connection is null || _disposed) return;
+        }
         if (!ok) AppLog.Error($"Controller speaks protocol v{hello.Version}; this app speaks v{ProtocolVersion.Current}");
         else HelloReceived?.Invoke(this, hello);
 
@@ -93,6 +111,7 @@ public sealed class ControllerLink : IDisposable
             if (ok) PushLocked(ScreenTransition.None, everything: true);
         }
         Raise(changed);
+        Drain();
     }
 
     /// <summary>Sends every button whose display changed, with no transition.</summary>
@@ -102,6 +121,7 @@ public sealed class ControllerLink : IDisposable
         {
             if (_state == ControllerState.Ready) PushLocked(ScreenTransition.None, everything: false);
         }
+        Drain();
     }
 
     /// <summary>Re-sends every button with no transition (e.g. the live preset was deleted).</summary>
@@ -111,6 +131,7 @@ public sealed class ControllerLink : IDisposable
         {
             if (_state == ControllerState.Ready) PushLocked(ScreenTransition.None, everything: true);
         }
+        Drain();
     }
 
     /// <summary>A preset change: every screen slides (even unchanged ones) and every LED is
@@ -129,6 +150,7 @@ public sealed class ControllerLink : IDisposable
                 if (displays[i] is LedDisplay l) { Send(ProtocolEncoder.EncodeLed(i, l.Value)); _sent[i] = l; }
             if (synchronized) Send(ProtocolEncoder.EncodeCommit());
         }
+        Drain();
     }
 
     private void PushLocked(ScreenTransition transition, bool everything)
@@ -156,16 +178,24 @@ public sealed class ControllerLink : IDisposable
 
     private void Tick()
     {
-        lock (_gate)
+        try
         {
-            if (_connection is null || _disposed) return;
-            var now = Environment.TickCount64;
-            if (_state == ControllerState.AwaitingHello
-                && now - _lastHelloRequestMs >= (long)_options.HelloRetryInterval.TotalMilliseconds)
-                SendHelloRequest();
-            else if (_state == ControllerState.Ready
-                     && now - _lastSendMs >= (long)_options.HeartbeatInterval.TotalMilliseconds)
-                Send(ProtocolEncoder.EncodeHeartbeat());
+            lock (_gate)
+            {
+                if (_connection is null || _disposed) return;
+                var now = Environment.TickCount64;
+                if (_state == ControllerState.AwaitingHello
+                    && now - _lastHelloRequestMs >= (long)_options.HelloRetryInterval.TotalMilliseconds)
+                    SendHelloRequest();
+                else if (_state == ControllerState.Ready
+                         && now - _lastSendMs >= (long)_options.HeartbeatInterval.TotalMilliseconds)
+                    Send(ProtocolEncoder.EncodeHeartbeat());
+            }
+            Drain();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Controller link tick failed: {ex.Message}");
         }
     }
 
@@ -175,11 +205,51 @@ public sealed class ControllerLink : IDisposable
         _lastHelloRequestMs = Environment.TickCount64;
     }
 
-    /// <summary>Caller holds _gate.</summary>
+    /// <summary>Caller holds _gate. Queues the frame; Drain() sends it.</summary>
     private void Send(byte[] frame)
     {
-        _connection?.Send(frame);
+        if (_connection is { } c)
+        {
+            lock (_outLock) _outbox.Enqueue((c, frame));
+        }
         _lastSendMs = Environment.TickCount64;
+    }
+
+    /// <summary>Sends queued frames. Only one thread drains at a time; the others return and
+    /// their frames are picked up by the drainer. Called with no lock held.</summary>
+    private void Drain()
+    {
+        lock (_outLock)
+        {
+            if (_draining) return;
+            _draining = true;
+        }
+        while (true)
+        {
+            (IControllerConnection Connection, byte[] Frame) item;
+            lock (_outLock)
+            {
+                if (_outbox.Count == 0) { _draining = false; return; }
+                item = _outbox.Dequeue();
+            }
+            if (!ReferenceEquals(item.Connection, _connection)) continue;   // stale attachment
+            try { item.Connection.Send(item.Frame); }
+            catch (Exception ex) { AppLog.Error($"Controller send failed: {ex.Message}"); }
+        }
+    }
+
+    private void ClearOutbox()
+    {
+        lock (_outLock) _outbox.Clear();
+    }
+
+    /// <summary>Caller holds _gate.</summary>
+    private ControllerState? Detached()
+    {
+        _connection = null;
+        _sent = Array.Empty<ButtonDisplay?>();
+        ClearOutbox();
+        return SetState(ControllerState.NoController);
     }
 
     /// <summary>Caller holds _gate. Returns the new state when it changed.</summary>
@@ -197,11 +267,14 @@ public sealed class ControllerLink : IDisposable
 
     public void Dispose()
     {
+        ControllerState? changed;
         lock (_gate)
         {
+            if (_disposed) return;
+            changed = Detached();
             _disposed = true;
-            _connection = null;
         }
         _timer.Dispose();
+        Raise(changed);
     }
 }
