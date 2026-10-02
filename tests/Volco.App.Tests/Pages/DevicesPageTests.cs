@@ -82,6 +82,7 @@ public class DevicesPageTests
         Assert.Equal("Desk speakers", spk.DisplayName);
         Assert.Equal("Desk speakers", spk.Preview.Main);
         Assert.Equal("ACTIVE", spk.Preview.TopText);
+        Assert.Null(entry.Icon);                                          // icon never chosen stays automatic
     }
 
     [AvaloniaFact]
@@ -136,5 +137,25 @@ public class DevicesPageTests
         rig.Engine.RaiseDeviceChanged(DeviceChangeKind.Added, dock);
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(vm.Devices.Outputs, d => d.Id == "dock");
+    }
+
+    [AvaloniaFact]
+    public void ShowingThePage_RefreshesStaleReferences()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        var window = (Window)page.GetVisualRoot()!;
+        Assert.DoesNotContain(vm.Devices.Outputs, d => d.Id == "tv");
+
+        rig.Config.Config.Sliders[1].Type = SliderMappingType.Device;
+        rig.Config.Config.Sliders[1].Device = new DeviceRefConfig { Id = "tv", FriendlyName = "LG TV (NVIDIA)" };
+        window.Content = null;
+        Dispatcher.UIThread.RunJobs();
+        window.Content = page;
+        Dispatcher.UIThread.RunJobs();
+
+        var tv = vm.Devices.Outputs.Single(d => d.Id == "tv");
+        Assert.Equal("Used by Slider 1", tv.UsedBy);
+        Assert.False(tv.CanForget);
     }
 }

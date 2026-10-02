@@ -90,7 +90,9 @@ public sealed partial class DeviceItemViewModel : ObservableObject
     [RelayCommand]
     private void ResetIcon()
     {
+        _loading = true;
         Icon = _automaticIcon;
+        _loading = false;
         Store(iconChosen: false);
     }
 
