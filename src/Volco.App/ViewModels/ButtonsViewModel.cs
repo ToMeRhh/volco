@@ -3,7 +3,9 @@ using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Devices;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
@@ -70,6 +72,30 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         for (int i = 0; i < Buttons.Count; i++)
             Items.Add(new ButtonItemViewModel(Buttons[i], i, _devices, this));
         Renumber();
+        RefreshController();
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCountHint))]
+    private string _countHint = "";
+
+    public bool HasCountHint => CountHint.Length > 0;
+
+    [ObservableProperty]
+    private bool _canAddMissing;
+
+    [ObservableProperty]
+    private string _addMissingText = "";
+
+    /// <summary>Re-reads the controller's hardware (a Hello arrived) or the card count changed.</summary>
+    public void RefreshController()
+    {
+        var n = _config.Config.Controller?.Buttons.Count;
+        CountHint = CountHints.Text("button", n, Items.Count);
+        var missing = (n ?? 0) - Items.Count;
+        CanAddMissing = missing > 0;
+        AddMissingText = missing == 1 ? "Add the missing one" : $"Add the missing {missing}";
+        RefreshLights();
     }
 
     private List<ButtonConfig> Buttons => _config.Config.Buttons;
@@ -86,6 +112,12 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         => _config.Config.Presets.Select(p => new PresetChoice(p.Id, p.Name)).ToList();
 
     public string? PresetName(string? id) => _config.Config.Presets.Find(p => p.Id == id)?.Name;
+
+    public IndicatorKind? IndicatorFor(int index)
+        => _config.Config.Controller is not { } c ? null
+           : index < c.Buttons.Count ? c.Buttons[index] : IndicatorKind.None;
+
+    public string DeviceName(DeviceRefConfig? device) => DeviceDisplay.NameOf(_config.Config, _audio, device, "?");
 
     void IButtonCardOwner.Execute(ButtonActionConfig action) => _execute(action);
 
@@ -239,6 +271,22 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         var item = new ButtonItemViewModel(cfg, Items.Count, _devices, this) { IsExpanded = true };
         Items.Add(item);
         Renumber();
+        RefreshController();
+        Save();
+    }
+
+    [RelayCommand]
+    private void AddMissing()
+    {
+        var target = _config.Config.Controller?.Buttons.Count ?? 0;
+        while (Items.Count < target)
+        {
+            var cfg = new ButtonConfig();
+            Buttons.Add(cfg);
+            Items.Add(new ButtonItemViewModel(cfg, Items.Count, _devices, this));
+        }
+        Renumber();
+        RefreshController();
         Save();
     }
 
@@ -269,12 +317,14 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         Items.RemoveAt(Items.Count - 1);
         Buttons.RemoveAt(Buttons.Count - 1);
         Renumber();
+        RefreshController();
         Save();
         _toast.Show($"{item.Title} removed", () =>
         {
             Buttons.Add(cfg);
             Items.Add(item);
             Renumber();
+            RefreshController();
             Save();
         });
     }

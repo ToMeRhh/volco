@@ -61,7 +61,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     public bool IsConnected => Status == ConnectionStatus.Connected;
 
     /// <summary>The navigation footer's text: "Connected · COM3", "Not connected", …</summary>
-    public string FooterText => Status switch
+    public string FooterText => _runtime.ControllerState == ControllerState.VersionMismatch ? "Firmware mismatch" : Status switch
     {
         ConnectionStatus.Connected => ConnectionType switch
         {
@@ -72,6 +72,49 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         ConnectionStatus.Error => "Connection error",
         _ => "Not connected",
     };
+
+    public const string MismatchText = "Controller firmware doesn't match this version of Volco. Reflash it.";
+
+    /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", from the last Hello; "" before one.</summary>
+    public string HardwareSummary => Summarize(_config.Config.Controller);
+    public bool HasHardwareSummary => HardwareSummary.Length > 0;
+    public string ControllerError => _runtime.ControllerState == ControllerState.VersionMismatch ? MismatchText : "";
+    public bool HasControllerError => ControllerError.Length > 0;
+
+    internal static string Summarize(ControllerInfoConfig? c)
+    {
+        if (c is null) return "";
+        string Plural(int n, string one) => $"{n} {one}{(n == 1 ? "" : "s")}";
+        var groups = new List<string>();
+        void Add(IndicatorKind kind, Func<int, string> text)
+        {
+            var n = c.Buttons.Count(k => k == kind);
+            if (n > 0) groups.Add(text(n));
+        }
+        Add(IndicatorKind.Led, n => $"{n} LED");
+        Add(IndicatorKind.LedPair, n => $"{n} LED pair");
+        Add(IndicatorKind.Screen, n => Plural(n, "screen"));
+        Add(IndicatorKind.None, n => $"{n} with no light");
+        var buttons = Plural(c.Buttons.Count, "button") + (groups.Count > 0 ? $" ({string.Join(", ", groups)})" : "");
+        return $"{Plural(c.Sliders, "slider")} · {buttons}";
+    }
+
+    private void OnControllerChanged(object? sender, ControllerState state)
+        => _ui.Post(() =>
+        {
+            if (_disposed) return;
+            OnPropertyChanged(nameof(ControllerError));
+            OnPropertyChanged(nameof(HasControllerError));
+            OnPropertyChanged(nameof(FooterText));
+        });
+
+    private void OnControllerInfo(object? sender, EventArgs e)
+        => _ui.Post(() =>
+        {
+            if (_disposed) return;
+            OnPropertyChanged(nameof(HardwareSummary));
+            OnPropertyChanged(nameof(HasHardwareSummary));
+        });
 
     /// <summary>Starts the connection again with the current settings.</summary>
     [RelayCommand]
@@ -175,6 +218,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // Survives transport restarts (the runtime re-attaches its own handler to each transport
         // it creates), so unlike the old per-transport subscription this never needs re-wiring.
         _runtime.ConnectionStatusChanged += OnConnectionStatusChanged;
+        _runtime.ControllerStateChanged += OnControllerChanged;
+        _runtime.ControllerInfoChanged += OnControllerInfo;
         UpdateStatus(_runtime.ConnectionStatus);
     }
 
@@ -217,6 +262,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _runtime.ConnectionStatusChanged -= OnConnectionStatusChanged;
+        _runtime.ControllerStateChanged -= OnControllerChanged;
+        _runtime.ControllerInfoChanged -= OnControllerInfo;
     }
 
     partial void OnStatusChanged(ConnectionStatus value)

@@ -8,6 +8,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Tests.Audio;
 using Xunit;
@@ -282,6 +283,7 @@ public class ButtonsPageTests
     {
         var (page, rig, vm) = Show(c =>
         {
+            c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = 5, Buttons = { IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen } };
             DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
             DefaultOf(c, 1).SinglePress = new ButtonActionConfig
             {
@@ -303,6 +305,66 @@ public class ButtonsPageTests
 
         Assert.Contains("on", In<Ellipse>(Card(page, 0), "Led").Classes);
         Assert.Equal("On while muted. Follows the Press action.", vm.Buttons.Items[0].LightDescription);
+    }
+
+    private static void Hardware(AppConfig c, params IndicatorKind[] kinds)
+        => c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = 5, Buttons = kinds.ToList() };
+
+    [AvaloniaFact]
+    public void ButtonsPage_ScreenButton_ShowsAScreenPreviewOfTheEditedPreset()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            Hardware(c, IndicatorKind.Screen, IndicatorKind.Led, IndicatorKind.None);
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+
+        var small = In<ScreenPreview>(Card(page, 0), "ScreenPreviewSmall");
+        Assert.True(small.IsVisible);
+        Assert.Equal("Speakers", small.Screen!.Main);
+        Assert.True(In<ScreenPreview>(Card(page, 0), "ScreenPreviewLarge").IsVisible);
+        Assert.Equal("Light: Screen", In<TextBlock>(Card(page, 0), "IndicatorText").Text);
+        Assert.False(In<ScreenPreview>(Card(page, 1), "ScreenPreviewSmall").IsVisible);
+        Assert.True(In<Ellipse>(Card(page, 1), "Led").IsVisible);
+        Assert.Equal("Light: None", vm.Buttons.Items[2].IndicatorText);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_NoControllerInfo_AsksToConnect_AndShowsNoPreview()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        Assert.Equal("Connect your controller to see its lights and screens.", In<TextBlock>(Card(page, 0), "IndicatorText").Text);
+        Assert.False(In<Ellipse>(Card(page, 0), "Led").IsVisible);
+        Assert.False(In<ScreenPreview>(Card(page, 0), "ScreenPreviewSmall").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_CountHint_AddsTheMissingButtons()
+    {
+        var (page, rig, vm) = Show(c => Hardware(c, IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen));
+        using var _ = rig; using var __ = vm;
+        Assert.Equal("Your controller has 4 buttons; 3 are set up.", In<TextBlock>(page, "CountHintText").Text);
+        In<Button>(page, "AddMissingButton").Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(4, rig.Config.Config.Buttons.Count);
+        Assert.False(vm.Buttons.HasCountHint);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_ControllerInfoArrives_CardsFollow()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        rig.Connection!.SetStatus(Volco.Core.Communication.ConnectionStatus.Connected);
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5,
+            new[] { IndicatorKind.Screen, IndicatorKind.Led, IndicatorKind.Led }));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(vm.Buttons.Items[0].IsScreen);
+        Assert.True(In<ScreenPreview>(Card(page, 0), "ScreenPreviewSmall").IsVisible);
     }
 
     // ── Presets ───────────────────────────────────────────────────────────────

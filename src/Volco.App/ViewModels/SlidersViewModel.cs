@@ -30,6 +30,29 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
             Items.Add(NewItem(config.Config.Sliders[i], i));
         Renumber();
         AppsChanged();
+        RefreshController();
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCountHint))]
+    private string _countHint = "";
+
+    public bool HasCountHint => CountHint.Length > 0;
+
+    [ObservableProperty]
+    private bool _canAddMissing;
+
+    [ObservableProperty]
+    private string _addMissingText = "";
+
+    /// <summary>Re-reads the controller's hardware (a Hello arrived) or the card count changed.</summary>
+    public void RefreshController()
+    {
+        var n = _config.Config.Controller?.Sliders;
+        CountHint = CountHints.Text("slider", n, Items.Count);
+        var missing = (n ?? 0) - Items.Count;
+        CanAddMissing = missing > 0;
+        AddMissingText = missing == 1 ? "Add the missing one" : $"Add the missing {missing}";
     }
 
     private List<SliderConfig> Sliders => _config.Config.Sliders;
@@ -52,6 +75,23 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         Items.Add(item);
         Renumber();
         AppsChanged();
+        RefreshController();
+        Save();
+    }
+
+    [RelayCommand]
+    private void AddMissing()
+    {
+        var target = _config.Config.Controller?.Sliders ?? 0;
+        while (Items.Count < target)
+        {
+            var cfg = new SliderConfig { Type = SliderMappingType.None };
+            Sliders.Add(cfg);
+            Items.Add(NewItem(cfg, Items.Count));
+        }
+        Renumber();
+        AppsChanged();
+        RefreshController();
         Save();
     }
 
@@ -81,6 +121,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         Sliders.RemoveAt(Sliders.Count - 1);
         Renumber();
         AppsChanged();
+        RefreshController();
         Save();
         _toast.Show($"{item.Title} removed", () =>
         {
@@ -88,6 +129,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
             Items.Add(item);
             Renumber();
             AppsChanged();
+            RefreshController();
             Save();
         });
     }

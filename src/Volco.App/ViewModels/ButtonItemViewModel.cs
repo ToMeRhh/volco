@@ -22,6 +22,8 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Title))]
     private int _index;
 
+    partial void OnIndexChanged(int value) => Refresh();
+
     public string Title => $"Button {Index}";
 
     [ObservableProperty]
@@ -51,14 +53,28 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     [ObservableProperty]
     private string _lightDescription = "";
 
+    /// <summary>What the controller reported for this input (spec §6.3); null before the first Hello.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsOnOffLight), nameof(IsPairLight), nameof(IsPresetLight), nameof(HasNoLight))]
-    private LightKind _lightKind;
+    [NotifyPropertyChangedFor(nameof(IsLed), nameof(IsLedPair), nameof(IsScreen), nameof(IsIndicatorUnknown), nameof(IndicatorText))]
+    private IndicatorKind? _indicator;
 
-    public bool IsOnOffLight => LightKind == LightKind.OnOff;
-    public bool IsPairLight => LightKind == LightKind.Pair;
-    public bool IsPresetLight => LightKind == LightKind.Preset;
-    public bool HasNoLight => LightKind == LightKind.None;
+    public bool IsLed => Indicator == IndicatorKind.Led;
+    public bool IsLedPair => Indicator == IndicatorKind.LedPair;
+    public bool IsScreen => Indicator == IndicatorKind.Screen;
+    public bool IsIndicatorUnknown => Indicator is null;
+
+    public string IndicatorText => Indicator switch
+    {
+        null => "Connect your controller to see its lights and screens.",
+        IndicatorKind.Led => "Light: LED",
+        IndicatorKind.LedPair => "Light: LED pair",
+        IndicatorKind.Screen => "Light: Screen",
+        _ => "Light: None",
+    };
+
+    /// <summary>What this button's screen shows in the edited preset.</summary>
+    [ObservableProperty]
+    private ScreenContent _screen = ScreenContent.Blank;
 
     /// <summary>The value the controller is sent for this button (spec §3.6).</summary>
     [ObservableProperty]
@@ -68,10 +84,6 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     public bool LedOn => LightValue != 0;
     public bool LedA => LightValue == 1;
     public bool LedB => LightValue == 2;
-
-    /// <summary>One dot per preset for preset actions; the live one is lit.</summary>
-    [ObservableProperty]
-    private IReadOnlyList<bool> _presetDots = Array.Empty<bool>();
 
     // ── View state ────────────────────────────────────────────────────────────
 
@@ -133,23 +145,23 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         Refresh();
     }
 
-    /// <summary>Recomputes the summary and the light preview. Cheap; safe to call often.</summary>
+    /// <summary>Recomputes the summary and the light/screen preview. Cheap; safe to call often.</summary>
     internal void Refresh()
     {
         var edited = Config.BindingFor(_owner.EditingPresetId);
         IsNotSetUp = Config.Actions.Values.All(b => b is null || b.IsEmpty);
-        var summary = ActionCatalog.Summary(edited, _owner.PresetName);
+        var summary = ActionCatalog.Summary(edited, _owner.PresetName, _owner.DeviceName);
         Summary = summary.Length > 0 ? summary : IsNotSetUp ? "Not set up" : "Nothing in this preset";
-        LightDescription = ActionCatalog.LightDescription(edited);
 
-        // The light preview is what the controller shows now, so it follows the live preset.
+        Indicator = _owner.IndicatorFor(Index);
+        LightDescription = IsScreen ? ActionCatalog.ScreenDescription(edited) : ActionCatalog.LightDescription(edited);
+
+        // LEDs show what the controller shows now (the live preset); a screen preview shows the
+        // preset being edited, so editing it is visible.
         var live = Config.BindingFor(_owner.LivePresetId);
-        var source = ActionCatalog.LightSource(live);
-        LightKind = source is { } s ? ActionCatalog.LightKindOf(s.Action.Action) : LightKind.None;
         LightValue = ControllerDisplay.LedValueFor(live, _owner.AppConfig, _owner.LivePresetId, _owner.Audio);
-        PresetDots = LightKind == LightKind.Preset
-            ? _owner.AppConfig.Presets.Select((p, i) => LightValue == i + 1).ToList()
-            : Array.Empty<bool>();
+        Screen = ControllerDisplay.Screen(ControllerDisplay.PrimaryAction(_owner.AppConfig, Index, _owner.EditingPresetId),
+                                          _owner.AppConfig, _owner.EditingPresetId, _owner.Audio);
     }
 
     private void OnActionChanged()
@@ -199,4 +211,6 @@ internal interface IButtonCardOwner
     void MoveDown(ButtonItemViewModel item);
     void Reset(ButtonItemViewModel item);
     void RemoveLast();
+    IndicatorKind? IndicatorFor(int index);
+    string DeviceName(DeviceRefConfig? device);
 }

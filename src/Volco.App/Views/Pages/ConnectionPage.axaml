@@ -21,7 +21,7 @@
 
       <!-- Status first -->
       <Border Name="StatusPanel" Classes="Panel">
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto" RowDefinitions="Auto,Auto">
           <Ellipse Name="StatusDot" Width="10" Height="10" VerticalAlignment="Center"
                    Fill="{Binding Status, Converter={StaticResource StatusToBrush}}"/>
           <TextBlock Name="StatusLabel" Grid.Column="1" Classes="Subtitle" Margin="8,0,16,0"
@@ -35,6 +35,12 @@
               <TextBlock Text="Reconnect"/>
             </StackPanel>
           </Button>
+          <StackPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="18,6,0,0" Spacing="2">
+            <TextBlock Name="HardwareSummaryText" Classes="Caption" Text="{Binding HardwareSummary}"
+                       IsVisible="{Binding HasHardwareSummary}"/>
+            <TextBlock Name="ControllerErrorText" Classes="Caption" Foreground="{DynamicResource DangerBrush}"
+                       TextWrapping="Wrap" Text="{Binding ControllerError}" IsVisible="{Binding HasControllerError}"/>
+          </StackPanel>
         </Grid>
       </Border>
 

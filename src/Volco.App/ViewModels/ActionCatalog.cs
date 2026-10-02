@@ -17,9 +17,6 @@ public sealed record PresetChoice(string Id, string Name)
     public override string ToString() => Name;
 }
 
-/// <summary>How a button's controller light shows its value (spec §3.6).</summary>
-public enum LightKind { None, OnOff, Pair, Preset }
-
 /// <summary>
 /// Everything the settings UI knows about button actions: the grouped picker, short labels for
 /// card summaries, which parameters an action takes, and what the controller light shows.
@@ -50,23 +47,22 @@ public static class ActionCatalog
     public static bool NeedsPair(ButtonActionType t) => t is ButtonActionType.ToggleOutputDevice;
     public static bool NeedsPreset(ButtonActionType t) => t is ButtonActionType.GoToPreset;
 
-    public static LightKind LightKindOf(ButtonActionType t) => t switch
-    {
-        ButtonActionType.MuteCurrentOutput or ButtonActionType.MuteCurrentInput
-            or ButtonActionType.MuteSpecificDevice or ButtonActionType.SetOutputDevice => LightKind.OnOff,
-        ButtonActionType.ToggleOutputDevice => LightKind.Pair,
-        ButtonActionType.NextPreset or ButtonActionType.GoToPreset => LightKind.Preset,
-        _ => LightKind.None,
-    };
-
-    /// <summary>The action that decides the light: the first stateful one, single → double → long
-    /// (the same rule as <see cref="Volco.Core.Communication.ControllerDisplay"/>).</summary>
+    /// <summary>The action that decides the light: the first action that isn't None, single → double → long.</summary>
     public static (ButtonActionConfig Action, string Slot)? LightSource(ButtonBindingConfig binding)
     {
-        if (LightKindOf(binding.SinglePress.Action) != LightKind.None) return (binding.SinglePress, "Press");
-        if (LightKindOf(binding.DoublePress.Action) != LightKind.None) return (binding.DoublePress, "Double press");
-        if (LightKindOf(binding.LongPress.Action) != LightKind.None) return (binding.LongPress, "Hold");
+        if (binding.SinglePress.Action != ButtonActionType.None) return (binding.SinglePress, "Press");
+        if (binding.DoublePress.Action != ButtonActionType.None) return (binding.DoublePress, "Double press");
+        if (binding.LongPress.Action != ButtonActionType.None) return (binding.LongPress, "Hold");
         return null;
+    }
+
+    /// <summary>The "Screen: …" line on a button card with a screen.</summary>
+    public static string ScreenDescription(ButtonBindingConfig binding)
+    {
+        if (binding.SinglePress.Action != ButtonActionType.None) return "Shows the Press action.";
+        if (binding.DoublePress.Action != ButtonActionType.None) return "Shows the Double press action.";
+        if (binding.LongPress.Action != ButtonActionType.None) return "Shows the Hold action.";
+        return "Blank. None of this button’s actions is set in this preset.";
     }
 
     /// <summary>The "Controller light: …" line on a button card.</summary>
@@ -85,26 +81,32 @@ public static class ActionCatalog
     }
 
     /// <summary>A short label for card summaries, e.g. "Mute mic" or "Toggle Speakers / Headphones".</summary>
-    public static string ShortLabel(ButtonActionConfig a, Func<string?, string?> presetName) => a.Action switch
+    public static string ShortLabel(ButtonActionConfig a, Func<string?, string?> presetName,
+                                    Func<DeviceRefConfig?, string>? deviceName = null)
     {
-        ButtonActionType.None => "Nothing",
-        ButtonActionType.MuteCurrentOutput => "Mute output",
-        ButtonActionType.MuteCurrentInput => "Mute mic",
-        ButtonActionType.MuteSpecificDevice => $"Mute {DeviceShort(a.Device)}",
-        ButtonActionType.SetOutputDevice => $"Switch to {DeviceShort(a.Device)}",
-        ButtonActionType.ToggleOutputDevice => $"Toggle {DeviceShort(a.Device)} / {DeviceShort(a.DeviceB)}",
-        ButtonActionType.NextPreset => "Next preset",
-        ButtonActionType.GoToPreset => $"Go to {presetName(a.PresetId) ?? "a preset"}",
-        _ => a.Action.ToString(),
-    };
+        var name = deviceName ?? DeviceShort;
+        return a.Action switch
+        {
+            ButtonActionType.None => "Nothing",
+            ButtonActionType.MuteCurrentOutput => "Mute output",
+            ButtonActionType.MuteCurrentInput => "Mute mic",
+            ButtonActionType.MuteSpecificDevice => $"Mute {name(a.Device)}",
+            ButtonActionType.SetOutputDevice => $"Switch to {name(a.Device)}",
+            ButtonActionType.ToggleOutputDevice => $"Toggle {name(a.Device)} / {name(a.DeviceB)}",
+            ButtonActionType.NextPreset => "Next preset",
+            ButtonActionType.GoToPreset => $"Go to {presetName(a.PresetId) ?? "a preset"}",
+            _ => a.Action.ToString(),
+        };
+    }
 
     /// <summary>The closed card's summary for one preset's binding.</summary>
-    public static string Summary(ButtonBindingConfig b, Func<string?, string?> presetName)
+    public static string Summary(ButtonBindingConfig b, Func<string?, string?> presetName,
+                                 Func<DeviceRefConfig?, string>? deviceName = null)
     {
         var parts = new List<string>();
-        if (b.SinglePress.Action != ButtonActionType.None) parts.Add(ShortLabel(b.SinglePress, presetName));
-        if (b.DoublePress.Action != ButtonActionType.None) parts.Add("Double: " + ShortLabel(b.DoublePress, presetName));
-        if (b.LongPress.Action != ButtonActionType.None) parts.Add("Hold: " + ShortLabel(b.LongPress, presetName));
+        if (b.SinglePress.Action != ButtonActionType.None) parts.Add(ShortLabel(b.SinglePress, presetName, deviceName));
+        if (b.DoublePress.Action != ButtonActionType.None) parts.Add("Double: " + ShortLabel(b.DoublePress, presetName, deviceName));
+        if (b.LongPress.Action != ButtonActionType.None) parts.Add("Hold: " + ShortLabel(b.LongPress, presetName, deviceName));
         return string.Join(" · ", parts);
     }
 

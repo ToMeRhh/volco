@@ -61,6 +61,16 @@ public class SlidersPageTests
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
+    public void SlidersPage_CountHint_WhenTheControllerHasFewerSliders()
+    {
+        var (page, _, rig, vm) = Show(c => c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = 3 });
+        using var __ = rig; using var ___ = vm;
+        Assert.Equal("Your controller has 3 sliders; cards 3–4 do nothing.",
+            page.GetVisualDescendants().OfType<TextBlock>().First(c => c.Name == "CountHintText").Text);
+        Assert.False(page.GetVisualDescendants().OfType<Button>().First(c => c.Name == "AddMissingButton").IsVisible);
+    }
+
+    [AvaloniaFact]
     public void SlidersPage_RendersOneCardPerSlider_NumberedByPosition()
     {
         var (page, _, rig, vm) = Show();

@@ -56,6 +56,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
         _runtime.ButtonActivity += OnButtonActivity;
         _runtime.ActivePresetChanged += OnActivePresetChanged;
+        _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
 
         // The controller only reports a slider when it moves, so levels reported before this VM
@@ -96,6 +97,14 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             if (!_disposed) _buttonsViewModel?.OnRuntimePresetChanged(presetId);
         });
 
+    private void OnControllerInfoChanged(object? sender, EventArgs e)
+        => _ui.Post(() =>
+        {
+            if (_disposed) return;
+            _buttonsViewModel?.RefreshController();
+            _slidersViewModel?.RefreshController();
+        });
+
     /// <summary>A mute flipped (from a button, the Windows mixer, anywhere): light previews follow.</summary>
     private void OnDeviceVolumeChanged(object? sender, DeviceVolumeChangedEventArgs e)
         => _ui.Post(() =>
@@ -112,6 +121,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.SliderLevelChanged -= OnSliderLevelChanged;
         _runtime.ButtonActivity -= OnButtonActivity;
         _runtime.ActivePresetChanged -= OnActivePresetChanged;
+        _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
         _connectionViewModel?.Dispose();
     }
