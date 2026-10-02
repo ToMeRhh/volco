@@ -12,6 +12,7 @@
             <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="label">
               <Binding/>
               <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
             </MultiBinding>
           </TextBlock.Text>
         </TextBlock>
@@ -20,6 +21,7 @@
             <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="secondary">
               <Binding/>
               <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
             </MultiBinding>
           </TextBlock.Text>
         </TextBlock>
@@ -55,7 +57,7 @@
       </StackPanel>
 
       <Border Name="DeviceParams" Classes="Indent" IsVisible="{Binding NeedsDevice}">
-        <ComboBox Name="DeviceCombo" ItemTemplate="{StaticResource DeviceItem}" MinWidth="240" PlaceholderText="Choose a device"
+        <ComboBox Name="DeviceCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" MinWidth="240" PlaceholderText="Choose a device"
                   ItemsSource="{Binding DeviceNames}"
                   SelectedItem="{Binding Device, Mode=TwoWay}"/>
       </Border>
@@ -63,11 +65,11 @@
       <Border Name="PairParams" Classes="Indent" IsVisible="{Binding NeedsPair}">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <TextBlock Text="A" Classes="Caption" VerticalAlignment="Center"/>
-          <ComboBox Name="DeviceACombo" ItemTemplate="{StaticResource DeviceItem}" MinWidth="200" PlaceholderText="Choose a device"
+          <ComboBox Name="DeviceACombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" MinWidth="200" PlaceholderText="Choose a device"
                     ItemsSource="{Binding DeviceNames}"
                     SelectedItem="{Binding Device, Mode=TwoWay}"/>
           <TextBlock Text="B" Classes="Caption" VerticalAlignment="Center" Margin="8,0,0,0"/>
-          <ComboBox Name="DeviceBCombo" ItemTemplate="{StaticResource DeviceItem}" MinWidth="200" PlaceholderText="Choose a device"
+          <ComboBox Name="DeviceBCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" MinWidth="200" PlaceholderText="Choose a device"
                     ItemsSource="{Binding DeviceNames}"
                     SelectedItem="{Binding DeviceB, Mode=TwoWay}"/>
         </StackPanel>

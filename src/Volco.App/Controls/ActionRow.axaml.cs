@@ -14,4 +14,7 @@ public partial class ActionRow : UserControl
     {
         AvaloniaXamlLoader.Load(this);
     }
+
+    private void DeviceCombo_ContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+        => Converters.DeviceLabelConverter.Stamp(sender, e);
 }

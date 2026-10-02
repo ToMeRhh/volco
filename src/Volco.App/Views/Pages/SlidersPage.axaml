@@ -12,6 +12,7 @@
             <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="label">
               <Binding/>
               <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
             </MultiBinding>
           </TextBlock.Text>
         </TextBlock>
@@ -20,6 +21,7 @@
             <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="secondary">
               <Binding/>
               <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
             </MultiBinding>
           </TextBlock.Text>
         </TextBlock>
@@ -170,7 +172,7 @@
 
                       <Grid Name="DeviceSection" ColumnDefinitions="150,*" IsVisible="{Binding IsDevice}">
                         <TextBlock Text="Device" Classes="Secondary" VerticalAlignment="Center"/>
-                        <ComboBox Name="DeviceCombo" ItemTemplate="{StaticResource DeviceItem}" Grid.Column="1" MinWidth="280"
+                        <ComboBox Name="DeviceCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" Grid.Column="1" MinWidth="280"
                                   ItemsSource="{Binding DeviceChoices}"
                                   SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"/>
                       </Grid>
