@@ -346,12 +346,13 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         // Dispose() that starts later is guaranteed to find the transport in _connection and
         // retire it itself. If it sees 1, exactly one of us gets it out of the field: retire
         // it only if CompareExchange says it is still there, and never Connect() it.
-        // Residual window, accepted: a Dispose() landing between this check and Connect() below
+        // Closed at the source: a Dispose() landing between this check and Connect() below
         // retires the transport, and Connect() then runs on (or concurrently with) its Dispose().
-        // Closing it would need a lock held across Connect()/Dispose(), both of which raise
-        // StatusChanged synchronously into subscribers - a deadlock risk for a UI that marshals
-        // synchronously. Dispose() only happens at app exit, so the worst case is a listener
-        // re-bound by a process that is about to end.
+        // Every transport (Serial, UDP, WebSocket) guards Connect() with its own disposed flag
+        // under its own lock, so a Connect() that loses that race is a no-op and binds nothing -
+        // no port or listener can outlive the Dispose(). No lock is needed here, and none is held
+        // across Connect()/Dispose(), both of which raise StatusChanged synchronously into
+        // subscribers (a deadlock risk for a UI that marshals synchronously).
         if (IsDisposed)
         {
             if (Interlocked.CompareExchange(ref _connection, null, connection) == connection)
