@@ -1,398 +1,352 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Volco WebSocket Simulator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .slider-vertical {
-            appearance: slider-vertical;
-            width: 8px;
-            height: 200px;
-            padding: 0 5px;
-        }
-
-        .led {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            transition: background-color 0.15s;
-        }
-
-        .led-off {
-            background-color: #374151;
-            box-shadow: none;
-        }
-
-        .led-on-red {
-            background-color: #ef4444;
-            box-shadow: 0 0 8px #ef4444;
-        }
-
-        .led-on-green {
-            background-color: #22c55e;
-            box-shadow: 0 0 8px #22c55e;
-        }
-
-        .led-on-blue {
-            background-color: #3b82f6;
-            box-shadow: 0 0 8px #3b82f6;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Volco Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="icons.js"></script>
+  <style>
+    .slider-vertical { appearance: slider-vertical; width: 8px; height: 200px; padding: 0 5px; }
+    .led { width: 12px; height: 12px; border-radius: 50%; background: #374151; }
+    .led.on { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    canvas.oled { width: 256px; height: 128px; image-rendering: pixelated; background: #05070a; border-radius: 4px; }
+  </style>
 </head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
+  <div class="max-w-5xl mx-auto bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-6">
+    <h1 class="text-2xl font-bold text-blue-400">Volco Simulator</h1>
 
-<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-700">
-        <h1 class="text-2xl font-bold mb-6 text-center text-blue-400">Volco Simulator</h1>
-
-        <!-- Connection Config -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
-            <div>
-                <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Host</label>
-                <input id="host" type="text" value="localhost"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-blue-500">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Port</label>
-                <input id="port" type="number" value="8765"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-blue-500">
-            </div>
-            <button id="connectBtn"
-                class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition-colors">
-                Connect
-            </button>
-        </div>
-
-        <div class="flex items-center gap-4 mb-8 justify-center">
-            <div class="flex items-center gap-2">
-                <div id="statusDot" class="w-3 h-3 rounded-full bg-red-500"></div>
-                <span id="statusText" class="text-sm font-medium text-gray-300">Disconnected</span>
-            </div>
-            <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
-                <input id="autoReconnect" type="checkbox" class="accent-blue-500">
-                Auto-reconnect
-            </label>
-            <label class="flex items-center gap-1.5 text-xs text-gray-400">
-                Sliders
-                <input id="sliderCount" type="number" min="0" max="16" value="5"
-                    class="w-14 bg-gray-700 border border-gray-600 rounded px-2 py-1">
-            </label>
-            <label class="flex items-center gap-1.5 text-xs text-gray-400">
-                Buttons
-                <input id="buttonCount" type="number" min="0" max="16" value="3"
-                    class="w-14 bg-gray-700 border border-gray-600 rounded px-2 py-1">
-            </label>
-        </div>
-
-        <div class="flex flex-col md:flex-row gap-12 justify-center items-start">
-            <!-- Sliders -->
-            <div class="flex gap-6">
-                <template id="sliderTemplate">
-                    <div class="flex flex-col items-center gap-3">
-                        <input type="range" min="0" max="4095" value="2048" class="slider-vertical">
-                        <span class="text-xs font-mono text-gray-400">S[ID]</span>
-                        <span class="text-xs font-mono text-blue-400 value-display">2048</span>
-                    </div>
-                </template>
-                <div id="slidersContainer" class="flex gap-6"></div>
-            </div>
-
-            <!-- Buttons -->
-            <div class="flex flex-col gap-4">
-                <div id="buttonsContainer" class="flex flex-col gap-4"></div>
-            </div>
-        </div>
+    <div class="flex flex-wrap gap-4 items-end">
+      <label class="text-xs text-gray-400">Host<br>
+        <input id="host" value="localhost" class="bg-gray-700 border border-gray-600 rounded px-3 py-2"></label>
+      <label class="text-xs text-gray-400">Port<br>
+        <input id="port" type="number" value="8765" class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-2"></label>
+      <label class="text-xs text-gray-400">Controller type<br>
+        <select id="type" class="bg-gray-700 border border-gray-600 rounded px-3 py-2">
+          <option value="led">LED controller (current hardware)</option>
+          <option value="screen">Screen controller</option>
+        </select></label>
+      <button id="connectBtn" class="bg-blue-600 hover:bg-blue-500 font-bold py-2 px-4 rounded">Connect</button>
+      <label class="flex items-center gap-1.5 text-xs text-gray-400"><input id="autoReconnect" type="checkbox"> Auto-reconnect</label>
     </div>
 
-    <script>
-        let ws = null;
-        let reconnectTimer = null;
-        const RECONNECT_INTERVAL = 3000;
+    <div class="flex items-center gap-2 text-sm">
+      <div id="statusDot" class="w-3 h-3 rounded-full bg-red-500"></div>
+      <span id="statusText" class="text-gray-300">Disconnected</span>
+    </div>
 
-        const hostInput = document.getElementById('host');
-        const portInput = document.getElementById('port');
-        const connectBtn = document.getElementById('connectBtn');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const autoReconnectCheckbox = document.getElementById('autoReconnect');
-        const slidersContainer = document.getElementById('slidersContainer');
-        const buttonsContainer = document.getElementById('buttonsContainer');
-        const sliderTemplate = document.getElementById('sliderTemplate');
+    <div class="flex flex-wrap gap-12 items-start">
+      <div id="sliders" class="flex gap-6"></div>
+      <div id="buttons" class="flex flex-col gap-4"></div>
+    </div>
 
-        const sliderCountInput = document.getElementById('sliderCount');
-        const buttonCountInput = document.getElementById('buttonCount');
+    <div>
+      <div class="text-xs text-gray-400 mb-1">Frames (newest first)</div>
+      <pre id="log" class="text-xs h-40 overflow-auto bg-gray-900 p-2 rounded"></pre>
+    </div>
+  </div>
 
-        // Per-button feedback display: { a, b, value } elements, indexed by button input number.
-        // The app sends 0x05 ButtonFeedback with a value per button: 0 = off, 1..N = on / choice N.
-        // A one-LED button lights for any non-zero value; an LED-pair button lights A for 1 and B
-        // for 2. The simulator shows both views: LED A lights for 1 (and any value but 2), LED B
-        // for 2, and the raw value is printed next to them.
-        let feedback = [];
+<script>
+// Volco wire protocol, controller side (docs/superpowers/specs/2026-10-02-oled-screens-design.md §3).
+const TYPES = {
+  led:    { sliders: 5, buttons: [1, 1, 2] },     // kinds: 1 LED, 2 LED pair, 3 screen
+  screen: { sliders: 5, buttons: [3, 3, 3, 3] },
+};
+const MSG = { HELLO: 0x01, ALIVE: 0x02, SLIDER: 0x03, BUTTON: 0x04, HELLO_REQUEST: 0x81,
+              HEARTBEAT: 0x82, LED: 0x83, SCREEN: 0x84, BEGIN: 0x85, COMMIT: 0x86 };
+const NAMES = Object.fromEntries(Object.entries(MSG).map(([k, v]) => [v, k]));
+const T = { hostTimeout: 3000, keepalive: 1000, commitFallback: 500, transition: 360,
+            scrollHold: 2000, scrollSpeed: 30, scrollEndHold: 1200 };
+const NOT_CONNECTED = { layout: 1, topKind: 1, top: 'NOT CONNECTED', icon: 255, flags: 0, main: 'Volco' };
 
-        // Throttle helper — sends at most once per interval, always sends final value
-        function throttle(fn, ms) {
-            let lastCall = 0;
-            let pending = null;
-            return function (...args) {
-                const now = Date.now();
-                if (now - lastCall >= ms) {
-                    lastCall = now;
-                    fn(...args);
-                } else {
-                    clearTimeout(pending);
-                    pending = setTimeout(() => {
-                        lastCall = Date.now();
-                        fn(...args);
-                    }, ms - (now - lastCall));
-                }
-            };
-        }
+const $ = id => document.getElementById(id);
+let ws = null, reconnectTimer = null, type = 'led';
+let lastTx = 0, lastRx = 0, hostAlive = false, holding = false, holdStart = 0, held = [];
+let buttons = [];   // { kind, a, b, ctx, cur, prev, transition, start, settled }
 
-        function buildSliders(count) {
-            slidersContainer.replaceChildren();
-            for (let i = 0; i < count; i++) {
-                const clone = sliderTemplate.content.cloneNode(true);
-                const slider = clone.querySelector('input');
-                const label = clone.querySelector('span');
-                const display = clone.querySelector('.value-display');
+// ── Framing ────────────────────────────────────────────────────────────────
+function frameOf(payload) {
+  let cs = 0;
+  for (const b of payload) cs ^= b;
+  return new Uint8Array([0xAA, payload.length, ...payload, cs]);
+}
+function hex(bytes) { return [...bytes].map(b => b.toString(16).padStart(2, '0')).join(' '); }
+function log(dir, payload) {
+  const line = `${dir} ${(NAMES[payload[0]] || '0x' + payload[0].toString(16)).padEnd(13)} ${hex(payload)}`;
+  const el = $('log');
+  el.textContent = (line + '\n' + el.textContent).split('\n').slice(0, 40).join('\n');
+}
+function send(payload) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(frameOf(payload).buffer);
+  lastTx = performance.now();
+  if (payload[0] !== MSG.ALIVE) log('→', payload);
+}
+function sendHello() {
+  const k = TYPES[type].buttons;
+  send([MSG.HELLO, 1, TYPES[type].sliders, k.length, ...k]);
+}
 
-                label.textContent = `S${i}`;
-                slider.dataset.index = i;
+let rx = { state: 0, len: 0, buf: [] };
+function feed(bytes) {
+  for (const b of bytes) {
+    if (rx.state === 0) { if (b === 0xAA) rx.state = 1; }
+    else if (rx.state === 1) { rx.len = b; rx.buf = []; rx.state = b === 0 ? 0 : 2; }
+    else if (rx.state === 2) { rx.buf.push(b); if (rx.buf.length >= rx.len) rx.state = 3; }
+    else {
+      rx.state = 0;
+      let cs = 0;
+      for (const x of rx.buf) cs ^= x;
+      if (cs === b) handle(rx.buf, performance.now());
+    }
+  }
+}
 
-                const throttledSend = throttle((val) => sendSlider(i, val), 20);
+// ── Session (mirrors firmware/lib/volco_protocol Link) ─────────────────────
+function decodeScreen(p) {
+  const td = new TextDecoder();
+  let i = 5;
+  const c = { layout: p[3], topKind: p[4], top: '', dotsSelected: 0, dotsCount: 0, icon: 255, flags: 0, main: '' };
+  const text = () => { const n = p[i++]; if (n === undefined || i + n > p.length) throw 0; const s = td.decode(new Uint8Array(p.slice(i, i + n))); i += n; return s; };
+  try {
+    if (c.topKind === 1) c.top = text();
+    else if (c.topKind === 2) { c.dotsSelected = p[i++]; c.dotsCount = p[i++]; }
+    if (i + 2 > p.length) return null;
+    c.icon = p[i++]; c.flags = p[i++];
+    c.main = text();
+  } catch { return null; }
+  return { button: p[1], transition: p[2] <= 2 ? p[2] : 0, content: c };
+}
 
-                slider.addEventListener('input', (e) => {
-                    const val = parseInt(e.target.value);
-                    display.textContent = val;
-                    throttledSend(val);
-                });
+function handle(p, now) {
+  log('←', p);
+  lastRx = now;
+  if (!hostAlive) {
+    hostAlive = true;
+    if (p[0] !== MSG.HELLO_REQUEST) sendHello();
+  }
+  const kind = i => buttons[i]?.kind;
+  switch (p[0]) {
+    case MSG.HELLO_REQUEST: sendHello(); break;
+    case MSG.LED:
+      if (kind(p[1]) === 1 || kind(p[1]) === 2) {
+        if (holding) held[p[1]] = { ...held[p[1]], led: p[2] }; else applyLed(p[1], p[2]);
+      }
+      break;
+    case MSG.SCREEN: {
+      const s = decodeScreen(p);
+      if (!s || kind(s.button) !== 3) break;
+      if (holding) {
+        const h = held[s.button] || {};
+        const transition = h.screen && s.transition === 0 ? h.transition : s.transition;
+        held[s.button] = { ...h, screen: s.content, transition };
+      } else applyScreen(s.button, s.transition, s.content, now);
+      break;
+    }
+    case MSG.BEGIN: holding = true; holdStart = now; break;
+    case MSG.COMMIT: if (holding) applyHeld(now); break;
+  }
+}
 
-                slidersContainer.appendChild(clone);
-            }
-        }
+function applyHeld(now) {
+  holding = false;
+  held.forEach((h, b) => {
+    if (!h) return;
+    if (h.led !== undefined) applyLed(b, h.led);
+    if (h.screen) applyScreen(b, h.transition, h.screen, now);
+  });
+  held = [];
+}
 
-        function buildButtons(count) {
-            buttonsContainer.replaceChildren();
-            feedback = [];
-            for (let index = 0; index < count; index++) {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'flex items-center gap-3';
+function applyLed(b, v) {
+  const btn = buttons[b];
+  if (btn.kind === 1) btn.a.classList.toggle('on', v !== 0);
+  if (btn.kind === 2) { btn.a.classList.toggle('on', v === 1); btn.b.classList.toggle('on', v === 2); }
+}
 
-                const btn = document.createElement('button');
-                btn.className = 'w-28 h-12 bg-gray-700 hover:bg-gray-600 active:bg-blue-600 rounded-lg border border-gray-600 font-bold transition-all flex items-center justify-center text-sm';
-                btn.textContent = `Button ${index}`;
+function applyScreen(b, transition, content, now) {
+  const s = buttons[b];
+  s.prev = s.cur;   // a running slide snaps: its target becomes the "from"
+  s.cur = content;
+  s.transition = transition;
+  s.start = now;
+  s.settled = transition ? now + T.transition : now;
+}
 
-                btn.addEventListener('pointerdown', () => { btn.dataset.pressed = '1'; sendButton(index, 1); });
-                btn.addEventListener('pointerup', () => { btn.dataset.pressed = '0'; sendButton(index, 0); });
-                btn.addEventListener('pointerleave', () => {
-                    if (btn.dataset.pressed === '1') {
-                        btn.dataset.pressed = '0';
-                        sendButton(index, 0);
-                    }
-                });
-                wrapper.appendChild(btn);
+function hostLost(now) {
+  hostAlive = false;
+  holding = false;
+  held = [];
+  buttons.forEach((btn, i) => {
+    if (btn.kind === 1 || btn.kind === 2) applyLed(i, 0);
+    if (btn.kind === 3) applyScreen(i, 0, NOT_CONNECTED, now);
+  });
+}
 
-                const ledContainer = document.createElement('div');
-                ledContainer.className = 'flex items-center gap-1.5 text-xs text-gray-400';
-                const a = document.createElement('div');
-                a.className = 'led led-off';
-                a.title = 'LED A (lit for any value but 0 and 2)';
-                const b = document.createElement('div');
-                b.className = 'led led-off';
-                b.title = 'LED B (lit for value 2)';
-                const value = document.createElement('span');
-                value.className = 'font-mono w-6';
-                value.textContent = '0';
-                ledContainer.append('A', a, b, 'B', value);
-                wrapper.appendChild(ledContainer);
+setInterval(() => {
+  const now = performance.now();
+  if (holding && now - holdStart >= T.commitFallback) applyHeld(now);
+  if (hostAlive && now - lastRx >= T.hostTimeout) hostLost(now);
+  if (ws && ws.readyState === WebSocket.OPEN && now - lastTx >= T.keepalive) send([MSG.ALIVE]);
+}, 50);
 
-                feedback[index] = { a, b, value };
-                buttonsContainer.appendChild(wrapper);
-            }
-        }
+// ── Screen rendering (layout 1, spec §2.1; text uses the browser's fonts) ───
+function scrollOffset(dist, since) {
+  const scroll = dist * 1000 / T.scrollSpeed, cycle = T.scrollHold + scroll + T.scrollEndHold;
+  const k = since % cycle;
+  return k < T.scrollHold ? 0 : k < T.scrollHold + scroll ? Math.round((k - T.scrollHold) * T.scrollSpeed / 1000) : dist;
+}
+function drawLine(ctx, text, font, baseline, since) {
+  if (!text) return;
+  ctx.font = font;
+  const w = Math.ceil(ctx.measureText(text).width);
+  const firstStrong = text.match(/[A-Za-zÀ-ɏ֐-׿]/);
+  const rtl = firstStrong && /[֐-׿]/.test(firstStrong[0]);
+  if (w <= 124) { ctx.fillText(text, 2 + Math.floor((124 - w) / 2), baseline); return; }
+  const off = scrollOffset(w - 124 + 6, since);
+  ctx.save(); ctx.beginPath(); ctx.rect(2, 0, 124, 64); ctx.clip();
+  ctx.fillText(text, rtl ? 2 + 124 - w + off : 2 - off, baseline);
+  ctx.restore();
+}
+function drawContent(ctx, c, since, dx) {
+  ctx.save();
+  ctx.translate(dx, 0);
+  ctx.fillStyle = '#e8f0ff';
+  if (c.layout !== 1) { drawLine(ctx, c.main, 'bold 14px Arimo, Arial, sans-serif', 36, since); ctx.restore(); return; }
+  if (c.topKind === 1) drawLine(ctx, c.top, '10px Arimo, Arial, sans-serif', 11, since);
+  if (c.topKind === 2) {
+    const n = Math.min(c.dotsCount, 12), x0 = 64 - Math.floor((n * 10 - 4) / 2);
+    for (let i = 0; i < n; i++) {
+      if (i === c.dotsSelected) ctx.fillRect(x0 + i * 10, 5, 6, 6);
+      else { ctx.strokeStyle = '#e8f0ff'; ctx.lineWidth = 1; ctx.strokeRect(x0 + i * 10 + 0.5, 5.5, 5, 5); }
+    }
+  }
+  if (c.icon !== 255) {
+    const rows = (window.VOLCO_ICONS || [])[c.icon < (window.VOLCO_ICONS || []).length ? c.icon : 0] || [];
+    rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') ctx.fillRect(50 + x, 18 + y, 1, 1); });
+    if (c.flags & 1) {
+      ctx.lineCap = 'square';
+      ctx.strokeStyle = '#05070a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(51, 19); ctx.lineTo(76, 44); ctx.stroke();
+      ctx.strokeStyle = '#e8f0ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(51, 19); ctx.lineTo(76, 44); ctx.stroke();
+    }
+  }
+  drawLine(ctx, c.main, 'bold 14px Arimo, Arial, sans-serif', 60, since);
+  ctx.restore();
+}
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+function renderScreens() {
+  const now = performance.now();
+  for (const s of buttons) {
+    if (s.kind !== 3) continue;
+    const ctx = s.ctx;
+    ctx.fillStyle = '#05070a'; ctx.fillRect(0, 0, 128, 64);
+    const t = now - s.start;
+    if (s.transition && t < T.transition) {
+      const off = Math.round(ease(t / T.transition) * 128), left = s.transition !== 2;
+      drawContent(ctx, s.prev, 0, left ? -off : off);
+      drawContent(ctx, s.cur, 0, left ? 128 - off : off - 128);
+    } else {
+      drawContent(ctx, s.cur, Math.max(0, now - s.settled), 0);
+    }
+  }
+  requestAnimationFrame(renderScreens);
+}
+requestAnimationFrame(renderScreens);
 
-        function showFeedback(index, value) {
-            const f = feedback[index];
-            if (!f) return;
-            f.a.className = value !== 0 && value !== 2 ? 'led led-on-green' : 'led led-off';
-            f.b.className = value === 2 ? 'led led-on-green' : 'led led-off';
-            f.value.textContent = String(value);
-        }
+// ── UI ─────────────────────────────────────────────────────────────────────
+function throttle(fn, ms) {
+  let last = 0, pending = null;
+  return (...args) => {
+    const now = Date.now();
+    clearTimeout(pending);
+    if (now - last >= ms) { last = now; fn(...args); }
+    else pending = setTimeout(() => { last = Date.now(); fn(...args); }, ms - (now - last));
+  };
+}
 
-        function clampCount(input) {
-            const n = Math.max(0, Math.min(16, parseInt(input.value) || 0));
-            input.value = n;
-            return n;
-        }
+function build() {
+  const t = TYPES[type];
+  $('sliders').replaceChildren();
+  for (let i = 0; i < t.sliders; i++) {
+    const col = document.createElement('div');
+    col.className = 'flex flex-col items-center gap-2';
+    const input = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: 4095, value: 2048, className: 'slider-vertical' });
+    const label = Object.assign(document.createElement('span'), { className: 'text-xs font-mono text-gray-400', textContent: `S${i}` });
+    const value = Object.assign(document.createElement('span'), { className: 'text-xs font-mono text-blue-400', textContent: '2048' });
+    const sendSlider = throttle(v => send([MSG.SLIDER, i, v >> 8, v & 255]), 20);
+    input.addEventListener('input', e => { value.textContent = e.target.value; sendSlider(+e.target.value); });
+    col.append(input, label, value);
+    $('sliders').append(col);
+  }
 
-        sliderCountInput.addEventListener('change', () => buildSliders(clampCount(sliderCountInput)));
-        buttonCountInput.addEventListener('change', () => buildButtons(clampCount(buttonCountInput)));
-        buildSliders(clampCount(sliderCountInput));
-        buildButtons(clampCount(buttonCountInput));
+  $('buttons').replaceChildren();
+  buttons = t.buttons.map((kind, i) => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-3';
+    const btn = Object.assign(document.createElement('button'), {
+      className: 'w-28 h-12 bg-gray-700 hover:bg-gray-600 active:bg-blue-600 rounded-lg border border-gray-600 font-bold text-sm',
+      textContent: `Button ${i}` });
+    let down = false;
+    btn.addEventListener('pointerdown', () => { down = true; send([MSG.BUTTON, i, 1]); });
+    const up = () => { if (down) { down = false; send([MSG.BUTTON, i, 0]); } };
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointerleave', up);
+    row.append(btn);
+    const entry = { kind, cur: NOT_CONNECTED, prev: NOT_CONNECTED, transition: 0, start: 0, settled: 0 };
+    if (kind === 1 || kind === 2) {
+      entry.a = Object.assign(document.createElement('div'), { className: 'led', title: kind === 1 ? 'LED' : 'LED A' });
+      row.append(entry.a);
+      if (kind === 2) {
+        entry.b = Object.assign(document.createElement('div'), { className: 'led', title: 'LED B' });
+        row.append(entry.b);
+      }
+    }
+    if (kind === 3) {
+      const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 64, className: 'oled' });
+      entry.ctx = canvas.getContext('2d');
+      row.append(canvas);
+    }
+    $('buttons').append(row);
+    return entry;
+  });
+}
 
-        connectBtn.addEventListener('click', () => {
-            if (ws) {
-                clearReconnectTimer();
-                ws.close();
-            } else {
-                connect();
-            }
-        });
+function setStatus(text, color) {
+  $('statusText').textContent = text;
+  $('statusDot').className = `w-3 h-3 rounded-full ${color}`;
+}
 
-        function clearReconnectTimer() {
-            if (reconnectTimer) {
-                clearTimeout(reconnectTimer);
-                reconnectTimer = null;
-            }
-        }
+function connect() {
+  ws = new WebSocket(`ws://${$('host').value}:${$('port').value}/`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => {
+    setStatus('Connected', 'bg-green-500');
+    $('connectBtn').textContent = 'Disconnect';
+    hostAlive = false;
+    lastRx = performance.now();
+    sendHello();    // as the firmware does at boot
+  };
+  ws.onmessage = e => feed(new Uint8Array(e.data));
+  ws.onclose = () => {
+    ws = null;
+    setStatus('Disconnected', 'bg-red-500');
+    $('connectBtn').textContent = 'Connect';
+    hostLost(performance.now());
+    if ($('autoReconnect').checked && !reconnectTimer)
+      reconnectTimer = setTimeout(() => { reconnectTimer = null; if (!ws) connect(); }, 3000);
+  };
+}
 
-        function scheduleReconnect() {
-            if (autoReconnectCheckbox.checked && !reconnectTimer && !ws) {
-                reconnectTimer = setTimeout(() => {
-                    reconnectTimer = null;
-                    if (!ws && autoReconnectCheckbox.checked) {
-                        statusText.textContent = 'Reconnecting...';
-                        connect();
-                    }
-                }, RECONNECT_INTERVAL);
-            }
-        }
-
-        function setDisconnected() {
-            statusDot.className = 'w-3 h-3 rounded-full bg-red-500';
-            statusText.textContent = 'Disconnected';
-            connectBtn.textContent = 'Connect';
-            connectBtn.className = 'bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition-colors';
-            ws = null;
-            // Reset feedback on disconnect
-            for (let i = 0; i < feedback.length; i++) showFeedback(i, 0);
-        }
-
-        function connect() {
-            const url = `ws://${hostInput.value}:${portInput.value}/`;
-            ws = new WebSocket(url);
-            ws.binaryType = 'arraybuffer';
-
-            ws.onopen = () => {
-                statusDot.className = 'w-3 h-3 rounded-full bg-green-500';
-                statusText.textContent = 'Connected';
-                connectBtn.textContent = 'Disconnect';
-                connectBtn.className = 'bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded transition-colors';
-            };
-
-            ws.onmessage = (event) => {
-                const data = new Uint8Array(event.data);
-                parseIncoming(data);
-            };
-
-            ws.onclose = () => {
-                setDisconnected();
-                scheduleReconnect();
-            };
-
-            ws.onerror = (err) => {
-                console.error('WebSocket Error:', err);
-            };
-        }
-
-        // ============ Incoming message parser ============
-
-        const RX_WAIT_START = 0, RX_WAIT_LENGTH = 1, RX_WAIT_PAYLOAD = 2, RX_WAIT_CHECKSUM = 3;
-        let rxState = RX_WAIT_START;
-        let rxPayload = [];
-        let rxExpectedLen = 0;
-
-        function parseIncoming(data) {
-            for (let i = 0; i < data.length; i++) {
-                processReceivedByte(data[i]);
-            }
-        }
-
-        function processReceivedByte(b) {
-            switch (rxState) {
-                case RX_WAIT_START:
-                    if (b === 0xAA) rxState = RX_WAIT_LENGTH;
-                    break;
-                case RX_WAIT_LENGTH:
-                    rxExpectedLen = b;
-                    rxPayload = [];
-                    if (rxExpectedLen === 0 || rxExpectedLen > 32) {
-                        rxState = RX_WAIT_START;
-                    } else {
-                        rxState = RX_WAIT_PAYLOAD;
-                    }
-                    break;
-                case RX_WAIT_PAYLOAD:
-                    rxPayload.push(b);
-                    if (rxPayload.length >= rxExpectedLen) {
-                        rxState = RX_WAIT_CHECKSUM;
-                    }
-                    break;
-                case RX_WAIT_CHECKSUM: {
-                    let checksum = 0;
-                    for (const pb of rxPayload) checksum ^= pb;
-                    if (checksum === b) {
-                        handleServerMessage(rxPayload);
-                    }
-                    rxState = RX_WAIT_START;
-                    break;
-                }
-            }
-        }
-
-        function handleServerMessage(payload) {
-            if (payload.length < 1) return;
-            const type = payload[0];
-
-            if (type === 0x05 && payload.length >= 3) {
-                // Button feedback: button_index, value
-                showFeedback(payload[1], payload[2]);
-            }
-            // Anything else is not for the controller: ignore it, as the firmware does.
-        }
-
-        // ============ Outgoing messages ============
-
-        function sendSlider(index, value) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-            const payload = new Uint8Array(4);
-            payload[0] = 0x01; // Type: Slider
-            payload[1] = index;
-            payload[2] = (value >> 8) & 0xFF;
-            payload[3] = value & 0xFF;
-
-            sendFrame(payload);
-        }
-
-        function sendButton(index, state) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-            const payload = new Uint8Array(3);
-            payload[0] = 0x02; // Type: Button
-            payload[1] = index;
-            payload[2] = state; // 1 = pressed, 0 = released
-
-            sendFrame(payload);
-        }
-
-        function sendFrame(payload) {
-            let checksum = 0;
-            for (let i = 0; i < payload.length; i++) {
-                checksum ^= payload[i];
-            }
-
-            const frame = new Uint8Array(payload.length + 3);
-            frame[0] = 0xAA; // Start marker
-            frame[1] = payload.length;
-            frame.set(payload, 2);
-            frame[frame.length - 1] = checksum;
-
-            ws.send(frame.buffer);
-        }
-    </script>
+$('connectBtn').addEventListener('click', () => {
+  if (ws) { clearTimeout(reconnectTimer); reconnectTimer = null; ws.close(); } else connect();
+});
+$('type').addEventListener('change', e => {
+  if (ws) ws.close();
+  type = e.target.value;
+  build();
+});
+build();
+</script>
 </body>
-
 </html>
