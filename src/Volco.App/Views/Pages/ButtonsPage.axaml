@@ -1,6 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:sys="using:System"
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:controls="using:Volco.App.Controls"
              xmlns:conv="using:Volco.App.Converters"
@@ -29,6 +28,15 @@
           </StackPanel>
         </Button>
       </Grid>
+
+      <Border Name="CountHintPanel" Classes="Panel" Padding="12,8" IsVisible="{Binding HasCountHint}">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Name="CountHintText" Classes="Secondary" TextWrapping="Wrap" VerticalAlignment="Center"
+                     Text="{Binding CountHint}"/>
+          <Button Name="AddMissingButton" Grid.Column="1" Margin="12,0,0,0" Content="{Binding AddMissingText}"
+                  Command="{Binding AddMissingCommand}" IsVisible="{Binding CanAddMissing}"/>
+        </Grid>
+      </Border>
 
       <!-- Presets -->
       <StackPanel Name="PresetBar" Spacing="10">
@@ -129,28 +137,15 @@
                     <!-- What the controller's light shows for this button right now -->
                     <Panel Name="LightPreview" Grid.Column="2" Margin="8,0" VerticalAlignment="Center"
                            ToolTip.Tip="{Binding LightDescription}">
-                      <Ellipse Name="Led" Classes="Led" Classes.on="{Binding LedOn}"
-                               IsVisible="{Binding IsOnOffLight}"/>
-                      <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsPairLight}">
+                      <Ellipse Name="Led" Classes="Led" Classes.on="{Binding LedOn}" IsVisible="{Binding IsLed}"/>
+                      <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsLedPair}">
                         <TextBlock Text="A" Classes="Caption" VerticalAlignment="Center"/>
                         <Ellipse Name="LedA" Classes="Led" Classes.on="{Binding LedA}"/>
                         <Ellipse Name="LedB" Classes="Led" Classes.on="{Binding LedB}"/>
                         <TextBlock Text="B" Classes="Caption" VerticalAlignment="Center"/>
                       </StackPanel>
-                      <ItemsControl Name="PresetDots" ItemsSource="{Binding PresetDots}"
-                                    IsVisible="{Binding IsPresetLight}">
-                        <ItemsControl.ItemsPanel>
-                          <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="4"/>
-                          </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="sys:Boolean">
-                            <Ellipse Classes="Led" Classes.on="{Binding}"/>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                      <Ellipse Classes="Led" Opacity="0.4" IsVisible="{Binding HasNoLight}"/>
+                      <controls:ScreenPreview Name="ScreenPreviewSmall" Scale="1" Screen="{Binding Screen}"
+                                              IsVisible="{Binding IsScreen}"/>
                     </Panel>
 
                     <Button Name="MenuButton" Grid.Column="3" Classes="Icon" ToolTip.Tip="More options">
@@ -185,8 +180,13 @@
 
                       <Border Name="LightLine" Background="{DynamicResource SubtleBrush}"
                               CornerRadius="{StaticResource ControlCornerRadius}" Padding="12,8">
-                        <TextBlock Name="LightDescriptionText" Classes="Secondary" TextWrapping="Wrap"
-                                   Text="{Binding LightDescription, StringFormat='Controller light: {0}'}"/>
+                        <StackPanel Spacing="8">
+                          <TextBlock Name="IndicatorText" Classes="Secondary" FontWeight="SemiBold" Text="{Binding IndicatorText}"/>
+                          <TextBlock Name="LightDescriptionText" Classes="Secondary" TextWrapping="Wrap"
+                                     Text="{Binding LightDescription}" IsVisible="{Binding ShowLightDescription}"/>
+                          <controls:ScreenPreview Name="ScreenPreviewLarge" Scale="2" Screen="{Binding Screen}"
+                                                  IsVisible="{Binding IsScreen}"/>
+                        </StackPanel>
                       </Border>
 
                       <ToggleButton Name="AdvancedToggle" Classes="Advanced"

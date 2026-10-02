@@ -1,0 +1,16 @@
+# Golden wire frames shared by tests/Volco.Core.Tests (ProtocolGoldenTests) and
+# firmware/test/test_protocol. Format: <name> <frame bytes in hex>. Spec §3.
+hello_led_hardware AA 07 01 01 05 03 01 01 02 04
+hello_screen_controller AA 08 01 01 05 04 03 03 03 03 01
+alive AA 01 02 02
+slider_2_512 AA 04 03 02 02 00 03
+button_1_pressed AA 03 04 01 01 04
+hello_request AA 01 81 81
+heartbeat AA 01 82 82
+led_2_value_2 AA 03 83 02 02 83
+begin AA 01 85 85
+commit AA 01 86 86
+screen_muted_mic AA 18 84 01 00 01 01 05 4D 55 54 45 44 07 01 0A 4D 69 63 72 6F 70 68 6F 6E 65 E7
+screen_preset_dots_slide_left AA 10 84 00 01 01 02 01 03 0A 00 06 47 61 6D 69 6E 67 A3
+screen_blank_slide_right AA 08 84 02 02 01 00 FF 00 00 7A
+screen_hebrew_main AA 25 84 03 00 01 01 0E 4E 45 58 54 3A 20 53 70 65 61 6B 65 72 73 01 00 0E D7 A8 D7 9E D7 A7 D7 95 D7 9C D7 99 D7 9D F8

@@ -45,4 +45,12 @@ public class AudioPrimitivesTests
         Assert.Equal(DeviceRef.ById("x"), DeviceRef.ById("x"));
         Assert.NotEqual(DeviceRef.ById("x"), DeviceRef.ById("y"));
     }
+
+    [Fact]
+    public void AudioDevice_FormFactorDefaultsToUnknown_AndIsPartOfEquality()
+    {
+        var plain = new AudioDevice("a", "A", AudioFlow.Render, false);
+        Assert.Equal(DeviceFormFactor.Unknown, plain.FormFactor);
+        Assert.NotEqual(plain, plain with { FormFactor = DeviceFormFactor.Headset });
+    }
 }

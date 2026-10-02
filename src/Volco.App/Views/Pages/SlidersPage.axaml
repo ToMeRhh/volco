@@ -1,8 +1,33 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
              x:Class="Volco.App.Views.Pages.SlidersPage"
              x:DataType="vm:SlidersViewModel">
+  <UserControl.Resources>
+    <DataTemplate x:Key="DeviceItem" x:DataType="x:String">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Name="DeviceLabel">
+          <TextBlock.Text>
+            <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="label">
+              <Binding/>
+              <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
+            </MultiBinding>
+          </TextBlock.Text>
+        </TextBlock>
+        <TextBlock Name="DeviceSecondary" Classes="Caption" VerticalAlignment="Center">
+          <TextBlock.Text>
+            <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="secondary">
+              <Binding/>
+              <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
+            </MultiBinding>
+          </TextBlock.Text>
+        </TextBlock>
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}"
                 Spacing="{StaticResource SpaceL}"
@@ -22,6 +47,15 @@
           </StackPanel>
         </Button>
       </Grid>
+
+      <Border Name="CountHintPanel" Classes="Panel" Padding="12,8" IsVisible="{Binding HasCountHint}">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Name="CountHintText" Classes="Secondary" TextWrapping="Wrap" VerticalAlignment="Center"
+                     Text="{Binding CountHint}"/>
+          <Button Name="AddMissingButton" Grid.Column="1" Margin="12,0,0,0" Content="{Binding AddMissingText}"
+                  Command="{Binding AddMissingCommand}" IsVisible="{Binding CanAddMissing}"/>
+        </Grid>
+      </Border>
 
       <ItemsControl Name="SliderList" ItemsSource="{Binding Items}">
         <ItemsControl.ItemsPanel>
@@ -138,7 +172,7 @@
 
                       <Grid Name="DeviceSection" ColumnDefinitions="150,*" IsVisible="{Binding IsDevice}">
                         <TextBlock Text="Device" Classes="Secondary" VerticalAlignment="Center"/>
-                        <ComboBox Name="DeviceCombo" Grid.Column="1" MinWidth="280"
+                        <ComboBox Name="DeviceCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" Grid.Column="1" MinWidth="280"
                                   ItemsSource="{Binding DeviceChoices}"
                                   SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"/>
                       </Grid>

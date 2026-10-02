@@ -28,5 +28,9 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\volco.ico" />
+    <!-- The controller's own icons and font (firmware/assets is their single source), for the
+         screen previews. -->
+    <AvaloniaResource Include="..\..\firmware\assets\icons\*.png" Link="Assets\Icons\%(Filename)%(Extension)" />
+    <AvaloniaResource Include="..\..\firmware\assets\fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

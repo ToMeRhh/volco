@@ -32,6 +32,27 @@ public class ConnectionPageTests
     }
 
     [AvaloniaFact]
+    public void HardwareSummary_AndVersionMismatch()
+    {
+        using var rig = new TestRig();
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var page = new ConnectionPage(vm.Connection);
+        new Window { Content = page }.Show();
+
+        rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5,
+            new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("5 sliders · 3 buttons (2 LED, 1 LED pair)", vm.Connection.HardwareSummary);
+        Assert.False(vm.Connection.HasControllerError);
+
+        rig.Connection.RaiseMessage(new HelloMessage(9, 5, new[] { IndicatorKind.Led }));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Controller firmware doesn't match this version of Volco. Reflash it.", vm.Connection.ControllerError);
+        Assert.Equal("Firmware mismatch", vm.Connection.FooterText);
+    }
+
+    [AvaloniaFact]
     public void ConnectionPage_StatusComesFirst_AndFollowsTheRuntime()
     {
         var (page, _, rig, vm) = Show();

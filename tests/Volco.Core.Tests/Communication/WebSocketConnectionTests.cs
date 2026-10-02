@@ -110,7 +110,7 @@ public class WebSocketConnectionTests : IDisposable
         using var client = new ClientWebSocket();
         await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
 
-        var frame = FramePayload(new byte[] { 0x01, 0x00, 0x02, 0x00 }); // slider 0, value 512
+        var frame = FramePayload(new byte[] { 0x03, 0x00, 0x02, 0x00 }); // slider 0, value 512
         await client.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None);
 
         // Give time for processing
@@ -130,8 +130,8 @@ public class WebSocketConnectionTests : IDisposable
         using var client = new ClientWebSocket();
         await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
 
-        var frame1 = FramePayload(new byte[] { 0x01, 0x01, 0x01, 0x00 }); // slider 1, value 256
-        var frame2 = FramePayload(new byte[] { 0x02, 0x02, 0x01 });       // button 2, pressed
+        var frame1 = FramePayload(new byte[] { 0x03, 0x01, 0x01, 0x00 }); // slider 1, value 256
+        var frame2 = FramePayload(new byte[] { 0x04, 0x02, 0x01 });       // button 2, pressed
         await client.SendAsync(frame1, WebSocketMessageType.Binary, true, CancellationToken.None);
         await client.SendAsync(frame2, WebSocketMessageType.Binary, true, CancellationToken.None);
 
@@ -140,6 +140,29 @@ public class WebSocketConnectionTests : IDisposable
         Assert.Equal(2, _messages.Count);
         Assert.IsType<SliderMessage>(_messages[0]);
         Assert.IsType<ButtonMessage>(_messages[1]);
+    }
+
+    [Fact]
+    public async Task Send_ManyFramesQuickly_AllArriveInOrder()
+    {
+        _connection.Connect();
+        using var client = new ClientWebSocket();
+        await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
+        for (int i = 0; i < 100 && _connection.Status != ConnectionStatus.Connected; i++)
+            await Task.Delay(20);
+        await Task.Delay(50);
+
+        for (byte i = 0; i < 100; i++) _connection.Send(new[] { i });
+
+        var received = new List<byte>();
+        var buffer = new byte[256];
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (received.Count < 100)
+        {
+            var r = await client.ReceiveAsync(buffer, cts.Token);
+            received.AddRange(buffer.Take(r.Count));
+        }
+        Assert.Equal(Enumerable.Range(0, 100).Select(i => (byte)i), received);
     }
 
 }

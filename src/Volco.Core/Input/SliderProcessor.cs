@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Devices;
 using Volco.Core.Diagnostics;
 
 namespace Volco.Core.Input;
@@ -116,13 +117,16 @@ public class SliderProcessor : IDisposable
     /// <summary>
     /// Builds the human-readable label shown on the OSD for a slider.
     /// <paramref name="currentOutputName"/> is only used for Device sliders with
-    /// an empty DeviceName (i.e. the "current output device").
+    /// an empty DeviceName (i.e. the "current output device"). <paramref name="configuredDeviceName"/>,
+    /// when given, is the resolved display name of a Device slider's configured device.
     /// </summary>
-    public static string BuildSliderLabel(SliderConfig slider, string? currentOutputName)
+    public static string BuildSliderLabel(SliderConfig slider, string? currentOutputName, string? configuredDeviceName = null)
     {
         switch (slider.Type)
         {
             case SliderMappingType.Device:
+                if (!string.IsNullOrEmpty(configuredDeviceName))
+                    return configuredDeviceName;
                 if (!string.IsNullOrEmpty(slider.DeviceName))
                     return slider.DeviceName;
                 return string.IsNullOrEmpty(currentOutputName) ? "Output" : currentOutputName;
@@ -262,11 +266,16 @@ public class SliderProcessor : IDisposable
 
             if (deviceResolved && VolumeChanged != null)
             {
-                var currentOutput = sliderConfig.Type == SliderMappingType.Device
-                                    && string.IsNullOrEmpty(sliderConfig.DeviceName)
-                    ? _audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName
-                    : null;
-                var label = BuildSliderLabel(sliderConfig, currentOutput);
+                // Display names (nickname, else the automatic short name), as everywhere else.
+                string? currentOutput = null, configured = null;
+                if (sliderConfig.Type == SliderMappingType.Device)
+                {
+                    if (string.IsNullOrEmpty(sliderConfig.DeviceName))
+                        currentOutput = _audio.GetDefaultDevice(AudioFlow.Render) is { } d ? DeviceDisplay.For(config, d).Name : null;
+                    else
+                        configured = DeviceDisplay.NameOf(config, _audio, sliderConfig.Device, sliderConfig.DeviceName);
+                }
+                var label = BuildSliderLabel(sliderConfig, currentOutput, configured);
                 var muted = _audio.IsMuted(MuteSourceFor(sliderConfig));
                 VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume));
             }

@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="using:System"
+             xmlns:local="using:Volco.App.Controls"
+             x:Class="Volco.App.Controls.ScreenPreview">
+  <!-- Layout 1 ("C nudged", spec §2.1) at the panel's own 128×64 pixels, scaled as a whole.
+       Close to the firmware's rendering, not pixel-identical. -->
+  <Border Background="#05070A" CornerRadius="3" Padding="4" HorizontalAlignment="Left">
+    <LayoutTransformControl Name="Scaler">
+      <Canvas Width="128" Height="64" ClipToBounds="True">
+        <TextBlock Name="TopText" Canvas.Left="2" Canvas.Top="0" Width="124" TextAlignment="Center"
+                   FontSize="10" Foreground="#E8F0FF" TextWrapping="NoWrap"/>
+        <ItemsControl Name="TopDots" Canvas.Top="5" Canvas.Left="0" Width="128">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center"/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="sys:Boolean">
+              <Border Width="6" Height="6" BorderBrush="#E8F0FF" BorderThickness="1"
+                      Background="{Binding Converter={x:Static local:ScreenDotFill.Instance}}"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Image Name="IconImage" Canvas.Left="50" Canvas.Top="18" Width="28" Height="28"
+               RenderOptions.BitmapInterpolationMode="None"/>
+        <Panel Name="Slash" Canvas.Left="50" Canvas.Top="18" Width="28" Height="28">
+          <Line StartPoint="2,2" EndPoint="26,26" Stroke="#05070A" StrokeThickness="5.5"/>
+          <Line StartPoint="2,2" EndPoint="26,26" Stroke="#E8F0FF" StrokeThickness="2.3"/>
+        </Panel>
+        <TextBlock Name="MainText" Canvas.Left="2" Canvas.Top="45" Width="124" TextAlignment="Center"
+                   FontSize="14" FontWeight="Bold" Foreground="#E8F0FF" TextWrapping="NoWrap"
+                   TextTrimming="None" ClipToBounds="True"/>
+      </Canvas>
+    </LayoutTransformControl>
+  </Border>
+</UserControl>

@@ -157,7 +157,7 @@ public class UpdateConfig
 
 public class AppConfig
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     /// <summary>Id of the preset every migrated or new config starts with.</summary>
     public const string DefaultPresetId = "default";
@@ -177,6 +177,17 @@ public class AppConfig
 
     /// <summary>Button presets, in tab order. The first one is live when the app starts.</summary>
     public List<PresetConfig> Presets { get; set; } = new();
+
+    /// <summary>Device nicknames and icons (Devices page). Only customized devices.</summary>
+    public List<DeviceSettingsConfig> Devices { get; set; } = new();
+
+    /// <summary>The last Hello the controller sent; null until the first one.</summary>
+    public ControllerInfoConfig? Controller { get; set; }
+
+    /// <summary>The settings entry for an endpoint id, or null.</summary>
+    public DeviceSettingsConfig? FindDevice(string? id)
+        => string.IsNullOrEmpty(id) ? null
+           : Devices.Find(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase));
     public UpdateConfig Updates { get; set; } = new();
     public bool DebugLogging { get; set; } = false;
 
@@ -199,6 +210,8 @@ public class AppConfig
         Sliders ??= new();
         Buttons ??= new();
         Presets ??= new();
+        Devices ??= new();
+        Devices.RemoveAll(d => d is null || string.IsNullOrEmpty(d.Id));
         if (Presets.Count == 0)
             Presets.Add(new PresetConfig { Id = DefaultPresetId, Name = "Default" });
         for (int i = 0; i < Sliders.Count; i++)

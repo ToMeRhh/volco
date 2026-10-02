@@ -25,8 +25,11 @@ namespace Volco.Core.Config;
 /// </summary>
 public static class ConfigMigrator
 {
+    /// <summary>True only for a schema v1 file (no "schemaVersion", or 0/1): its device names still
+    /// need resolving against live devices. v2 and v3 are upgraded in <see cref="ConfigManager.Load"/>
+    /// and must never come through here (that would write config.v1.bak and re-parse them as v1).</summary>
     public static bool NeedsMigration(AppConfig config)
-        => config.SchemaVersion < AppConfig.CurrentSchemaVersion;
+        => config.SchemaVersion < 2;
 
     /// <summary>
     /// Resolves a v1 name to a device: exact friendly-name match first, then the legacy
@@ -92,7 +95,7 @@ public static class ConfigMigrator
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            AppLog.Error($"Config migration could not read {configPath} ({ex.GetType().Name}: {ex.Message}); stamping v2 with defaults");
+            AppLog.Error($"Config migration could not read {configPath} ({ex.GetType().Name}: {ex.Message}); stamping v{AppConfig.CurrentSchemaVersion} with defaults");
         }
 
         config.SchemaVersion = AppConfig.CurrentSchemaVersion;

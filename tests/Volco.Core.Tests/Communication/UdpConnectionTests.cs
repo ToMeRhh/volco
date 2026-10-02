@@ -24,7 +24,7 @@ public class UdpConnectionTests
         public int Count(ConnectionStatus s) => Statuses.Count(x => x == s);
     }
 
-    private static readonly byte[] SliderFrame = Frame(0x01, 0x00, 0x01, 0x00);
+    private static readonly byte[] SliderFrame = Frame(0x03, 0x00, 0x01, 0x00); // slider 0 = 256
 
     private static UdpClient NewSender() => new(new IPEndPoint(IPAddress.Loopback, 0));
 

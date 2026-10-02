@@ -42,7 +42,7 @@ public class WebSocketConnectionHardeningTests
 
         using var client = await ConnectClientAsync(port);
         // A round trip proves the server has registered this client as the active one.
-        await client.SendAsync(Frame(0x02, 0x00, 0x01), WebSocketMessageType.Binary, true, CancellationToken.None);
+        await client.SendAsync(Frame(0x04, 0x00, 0x01), WebSocketMessageType.Binary, true, CancellationToken.None);
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref received) == 1), "server never saw the client's frame");
 
         // Pins ordering and integrity of a burst. It cannot reproduce A6 on Linux: there the server
@@ -236,7 +236,7 @@ public class WebSocketConnectionHardeningTests
         conn.Connect();
 
         using var second = await ConnectClientAsync(port);
-        await second.SendAsync(Frame(0x02, 0x00, 0x01), WebSocketMessageType.Binary, true, CancellationToken.None);
+        await second.SendAsync(Frame(0x04, 0x00, 0x01), WebSocketMessageType.Binary, true, CancellationToken.None);
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref received) == 1));
         Assert.Equal(ConnectionStatus.Connected, conn.Status);
 

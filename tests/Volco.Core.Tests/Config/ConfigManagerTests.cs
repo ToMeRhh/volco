@@ -380,6 +380,79 @@ public class ConfigManagerLoadSaveTests : IDisposable
     }
     """;
 
+    /// <summary>A realistic v3 config.json, as the v3 app wrote it (the user's current hardware).
+    /// If the user supplies their real config.json, paste it here instead.</summary>
+    internal const string V3Json = """
+    {
+      "schemaVersion": 3,
+      "connection": { "type": "Serial", "serial": { "comPort": "COM3", "baudRate": 115200 }, "udp": { "listenPort": 12345 }, "webSocket": { "port": 8765 } },
+      "sliders": [
+        { "index": 0, "type": "Device", "processes": [], "device": null, "invert": false, "curve": "Linear", "deadZonePercent": 0, "smoothingFactor": 0 },
+        { "index": 1, "type": "Processes", "processes": [ "spotify.exe" ], "device": null, "invert": false, "curve": "Logarithmic", "deadZonePercent": 0.02, "smoothingFactor": 0.2 }
+      ],
+      "buttons": [
+        { "index": 0, "actions": { "default": { "singlePress": { "action": "MuteCurrentInput" }, "doublePress": { "action": "None" }, "longPress": { "action": "NextPreset" } } }, "longPressMs": 600, "doublePressWindowMs": 250 },
+        { "index": 1, "actions": { "default": { "singlePress": { "action": "ToggleOutputDevice", "device": { "id": "dev-1", "friendlyName": "Speakers" }, "deviceB": { "id": "dev-2", "friendlyName": "Headphones" } } } }, "longPressMs": 500, "doublePressWindowMs": 300 }
+      ],
+      "presets": [ { "id": "default", "name": "Default" }, { "id": "preset-2", "name": "Gaming" } ],
+      "updates": { "gitHubToken": "ghp_x", "useCiArtifact": false },
+      "debugLogging": false
+    }
+    """;
+
+    [Fact]
+    public void Load_V3Config_StampsV4_KeepsEverything_AndAddsEmptyDeviceAndControllerInfo()
+    {
+        File.WriteAllText(_configPath, V3Json);
+
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+        var c = cm.Config;
+
+        Assert.Equal(4, c.SchemaVersion);
+        Assert.Empty(c.Devices);
+        Assert.Null(c.Controller);
+        Assert.Equal(2, c.Presets.Count);
+        Assert.Equal(ButtonActionType.NextPreset, c.Buttons[0].Default().LongPress.Action);
+        Assert.Equal("dev-2", c.Buttons[1].Default().SinglePress.DeviceB!.Id);
+        Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
+
+        Assert.Contains("\"schemaVersion\": 4", File.ReadAllText(_configPath));
+        Assert.Equal(V3Json, File.ReadAllText(Path.Combine(_tempDir, "config.v3.bak")));
+        Assert.False(File.Exists(Path.Combine(_tempDir, "config.v1.bak")));
+        Assert.False(ConfigMigrator.NeedsMigration(c));
+    }
+
+    [Fact]
+    public void DevicesAndControllerInfo_RoundTrip()
+    {
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+        cm.Config.Devices.Add(new DeviceSettingsConfig
+        {
+            Id = "dev-1", Flow = Volco.Core.Audio.AudioFlow.Render, FriendlyName = "Speakers (Realtek)",
+            Nickname = "Desk speakers", Icon = Volco.Core.Communication.ScreenIcon.Speakers,
+        });
+        cm.Config.Controller = new ControllerInfoConfig
+        {
+            ProtocolVersion = 1, Sliders = 5,
+            Buttons = { Volco.Core.Communication.IndicatorKind.Led, Volco.Core.Communication.IndicatorKind.LedPair },
+        };
+        cm.Save();
+
+        var json = File.ReadAllText(_configPath);
+        Assert.Contains("\"icon\": \"Speakers\"", json);
+        Assert.Contains("\"LedPair\"", json);
+        Assert.Contains("\"flow\": \"Render\"", json);
+
+        var again = new ConfigManager(_configPath);
+        again.Load();
+        var d = Assert.Single(again.Config.Devices);
+        Assert.Equal("Desk speakers", d.Nickname);
+        Assert.Equal(Volco.Core.Communication.ScreenIcon.Speakers, d.Icon);
+        Assert.True(again.Config.Controller!.SameAs(cm.Config.Controller));
+    }
+
     [Fact]
     public void Load_V2Config_MigratesToV3_WithoutLosingAnything()
     {
@@ -389,7 +462,7 @@ public class ConfigManagerLoadSaveTests : IDisposable
         cm.Load();
         var c = cm.Config;
 
-        Assert.Equal(3, c.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, c.SchemaVersion);
         Assert.Equal(ConnectionType.Serial, c.Connection.Type);
         Assert.Equal("COM3", c.Connection.Serial.ComPort);
         Assert.True(c.DebugLogging);
@@ -427,7 +500,7 @@ public class ConfigManagerLoadSaveTests : IDisposable
         new ConfigManager(_configPath).Load();
 
         var onDisk = File.ReadAllText(_configPath);
-        Assert.Contains("\"schemaVersion\": 3", onDisk);
+        Assert.Contains("\"schemaVersion\": 4", onDisk);
         Assert.DoesNotContain("outputDevices", onDisk);
         Assert.Contains("\"actions\"", onDisk);
 

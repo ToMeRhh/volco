@@ -30,7 +30,7 @@ public class ProtocolParserTests
     public void ParsesSliderMessage()
     {
         // Slider 2, value 512 (0x0200 big-endian)
-        var payload = new byte[] { 0x01, 0x02, 0x02, 0x00 };
+        var payload = new byte[] { 0x03, 0x02, 0x02, 0x00 };
         _parser.FeedBytes(FramePayload(payload));
 
         Assert.Single(_received);
@@ -43,7 +43,7 @@ public class ProtocolParserTests
     public void ParsesButtonMessage()
     {
         // Button 1, pressed
-        var payload = new byte[] { 0x02, 0x01, 0x01 };
+        var payload = new byte[] { 0x04, 0x01, 0x01 };
         _parser.FeedBytes(FramePayload(payload));
 
         Assert.Single(_received);
@@ -55,7 +55,7 @@ public class ProtocolParserTests
     [Fact]
     public void RejectsInvalidChecksum()
     {
-        var payload = new byte[] { 0x02, 0x01, 0x01 };
+        var payload = new byte[] { 0x04, 0x01, 0x01 };
         var frame = FramePayload(payload);
         frame[^1] ^= 0xFF; // corrupt checksum
         _parser.FeedBytes(frame);
@@ -66,8 +66,8 @@ public class ProtocolParserTests
     [Fact]
     public void ParsesMultipleMessagesInOneBuffer()
     {
-        var frame1 = FramePayload(new byte[] { 0x01, 0x00, 0x00, 0x64 }); // slider 0, value 100
-        var frame2 = FramePayload(new byte[] { 0x02, 0x02, 0x00 });       // button 2, released
+        var frame1 = FramePayload(new byte[] { 0x03, 0x00, 0x00, 0x64 }); // slider 0, value 100
+        var frame2 = FramePayload(new byte[] { 0x04, 0x02, 0x00 });       // button 2, released
         var combined = frame1.Concat(frame2).ToArray();
         _parser.FeedBytes(combined);
 
@@ -79,7 +79,7 @@ public class ProtocolParserTests
     [Fact]
     public void ParsesMessageSplitAcrossMultipleFeeds()
     {
-        var frame = FramePayload(new byte[] { 0x01, 0x03, 0x03, 0xFF }); // slider 3, value 1023
+        var frame = FramePayload(new byte[] { 0x03, 0x03, 0x03, 0xFF }); // slider 3, value 1023
         var half = frame.Length / 2;
         _parser.FeedBytes(frame[..half]);
         Assert.Empty(_received);
@@ -95,7 +95,7 @@ public class ProtocolParserTests
     public void SkipsGarbageBytesBeforeStartMarker()
     {
         var garbage = new byte[] { 0x00, 0x55, 0xFF };
-        var frame = FramePayload(new byte[] { 0x02, 0x00, 0x01 }); // button 0, pressed
+        var frame = FramePayload(new byte[] { 0x04, 0x00, 0x01 }); // button 0, pressed
         _parser.FeedBytes(garbage.Concat(frame).ToArray());
 
         Assert.Single(_received);
@@ -105,14 +105,27 @@ public class ProtocolParserTests
     [Fact]
     public void ParsesFrameWithEmbeddedStartMarkerInPayload()
     {
-        // Payload: { messageType=0x02, 0xAA, value=0x01 }
-        // Checksum: 0x02 ^ 0xAA ^ 0x01 = 0xA9
-        var frame = new byte[] { 0xAA, 0x03, 0x02, 0xAA, 0x01, 0xA9 };
+        // Payload: { messageType=0x04, 0xAA, value=0x01 }; checksum: 0x04 ^ 0xAA ^ 0x01 = 0xAF
+        var frame = new byte[] { 0xAA, 0x03, 0x04, 0xAA, 0x01, 0xAF };
         _parser.FeedBytes(frame);
 
         Assert.Single(_received);
         var msg = Assert.IsType<ButtonMessage>(_received[0]);
         Assert.Equal(0xAA, (int)msg.ButtonIndex);
         Assert.Equal(ButtonState.Pressed, msg.State);
+    }
+
+    [Fact]
+    public void ParsesAlive_WhichHasNoBody()
+    {
+        _parser.FeedBytes(new byte[] { 0xAA, 0x01, 0x02, 0x02 });
+        Assert.IsType<AliveMessage>(Assert.Single(_received));
+    }
+
+    [Fact]
+    public void DropsABodyTooShortForItsType()
+    {
+        _parser.FeedBytes(FramePayload(new byte[] { 0x03, 0x01 }));   // slider with no value
+        Assert.Empty(_received);
     }
 }

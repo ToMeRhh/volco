@@ -1,12 +1,27 @@
 namespace Volco.Core.Communication;
 
+/// <summary>
+/// Wire message types (spec §3.2). The high bit is the direction: 0x0_ comes from the controller,
+/// 0x8_ from the PC. Paired messages share their low bits (Hello/HelloRequest, Alive/Heartbeat).
+/// </summary>
 public enum MessageType : byte
 {
-    Slider = 0x01,
-    Button = 0x02,
-    // 0x03 (mute state) and 0x04 (active device) were retired in schema v3 / protocol v2.
-    /// <summary>Host → controller: what one button's indicator should show.</summary>
-    ButtonFeedback = 0x05
+    Hello = 0x01,
+    Alive = 0x02,
+    Slider = 0x03,
+    Button = 0x04,
+    HelloRequest = 0x81,
+    Heartbeat = 0x82,
+    Led = 0x83,
+    Screen = 0x84,
+    Begin = 0x85,
+    Commit = 0x86,
+}
+
+/// <summary>The protocol version this app speaks; Hello carries the firmware's.</summary>
+public static class ProtocolVersion
+{
+    public const byte Current = 1;
 }
 
 public enum ButtonState : byte
@@ -43,4 +58,28 @@ public class ButtonMessage : ControllerMessage
         ButtonIndex = buttonIndex;
         State = state;
     }
+}
+
+/// <summary>The controller describing its hardware (spec §3.2): sent at boot, in reply to every
+/// HelloRequest, and on the first frame after a host timeout.</summary>
+public sealed class HelloMessage : ControllerMessage
+{
+    public byte Version { get; }
+    public int SliderCount { get; }
+
+    /// <summary>One indicator kind per button, by hardware input number.</summary>
+    public IReadOnlyList<IndicatorKind> Buttons { get; }
+
+    public HelloMessage(byte version, int sliderCount, IReadOnlyList<IndicatorKind> buttons) : base(MessageType.Hello)
+    {
+        Version = version;
+        SliderCount = sliderCount;
+        Buttons = buttons;
+    }
+}
+
+/// <summary>The controller's keepalive: sent when it has sent nothing else for a second.</summary>
+public sealed class AliveMessage : ControllerMessage
+{
+    public AliveMessage() : base(MessageType.Alive) { }
 }

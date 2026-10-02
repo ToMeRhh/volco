@@ -8,6 +8,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Tests.Audio;
 using Xunit;
@@ -282,6 +283,7 @@ public class ButtonsPageTests
     {
         var (page, rig, vm) = Show(c =>
         {
+            c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = 5, Buttons = { IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen } };
             DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
             DefaultOf(c, 1).SinglePress = new ButtonActionConfig
             {
@@ -303,6 +305,91 @@ public class ButtonsPageTests
 
         Assert.Contains("on", In<Ellipse>(Card(page, 0), "Led").Classes);
         Assert.Equal("On while muted. Follows the Press action.", vm.Buttons.Items[0].LightDescription);
+    }
+
+    private static void Hardware(AppConfig c, params IndicatorKind[] kinds)
+        => c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = 5, Buttons = kinds.ToList() };
+
+    [AvaloniaFact]
+    public void ButtonsPage_ScreenButton_ShowsAScreenPreviewOfTheEditedPreset()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            Hardware(c, IndicatorKind.Screen, IndicatorKind.Led, IndicatorKind.None);
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+
+        var small = In<ScreenPreview>(Card(page, 0), "ScreenPreviewSmall");
+        Assert.True(small.IsVisible);
+        Assert.Equal("Speakers", small.Screen!.Main);
+        Assert.True(In<ScreenPreview>(Card(page, 0), "ScreenPreviewLarge").IsVisible);
+        Assert.Equal("Light: Screen", In<TextBlock>(Card(page, 0), "IndicatorText").Text);
+        Assert.False(In<ScreenPreview>(Card(page, 1), "ScreenPreviewSmall").IsVisible);
+        Assert.True(In<Ellipse>(Card(page, 1), "Led").IsVisible);
+        Assert.Equal("Light: None", vm.Buttons.Items[2].IndicatorText);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_NoControllerInfo_AsksToConnect_AndShowsNoPreview()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        Assert.Equal("Connect your controller to see its lights and screens.", In<TextBlock>(Card(page, 0), "IndicatorText").Text);
+        Assert.False(In<Ellipse>(Card(page, 0), "Led").IsVisible);
+        Assert.False(In<ScreenPreview>(Card(page, 0), "ScreenPreviewSmall").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_CountHint_AddsTheMissingButtons()
+    {
+        var (page, rig, vm) = Show(c => Hardware(c, IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen));
+        using var _ = rig; using var __ = vm;
+        Assert.Equal("Your controller has 4 buttons; 3 are set up.", In<TextBlock>(page, "CountHintText").Text);
+        In<Button>(page, "AddMissingButton").Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(4, rig.Config.Config.Buttons.Count);
+        Assert.False(vm.Buttons.HasCountHint);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_ControllerInfoArrives_CardsFollow()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        rig.Connection!.SetStatus(Volco.Core.Communication.ConnectionStatus.Connected);
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5,
+            new[] { IndicatorKind.Screen, IndicatorKind.Led, IndicatorKind.Led }));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(vm.Buttons.Items[0].IsScreen);
+        Assert.True(In<ScreenPreview>(Card(page, 0), "ScreenPreviewSmall").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_DragPreview_KeepsEachCardsOwnScreen()
+    {
+        var (_, rig, vm) = Show(c =>
+        {
+            Hardware(c, IndicatorKind.Screen, IndicatorKind.Led);
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+            DefaultOf(c, 1).SinglePress.Action = ButtonActionType.MuteCurrentInput;
+        });
+        using var _ = rig; using var __ = vm;
+        var card0 = vm.Buttons.Items[0];
+        var before = card0.Screen;
+        Assert.True(card0.IsScreen);
+
+        vm.Buttons.PreviewMove(0, 1);
+
+        Assert.Equal(before, card0.Screen);
+        Assert.Equal(IndicatorKind.Led, card0.Indicator);
+
+        vm.Buttons.CancelPreview();
+
+        Assert.Equal(before, card0.Screen);
+        Assert.Equal(IndicatorKind.Screen, card0.Indicator);
     }
 
     // ── Presets ───────────────────────────────────────────────────────────────
@@ -517,5 +604,79 @@ public class ButtonsPageTests
 
         Assert.Contains("active", Card(page, 2).Classes);
         Assert.DoesNotContain("active", Card(page, 0).Classes);
+    }
+
+    [AvaloniaFact]
+    public void DevicePicker_ShowsNicknames_WithTheWindowsNameAsSecondaryText()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", Nickname = "Cans" });
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteSpecificDevice;
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var slot = vm.Buttons.Items[0].Press;
+        Assert.Equal(new DeviceChoice("Cans", "Headphones"), ((IDeviceLabeler)slot).Describe("Headphones"));
+        Assert.Equal(new DeviceChoice("Speakers", ""), ((IDeviceLabeler)slot).Describe("Speakers"));
+    }
+
+    [AvaloniaFact]
+    public void CardSummary_UsesNicknames()
+    {
+        var (_, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-1", Nickname = "Desk" });
+            DefaultOf(c, 0).SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.SetOutputDevice, Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" },
+            };
+        });
+        using var _ = rig; using var __ = vm;
+        Assert.Equal("Switch to Desk", vm.Buttons.Items[0].Summary);
+    }
+
+    [AvaloniaFact]
+    public void DevicePicker_RenderedSelectionBox_ShowsTheNickname()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", Nickname = "Cans" });
+            DefaultOf(c, 0).SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.MuteSpecificDevice, Device = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" },
+            };
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var combo = InRow<ComboBox>(page, "PressRow", "DeviceCombo");
+        Assert.Equal("Headphones", combo.SelectedItem);
+        var texts = combo.GetVisualDescendants().OfType<TextBlock>().ToList();
+        Assert.Equal("Cans", texts.First(t => t.Name == "DeviceLabel").Text);
+        Assert.Equal("Headphones", texts.First(t => t.Name == "DeviceSecondary").Text);
+    }
+
+    [AvaloniaFact]
+    public void DevicePicker_RenderedDropdownItems_ShowNicknames()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", Nickname = "Cans" });
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteSpecificDevice;
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var combo = InRow<ComboBox>(page, "PressRow", "DeviceCombo");
+        combo.IsDropDownOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        var labels = new List<string?>();
+        for (int i = 0; i < combo.ItemCount; i++)
+        {
+            var container = Assert.IsAssignableFrom<Control>(combo.ContainerFromIndex(i));
+            labels.Add(container.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "DeviceLabel").Text);
+        }
+        Assert.Contains("Cans", labels);
+        Assert.Contains("Speakers", labels);
+        Assert.DoesNotContain("Headphones", labels);
     }
 }

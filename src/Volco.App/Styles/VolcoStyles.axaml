@@ -236,6 +236,20 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
   </Style>
 
+  <!-- Device icon picker (Devices page). -->
+  <Style Selector="Button.IconChoice">
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+  </Style>
+  <Style Selector="Button.IconChoice.selected">
+    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.auto">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="FontWeight" Value="Normal"/>
+  </Style>
+
   <!-- ── Level bar and lights ──────────────────────────────────────────── -->
   <Style Selector="ProgressBar.Level">
     <Setter Property="Height" Value="4"/>

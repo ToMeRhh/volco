@@ -29,6 +29,9 @@ public partial class SlidersPage : UserControl
 
     internal CardReorder Reorder { get; }
 
+    private void DeviceCombo_ContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+        => Converters.DeviceLabelConverter.Stamp(sender, e);
+
     private void ProcessBox_Attached(object? sender, VisualTreeAttachmentEventArgs e)
     {
         if (sender is not AutoCompleteBox box) return;

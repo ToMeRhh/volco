@@ -14,7 +14,7 @@ namespace Volco.Core.Tests.Runtime;
 /// <summary>
 /// Drives <see cref="VolcoRuntime"/> headless with <see cref="FakeAudioEngine"/> and
 /// <see cref="FakeControllerConnection"/>. Anything timer-driven (slider coalescing, button
-/// press classification, post-connect re-pushes, ConfigManager's save debounce) is awaited with
+/// press classification, ConfigManager's save debounce) is awaited with
 /// a bounded poll, never a fixed sleep; "nothing more happens" is asserted over a short window.
 /// </summary>
 public sealed class VolcoRuntimeTests : IDisposable
@@ -26,8 +26,14 @@ public sealed class VolcoRuntimeTests : IDisposable
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan QuietWindow = TimeSpan.FromMilliseconds(150);
 
-    /// <summary>No timed re-pushes, so frame counts only move when the test makes them.</summary>
-    private static readonly VolcoRuntimeOptions NoTimedRepushes = new(Array.Empty<TimeSpan>());
+    /// <summary>No HelloRequest retries or heartbeats inside a test unless it asks for them.</summary>
+    private static readonly VolcoRuntimeOptions Quiet = new()
+    {
+        Link = new ControllerLinkOptions(TimeSpan.FromHours(1), TimeSpan.FromHours(1), TimeSpan.FromHours(1)),
+    };
+
+    private static readonly HelloMessage LedHello = new(ProtocolVersion.Current, 5,
+        new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair });
 
     private readonly FakeAudioEngine _engine = new();
     private readonly List<FakeControllerConnection> _connections = new(); // guarded by itself
@@ -109,7 +115,7 @@ public sealed class VolcoRuntimeTests : IDisposable
                                       VolcoRuntimeOptions? options = null)
     {
         var runtime = new VolcoRuntime(config ?? NewConfig(), _engine, audioReady, Factory,
-                                       options ?? NoTimedRepushes);
+                                       options ?? Quiet);
         _runtimes.Add(runtime);
         runtime.Start();
         return runtime;
@@ -149,6 +155,13 @@ public sealed class VolcoRuntimeTests : IDisposable
 
     private static bool ContainsFrame(IEnumerable<byte[]> frames, byte[] expected)
         => frames.Any(f => f.AsSpan().SequenceEqual(expected));
+
+    /// <summary>Transport connected and the controller said hello.</summary>
+    private static void ConnectAndGreet(FakeControllerConnection connection, HelloMessage? hello = null)
+    {
+        connection.SetStatus(ConnectionStatus.Connected);
+        connection.RaiseMessage(hello ?? LedHello);
+    }
 
     /// <summary>Thread-safe point-in-time copy of one of <see cref="_engine"/>'s call-recording
     /// lists (see <see cref="FakeAudioEngine.Snapshot{T}"/>). Use this instead of indexing or
@@ -614,10 +627,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     [Fact]
     public void SetOutputDevicePress_SwitchNeverLands_ExpiresAndRaisesNoOsd()
     {
-        var options = new VolcoRuntimeOptions(Array.Empty<TimeSpan>())
-        {
-            PendingSwitchTimeout = TimeSpan.FromMilliseconds(100),
-        };
+        var options = Quiet with { PendingSwitchTimeout = TimeSpan.FromMilliseconds(100) };
         var runtime = StartRuntime(NewConfig(c => c.Buttons[0].Default().SinglePress = SetDevice(Headphones, "Headphones")),
                                    options: options);
         var osd = new Recorder<VolumeChangeNotification>();
@@ -640,19 +650,20 @@ public sealed class VolcoRuntimeTests : IDisposable
     // ---- controller-state pushes -----------------------------------------------------------
 
     [Fact]
-    public void Connected_PushesStateImmediately()
+    public void Hello_PushesStateForEveryButton()
     {
         var runtime = StartRuntime();
         var statuses = new Recorder<ConnectionStatus>();
         runtime.ConnectionStatusChanged += statuses.Handler;
         Assert.Equal(ConnectionStatus.Disconnected, runtime.ConnectionStatus);
 
-        Connection(0).SetStatus(ConnectionStatus.Connected);
+        ConnectAndGreet(Connection(0));
 
         var frames = Connection(0).SentFrames;
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(0, 0)), "button 0 feedback frame missing");
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(1, 0)), "button 1 feedback frame missing");
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(2, 0)), "button 2 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeHelloRequest()), "no HelloRequest on connect");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(0, 0)), "button 0 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(1, 0)), "button 1 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(2, 0)), "button 2 feedback frame missing");
         Assert.Equal(ConnectionStatus.Connected, runtime.ConnectionStatus);
         Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
     }
@@ -662,7 +673,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         StartRuntime();
         var connection = Connection(0);
-        connection.SetStatus(ConnectionStatus.Connected);
+        ConnectAndGreet(connection);
         var baseline = connection.SentCount;
         Assert.True(baseline > 0);
 
@@ -683,7 +694,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         StartRuntime();
         var connection = Connection(0);
-        connection.SetStatus(ConnectionStatus.Connected);
+        ConnectAndGreet(connection);
         var baseline = connection.SentCount;
 
         _engine.DeviceStates[Speakers] = (0.5f, true);
@@ -691,44 +702,202 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Assert.True(connection.SentCount > baseline, "mute flip did not resend frames");
         var newFrames = connection.SentFrames.Skip(baseline);
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(0, 1)), "muted frame not sent");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(0, 1)), "muted frame not sent");
     }
 
     [Fact]
-    public void Connected_RepushesAfterEachConfiguredDelay()
-    {
-        var config = NewConfig();
-        StartRuntime(config, options: new VolcoRuntimeOptions(
-            new[] { TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(60) }));
-        var connection = Connection(0);
-        var framesPerPush = ButtonFeedback.BuildFrames(config.Config, AppConfig.DefaultPresetId, _engine).Count;
-        Assert.True(framesPerPush > 0);
-
-        connection.SetStatus(ConnectionStatus.Connected);
-
-        // Immediate push + one forced re-push per configured delay, then nothing more.
-        Assert.True(WaitUntil(() => connection.SentCount >= 3 * framesPerPush),
-                    $"expected {3 * framesPerPush} frames, got {connection.SentCount}");
-        Assert.True(StaysUnchanged(() => connection.SentCount), "more pushes than configured delays");
-        Assert.Equal(3 * framesPerPush, connection.SentCount);
-    }
-
-    [Fact]
-    public void FirstMessageAfterConnect_ForcesOneRepush()
+    public void Connected_SendsOnlyHelloRequest_UntilHello()
     {
         StartRuntime();
         var connection = Connection(0);
         connection.SetStatus(ConnectionStatus.Connected);
-        var afterConnect = connection.SentCount;
-        Assert.True(afterConnect > 0);
+        _engine.DeviceStates[Speakers] = (0.5f, true);
+        _engine.RaiseDeviceVolumeChanged(Speakers, 0.5f, muted: true, isOwnChange: false);
 
-        // Slider index 10 is beyond the configured sliders, so it touches nothing but the
-        // first-message flag.
-        connection.RaiseMessage(new SliderMessage(10, 0));
-        Assert.Equal(2 * afterConnect, connection.SentCount);
+        Assert.Equal(new[] { ProtocolEncoder.EncodeHelloRequest() }, connection.SentFrames);
+    }
 
-        connection.RaiseMessage(new SliderMessage(10, 0));
-        Assert.Equal(2 * afterConnect, connection.SentCount);
+    [Fact]
+    public void Hello_StoresControllerInfo_AndRaisesTheEvents()
+    {
+        var config = NewConfig();
+        var runtime = StartRuntime(config);
+        var states = new Recorder<ControllerState>();
+        var infos = 0;
+        runtime.ControllerStateChanged += states.Handler;
+        runtime.ControllerInfoChanged += (_, _) => Interlocked.Increment(ref infos);
+
+        ConnectAndGreet(Connection(0));
+
+        Assert.Equal(ControllerState.Ready, runtime.ControllerState);
+        Assert.Equal(new[] { ControllerState.AwaitingHello, ControllerState.Ready }, states.Items);
+        Assert.Equal(new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }, config.Config.Controller!.Buttons);
+        Assert.Equal(1, infos);
+
+        Connection(0).RaiseMessage(LedHello);         // same hardware again: no new info event
+        Assert.Equal(1, infos);
+    }
+
+    [Fact]
+    public void Hello_WrongVersion_IsAMismatch_AndInputStillWorks()
+    {
+        var runtime = StartRuntime();
+        var connection = Connection(0);
+        ConnectAndGreet(connection, new HelloMessage(42, 5, new[] { IndicatorKind.Led }));
+        var after = connection.SentCount;
+
+        Press(connection, 0);
+
+        Assert.Equal(ControllerState.VersionMismatch, runtime.ControllerState);
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "button input ignored during a mismatch");
+        Assert.Equal(after, connection.SentCount);
+    }
+
+    [Fact]
+    public void Reconnect_WithoutControllerReboot_RequestsHelloAndPushesEverything()
+    {
+        // Review Focus #3: a new session on a controller that never rebooted.
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        runtime.Reconnect();
+        var fresh = Connection(1);
+
+        fresh.SetStatus(ConnectionStatus.Connected);
+        Assert.Equal(new[] { ProtocolEncoder.EncodeHelloRequest() }, fresh.SentFrames);
+        fresh.RaiseMessage(LedHello);
+
+        Assert.True(ContainsFrame(fresh.SentFrames, ProtocolEncoder.EncodeLed(0, 0)));
+        Assert.True(ContainsFrame(fresh.SentFrames, ProtocolEncoder.EncodeLed(2, 0)));
+    }
+
+    [Fact]
+    public void NextPreset_SlidesLeft_EvenWhenWrapping()
+    {
+        var config = TwoPresetConfig();
+        config.Config.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = 5, Buttons = { IndicatorKind.Screen } };
+        var runtime = StartRuntime(config);
+        var connection = Connection(0);
+        ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
+
+        runtime.SetActivePreset("gaming");
+        var baseline = connection.SentCount;
+        runtime.NextPreset();                                     // gaming → default wraps
+
+        var screen = connection.SentFrames.Skip(baseline).First(f => f[2] == (byte)MessageType.Screen);
+        Assert.Equal((byte)ScreenTransition.SlideLeft, screen[4]);
+    }
+
+    [Fact]
+    public void GoToAnEarlierPreset_SlidesRight()
+    {
+        var config = TwoPresetConfig();
+        var runtime = StartRuntime(config);
+        var connection = Connection(0);
+        ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
+        runtime.SetActivePreset("gaming");
+        var baseline = connection.SentCount;
+
+        runtime.SetActivePreset(AppConfig.DefaultPresetId);
+
+        var screen = connection.SentFrames.Skip(baseline).First(f => f[2] == (byte)MessageType.Screen);
+        Assert.Equal((byte)ScreenTransition.SlideRight, screen[4]);
+    }
+
+    [Fact]
+    public void Unsynchronized_PresetChange_HasNoBeginOrCommit()
+    {
+        var runtime = StartRuntime(TwoPresetConfig(), options: Quiet with { SynchronizedPresetTransitions = false });
+        var connection = Connection(0);
+        ConnectAndGreet(connection);
+        var baseline = connection.SentCount;
+
+        runtime.SetActivePreset("gaming");
+
+        var burst = connection.SentFrames.Skip(baseline).ToList();
+        Assert.NotEmpty(burst);
+        Assert.DoesNotContain(burst, f => f[2] is (byte)MessageType.Begin or (byte)MessageType.Commit);
+    }
+
+    [Fact]
+    public void DeletingTheLivePreset_PushesInstantly()
+    {
+        var config = TwoPresetConfig();
+        var runtime = StartRuntime(config);
+        var connection = Connection(0);
+        ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
+        runtime.SetActivePreset("gaming");
+        var baseline = connection.SentCount;
+
+        config.Config.Presets.RemoveAll(p => p.Id == "gaming");
+        runtime.SetActivePreset(AppConfig.DefaultPresetId);       // what ButtonsViewModel does
+
+        var screen = connection.SentFrames.Skip(baseline).First(f => f[2] == (byte)MessageType.Screen);
+        Assert.Equal((byte)ScreenTransition.None, screen[4]);
+        Assert.DoesNotContain(connection.SentFrames.Skip(baseline), f => f[2] == (byte)MessageType.Begin);
+    }
+
+    [Fact]
+    public void DeletingTheFallbackLivePreset_NeverSetExplicitly_PushesInstantly()
+    {
+        // No SetActivePreset before: the live preset is the first one only by fallback.
+        var config = TwoPresetConfig();
+        var runtime = StartRuntime(config);
+        var connection = Connection(0);
+        ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
+        var baseline = connection.SentCount;
+
+        config.Config.Presets.RemoveAll(p => p.Id == AppConfig.DefaultPresetId);
+        runtime.SetActivePreset("gaming");                        // what ButtonsViewModel does
+
+        var burst = connection.SentFrames.Skip(baseline).ToList();
+        var screen = burst.First(f => f[2] == (byte)MessageType.Screen);
+        Assert.Equal((byte)ScreenTransition.None, screen[4]);
+        Assert.DoesNotContain(burst, f => f[2] == (byte)MessageType.Begin);
+    }
+
+    [Fact]
+    public void ConfigChanged_PushesActionEdits()
+    {
+        var config = NewConfig();
+        StartRuntime(config);
+        var connection = Connection(0);
+        ConnectAndGreet(connection);
+        _engine.DeviceStates[Speakers] = (0.5f, true);            // muted, but button 2 does nothing yet
+        var baseline = connection.SentCount;
+
+        config.Config.Buttons[2].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
+        config.Save();                                            // raises ConfigChanged
+
+        Assert.True(WaitUntil(() => ContainsFrame(connection.SentFrames.Skip(baseline), ProtocolEncoder.EncodeLed(2, 1))));
+    }
+
+    [Fact]
+    public void DevicesChanged_RefreshesAStoredFriendlyName()
+    {
+        var config = NewConfig(c => c.Devices.Add(new DeviceSettingsConfig { Id = Speakers, FriendlyName = "Old name", Nickname = "Desk" }));
+        StartRuntime(config);
+        var renamed = new AudioDevice(Speakers, "Speakers (new driver)", AudioFlow.Render, true);
+        _engine.Devices[0] = renamed;
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, renamed);
+
+        Assert.Equal("Speakers (new driver)", config.Config.FindDevice(Speakers)!.FriendlyName);
+    }
+
+    [Fact]
+    public void MuteOsd_UsesTheNickname()
+    {
+        var config = NewConfig(c => c.Devices.Add(new DeviceSettingsConfig { Id = Speakers, Nickname = "Desk speakers" }));
+        var runtime = StartRuntime(config);
+        var volumes = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += volumes.Handler;
+
+        Press(Connection(0), 0);                                  // button 0 mutes the default output
+        _engine.DeviceStates[Speakers] = (0.5f, true);
+        _engine.RaiseDeviceVolumeChanged(Speakers, 0.5f, muted: true, isOwnChange: true);
+
+        Assert.True(WaitUntil(() => volumes.Count > 0));
+        Assert.Equal("Desk speakers", volumes.Items[0].Label);
     }
 
     // ---- transport restart -----------------------------------------------------------------
@@ -929,7 +1098,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     public void GetSliderLevel_NullBeforeStart_ReflectsMessageAfterStart_NullAfterDispose()
     {
         var config = NewConfig();
-        var runtime = new VolcoRuntime(config, _engine, audioReady: true, Factory, NoTimedRepushes);
+        var runtime = new VolcoRuntime(config, _engine, audioReady: true, Factory, Quiet);
 
         Assert.Null(runtime.GetSliderLevel(0)); // before Start()
 
@@ -962,7 +1131,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     [Fact]
     public void Dispose_DisposesTransport_NotEngine()
     {
-        var runtime = StartRuntime(options: new VolcoRuntimeOptions(new[] { TimeSpan.FromMilliseconds(40) }));
+        var runtime = StartRuntime(options: Quiet);
         var connection = Connection(0);
         connection.SetStatus(ConnectionStatus.Connected);
 
@@ -985,7 +1154,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         connection.SetStatus(ConnectionStatus.Disconnected);
         connection.RaiseMessage(new SliderMessage(0, 1000));
 
-        // Covers the slider coalescing tick and the (cancelled) 40 ms re-push timer.
+        // Covers the slider coalescing tick.
         Assert.True(StaysUnchanged(() => Volatile.Read(ref events) + connection.SentCount + _engine.DeviceVolumeCalls.Count));
         Assert.Equal(0, Volatile.Read(ref events));
         Assert.Equal(sentAtDispose, connection.SentCount);
@@ -1082,16 +1251,18 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var runtime = StartRuntime(TwoPresetConfig());
         var connection = Connection(0);
-        connection.SetStatus(ConnectionStatus.Connected);
+        ConnectAndGreet(connection);
         _engine.DeviceStates[Microphone] = (0.5f, true);   // muted mic: lit only under Gaming
         var baseline = connection.SentCount;
 
         runtime.SetActivePreset("gaming");
 
         var newFrames = connection.SentFrames.Skip(baseline).ToList();
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(0, 1)), "button 0 not lit for the muted mic");
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(1, 0)), "button 1 has nothing in Gaming, so its light must go off");
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(2, 2)), "preset indicator not on preset 2");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeBegin()), "no Begin");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeCommit()), "no Commit");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(0, 1)), "button 0 not lit for the muted mic");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(1, 0)), "button 1 has nothing in Gaming, so its light must go off");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(2, 2)), "preset indicator not on preset 2");
     }
 
     [Fact]
