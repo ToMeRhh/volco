@@ -44,6 +44,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     {
         public required string Id { get; init; }              // IMMDevice::GetId
         public required string FriendlyName { get; init; }    // PKEY_Device_FriendlyName
+        public DeviceFormFactor FormFactor { get; init; }     // PKEY_AudioEndpoint_FormFactor
         public required AudioFlow Flow { get; init; }
         public required IMMDevice Device { get; init; }
 
@@ -471,6 +472,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     {
         string id = GetDeviceId(device);
         string friendlyName = GetFriendlyName(device);
+        var formFactor = GetFormFactor(device);
         AudioFlow flow = GetFlow(device);
 
         IAudioEndpointVolume? volume = null;
@@ -508,6 +510,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
             {
                 Id = id,
                 FriendlyName = friendlyName,
+                FormFactor = formFactor,
                 Flow = flow,
                 Device = device,
                 Volume = volume,
@@ -580,6 +583,43 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         finally
         {
             ReleaseIfComObject(store);
+        }
+    }
+
+    private static DeviceFormFactor GetFormFactor(IMMDevice device)
+    {
+        try
+        {
+            device.OpenPropertyStore(STGM.STGM_READ, out IPropertyStore store);
+            try
+            {
+                store.GetValue(in PInvoke.PKEY_AudioEndpoint_FormFactor, out PROPVARIANT value);
+                try
+                {
+                    if (value.Anonymous.Anonymous.vt != VARENUM.VT_UI4) return DeviceFormFactor.Unknown;
+                    return value.Anonymous.Anonymous.Anonymous.ulVal switch
+                    {
+                        1 => DeviceFormFactor.Speakers,
+                        3 => DeviceFormFactor.Headphones,
+                        4 => DeviceFormFactor.Microphone,
+                        5 or 6 => DeviceFormFactor.Headset,
+                        9 => DeviceFormFactor.Display,
+                        _ => DeviceFormFactor.Other,
+                    };
+                }
+                finally
+                {
+                    PInvoke.PropVariantClear(ref value);
+                }
+            }
+            finally
+            {
+                ReleaseIfComObject(store);
+            }
+        }
+        catch (COMException)
+        {
+            return DeviceFormFactor.Unknown;
         }
     }
 
@@ -786,7 +826,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     private AudioDevice ToAudioDeviceLocked(DeviceHandle handle)
     {
         bool isDefault = _defaults.TryGetValue((handle.Flow, AudioRoleMapping.ForFlow(handle.Flow)), out var id) && id == handle.Id;
-        return new AudioDevice(handle.Id, handle.FriendlyName, handle.Flow, isDefault);
+        return new AudioDevice(handle.Id, handle.FriendlyName, handle.Flow, isDefault, handle.FormFactor);
     }
 
     private static AudioRole ToAudioRole(ERole role) => role switch

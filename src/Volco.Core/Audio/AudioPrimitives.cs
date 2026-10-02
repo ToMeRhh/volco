@@ -28,7 +28,8 @@ public sealed record AudioDevice(
     string    Id,
     string    FriendlyName,
     AudioFlow Flow,
-    bool      IsDefault);
+    bool      IsDefault,
+    DeviceFormFactor FormFactor = DeviceFormFactor.Unknown);
 
 public sealed record AudioSessionInfo(
     string InstanceId,

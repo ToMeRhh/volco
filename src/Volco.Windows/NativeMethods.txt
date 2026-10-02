@@ -30,4 +30,5 @@ PROCESS_ACCESS_RIGHTS
 CoTaskMemFree
 PropVariantClear
 PKEY_Device_FriendlyName
+PKEY_AudioEndpoint_FormFactor
 AudioSessionDisconnectReason
