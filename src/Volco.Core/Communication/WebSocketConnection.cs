@@ -16,8 +16,15 @@ namespace Volco.Core.Communication;
 /// stale, so a handler that outlives <see cref="Disconnect"/> can never announce into a later
 /// connection.
 ///
-/// A WebSocket allows only one outstanding send, and the runtime sends several frames back to
-/// back, so <see cref="Send"/> only enqueues onto a per-client channel that a single drain loop
+/// Event contract: <see cref="Status"/> is authoritative. <see cref="StatusChanged"/> events are
+/// hints raised outside the lock by design, so around teardown they can arrive out of order
+/// relative to each other and to <see cref="Status"/>; subscribers should re-read
+/// <see cref="Status"/> rather than trust event order.
+///
+/// A WebSocket allows only one outstanding send (on Windows, HttpListener's ServerWebSocket /
+/// WebSocketBase throws InvalidOperationException on a second one and then aborts the whole
+/// connection; Linux's ManagedWebSocket serialises silently), and the runtime sends several frames
+/// back to back, so <see cref="Send"/> only enqueues onto a per-client channel that a single drain loop
 /// empties in order, awaiting each send. Queued frames are dropped when the client goes away; the
 /// runtime re-pushes full controller state on every connect.
 /// </summary>
@@ -116,16 +123,31 @@ public class WebSocketConnection : IControllerConnection
             try
             {
                 var context = await listener.GetContextAsync().WaitAsync(ct);
-                if (!context.Request.IsWebSocketRequest)
+                try
                 {
-                    context.Response.StatusCode = 400;
-                    context.Response.Close();
+                    if (!context.Request.IsWebSocketRequest)
+                    {
+                        context.Response.StatusCode = 400;
+                        context.Response.Close();
+                        continue;
+                    }
+
+                    var wsContext = await context.AcceptWebSocketAsync(null);
+                    AppLog.Info("New WebSocket connection accepted");
+                    _ = HandleClientAsync(wsContext.WebSocket, ct, generation);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // One bad request must not take the whole server down; only a failure of the
+                    // listener itself (GetContextAsync) does.
+                    AppLog.Error($"Rejected a WebSocket request: {ex.Message}");
+                    try { context.Response.Abort(); } catch (Exception) { }
                     continue;
                 }
-
-                var wsContext = await context.AcceptWebSocketAsync(null);
-                AppLog.Info("New WebSocket connection accepted");
-                _ = HandleClientAsync(wsContext.WebSocket, ct, generation);
             }
             catch (OperationCanceledException)
             {
@@ -202,6 +224,13 @@ public class WebSocketConnection : IControllerConnection
             AppLog.Error($"WebSocket connection error: {ex.Message}");
         }
         catch (ObjectDisposedException) { }
+        catch (Exception ex)
+        {
+            // E.g. a MessageReceived subscriber threw: log it rather than fault this fire-and-forget
+            // task unobserved. finally still unwinds the client.
+            AppLog.Error($"Unexpected error in WebSocket client handler: {ex}");
+            Abort(webSocket);
+        }
         finally
         {
             AppLog.Info("WebSocket connection closed");
@@ -242,7 +271,7 @@ public class WebSocketConnection : IControllerConnection
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException or InvalidOperationException)
+        catch (Exception ex)
         {
             AppLog.Debug($"WebSocket send failed: {ex.Message}");
             // The receive loop notices the dead socket and unwinds the client.

@@ -16,6 +16,11 @@ namespace Volco.Core.Communication;
 /// <see cref="_generation"/>; the receive loop and the inactivity timer capture the generation
 /// they were started under and do nothing (in particular raise no status) once it is stale, so a
 /// callback that outlives <see cref="Disconnect"/> can never announce into a later connection.
+///
+/// Event contract: <see cref="Status"/> is authoritative. <see cref="StatusChanged"/> events are
+/// hints raised outside the lock by design, so around teardown they can arrive out of order
+/// relative to each other and to <see cref="Status"/>; subscribers should re-read
+/// <see cref="Status"/> rather than trust event order.
 /// </summary>
 public class UdpConnection : IControllerConnection
 {
@@ -101,6 +106,13 @@ public class UdpConnection : IControllerConnection
             {
                 break;
             }
+            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionReset)
+            {
+                // Windows reports an ICMP port-unreachable (the controller endpoint went away) as a
+                // ConnectionReset on the next receive. The socket is still fine: keep listening.
+                // (Not suppressed via SIO_UDP_CONNRESET: Core stays platform-neutral.)
+                AppLog.Debug($"UDP receive: connection reset ignored: {ex.Message}");
+            }
             catch (Exception ex)
             {
                 // Closing the socket during Disconnect() lands here; only a still-current
@@ -145,7 +157,11 @@ public class UdpConnection : IControllerConnection
         return true;
     }
 
-    private void OnInactivity(object? state)
+    /// <summary>Test seam: the generation the current connection (if any) runs under.</summary>
+    internal int CurrentGeneration { get { lock (_gate) return _generation; } }
+
+    /// <summary>Inactivity-timer callback; internal so tests can invoke it with a chosen generation.</summary>
+    internal void OnInactivity(object? state)
     {
         var generation = (int)state!;
         lock (_gate)

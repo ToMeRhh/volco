@@ -210,4 +210,37 @@ public class UdpConnectionTests
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref probe.Messages) == 2));
         Assert.Equal(ConnectionStatus.Connected, conn.Status);
     }
+
+    [Fact]
+    public async Task StaleInactivityCallback_FromPreviousConnection_IsIgnored()
+    {
+        // Deterministic A4 witness: invoke the timer callback by hand with a chosen generation.
+        // The real timer is made too slow to interfere.
+        var port = FreeUdpPort();
+        using var conn = new UdpConnection(new UdpConfig { ListenPort = port }, inactivityTimeoutMs: 600000);
+        var probe = new Probe(conn);
+        using var sender = NewSender();
+
+        conn.Connect();
+        await SendPacketAsync(sender, port);
+        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Connected) == 1));
+        var oldGeneration = conn.CurrentGeneration;
+
+        conn.Disconnect();
+        conn.Connect();
+        await SendPacketAsync(sender, port);
+        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Connected) == 2));
+        var currentGeneration = conn.CurrentGeneration;
+        Assert.NotEqual(oldGeneration, currentGeneration);
+        var disconnectedBefore = probe.Count(ConnectionStatus.Disconnected);
+
+        conn.OnInactivity(oldGeneration);
+        Assert.Equal(ConnectionStatus.Connected, conn.Status);
+        Assert.Equal(disconnectedBefore, probe.Count(ConnectionStatus.Disconnected));
+
+        // Proves the callback path does fire for the current generation.
+        conn.OnInactivity(currentGeneration);
+        Assert.Equal(ConnectionStatus.Disconnected, conn.Status);
+        Assert.Equal(disconnectedBefore + 1, probe.Count(ConnectionStatus.Disconnected));
+    }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using Volco.Core.Communication;
@@ -44,10 +45,11 @@ public class WebSocketConnectionHardeningTests
         await client.SendAsync(Frame(0x02, 0x00, 0x01), WebSocketMessageType.Binary, true, CancellationToken.None);
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref received) == 1), "server never saw the client's frame");
 
-        // Frames are large and the client does not read until every Send() has returned, so the
-        // socket's send buffer fills and a SendAsync stays outstanding while the next Send() is
-        // issued - the situation that makes a fire-and-forget SendAsync throw (a WebSocket
-        // allows one outstanding send). Tiny frames would complete synchronously and hide it.
+        // Pins ordering and integrity of a burst. It cannot reproduce A6 on Linux: there the server
+        // socket is ManagedWebSocket, which serialises concurrent SendAsync calls. On Windows,
+        // HttpListener's ServerWebSocket/WebSocketBase throws InvalidOperationException on a second
+        // outstanding send and aborts the connection. Frames are large and the client does not read
+        // until every Send() has returned, so a send is outstanding while the next Send() is issued.
         const int count = 20;
         const int frameSize = 512 * 1024;
         for (var i = 0; i < count; i++)
@@ -189,6 +191,8 @@ public class WebSocketConnectionHardeningTests
         Assert.True(probe.Count(ConnectionStatus.Disconnected) <= 1);
     }
 
+    // Regression pin only: probably green on the old code too. The real A7 witness is
+    // Reconnect_OnSamePort_ServesNewClientAndStaleClientRaisesNothing.
     [Fact]
     public async Task Disconnect_ClosesClient_AndRaisesNothingAfterDisconnected()
     {
@@ -214,6 +218,7 @@ public class WebSocketConnectionHardeningTests
         Assert.Equal(ConnectionStatus.Disconnected, conn.Status);
     }
 
+    // The real A7 witness: a stale handler from the previous connection must not flip the new one.
     [Fact]
     public async Task Reconnect_OnSamePort_ServesNewClientAndStaleClientRaisesNothing()
     {
@@ -247,5 +252,39 @@ public class WebSocketConnectionHardeningTests
         var r = await second.ReceiveAsync(buffer, cts.Token);
         Assert.Equal(1, r.Count);
         Assert.Equal(0x42, buffer[0]);
+    }
+
+    [Fact]
+    public async Task BadRequests_DoNotTakeServerDown()
+    {
+        var port = FreeTcpPort();
+        using var conn = new WebSocketConnection(new WebSocketConfig { Port = port });
+        var probe = new Probe(conn);
+        conn.Connect();
+        Assert.True(await WaitUntilAsync(() => CanConnectTcpAsync(port).GetAwaiter().GetResult()));
+
+        // Plain HTTP GET, not an upgrade: answered with 400.
+        using (var http = new HttpClient())
+        {
+            var resp = await http.GetAsync($"http://localhost:{port}/");
+            Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        }
+
+        // Malformed upgrade: claims an upgrade but with a bogus key/version.
+        using (var tcp = new TcpClient())
+        {
+            await tcp.ConnectAsync("localhost", port);
+            var req = System.Text.Encoding.ASCII.GetBytes(
+                $"GET / HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n" +
+                "Sec-WebSocket-Key: not-a-valid-key\r\nSec-WebSocket-Version: 99\r\n\r\n");
+            await tcp.GetStream().WriteAsync(req);
+            var buf = new byte[512];
+            using var cts = new CancellationTokenSource(3000);
+            try { await tcp.GetStream().ReadAsync(buf, cts.Token); } catch (Exception) { }
+        }
+
+        using var client = await ConnectClientAsync(port);
+        Assert.True(await WaitUntilAsync(() => conn.Status == ConnectionStatus.Connected));
+        Assert.Equal(0, probe.Count(ConnectionStatus.Error));
     }
 }
