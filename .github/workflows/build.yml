@@ -36,6 +36,25 @@ jobs:
         dotnet test tests/Volco.App.Tests/Volco.App.Tests.csproj \
           --configuration Release
 
+  firmware-test:
+    name: Firmware Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install PlatformIO
+      run: pip install platformio==6.1.18
+
+    - name: Native tests
+      working-directory: firmware
+      run: pio test -e native
+
   build:
     name: Build and Publish
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_build == true)
