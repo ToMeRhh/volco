@@ -1,0 +1,237 @@
+<title>Volco Devices Page</title>
+<style>
+/* Layout: the Volco settings window (200px nav + page), Devices page with expandable device cards. Tokens follow the UX redesign spec §3.7. */
+:root{
+  --bg:#F6F6F7; --surface:#FFFFFF; --subtle:#EFEFF1; --border:#E4E4E7; --border-strong:#8E8E96;
+  --text:#18181B; --text2:#52525B; --text3:#6B6B74; --accent:#3358C4; --on-accent:#FFFFFF;
+  --success:#1F7A45; --warning:#9A5B00; --danger:#B42318; --glass:#05070a; --page:#e3e4e8;
+  --ui:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111113; --surface:#1A1A1D; --subtle:#222226; --border:#2C2C31; --border-strong:#6A6A73;
+  --text:#F4F4F5; --text2:#A8A8B0; --text3:#8E8E97; --accent:#8AA6F2; --on-accent:#111113;
+  --success:#5CC98A; --warning:#E7B04F; --danger:#F4877C; --page:#08080a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111113; --surface:#1A1A1D; --subtle:#222226; --border:#2C2C31; --border-strong:#6A6A73;
+  --text:#F4F4F5; --text2:#A8A8B0; --text3:#8E8E97; --accent:#8AA6F2; --on-accent:#111113;
+  --success:#5CC98A; --warning:#E7B04F; --danger:#F4877C; --page:#08080a; color-scheme:dark}
+body{background:var(--page);color:var(--text);font:13px/1.45 var(--ui)}
+.outer{padding-inline:16px;padding-block:28px 48px;display:flex;flex-direction:column;gap:18px;align-items:center}
+.intro{max-width:980px;width:100%;display:flex;flex-direction:column;gap:4px}
+.intro h1{font-size:20px;margin:0;font-weight:600}
+.intro p{margin:0;color:var(--text2);font-size:14px;max-width:80ch}
+.win{width:100%;max-width:980px;display:grid;grid-template-columns:200px minmax(0,1fr);background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;min-height:640px}
+nav{border-right:1px solid var(--border);padding:16px 8px;display:flex;flex-direction:column;gap:2px}
+nav .app{font-weight:600;font-size:14px;padding:4px 12px 14px}
+nav a{display:block;padding:7px 12px;border-radius:6px;color:var(--text2);text-decoration:none}
+nav a.on{background:var(--subtle);color:var(--text);font-weight:600}
+nav a .new{font-size:11px;color:var(--accent);margin-left:6px}
+nav .foot{margin-top:auto;padding:12px;color:var(--text2);font-size:12px;display:flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block}
+main{padding:24px;display:flex;flex-direction:column;gap:20px;min-width:0}
+.ph h2{font-size:20px;font-weight:600;margin:0}
+.ph p{margin:4px 0 0;color:var(--text2);max-width:70ch}
+.group{display:flex;flex-direction:column;gap:8px}
+.group h3{font-size:12px;font-weight:600;color:var(--text3);margin:0;text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;min-width:0}
+.card.off{opacity:.78}
+.hd{display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;width:100%;background:none;border:none;color:inherit;font:inherit;text-align:left;border-radius:8px}
+.hd:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tile{background:var(--glass);border-radius:6px;display:grid;place-items:center;flex:none}
+.tile canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+.hd .tile{width:40px;height:40px}
+.hd .tile canvas{width:32px;height:32px}
+.names{display:flex;flex-direction:column;min-width:0;flex:1}
+.names b{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.names b.auto{font-weight:400;color:var(--text2)}
+.names span{color:var(--text3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid var(--border);color:var(--text2);white-space:nowrap}
+.chip.def{color:var(--success);border-color:currentColor}
+.chev{color:var(--text3);transition:transform .15s}
+.card.open .chev{transform:rotate(180deg)}
+.body{display:none;padding:4px 14px 16px 66px;gap:18px;grid-template-columns:minmax(0,1fr) auto}
+.card.open .body{display:grid}
+.fields{display:flex;flex-direction:column;gap:16px;min-width:0}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>label,.field>.lbl{font-weight:600;font-size:13px}
+.hint{color:var(--text3);font-size:12px}
+input[type=text]{font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text);max-width:320px}
+input[type=text]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.icons{display:flex;flex-wrap:wrap;gap:6px}
+.icons button{width:44px;height:44px;padding:0;border:2px solid transparent;border-radius:8px;background:var(--glass);cursor:pointer;display:grid;place-items:center}
+.icons button canvas{width:32px;height:32px}
+.icons button[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 2px var(--surface) inset}
+.icons button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.prev{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.glass{background:var(--glass);border-radius:4px;padding:6px}
+.glass canvas{display:block;width:256px;max-width:100%;aspect-ratio:2/1;image-rendering:pixelated;image-rendering:crisp-edges}
+.meta{color:var(--text3);font-size:12px;grid-column:1/-1;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.linkbtn{background:none;border:none;padding:0;color:var(--danger);font:inherit;font-size:12px;cursor:pointer}
+@media (max-width:760px){
+  .win{grid-template-columns:1fr}
+  nav{border-right:none;border-bottom:1px solid var(--border);flex-direction:row;flex-wrap:wrap}
+  nav .app,nav .foot{display:none}
+  .body{padding-left:14px;grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion: reduce){.chev{transition:none}}
+</style>
+
+<div class="outer">
+  <div class="intro">
+    <h1>Devices page</h1>
+    <p>A mockup of the new settings page for the OLED feature. Open a card to rename a device or change its icon. The screen preview updates as you type, and also shows a Hebrew device name. The icons are the closed set the firmware would contain, drawn at their real pixel size.</p>
+  </div>
+
+  <div class="win">
+    <nav aria-label="Settings pages">
+      <div class="app">Volco settings</div>
+      <a href="#">Sliders</a>
+      <a href="#">Buttons</a>
+      <a href="#" class="on" aria-current="page">Devices<span class="new">new</span></a>
+      <a href="#">Connection</a>
+      <a href="#">General</a>
+      <div class="foot"><span class="dot"></span>Connected · COM3</div>
+    </nav>
+    <main>
+      <div class="ph">
+        <h2>Devices</h2>
+        <p>Give your audio devices short names and icons. Volco uses them on your controller's screens, in the volume pop-up and in its own device lists.</p>
+      </div>
+      <div class="group" id="outputs"><h3>Outputs</h3></div>
+      <div class="group" id="inputs"><h3>Inputs</h3></div>
+    </main>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- 1-bit renderer shared by icons and screen previews ----------
+const off = document.createElement('canvas');
+const g = off.getContext('2d', { willReadFrequently: true });
+function bits(w, h, fn){
+  off.width = w; off.height = h; g.clearRect(0,0,w,h); g.save(); fn(); g.restore();
+  const d = g.getImageData(0,0,w,h).data, b = new Uint8Array(w*h);
+  for (let i=0;i<w*h;i++) b[i] = d[i*4]*d[i*4+3]/255 > 110 ? 1 : 0;
+  return b;
+}
+function paint(cv, b, col){
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(cv.width, cv.height), d = img.data;
+  for (let i=0;i<b.length;i++){ const o=i*4; d[o]=b[i]?col[0]:5; d[o+1]=b[i]?col[1]:7; d[o+2]=b[i]?col[2]:10; d[o+3]=255; }
+  ctx.putImageData(img,0,0);
+}
+const WHITE = [232,240,255];
+const FG = '#fff', BG = '#000';
+function line(a,b,c,d){ g.beginPath(); g.moveTo(a,b); g.lineTo(c,d); g.stroke(); }
+function poly(p,close,fill){ g.beginPath(); p.forEach(([x,y],i)=> i?g.lineTo(x,y):g.moveTo(x,y)); if(close) g.closePath(); fill?g.fill():g.stroke(); }
+function rrf(x,y,w,h,r){ g.beginPath(); g.roundRect(x,y,w,h,r); g.fill(); }
+function rrs(x,y,w,h,r){ g.beginPath(); g.roundRect(x,y,w,h,r); g.stroke(); }
+function circ(x,y,r,fill){ g.beginPath(); g.arc(x,y,r,0,Math.PI*2); fill?g.fill():g.stroke(); }
+
+// The closed icon set (device icons; the firmware also has preset/action icons and a generic "muted" slash overlay)
+const ICONS = {
+  speaker:   ['Speaker', () => { poly([[3,9],[7,9],[12,4],[12,20],[7,15],[3,15]],true,true); g.beginPath(); g.arc(13,12,4,-.9,.9); g.stroke(); g.beginPath(); g.arc(13,12,8,-.9,.9); g.stroke(); }],
+  speakers:  ['Speaker pair', () => { for (const x of [1.5,13]) { rrs(x,2.5,9.5,19,2); circ(x+4.75,15,2.6); circ(x+4.75,7.5,1.3,true); } }],
+  headphones:['Headphones', () => { g.beginPath(); g.arc(12,13,8.5,Math.PI,0); g.stroke(); rrf(2.5,13,5,8.5,1.5); rrf(16.5,13,5,8.5,1.5); }],
+  headset:   ['Headset', () => { g.beginPath(); g.arc(12,12,8.5,Math.PI,0); g.stroke(); rrf(2.5,11,5,8,1.5); rrf(16.5,11,5,8,1.5); g.beginPath(); g.moveTo(5,19); g.quadraticCurveTo(6,22.5,11,22); g.stroke(); circ(12.5,22,1.6,true); }],
+  earbuds:   ['Earbuds', () => { circ(7,8,4,true); line(8.5,11,8.5,21); circ(17,8,4,true); line(15.5,11,15.5,21); }],
+  display:   ['Monitor / TV', () => { rrs(2,3,20,13,1.5); line(12,16.5,12,20); line(7,21,17,21); }],
+  mic:       ['Microphone', () => { rrf(8,2,8,13,4); g.beginPath(); g.arc(12,11,6.5,0,Math.PI); g.stroke(); line(12,17.5,12,21.5); line(8,21.5,16,21.5); }],
+  studiomic: ['Studio mic', () => { rrs(7.5,1.5,9,13,4.5); line(7.5,6,16.5,6); line(7.5,10,16.5,10); g.beginPath(); g.arc(12,11,7.5,0.15,Math.PI-0.15); g.stroke(); line(12,18.5,12,21.5); line(6,21.5,18,21.5); }],
+  webcam:    ['Webcam', () => { circ(12,10,7); circ(12,10,2.6,true); line(12,17,12,20.5); line(6,21.5,18,21.5); }],
+  generic:   ['Generic', () => { [[4,10,14],[8,6,18],[12,3,21],[16,7,17],[20,10,14]].forEach(([x,a,b]) => line(x,a,x,b)); }],
+};
+function drawIcon(name, x, y, s){
+  g.save(); g.translate(x,y); g.scale(s/24,s/24); g.lineWidth=2.3; g.lineCap='round'; g.lineJoin='round';
+  g.strokeStyle=FG; g.fillStyle=FG; ICONS[name][1](); g.restore();
+}
+function iconCanvas(name){
+  const cv = document.createElement('canvas'); cv.width = 32; cv.height = 32;
+  paint(cv, bits(32,32,() => drawIcon(name,2,2,28)), WHITE); return cv;
+}
+
+// Layout C nudged: state on top, 28px icon, name at the bottom (scrolls if long)
+const BIG = 'bold 14px Helvetica, Arial, sans-serif', SMALL = '10px Helvetica, Arial, sans-serif';
+function textLine(str, base, font, t){
+  g.font = font; g.fillStyle = FG;
+  const tw = Math.ceil(g.measureText(str).width), w = 124, x = 2;
+  if (tw <= w) { g.fillText(str, x + Math.round((w-tw)/2), base); return; }
+  const rtl = /[֐-׿]/.test(str);
+  const dist = tw - w + 6, sp = .03, hold = 2000, sc = dist/sp, cyc = hold + sc + 1200, k = t % cyc;
+  const dx = k < hold ? 0 : k < hold + sc ? Math.round((k-hold)*sp) : dist;
+  g.save(); g.beginPath(); g.rect(x,0,w,64); g.clip();
+  g.fillText(str, rtl ? x + w - tw + dx : x - dx, base); g.restore();
+}
+function screen(state, icon, name, t){ return bits(128,64,() => { textLine(state,11,SMALL,t); drawIcon(icon,50,18,28); textLine(name,60,BIG,t); }); }
+
+// ---------- data ----------
+const autoName = w => { const m = w.match(/^(.*?)\s*\(.*\)\s*$/); return m && m[1] ? m[1] : w; };
+const DEVICES = [
+  { flow:'out', win:'Speakers (Realtek High Definition Audio)', nick:'Desk speakers', icon:'speakers', status:'def', open:true },
+  { flow:'out', win:'Headphones (Arctis Nova 7)', nick:'Arctis', icon:'headset' },
+  { flow:'out', win:'LG HDR 4K (NVIDIA High Definition Audio)', nick:'', icon:'display' },
+  { flow:'out', win:'רמקולים (USB Audio Device)', nick:'', icon:'speaker' },
+  { flow:'out', win:'Headphones (WH-1000XM4 Stereo)', nick:'Sony', icon:'headphones', status:'gone' },
+  { flow:'in',  win:'Microphone (Yeti Stereo Microphone)', nick:'Yeti', icon:'studiomic', status:'def' },
+  { flow:'in',  win:'Headset Microphone (Arctis Nova 7)', nick:'Arctis mic', icon:'headset' },
+  { flow:'in',  win:'Microphone (HD Pro Webcam C920)', nick:'', icon:'webcam' },
+];
+const previews = [];
+DEVICES.forEach((dv, i) => {
+  const card = document.createElement('div');
+  card.className = 'card' + (dv.open ? ' open' : '') + (dv.status === 'gone' ? ' off' : '');
+  const hd = document.createElement('button'); hd.className = 'hd'; hd.setAttribute('aria-expanded', !!dv.open);
+  const tile = document.createElement('div'); tile.className = 'tile';
+  const names = document.createElement('div'); names.className = 'names';
+  const title = document.createElement('b'), sub = document.createElement('span'); sub.textContent = dv.win;
+  names.append(title, sub);
+  hd.append(tile, names);
+  if (dv.status === 'def') { const c = document.createElement('span'); c.className='chip def'; c.textContent = dv.flow==='out' ? 'Default output' : 'Default input'; hd.append(c); }
+  if (dv.status === 'gone') { const c = document.createElement('span'); c.className='chip'; c.textContent = 'Not connected'; hd.append(c); }
+  const chev = document.createElement('span'); chev.className='chev'; chev.textContent='⌄'; chev.setAttribute('aria-hidden','true'); hd.append(chev);
+
+  const body = document.createElement('div'); body.className = 'body';
+  const auto = autoName(dv.win);
+  body.innerHTML = `
+    <div class="fields">
+      <div class="field"><label for="nick-${i}">Nickname</label>
+        <input type="text" id="nick-${i}" dir="auto" placeholder="${auto}" value="${dv.nick}">
+        <span class="hint">Leave empty to use “${auto}”.</span></div>
+      <div class="field"><span class="lbl" id="ic-${i}">Icon</span><div class="icons" role="group" aria-labelledby="ic-${i}"></div></div>
+    </div>
+    <div class="prev"><div class="glass"><canvas width="128" height="64" aria-label="Screen preview"></canvas></div></div>
+    <div class="meta"><span>Windows name: ${dv.win}</span><span>${dv.flow==='out'?'Output':'Input'}</span>${dv.status==='gone' ? '<button class="linkbtn">Forget this device</button>' : ''}</div>`;
+  card.append(hd, body);
+  document.getElementById(dv.flow === 'out' ? 'outputs' : 'inputs').append(card);
+
+  const input = body.querySelector('input'), grid = body.querySelector('.icons'), pcv = body.querySelector('canvas');
+  const refresh = () => {
+    const name = input.value.trim() || auto;
+    title.textContent = name; title.className = input.value.trim() ? '' : 'auto'; title.dir = 'auto';
+    tile.replaceChildren(iconCanvas(dv.icon));
+    grid.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.icon === dv.icon));
+  };
+  for (const [key,[label]] of Object.entries(ICONS)) {
+    const b = document.createElement('button'); b.dataset.icon = key; b.title = label; b.setAttribute('aria-label', label);
+    b.append(iconCanvas(key)); b.addEventListener('click', () => { dv.icon = key; refresh(); }); grid.append(b);
+  }
+  input.addEventListener('input', refresh);
+  hd.addEventListener('click', () => { const o = card.classList.toggle('open'); hd.setAttribute('aria-expanded', o); });
+  previews.push({ cv: pcv, dv, input, auto, card });
+  refresh();
+});
+
+const start = performance.now();
+let last = 0;
+(function loop(now){
+  if (now - last > 33) {
+    last = now;
+    for (const p of previews) {
+      if (!p.card.classList.contains('open')) continue;
+      const active = p.dv.status === 'def';
+      paint(p.cv, screen(active ? 'ACTIVE' : 'PRESS TO SWITCH', p.dv.icon, p.input.value.trim() || p.auto, now - start), WHITE);
+    }
+  }
+  requestAnimationFrame(loop);
+})(performance.now());
+})();
+</script>
