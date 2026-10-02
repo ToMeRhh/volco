@@ -5,7 +5,10 @@
 // ============================================================
 // Transport — uncomment exactly one
 // ============================================================
+// The guard lets CI build-check the other transports with -DTRANSPORT_UDP etc. without editing this file.
+#if !defined(TRANSPORT_WEBSOCKET) && !defined(TRANSPORT_UDP) && !defined(TRANSPORT_LOCAL_DEBUG)
 #define TRANSPORT_SERIAL         // USB serial; Wi-Fi off
+#endif
 // #define TRANSPORT_WEBSOCKET   // Wi-Fi, WebSocket client of the app (SERVER_IP:SERVER_PORT)
 // #define TRANSPORT_UDP         // Wi-Fi, UDP to the app, listening on UDP_LOCAL_PORT
 // #define TRANSPORT_LOCAL_DEBUG // no PC: frames dropped, input logged to serial
@@ -40,11 +43,19 @@ static constexpr uint8_t SLIDER_PINS[] = {33, 35, 32, 36, 34};
 //   IND_LED_PAIR(pinA, pinB, polarity)   two LEDs: 1 lights A, 2 lights B
 //   IND_SCREEN(bus, address)             an SSD1306 screen: bus 0 or 1, address 0x3C or 0x3D
 // polarity is ACTIVE_HIGH (HIGH lights the LED) or ACTIVE_LOW (LOW does).
+#ifdef VOLCO_SCREENS_CHECK  // CI-only: proves the screen code compiles (see platformio.ini)
+static constexpr ButtonDef BUTTONS[] = {
+    {4, IND_SCREEN(0, 0x3C)},
+    {14, IND_SCREEN(0, 0x3D)},
+    {5, IND_LED_PAIR(18, 19, ACTIVE_HIGH)},
+};
+#else
 static constexpr ButtonDef BUTTONS[] = {
     {4, IND_LED(12, ACTIVE_LOW)},
     {14, IND_LED(21, ACTIVE_LOW)},
     {5, IND_LED_PAIR(18, 19, ACTIVE_HIGH)},
 };
+#endif
 
 // ============================================================
 // Screens — only used when a button in BUTTONS is IND_SCREEN

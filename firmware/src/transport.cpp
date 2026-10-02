@@ -144,7 +144,12 @@ int transport_receive(uint8_t* buf, size_t maxLen) {
     int size = udpClient.parsePacket();
     if (size <= 0) return 0;
     if (size > (int)sizeof(udpPacket)) DEBUG_LOG("[DBG] UDP packet larger than the buffer; truncated");
-    udpLen = udpClient.read(udpPacket, sizeof(udpPacket));
+    int r = udpClient.read(udpPacket, sizeof(udpPacket));
+    if (r <= 0) {
+      udpLen = udpPos = 0;
+      return 0;
+    }
+    udpLen = (size_t)r;
     udpPos = 0;
   }
   size_t n = min(udpLen - udpPos, maxLen);
