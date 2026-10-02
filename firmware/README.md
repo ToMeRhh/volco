@@ -38,7 +38,7 @@ Everything in `lib/` is pure C++ with time passed in, so it builds and is tested
 
 ### Transport
 
-Exactly one of these must be defined (serial is the default; the file only picks it when no other is defined, so CI can build the others with `-DTRANSPORT_UDP` and so on):
+Serial is the default. To switch, uncomment one of the other three `#define`s at the top of the transport section; the `TRANSPORT_SERIAL` line below them is guarded so it turns itself off when another is defined (the same guard lets CI build the others with `-DTRANSPORT_UDP` and so on). If more or fewer than one ends up defined, the build stops with `Define exactly one TRANSPORT_*`.
 
 | Define | Link |
 |---|---|

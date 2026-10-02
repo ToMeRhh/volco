@@ -33,7 +33,7 @@ cd firmware && pio test -e native   # host-side tests of firmware/lib (no hardwa
 python3 firmware/tools/gen_assets.py  # regenerate icons and fonts (needs Pillow >= 10)
 ```
 
-The `firmware-test` CI job runs `pio test -e native` and builds both ESP32 environments (`denky32` plus the build-only `denky32_screens_check`, `denky32_udp_check` and `denky32_websocket_check` checks). `gen_assets.py` regenerates the firmware icons and fonts, the C# `ScreenIcon` enum and the simulator's `icons.js` from `firmware/assets`; its outputs are committed.
+The `firmware-test` CI job runs `pio test -e native` and builds all four ESP32 environments (`denky32` plus the build-only `denky32_screens_check`, `denky32_udp_check` and `denky32_websocket_check` checks). `gen_assets.py` regenerates the firmware icons and fonts, the C# `ScreenIcon` enum and the simulator's `icons.js` from `firmware/assets`; its outputs are committed.
 
 ## Architecture
 
@@ -52,7 +52,7 @@ No UI, no platform APIs. Holds the protocol, config, input, and orchestration la
 
 ### `src/Volco.App/` — Avalonia 12 UI, `net8.0`, builds and tests on Linux
 
-The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (startup/shutdown, tray, windows), the settings window and its five pages, the update window, the volume OSD, ViewModels, styles. It is a view over `VolcoRuntime`. **`Volco.App` and `Volco.Core` must stay platform-free** (no `DllImport`/`LibraryImport`, no `Windows.*`/`Microsoft.UI.*`, no CsWin32); `tests/Volco.App.Tests/ArchitectureTests.cs` enforces it by reflection (no P/Invoke, no Windows assembly references; `DllImport`, `LibraryImport` and CsWin32 all compile on Linux, so compiling alone cannot catch them), and the Linux compile catches WinRT and Windows SDK projections. Everything OS-specific comes in through two seams: `IAudioEngine` (Core) and `IWindowEffects` (App, `MakeClickThrough` for the OSD), bundled as `PlatformServices` and handed to `VolcoAppHost.Run`.
+The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (startup/shutdown, tray, windows), the settings window and its five pages (Sliders, Buttons, Devices, Connection, General), the update window, the volume OSD, ViewModels, styles. It is a view over `VolcoRuntime`. The Devices page sets each device's nickname and screen icon (`config.devices`); device pickers, button-card summaries, screen previews and the OSD all show the resulting display name (`Volco.Core.Devices.DeviceDisplay`: nickname, else the automatic short name), with the Windows name as secondary text in pickers. Pages and their view models are cached, so a nickname/icon edit makes `SettingsViewModel` re-seed the Sliders and Buttons pickers and previews, and the Devices page re-reads "Used by" each time it is shown. **`Volco.App` and `Volco.Core` must stay platform-free** (no `DllImport`/`LibraryImport`, no `Windows.*`/`Microsoft.UI.*`, no CsWin32); `tests/Volco.App.Tests/ArchitectureTests.cs` enforces it by reflection (no P/Invoke, no Windows assembly references; `DllImport`, `LibraryImport` and CsWin32 all compile on Linux, so compiling alone cannot catch them), and the Linux compile catches WinRT and Windows SDK projections. Everything OS-specific comes in through two seams: `IAudioEngine` (Core) and `IWindowEffects` (App, `MakeClickThrough` for the OSD), bundled as `PlatformServices` and handed to `VolcoAppHost.Run`.
 
 ### `src/Volco.Windows/` — `net8.0-windows10.0.22621.0`, the shipping `Volco.exe`
 

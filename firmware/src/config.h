@@ -3,15 +3,21 @@
 #include "hardware.h"
 
 // ============================================================
-// Transport — uncomment exactly one
+// Transport — USB serial unless you pick another
 // ============================================================
-// The guard lets CI build-check the other transports with -DTRANSPORT_UDP etc. without editing this file.
-#if !defined(TRANSPORT_WEBSOCKET) && !defined(TRANSPORT_UDP) && !defined(TRANSPORT_LOCAL_DEBUG)
-#define TRANSPORT_SERIAL         // USB serial; Wi-Fi off
-#endif
+// To switch, uncomment one of these (the serial default below then turns itself off).
 // #define TRANSPORT_WEBSOCKET   // Wi-Fi, WebSocket client of the app (SERVER_IP:SERVER_PORT)
 // #define TRANSPORT_UDP         // Wi-Fi, UDP to the app, listening on UDP_LOCAL_PORT
 // #define TRANSPORT_LOCAL_DEBUG // no PC: frames dropped, input logged to serial
+
+// The default. The guard also lets CI build-check the other transports with -DTRANSPORT_UDP etc.
+#if !defined(TRANSPORT_WEBSOCKET) && !defined(TRANSPORT_UDP) && !defined(TRANSPORT_LOCAL_DEBUG)
+#define TRANSPORT_SERIAL         // USB serial; Wi-Fi off
+#endif
+
+#if (defined(TRANSPORT_SERIAL) + defined(TRANSPORT_WEBSOCKET) + defined(TRANSPORT_UDP) + defined(TRANSPORT_LOCAL_DEBUG)) != 1
+#error "Define exactly one TRANSPORT_*"
+#endif
 
 // ============================================================
 // Wi-Fi — only used for TRANSPORT_WEBSOCKET and TRANSPORT_UDP
