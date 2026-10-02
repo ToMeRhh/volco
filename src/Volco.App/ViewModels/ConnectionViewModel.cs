@@ -192,14 +192,11 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // ComPorts.Clear() drives the two-way-bound ComboBox.SelectedItem — and therefore
         // ComPort — to null via OnComPortChanged before the list is repopulated. The guard in
         // OnComPortChanged stops that from persisting a blank port or restarting the connection,
-        // but it still leaves the backing field blank. Restore it directly here (bypassing the
-        // generated setter/partial hook, so this doesn't itself trigger a redundant save or
-        // connection restart) when the previously selected port is still present.
+        // but it still leaves the property blank. Put the previous selection back when it is
+        // still present; it is already the saved port, so OnComPortChanged neither saves nor
+        // restarts the connection for it.
         if (!string.IsNullOrEmpty(previous) && ComPorts.Contains(previous))
-        {
-            _comPort = previous;
-            OnPropertyChanged(nameof(ComPort));
-        }
+            ComPort = previous;
     }
 
     // ── Status subscription helpers ────────────────────────────────────────────
@@ -261,9 +258,12 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // selection, and therefore ComPort, to null) — never real user intent, since the picker
         // has no blank/"None" entry. Ignore it: no persist, no connection restart.
         if (string.IsNullOrEmpty(value)) return;
-        _config.Config.Connection.Serial.ComPort = value;
         OnPropertyChanged(nameof(TransportDetails));
         OnPropertyChanged(nameof(FooterText));
+        // Already the saved port (RefreshComPorts restoring the selection the clear wiped):
+        // nothing to save, and no reason to restart the connection.
+        if (value == _config.Config.Connection.Serial.ComPort) return;
+        _config.Config.Connection.Serial.ComPort = value;
         Persist();
     }
 

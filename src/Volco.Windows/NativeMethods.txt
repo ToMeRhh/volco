@@ -15,7 +15,7 @@ ISimpleAudioVolume
 MMDeviceEnumerator
 EDataFlow
 ERole
-DEVICE_STATE_ACTIVE
+DEVICE_STATE
 AudioSessionState
 STGM
 PROPERTYKEY
@@ -26,7 +26,7 @@ CoUninitialize
 OpenProcess
 QueryFullProcessImageNameW
 CloseHandle
-PROCESS_QUERY_LIMITED_INFORMATION
+PROCESS_ACCESS_RIGHTS
 CoTaskMemFree
 PropVariantClear
 PKEY_Device_FriendlyName
