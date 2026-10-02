@@ -44,7 +44,7 @@ public sealed class ControllerLink : IDisposable
     private bool _disposed;
 
     /// <param name="compute">What every controller button should show now (ControllerDisplay).
-    /// Called with the lock held; must only read.</param>
+    /// Called with the lock held; must only read. If it throws, the push is skipped and logged.</param>
     public ControllerLink(Func<IReadOnlyList<ButtonDisplay?>> compute, ControllerLinkOptions? options = null)
     {
         _compute = compute;
@@ -141,8 +141,9 @@ public sealed class ControllerLink : IDisposable
         lock (_gate)
         {
             if (_state != ControllerState.Ready) return;
+            // Computed before Begin is queued, so a compute that throws leaves no open burst.
+            if (TryCompute() is not { } displays) return;
             if (synchronized) Send(ProtocolEncoder.EncodeBegin());
-            var displays = _compute();
             EnsureCapacity(displays.Count);
             for (int i = 0; i < displays.Count; i++)
                 if (displays[i] is ScreenDisplay s) { Send(ProtocolEncoder.EncodeScreen(i, transition, s.Content)); _sent[i] = s; }
@@ -155,7 +156,7 @@ public sealed class ControllerLink : IDisposable
 
     private void PushLocked(ScreenTransition transition, bool everything)
     {
-        var displays = _compute();
+        if (TryCompute() is not { } displays) return;
         EnsureCapacity(displays.Count);
         for (int i = 0; i < displays.Count; i++)
         {
@@ -168,6 +169,21 @@ public sealed class ControllerLink : IDisposable
                 _ => throw new InvalidOperationException(d.GetType().Name),
             });
             _sent[i] = d;
+        }
+    }
+
+    /// <summary>Caller holds _gate. Runs <c>_compute</c>, which reads live config lists the UI
+    /// thread may be mutating, so it can throw. Callers include timer and transport-receive
+    /// threads, where an unhandled exception would end the process: a failure is logged and
+    /// returns null, the caller sends nothing and leaves <c>_sent</c> alone, and the next push
+    /// sends whatever differs.</summary>
+    private IReadOnlyList<ButtonDisplay?>? TryCompute()
+    {
+        try { return _compute(); }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Controller display compute failed: {ex.GetType().Name}: {ex.Message}");
+            return null;
         }
     }
 

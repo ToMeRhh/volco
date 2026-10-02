@@ -268,6 +268,28 @@ public sealed class ControllerLinkTests : IDisposable
         finally { linkWithCounter.Dispose(); }
     }
 
+    [Fact]
+    public void ComputeThrows_PushesDoNotThrow_SendNothing_AndALaterComputeStillSends()
+    {
+        var fail = true;
+        var link = new ControllerLink(
+            () => fail ? throw new InvalidOperationException("Collection was modified") : _displays.ToList(), Quiet);
+        _link = link;
+        link.Attach(_conn);
+
+        link.OnMessage(GoodHello);                               // full push: compute throws
+        Assert.Equal(ControllerState.Ready, link.State);
+        link.Push();
+        link.PushAll();
+        link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: true);
+        Assert.Equal(new[] { ProtocolEncoder.EncodeHelloRequest() }, _conn.SentFrames);   // no Begin left open
+
+        fail = false;
+        link.Push();                                             // _sent untouched: everything differs
+        Assert.Equal(1, Count(ProtocolEncoder.EncodeLed(0, 0)));
+        Assert.Equal(1, Count(Screen1()));
+    }
+
     private sealed class ScriptedConnection : IControllerConnection
     {
         private readonly object _lock = new();

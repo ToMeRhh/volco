@@ -95,7 +95,7 @@ public static class ConfigMigrator
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            AppLog.Error($"Config migration could not read {configPath} ({ex.GetType().Name}: {ex.Message}); stamping v2 with defaults");
+            AppLog.Error($"Config migration could not read {configPath} ({ex.GetType().Name}: {ex.Message}); stamping v{AppConfig.CurrentSchemaVersion} with defaults");
         }
 
         config.SchemaVersion = AppConfig.CurrentSchemaVersion;
