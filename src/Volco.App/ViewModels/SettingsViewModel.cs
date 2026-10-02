@@ -37,7 +37,18 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public SlidersViewModel Sliders =>
         _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast);
 
-    public DevicesViewModel Devices => _devicesViewModel ??= new DevicesViewModel(_config, _audio);
+    public DevicesViewModel Devices
+    {
+        get
+        {
+            if (_devicesViewModel is null)
+            {
+                _devicesViewModel = new DevicesViewModel(_config, _audio);
+                _devicesViewModel.DeviceSettingsChanged += OnDeviceSettingsChanged;
+            }
+            return _devicesViewModel;
+        }
+    }
 
     public ButtonsViewModel Buttons =>
         _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast);
@@ -78,6 +89,17 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             _buttonsViewModel?.RefreshDevices(devices);
             _devicesViewModel?.Refresh();
         });
+
+    /// <summary>A nickname or icon changed on the Devices page (UI thread): the cached Sliders and
+    /// Buttons pages re-seed their pickers (so the item templates re-run the label converter) and
+    /// recompute card summaries and screen previews.</summary>
+    private void OnDeviceSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+        var devices = _audio.GetDevices(AudioFlow.Render);
+        _slidersViewModel?.RefreshDevices(devices);
+        _buttonsViewModel?.RefreshDevices(devices);
+    }
 
     private void OnSliderLevelChanged(object? sender, SliderLevelEventArgs e)
         => _ui.Post(() =>
@@ -123,6 +145,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ActivePresetChanged -= OnActivePresetChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
+        if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();
     }
 }

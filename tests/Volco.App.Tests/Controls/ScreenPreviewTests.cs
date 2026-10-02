@@ -66,4 +66,10 @@ public class ScreenPreviewTests
         foreach (var icon in Enum.GetValues<ScreenIcon>())
             Assert.NotNull(ScreenIcons.Bitmap(icon));
     }
+
+    [AvaloniaFact]
+    public void UndefinedIcon_FallsBackToGeneric()
+    {
+        Assert.Same(ScreenIcons.Bitmap(ScreenIcon.Generic), ScreenIcons.Bitmap((ScreenIcon)42));
+    }
 }

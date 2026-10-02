@@ -15,6 +15,8 @@ internal static class ScreenIcons
 
     public static Bitmap Bitmap(ScreenIcon icon)
     {
+        // A hand-edited config can hold any number; there is no PNG for an undefined one.
+        if (!Enum.IsDefined(icon)) icon = ScreenIcon.Generic;
         lock (Cache)
         {
             if (!Cache.TryGetValue(icon, out var bitmap))

@@ -316,6 +316,9 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         try
         {
             SetDevices(devices);
+            // Pass through no selection, so the selection box re-runs its label template even
+            // when the selected name is unchanged (a nickname may have changed).
+            SelectedDevice = "";
             SelectedDevice = keep;
         }
         finally { _loading = false; }

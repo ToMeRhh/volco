@@ -147,6 +147,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         try
         {
             SetDevices(devices);
+            // Pass through no selection, so the selection boxes re-run their label template even
+            // when the selected name is unchanged (a nickname may have changed).
+            Device = "";
+            DeviceB = "";
             Device = a;
             DeviceB = b;
         }

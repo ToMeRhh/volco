@@ -28,9 +28,19 @@ public sealed partial class DevicesViewModel : ObservableObject
 
     internal AppConfig Config => _config.Config;
 
-    internal void Save() => _config.RequestSave();
+    /// <summary>A nickname or icon was saved, or a device forgotten: other pages showing display
+    /// names (pickers, card summaries, screen previews) should re-read them.</summary>
+    public event EventHandler? DeviceSettingsChanged;
 
-    /// <summary>Rebuilds both lists (device plugged in or out, default changed); keeps open cards open.</summary>
+    internal void Save()
+    {
+        _config.RequestSave();
+        DeviceSettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Rebuilds both lists (device plugged in or out, default changed); keeps open cards
+    /// open. When the same devices are listed with the same status, the cards are kept (so a
+    /// nickname being typed keeps its text box) and only their "Used by" lines are re-read.</summary>
     public void Refresh()
     {
         var open = Outputs.Concat(Inputs).Where(i => i.IsExpanded).Select(i => i.Id)
@@ -53,6 +63,14 @@ public sealed partial class DevicesViewModel : ObservableObject
             items.Add(new DeviceItemViewModel(this, s.Id, flow, s.FriendlyName, ScreenIconDefault, false, false));
         foreach (var r in References(flow).Where(r => !string.IsNullOrEmpty(r.Id) && !Known(r.Id)))
             items.Add(new DeviceItemViewModel(this, r.Id, flow, r.FriendlyName, ScreenIconDefault, false, false));
+
+        static (string, bool, bool, string) Key(DeviceItemViewModel i)
+            => (i.Id.ToUpperInvariant(), i.IsConnected, i.IsDefault, i.WindowsName);
+        if (list.Count == items.Count && list.Select(Key).ToHashSet().SetEquals(items.Select(Key)))
+        {
+            foreach (var item in list) item.RefreshUsage();
+            return;
+        }
 
         list.Clear();
         foreach (var item in items.OrderByDescending(i => i.IsDefault)

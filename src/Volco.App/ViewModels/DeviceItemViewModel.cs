@@ -78,6 +78,14 @@ public sealed partial class DeviceItemViewModel : ObservableObject
     public string UsedBy => _owner.UsedBy(Id);
     public bool CanForget => !IsConnected && UsedBy.Length == 0;
     public bool ShowUsedBy => !IsConnected && UsedBy.Length > 0;
+    /// <summary>Re-reads "Used by" (a slider or button action changed on another page).</summary>
+    internal void RefreshUsage()
+    {
+        OnPropertyChanged(nameof(UsedBy));
+        OnPropertyChanged(nameof(CanForget));
+        OnPropertyChanged(nameof(ShowUsedBy));
+    }
+
     public string FooterText => $"Windows name: {WindowsName} · {(Flow == AudioFlow.Render ? "Output" : "Input")}";
 
     [RelayCommand]

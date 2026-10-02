@@ -158,4 +158,23 @@ public class DevicesPageTests
         Assert.Equal("Used by Slider 1", tv.UsedBy);
         Assert.False(tv.CanForget);
     }
+
+    [AvaloniaFact]
+    public void UnrelatedDeviceEvent_KeepsTheCardsAndTheNicknameBoxBeingTyped()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        var spk = vm.Devices.Outputs[0];
+        spk.IsExpanded = true;
+        Dispatcher.UIThread.RunJobs();
+        var box = All<TextBox>(page, "NicknameBox")[0];
+        spk.Nickname = "Des";
+
+        rig.Engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, rig.Engine.Devices[0]);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(spk, vm.Devices.Outputs[0]);
+        Assert.Same(box, All<TextBox>(page, "NicknameBox")[0]);
+        Assert.Equal("Des", box.Text);
+    }
 }
