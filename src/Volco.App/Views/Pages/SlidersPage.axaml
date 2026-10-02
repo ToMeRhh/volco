@@ -11,7 +11,7 @@
           <TextBlock.Text>
             <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="label">
               <Binding/>
-              <ReflectionBinding Path="$parent[ComboBox].DataContext"/>
+              <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
             </MultiBinding>
           </TextBlock.Text>
         </TextBlock>
@@ -19,7 +19,7 @@
           <TextBlock.Text>
             <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="secondary">
               <Binding/>
-              <ReflectionBinding Path="$parent[ComboBox].DataContext"/>
+              <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
             </MultiBinding>
           </TextBlock.Text>
         </TextBlock>
