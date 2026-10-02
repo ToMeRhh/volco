@@ -41,6 +41,9 @@ constexpr bool addressesUnique() {
 }
 
 constexpr uint8_t NUM_SCREENS = countScreens();
+// Size of the screens[] array and the round-robin modulus: never 0, so a build with no screens
+// (where all of this code is unreachable) neither declares a zero-length array nor divides by 0.
+constexpr uint8_t SCREEN_SLOTS = NUM_SCREENS > 0 ? NUM_SCREENS : 1;
 static_assert(screensValid(), "IND_SCREEN(bus, address): bus must be 0 or 1, address 0x3C or 0x3D");
 static_assert(countScreens(0) <= 2 && countScreens(1) <= 2, "At most two screens per I2C bus");
 static_assert(addressesUnique(), "Two screens share the same bus and address");
@@ -55,7 +58,7 @@ struct Screen {
   uint32_t lastRender = 0;
 };
 
-Screen screens[NUM_SCREENS > 0 ? NUM_SCREENS : 1];
+Screen screens[SCREEN_SLOTS];
 int8_t screenOf[NUM_BUTTONS];  // button → index into screens, or -1
 
 volco::Panels panels({SCREEN_DIM_ENABLED, SCREEN_OFF_ENABLED, SCREEN_PIXEL_SHIFT_ENABLED,
@@ -157,11 +160,11 @@ void screens_tick(uint32_t now) {
   // Redraw at most one panel per pass (~25-30 ms of I2C at 400 kHz), round-robin, so one pass
   // never blocks the loop for longer than one panel's redraw (spec §4.6).
   for (uint8_t k = 0; k < NUM_SCREENS; k++) {
-    uint8_t i = (uint8_t)((nextPanel + k) % NUM_SCREENS);
+    uint8_t i = (uint8_t)((nextPanel + k) % SCREEN_SLOTS);
     Screen& s = screens[i];
     if (now - s.lastRender < kFrameMs) continue;
     s.lastRender = now;
-    nextPanel = (uint8_t)((i + 1) % NUM_SCREENS);
+    nextPanel = (uint8_t)((i + 1) % SCREEN_SLOTS);
     render(s, now);
     break;
   }
