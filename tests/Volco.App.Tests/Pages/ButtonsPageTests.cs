@@ -367,6 +367,31 @@ public class ButtonsPageTests
         Assert.True(In<ScreenPreview>(Card(page, 0), "ScreenPreviewSmall").IsVisible);
     }
 
+    [AvaloniaFact]
+    public void ButtonsPage_DragPreview_KeepsEachCardsOwnScreen()
+    {
+        var (_, rig, vm) = Show(c =>
+        {
+            Hardware(c, IndicatorKind.Screen, IndicatorKind.Led);
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+            DefaultOf(c, 1).SinglePress.Action = ButtonActionType.MuteCurrentInput;
+        });
+        using var _ = rig; using var __ = vm;
+        var card0 = vm.Buttons.Items[0];
+        var before = card0.Screen;
+        Assert.True(card0.IsScreen);
+
+        vm.Buttons.PreviewMove(0, 1);
+
+        Assert.Equal(before, card0.Screen);
+        Assert.Equal(IndicatorKind.Led, card0.Indicator);
+
+        vm.Buttons.CancelPreview();
+
+        Assert.Equal(before, card0.Screen);
+        Assert.Equal(IndicatorKind.Screen, card0.Indicator);
+    }
+
     // ── Presets ───────────────────────────────────────────────────────────────
 
     [AvaloniaFact]

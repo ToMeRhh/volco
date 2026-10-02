@@ -1,6 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:sys="using:System"
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:controls="using:Volco.App.Controls"
              xmlns:conv="using:Volco.App.Converters"
@@ -184,7 +183,7 @@
                         <StackPanel Spacing="8">
                           <TextBlock Name="IndicatorText" Classes="Secondary" FontWeight="SemiBold" Text="{Binding IndicatorText}"/>
                           <TextBlock Name="LightDescriptionText" Classes="Secondary" TextWrapping="Wrap"
-                                     Text="{Binding LightDescription}" IsVisible="{Binding !IsIndicatorUnknown}"/>
+                                     Text="{Binding LightDescription}" IsVisible="{Binding ShowLightDescription}"/>
                           <controls:ScreenPreview Name="ScreenPreviewLarge" Scale="2" Screen="{Binding Screen}"
                                                   IsVisible="{Binding IsScreen}"/>
                         </StackPanel>

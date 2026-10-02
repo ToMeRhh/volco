@@ -22,7 +22,18 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Title))]
     private int _index;
 
-    partial void OnIndexChanged(int value) => Refresh();
+    // A drag preview renumbers cards without moving their config: only what depends on the
+    // input number changes here, so each step stays cheap.
+    partial void OnIndexChanged(int value)
+    {
+        Indicator = _owner.IndicatorFor(value);
+        UpdateLightDescription(Config.BindingFor(_owner.EditingPresetId));
+    }
+
+    private void UpdateLightDescription(ButtonBindingConfig edited)
+        => LightDescription = IsScreen ? ActionCatalog.ScreenDescription(edited) : ActionCatalog.LightDescription(edited);
+
+    public bool ShowLightDescription => Indicator is not null && Indicator != IndicatorKind.None;
 
     public string Title => $"Button {Index}";
 
@@ -55,7 +66,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>What the controller reported for this input (spec §6.3); null before the first Hello.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLed), nameof(IsLedPair), nameof(IsScreen), nameof(IsIndicatorUnknown), nameof(IndicatorText))]
+    [NotifyPropertyChangedFor(nameof(IsLed), nameof(IsLedPair), nameof(IsScreen), nameof(IsIndicatorUnknown), nameof(IndicatorText), nameof(ShowLightDescription))]
     private IndicatorKind? _indicator;
 
     public bool IsLed => Indicator == IndicatorKind.Led;
@@ -154,13 +165,15 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         Summary = summary.Length > 0 ? summary : IsNotSetUp ? "Not set up" : "Nothing in this preset";
 
         Indicator = _owner.IndicatorFor(Index);
-        LightDescription = IsScreen ? ActionCatalog.ScreenDescription(edited) : ActionCatalog.LightDescription(edited);
+        UpdateLightDescription(edited);
 
         // LEDs show what the controller shows now (the live preset); a screen preview shows the
         // preset being edited, so editing it is visible.
         var live = Config.BindingFor(_owner.LivePresetId);
         LightValue = ControllerDisplay.LedValueFor(live, _owner.AppConfig, _owner.LivePresetId, _owner.Audio);
-        Screen = ControllerDisplay.Screen(ControllerDisplay.PrimaryAction(_owner.AppConfig, Index, _owner.EditingPresetId),
+        // From this card's own config, not AppConfig.Buttons[Index]: during a drag preview the
+        // card's Index no longer matches its position in the list.
+        Screen = ControllerDisplay.Screen(edited.All().FirstOrDefault(a => a.Action != ButtonActionType.None),
                                           _owner.AppConfig, _owner.EditingPresetId, _owner.Audio);
     }
 
