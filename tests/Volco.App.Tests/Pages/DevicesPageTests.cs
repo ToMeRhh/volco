@@ -144,7 +144,7 @@ public class DevicesPageTests
     {
         var (page, rig, vm) = Show();
         using var _ = rig; using var __ = vm;
-        var window = (Window)page.GetVisualRoot()!;
+        var window = (Window)TopLevel.GetTopLevel(page)!;
         Assert.DoesNotContain(vm.Devices.Outputs, d => d.Id == "tv");
 
         rig.Config.Config.Sliders[1].Type = SliderMappingType.Device;
