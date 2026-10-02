@@ -526,4 +526,41 @@ public class SlidersPageTests
         Assert.Contains("active", Card(page, 2).Classes);
         Assert.DoesNotContain("active", Card(page, 1).Classes);
     }
+
+    [AvaloniaFact]
+    public void SliderDevicePicker_DescribesTheDefaultEntryAndNicknames()
+    {
+        var (_, _, rig, vm) = Show(c =>
+        {
+            c.Sliders[0].Type = SliderMappingType.Device;
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-1", Nickname = "Desk" });
+        });
+        using var __ = rig; using var ___ = vm;
+        var labeler = (IDeviceLabeler)vm.Sliders.Items[0];
+        Assert.Equal(new DeviceChoice(SliderItemViewModel.CurrentDefaultOutput, ""), labeler.Describe(SliderItemViewModel.CurrentDefaultOutput));
+        Assert.Equal("Desk", labeler.Describe("Speakers").Label);
+    }
+
+    [AvaloniaFact]
+    public void SliderDevicePicker_RenderedDropdownItems_ShowNicknames()
+    {
+        var (page, _, rig, vm) = Show(c =>
+        {
+            c.Sliders[0].Type = SliderMappingType.Device;
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-1", Nickname = "Desk" });
+        });
+        using var __ = rig; using var ___ = vm;
+        Expand(vm, 0);
+        var combo = In<ComboBox>(page, 0, "DeviceCombo");
+        combo.IsDropDownOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        var labels = new List<string?>();
+        for (int i = 0; i < combo.ItemCount; i++)
+        {
+            var container = Assert.IsAssignableFrom<Control>(combo.ContainerFromIndex(i));
+            labels.Add(container.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "DeviceLabel").Text);
+        }
+        Assert.Contains("Desk", labels);
+        Assert.Contains(SliderItemViewModel.CurrentDefaultOutput, labels);
+    }
 }

@@ -117,6 +117,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         => _config.Config.Controller is not { } c ? null
            : index < c.Buttons.Count ? c.Buttons[index] : IndicatorKind.None;
 
+    public DeviceChoice Describe(string friendlyName) => DeviceChoice.For(_config.Config, _devices, friendlyName);
+
     public string DeviceName(DeviceRefConfig? device) => DeviceDisplay.NameOf(_config.Config, _audio, device, "?");
 
     void IButtonCardOwner.Execute(ButtonActionConfig action) => _execute(action);

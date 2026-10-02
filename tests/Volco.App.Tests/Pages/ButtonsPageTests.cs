@@ -605,4 +605,78 @@ public class ButtonsPageTests
         Assert.Contains("active", Card(page, 2).Classes);
         Assert.DoesNotContain("active", Card(page, 0).Classes);
     }
+
+    [AvaloniaFact]
+    public void DevicePicker_ShowsNicknames_WithTheWindowsNameAsSecondaryText()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", Nickname = "Cans" });
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteSpecificDevice;
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var slot = vm.Buttons.Items[0].Press;
+        Assert.Equal(new DeviceChoice("Cans", "Headphones"), ((IDeviceLabeler)slot).Describe("Headphones"));
+        Assert.Equal(new DeviceChoice("Speakers", ""), ((IDeviceLabeler)slot).Describe("Speakers"));
+    }
+
+    [AvaloniaFact]
+    public void CardSummary_UsesNicknames()
+    {
+        var (_, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-1", Nickname = "Desk" });
+            DefaultOf(c, 0).SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.SetOutputDevice, Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" },
+            };
+        });
+        using var _ = rig; using var __ = vm;
+        Assert.Equal("Switch to Desk", vm.Buttons.Items[0].Summary);
+    }
+
+    [AvaloniaFact]
+    public void DevicePicker_RenderedSelectionBox_ShowsTheNickname()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", Nickname = "Cans" });
+            DefaultOf(c, 0).SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.MuteSpecificDevice, Device = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" },
+            };
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var combo = InRow<ComboBox>(page, "PressRow", "DeviceCombo");
+        Assert.Equal("Headphones", combo.SelectedItem);
+        var texts = combo.GetVisualDescendants().OfType<TextBlock>().ToList();
+        Assert.Equal("Cans", texts.First(t => t.Name == "DeviceLabel").Text);
+        Assert.Equal("Headphones", texts.First(t => t.Name == "DeviceSecondary").Text);
+    }
+
+    [AvaloniaFact]
+    public void DevicePicker_RenderedDropdownItems_ShowNicknames()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", Nickname = "Cans" });
+            DefaultOf(c, 0).SinglePress.Action = ButtonActionType.MuteSpecificDevice;
+        });
+        using var _ = rig; using var __ = vm;
+        Expand(vm, 0);
+        var combo = InRow<ComboBox>(page, "PressRow", "DeviceCombo");
+        combo.IsDropDownOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        var labels = new List<string?>();
+        for (int i = 0; i < combo.ItemCount; i++)
+        {
+            var container = Assert.IsAssignableFrom<Control>(combo.ContainerFromIndex(i));
+            labels.Add(container.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "DeviceLabel").Text);
+        }
+        Assert.Contains("Cans", labels);
+        Assert.Contains("Speakers", labels);
+        Assert.DoesNotContain("Headphones", labels);
+    }
 }

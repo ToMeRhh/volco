@@ -11,7 +11,7 @@ namespace Volco.App.ViewModels;
 /// the hardware input number; a slider has no name, only that number and what it controls. Edits
 /// write straight through to the wrapped <see cref="SliderConfig"/> and request a save.
 /// </summary>
-public partial class SliderItemViewModel : ObservableObject
+public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 {
     /// <summary>The device picker's first entry: a null <see cref="SliderConfig.Device"/>.</summary>
     public const string CurrentDefaultOutput = "Current default output";
@@ -169,6 +169,9 @@ public partial class SliderItemViewModel : ObservableObject
         Apps.Remove(existing);
         WriteApps();
     }
+
+    public DeviceChoice Describe(string friendlyName)
+        => friendlyName == CurrentDefaultOutput ? new DeviceChoice(CurrentDefaultOutput, "") : _owner.Describe(friendlyName);
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -361,4 +364,5 @@ internal interface ISliderCardOwner
     void Reset(SliderItemViewModel item);
     void RemoveLast();
     void AppsChanged();
+    DeviceChoice Describe(string friendlyName);
 }

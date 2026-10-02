@@ -127,9 +127,9 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         Config = cfg;
         _owner = owner;
         _index = index;
-        Press = new ActionSlotViewModel("Press", devices, owner.PresetChoices, owner.Execute, OnActionChanged);
-        DoublePress = new ActionSlotViewModel("Double press", devices, owner.PresetChoices, owner.Execute, OnActionChanged);
-        Hold = new ActionSlotViewModel("Hold", devices, owner.PresetChoices, owner.Execute, OnActionChanged);
+        Press = new ActionSlotViewModel("Press", devices, owner.PresetChoices, owner.Execute, OnActionChanged, name => owner.Describe(name));
+        DoublePress = new ActionSlotViewModel("Double press", devices, owner.PresetChoices, owner.Execute, OnActionChanged, name => owner.Describe(name));
+        Hold = new ActionSlotViewModel("Hold", devices, owner.PresetChoices, owner.Execute, OnActionChanged, name => owner.Describe(name));
         Reload();
     }
 
@@ -226,4 +226,5 @@ internal interface IButtonCardOwner
     void RemoveLast();
     IndicatorKind? IndicatorFor(int index);
     string DeviceName(DeviceRefConfig? device);
+    DeviceChoice Describe(string friendlyName);
 }

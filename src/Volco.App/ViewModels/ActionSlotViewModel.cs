@@ -10,9 +10,10 @@ namespace Volco.App.ViewModels;
 /// the grouped action picker, that action's settings, and Test. Re-pointed at another preset's
 /// <see cref="ButtonActionConfig"/> with <see cref="Bind"/> when the edited preset changes.
 /// </summary>
-public sealed partial class ActionSlotViewModel : ObservableObject
+public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabeler
 {
     private readonly Action _changed;
+    private readonly Func<string, DeviceChoice> _describe;
     private readonly Action<ButtonActionConfig> _execute;
     private readonly Func<IReadOnlyList<PresetChoice>> _presets;
     private ButtonActionConfig _cfg = new();
@@ -53,14 +54,18 @@ public sealed partial class ActionSlotViewModel : ObservableObject
 
     internal ActionSlotViewModel(string label, IReadOnlyList<AudioDevice> devices,
                                  Func<IReadOnlyList<PresetChoice>> presets,
-                                 Action<ButtonActionConfig> execute, Action changed)
+                                 Action<ButtonActionConfig> execute, Action changed,
+                                 Func<string, DeviceChoice> describe)
     {
+        _describe = describe;
         Label = label;
         _presets = presets;
         _execute = execute;
         _changed = changed;
         SetDevices(devices);
     }
+
+    public DeviceChoice Describe(string friendlyName) => _describe(friendlyName);
 
     internal ButtonActionConfig Config => _cfg;
 

@@ -188,6 +188,8 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
     }
 
     /// <summary>Refreshes every "All other apps" hint after any slider's apps or type changed.</summary>
+    public DeviceChoice Describe(string friendlyName) => DeviceChoice.For(_config.Config, _devices, friendlyName);
+
     public void AppsChanged()
     {
         foreach (var item in Items)
