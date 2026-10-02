@@ -423,8 +423,17 @@ public class ConfigMigratorTests
 
         var reloaded = new ConfigManager(path);
         reloaded.Load();
-        Assert.Equal(3, reloaded.Config.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, reloaded.Config.SchemaVersion);
         Assert.Equal("dev-2", reloaded.Config.Buttons[0].Default().DoublePress.DeviceB!.Id);
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "config.v2.bak")));
     }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(3, false)]
+    [InlineData(4, false)]
+    public void NeedsMigration_OnlyForV1Files(int version, bool expected)
+        => Assert.Equal(expected, ConfigMigrator.NeedsMigration(new AppConfig { SchemaVersion = version }));
 }

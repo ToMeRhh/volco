@@ -33,7 +33,7 @@ public class ConfigManager
 
     public void Load()
     {
-        var migratedFromV2 = false;
+        var migratedFrom = 0;
         if (File.Exists(_configPath))
         {
             AppLog.Info($"Loading config from {_configPath}");
@@ -45,15 +45,24 @@ public class ConfigManager
                     var version = root["schemaVersion"] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 0;
                     if (version < 3)
                     {
-                        // v1 and v2 both get the v3 shape here. Only v2 is now fully v3; v1 keeps its
+                        // v1 and v2 both get the v3 shape here. v2 is then current; v1 keeps its
                         // number until the runtime resolves its device names (ConfigMigrator.MigrateFile).
                         ConfigMigrator.UpgradeShapeToV3(root);
                         if (version == 2)
                         {
                             BackupBeforeMigration(json, "config.v2.bak");
                             root["schemaVersion"] = AppConfig.CurrentSchemaVersion;
-                            migratedFromV2 = true;
+                            migratedFrom = 2;
                         }
+                        json = root.ToJsonString();
+                    }
+                    else if (version == 3)
+                    {
+                        // v3 → v4 only adds "devices" and "controller", which deserialize to their
+                        // defaults when missing: stamp the version and keep a backup.
+                        BackupBeforeMigration(json, "config.v3.bak");
+                        root["schemaVersion"] = AppConfig.CurrentSchemaVersion;
+                        migratedFrom = 3;
                         json = root.ToJsonString();
                     }
                 }
@@ -72,7 +81,7 @@ public class ConfigManager
                 // first.
                 AppLog.Error($"Config at {_configPath} could not be read ({ex.GetType().Name}: {ex.Message}); using defaults");
                 BackupCorruptConfig();
-                migratedFromV2 = false; // never overwrite an unreadable file with the defaults
+                migratedFrom = 0; // never overwrite an unreadable file with the defaults
                 Config = AppConfig.CreateDefault();
             }
         }
@@ -87,9 +96,9 @@ public class ConfigManager
         Config.Normalize();
 
         // Outside the try above: a failed write must not be mistaken for an unreadable file.
-        if (migratedFromV2)
+        if (migratedFrom != 0)
         {
-            AppLog.Info("Migrated config from schema v2 to v3");
+            AppLog.Info($"Migrated config from schema v{migratedFrom} to v{AppConfig.CurrentSchemaVersion}");
             try { WriteToDisk(); }
             catch (Exception ex) { AppLog.Error($"Could not write the migrated config: {ex}"); }
         }
