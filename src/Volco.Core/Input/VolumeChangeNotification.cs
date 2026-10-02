@@ -2,7 +2,8 @@ namespace Volco.Core.Input;
 
 /// <summary>What produced an OSD notification.</summary>
 /// <remarks>
-/// <see cref="Volume"/>: a slider moved. <see cref="Mute"/>: a mute button was pressed (the
+/// <see cref="Volume"/>: a slider moved (muted = a Device slider's target is muted; moving
+/// it does not unmute, so the OSD shows "Muted"). <see cref="Mute"/>: a mute button was pressed (the
 /// notification carries the target's real level; the OSD shows "Muted" while muted, the
 /// percentage otherwise). <see cref="Device"/>: a button switched the default output device
 /// (label = the new default's name, level/muted = that device's state). <see cref="Preset"/>: a

@@ -246,6 +246,41 @@ public class SliderProcessorTests
         Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
     }
 
+    // ── Issue #48: a Device slider's OSD carries the target's mute flag ──────────────────────
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DeviceSlider_VolumeChanged_CarriesDeviceMuteState(bool muted)
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "dev", FriendlyName = "Headphones" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["dev"] = (0.5f, muted);
+        using var processor = new SliderProcessor(audio, configManager);
+
+        var volumeTcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.VolumeChanged += (_, e) => volumeTcs.TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+
+        var completed = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
+        Assert.True(completed == volumeTcs.Task, "VolumeChanged did not fire");
+        var n = await volumeTcs.Task;
+        Assert.Equal(OsdKind.Volume, n.Kind);
+        Assert.Equal(muted, n.Muted);
+        // Moving the slider never unmutes the device.
+        Assert.Empty(audio.Snapshot(audio.SetMuteCalls));
+        Assert.Empty(audio.Snapshot(audio.ToggleMuteCalls));
+    }
+
     // ── Fix D: GetLastLevel ──────────────────────────────────────────────────
 
     [Fact]
