@@ -26,7 +26,10 @@ public class ButtonPressDetectorTests
         };
     }
 
-    private async Task WaitForEventsAsync(int expectedCount, int timeoutMs = 2000)
+    /// <summary>Polls until the detector's timer threads have raised the events. The default limit
+    /// is generous because it is only reached when a test is failing: on a loaded shared CI runner
+    /// (the test classes run in parallel), a 300 ms timer callback has been seen to arrive after 2 s.</summary>
+    private async Task WaitForEventsAsync(int expectedCount, int timeoutMs = 5000)
     {
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < timeoutMs)
