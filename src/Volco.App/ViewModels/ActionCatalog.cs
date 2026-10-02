@@ -1,3 +1,4 @@
+using Volco.Core.Communication;
 using Volco.Core.Config;
 
 namespace Volco.App.ViewModels;
@@ -59,25 +60,45 @@ public static class ActionCatalog
     /// <summary>The "Screen: …" line on a button card with a screen.</summary>
     public static string ScreenDescription(ButtonBindingConfig binding)
     {
-        if (binding.SinglePress.Action != ButtonActionType.None) return "Shows the Press action.";
-        if (binding.DoublePress.Action != ButtonActionType.None) return "Shows the Double press action.";
-        if (binding.LongPress.Action != ButtonActionType.None) return "Shows the Hold action.";
-        return "Blank. None of this button’s actions is set in this preset.";
+        if (LightSource(binding) is not { } source) return "Blank. None of this button’s actions is set in this preset.";
+        var text = $"Shows the {source.Slot} action.";
+        return ControllerDisplay.FlashesPresetName(binding) && PresetSlot(binding) is { } slot
+            ? $"{text} Flashes the preset’s name when {slot} changes the preset."
+            : text;
     }
 
-    /// <summary>The "Controller light: …" line on a button card.</summary>
-    public static string LightDescription(ButtonBindingConfig binding)
+    /// <summary>The "Controller light: …" line on a button card, for one LED or an LED pair.</summary>
+    public static string LightDescription(ButtonBindingConfig binding, bool singleLed,
+                                          Func<string?, string?> presetName, Func<DeviceRefConfig?, string>? deviceName = null)
     {
         if (LightSource(binding) is not { } source)
             return "No light. None of this button’s actions has an on/off state.";
-        var follows = $"Follows the {source.Slot} action.";
-        return source.Action.Action switch
+        var name = deviceName ?? DeviceShort;
+        var a = source.Action;
+        var what = a.Action switch
         {
-            ButtonActionType.ToggleOutputDevice => $"Shows which output is active (A or B). {follows}",
-            ButtonActionType.NextPreset or ButtonActionType.GoToPreset => $"Shows which preset is live. {follows}",
-            ButtonActionType.SetOutputDevice => $"On while that device is the output. {follows}",
-            _ => $"On while muted. {follows}",
+            ButtonActionType.ToggleOutputDevice when singleLed => $"Dark on {name(a.Device)} (A), lit on {name(a.DeviceB)} (B).",
+            ButtonActionType.ToggleOutputDevice => $"A lights for {name(a.Device)}, B for {name(a.DeviceB)}.",
+            ButtonActionType.NextPreset when singleLed => "Dark; blinks when the preset changes.",
+            ButtonActionType.GoToPreset when singleLed => $"On while {presetName(a.PresetId) ?? "that preset"} is live.",
+            ButtonActionType.NextPreset or ButtonActionType.GoToPreset => "Shows the live preset: the first lights A, the second B.",
+            ButtonActionType.SetOutputDevice => "On while that device is the output.",
+            _ => "On while muted.",
         };
+        var text = $"{what} Follows the {source.Slot} action.";
+        return singleLed && a.Action != ButtonActionType.NextPreset && ControllerDisplay.BlinksOnPresetChange(binding)
+            ? $"{text} Blinks when {PresetSlot(binding)} changes the preset."
+            : text;
+    }
+
+    /// <summary>The first slot with a preset action, or null.</summary>
+    private static string? PresetSlot(ButtonBindingConfig binding)
+    {
+        static bool IsPreset(ButtonActionConfig a) => a.Action is ButtonActionType.NextPreset or ButtonActionType.GoToPreset;
+        if (IsPreset(binding.SinglePress)) return "Press";
+        if (IsPreset(binding.DoublePress)) return "Double press";
+        if (IsPreset(binding.LongPress)) return "Hold";
+        return null;
     }
 
     /// <summary>A short label for card summaries, e.g. "Mute mic" or "Toggle Speakers / Headphones".</summary>

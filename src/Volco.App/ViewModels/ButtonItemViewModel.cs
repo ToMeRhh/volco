@@ -31,7 +31,9 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     }
 
     private void UpdateLightDescription(ButtonBindingConfig edited)
-        => LightDescription = IsScreen ? ActionCatalog.ScreenDescription(edited) : ActionCatalog.LightDescription(edited);
+        => LightDescription = IsScreen
+            ? ActionCatalog.ScreenDescription(edited)
+            : ActionCatalog.LightDescription(edited, IsLed, _owner.PresetName, _owner.DeviceName);
 
     public bool ShowLightDescription => Indicator is not null && Indicator != IndicatorKind.None;
 
@@ -170,7 +172,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         // LEDs show what the controller shows now (the live preset); a screen preview shows the
         // preset being edited, so editing it is visible.
         var live = Config.BindingFor(_owner.LivePresetId);
-        LightValue = ControllerDisplay.LedValueFor(live, _owner.AppConfig, _owner.LivePresetId, _owner.Audio);
+        LightValue = ControllerDisplay.LedValueFor(live, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.LivePresetId, _owner.Audio);
         // From this card's own config, not AppConfig.Buttons[Index]: during a drag preview the
         // card's Index no longer matches its position in the list.
         Screen = ControllerDisplay.Screen(edited.All().FirstOrDefault(a => a.Action != ButtonActionType.None),

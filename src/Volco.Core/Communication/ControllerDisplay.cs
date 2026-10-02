@@ -15,6 +15,11 @@ public sealed record ScreenDisplay(ScreenContent Content) : ButtonDisplay;
 /// queries. One entry per button the controller reported in Hello (not per config card): a
 /// button with no card is "Not set up", and cards beyond the controller's count are ignored.
 /// A button shows its first action that is not "Do nothing", in the order press → double → hold.
+/// <para>
+/// For <see cref="AnnounceSteps"/> link ticks after a preset change, a button with a preset action
+/// announces it: a screen that shows another action flashes the live preset instead
+/// (<see cref="FlashesPresetName"/>), and a single LED blinks (<see cref="BlinksOnPresetChange"/>).
+/// </para>
 /// </summary>
 public static class ControllerDisplay
 {
@@ -26,43 +31,68 @@ public static class ControllerDisplay
     public const string NoDevice = "No device";
     public const string ChoosePreset = "Choose a preset";
 
+    /// <summary>How many link ticks a preset change is announced for (6 × 250 ms ≈ 1.5 s): a
+    /// single LED is on in the even steps, so it blinks 3 times.</summary>
+    public const int AnnounceSteps = 6;
+
     /// <summary>One entry per controller button; null where the kind is None or unknown. Empty
-    /// until the controller has said hello.</summary>
-    public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string presetId, IAudioEngine audio)
+    /// until the controller has said hello. <paramref name="announceStep"/> is the link tick since
+    /// the last preset change (0 = the change itself), or null when no change is being announced.</summary>
+    public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string presetId, IAudioEngine audio, int? announceStep = null)
     {
         var info = config.Controller;
         if (info is null) return Array.Empty<ButtonDisplay?>();
         var result = new ButtonDisplay?[info.Buttons.Count];
         for (int i = 0; i < result.Length; i++)
-            result[i] = For(config, i, info.Buttons[i], presetId, audio);
+            result[i] = For(config, i, info.Buttons[i], presetId, audio, announceStep);
         return result;
     }
 
-    public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string presetId, IAudioEngine audio)
+    public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string presetId, IAudioEngine audio,
+                                     int? announceStep = null)
     {
-        var action = PrimaryAction(config, button, presetId);
+        var binding = button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(presetId) : null;
+        var action = binding is null ? null : Primary(binding);
+        var announcing = announceStep is >= 0 and < AnnounceSteps && binding is not null;
         return kind switch
         {
-            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(action, config, presetId, audio)),
+            IndicatorKind.Led when announcing && BlinksOnPresetChange(binding!) => new LedDisplay(Bit(announceStep % 2 == 0)),
+            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(action, kind, config, presetId, audio)),
+            IndicatorKind.Screen when announcing && FlashesPresetName(binding!) => new ScreenDisplay(LivePresetScreen(config, presetId)),
             IndicatorKind.Screen => new ScreenDisplay(Screen(action, config, presetId, audio)),
             _ => null,
         };
     }
 
-    /// <summary>The action a button shows, or null when it has no card or does nothing.</summary>
-    public static ButtonActionConfig? PrimaryAction(AppConfig config, int button, string presetId)
-        => button >= 0 && button < config.Buttons.Count
-            ? config.Buttons[button].BindingFor(presetId).All().FirstOrDefault(a => a.Action != ButtonActionType.None)
-            : null;
+    /// <summary>A single LED blinks after a preset change when the button has a preset action,
+    /// unless its light follows "Go to preset" (that light already says whether its preset is live).</summary>
+    public static bool BlinksOnPresetChange(ButtonBindingConfig binding)
+        => HasPresetAction(binding) && Primary(binding)?.Action != ButtonActionType.GoToPreset;
+
+    /// <summary>A screen flashes the live preset after a preset change when the button has a preset
+    /// action but its screen shows another action.</summary>
+    public static bool FlashesPresetName(ButtonBindingConfig binding)
+        => HasPresetAction(binding) && !IsPresetAction(Primary(binding));
+
+    private static bool HasPresetAction(ButtonBindingConfig binding) => binding.All().Any(IsPresetAction);
+
+    private static bool IsPresetAction(ButtonActionConfig? a)
+        => a?.Action is ButtonActionType.NextPreset or ButtonActionType.GoToPreset;
+
+    private static ButtonActionConfig? Primary(ButtonBindingConfig binding)
+        => binding.All().FirstOrDefault(a => a.Action != ButtonActionType.None);
 
     /// <summary>The LED value for a whole binding (used by the settings UI's light preview).</summary>
-    public static byte LedValueFor(ButtonBindingConfig binding, AppConfig config, string presetId, IAudioEngine audio)
-        => LedValue(binding.All().FirstOrDefault(a => a.Action != ButtonActionType.None), config, presetId, audio);
+    public static byte LedValueFor(ButtonBindingConfig binding, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio)
+        => LedValue(Primary(binding), kind, config, presetId, audio);
 
-    /// <summary>0 = off; mute: 1 while muted; switch: 1 while active; toggle: 1 = A, 2 = B;
-    /// presets: 1 + the preset's position.</summary>
-    public static byte LedValue(ButtonActionConfig? action, AppConfig config, string presetId, IAudioEngine audio)
+    /// <summary>The steady LED value. 0 = off; mute: 1 while muted; switch: 1 while active.
+    /// An LED pair: toggle 1 = A, 2 = B; presets 1 + the live preset's position. A single LED:
+    /// toggle lit on B, dark on A; "Go to preset" lit while that preset is live; "Next preset" dark
+    /// (it blinks on a change instead).</summary>
+    public static byte LedValue(ButtonActionConfig? action, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio)
     {
+        var single = kind == IndicatorKind.Led;
         switch (action?.Action)
         {
             case ButtonActionType.MuteCurrentOutput:
@@ -78,9 +108,13 @@ public static class ControllerDisplay
             {
                 var (a, b) = ToggleSides(action);
                 if (a is null) return 0;
-                if (IsCurrentOutput(audio, a)) return 1;
-                return IsCurrentOutput(audio, b) ? (byte)2 : (byte)0;
+                if (IsCurrentOutput(audio, a)) return single ? (byte)0 : (byte)1;
+                return IsCurrentOutput(audio, b) ? (single ? (byte)1 : (byte)2) : (byte)0;
             }
+            case ButtonActionType.NextPreset when single:
+                return 0;
+            case ButtonActionType.GoToPreset when single:
+                return Bit(action.PresetId == presetId);
             case ButtonActionType.NextPreset:
             case ButtonActionType.GoToPreset:
             {
@@ -126,7 +160,7 @@ public static class ControllerDisplay
                 return ScreenContent.Text($"NEXT: {other.Name}", active.Icon, false, active.Name);
             }
             case ButtonActionType.NextPreset:
-                return PresetScreen(config, presetId, config.Presets.Find(p => p.Id == presetId)?.Name ?? "");
+                return LivePresetScreen(config, presetId);
             case ButtonActionType.GoToPreset:
                 return PresetScreen(config, presetId, config.Presets.Find(p => p.Id == action.PresetId)?.Name ?? ChoosePreset);
             default:
@@ -141,6 +175,9 @@ public static class ControllerDisplay
         var muted = audio.IsMuted(reference);
         return ScreenContent.Text(muted ? Muted : Live, look.Icon, muted, look.Name);
     }
+
+    private static ScreenContent LivePresetScreen(AppConfig config, string presetId)
+        => PresetScreen(config, presetId, config.Presets.Find(p => p.Id == presetId)?.Name ?? "");
 
     private static ScreenContent PresetScreen(AppConfig config, string presetId, string main)
     {
