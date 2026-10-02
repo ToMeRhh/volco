@@ -38,6 +38,7 @@ public sealed partial class VolumeOsdWindow : Window
     private readonly PathIcon _speakerIcon;
     private readonly PathIcon _presetIcon;
     private readonly Image _deviceIcon;
+    private readonly Panel _deviceMuteSlash;
     private readonly DispatcherTimer _hideTimer;
     private readonly DispatcherTimer _fadeTimer;
     private readonly Stopwatch _fadeClock = new();
@@ -68,6 +69,7 @@ public sealed partial class VolumeOsdWindow : Window
         _speakerIcon = this.FindControl<PathIcon>("SpeakerIcon")!;
         _presetIcon = this.FindControl<PathIcon>("PresetIcon")!;
         _deviceIcon = this.FindControl<Image>("DeviceIcon")!;
+        _deviceMuteSlash = this.FindControl<Panel>("DeviceMuteSlash")!;
 
         _hideTimer = new DispatcherTimer { Interval = _timings.Visible };
         _hideTimer.Tick += (_, _) => { _hideTimer.Stop(); BeginFade(); };
@@ -100,6 +102,7 @@ public sealed partial class VolumeOsdWindow : Window
     internal PathIcon SpeakerGlyph => _speakerIcon;
     internal PathIcon PresetGlyph => _presetIcon;
     internal Image DeviceGlyph => _deviceIcon;
+    internal Panel MuteSlash => _deviceMuteSlash;
 
     /// <summary>Shows the notification. Safe to call from any thread; posts to the UI thread itself.</summary>
     public void Show(VolumeChangeNotification n)
@@ -173,6 +176,8 @@ public sealed partial class VolumeOsdWindow : Window
         _presetIcon.IsVisible = _vm.Glyph == OsdGlyph.Preset;
         _deviceIcon.Source = _vm.DeviceIcon is { } icon ? ScreenIcons.Bitmap(icon) : null;
         _deviceIcon.IsVisible = _vm.Glyph == OsdGlyph.Device;
+        _deviceIcon.Opacity = _vm.DeviceIconMuted ? 0.4 : 1.0;
+        _deviceMuteSlash.IsVisible = _vm.DeviceIconMuted;
         _bar.IsVisible = _vm.ShowsLevel;
     }
 

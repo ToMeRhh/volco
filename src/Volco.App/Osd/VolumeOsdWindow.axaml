@@ -29,9 +29,19 @@
         <PathIcon Name="PresetIcon" Data="{StaticResource Icon.Preset}" Width="20" Height="20"
                   Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
         <!-- The device's own controller icon: 28 px white-on-black art, overhanging the 20 px slot
-             so it stays crisp; Screen blending drops the black onto the pill's surface. -->
-        <Image Name="DeviceIcon" Width="28" Height="28" Margin="-4" IsVisible="False"
-               BlendMode="Screen" RenderOptions.BitmapInterpolationMode="None"/>
+             so it stays crisp; Screen blending drops the black onto the pill's surface. Muted, it
+             is dimmed and struck through (the slash is outlined in the surface colour to stand
+             out against the icon). -->
+        <Panel Width="28" Height="28" Margin="-4">
+          <Image Name="DeviceIcon" Width="28" Height="28" IsVisible="False"
+                 BlendMode="Screen" RenderOptions.BitmapInterpolationMode="None"/>
+          <Panel Name="DeviceMuteSlash" IsVisible="False">
+            <Line StartPoint="4,4" EndPoint="24,24" StrokeThickness="5" StrokeLineCap="Round"
+                  Stroke="{DynamicResource OsdBackgroundBrush}"/>
+            <Line StartPoint="4,4" EndPoint="24,24" StrokeThickness="2" StrokeLineCap="Round"
+                  Stroke="{DynamicResource OsdTextBrush}"/>
+          </Panel>
+        </Panel>
       </Panel>
       <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="12,0,0,0" Width="210">
         <TextBlock Name="LabelText" Text="Output" Foreground="{DynamicResource OsdTextBrush}" FontSize="12"

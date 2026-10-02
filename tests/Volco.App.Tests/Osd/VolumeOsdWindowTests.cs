@@ -187,11 +187,19 @@ public class VolumeOsdWindowTests
         Assert.False(osd.MutedGlyph.IsVisible);
         Assert.False(osd.VolumeGlyph.IsVisible);
         Assert.Equal("Muted", osd.ValueBlock.Text);
+        Assert.True(osd.MuteSlash.IsVisible);   // muted: struck through...
+        Assert.Equal(0.4, osd.DeviceGlyph.Opacity);    // ...and dimmed
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.37f, false, OsdKind.Device, ScreenIcon.Headphones));
+        PumpUntil(() => !osd.MuteSlash.IsVisible);
+        Assert.False(osd.MuteSlash.IsVisible);
+        Assert.Equal(1.0, osd.DeviceGlyph.Opacity);
 
         osd.Show(Vol);
         PumpUntil(() => osd.VolumeGlyph.IsVisible);
         Assert.True(osd.VolumeGlyph.IsVisible);
         Assert.False(osd.DeviceGlyph.IsVisible);
+        Assert.False(osd.MuteSlash.IsVisible);
         osd.Close();
     }
 
