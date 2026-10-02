@@ -5,52 +5,96 @@ using Volco.Core.Diagnostics;
 
 namespace Volco.Core.Communication;
 
+/// <summary>
+/// Listen-only UDP transport: binds a local port and treats the sender of the latest packet as
+/// the controller. "Connected" means a packet arrived within the inactivity timeout.
+///
+/// Mirrors <see cref="SerialConnection"/>'s hardening: all mutable state lives under
+/// <see cref="_gate"/>; no lock is held while raising <see cref="StatusChanged"/>, calling into
+/// the socket or awaiting. Resources are taken out of the fields under the lock and cancelled /
+/// closed / disposed outside it. Every <see cref="Connect"/> and teardown bumps
+/// <see cref="_generation"/>; the receive loop and the inactivity timer capture the generation
+/// they were started under and do nothing (in particular raise no status) once it is stale, so a
+/// callback that outlives <see cref="Disconnect"/> can never announce into a later connection.
+/// </summary>
 public class UdpConnection : IControllerConnection
 {
-    private const int InactivityTimeoutMs = 3000;
+    private const int DefaultInactivityTimeoutMs = 3000;
 
     private readonly UdpConfig _config;
+    private readonly int _inactivityTimeoutMs;
     private readonly ProtocolParser _parser = new();
+
+    private readonly object _gate = new();
     private UdpClient? _udpClient;
     private CancellationTokenSource? _cts;
     private System.Threading.Timer? _inactivityTimer;
     private IPEndPoint? _remoteEndPoint;
+    private bool _disposed;
+    private int _generation;
 
     public event EventHandler<ControllerMessage>? MessageReceived;
     public event EventHandler<ConnectionStatus>? StatusChanged;
     public ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
 
-    public UdpConnection(UdpConfig config)
+    public UdpConnection(UdpConfig config) : this(config, DefaultInactivityTimeoutMs)
+    {
+    }
+
+    /// <summary>Test seam: lets tests shorten the inactivity timeout.</summary>
+    internal UdpConnection(UdpConfig config, int inactivityTimeoutMs)
     {
         _config = config;
+        _inactivityTimeoutMs = inactivityTimeoutMs;
         _parser.MessageParsed += (_, msg) => MessageReceived?.Invoke(this, msg);
     }
 
     public void Connect()
     {
-        try
+        UdpClient? client = null;
+        var token = CancellationToken.None;
+        var generation = 0;
+        var raiseError = false;
+        lock (_gate)
         {
-            _udpClient = new UdpClient(_config.ListenPort);
-            _cts = new CancellationTokenSource();
-            // Socket is bound but no client has sent data yet — remain Disconnected
-            _ = ReceiveLoopAsync(_cts.Token);
+            if (_disposed || _udpClient != null) return;
+            try
+            {
+                client = new UdpClient(_config.ListenPort);
+                _udpClient = client;
+                _cts = new CancellationTokenSource();
+                token = _cts.Token;
+                generation = ++_generation;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error($"Failed to start UDP listener on port {_config.ListenPort}: {ex.Message}");
+                client?.Dispose();
+                client = null;
+                _udpClient = null;
+                raiseError = Status != ConnectionStatus.Error;
+                Status = ConnectionStatus.Error;
+            }
         }
-        catch (Exception ex)
+
+        if (client == null)
         {
-            AppLog.Error($"Failed to start UDP listener on port {_config.ListenPort}: {ex.Message}");
-            SetStatus(ConnectionStatus.Error);
+            if (raiseError) StatusChanged?.Invoke(this, ConnectionStatus.Error);
+            return;
         }
+
+        // Socket is bound but no client has sent data yet - remain Disconnected
+        _ = ReceiveLoopAsync(client, token, generation);
     }
 
-    private async Task ReceiveLoopAsync(CancellationToken ct)
+    private async Task ReceiveLoopAsync(UdpClient client, CancellationToken ct, int generation)
     {
-        while (!ct.IsCancellationRequested && _udpClient != null)
+        while (!ct.IsCancellationRequested)
         {
             try
             {
-                var result = await _udpClient.ReceiveAsync(ct);
-                _remoteEndPoint = result.RemoteEndPoint;
-                OnPacketReceived();
+                var result = await client.ReceiveAsync(ct);
+                if (!OnPacketReceived(result.RemoteEndPoint, generation)) break;
                 _parser.FeedBytes(result.Buffer);
             }
             catch (OperationCanceledException)
@@ -59,52 +103,138 @@ public class UdpConnection : IControllerConnection
             }
             catch (Exception ex)
             {
-                AppLog.Error($"Error in UDP receive loop: {ex.Message}");
-                SetStatus(ConnectionStatus.Error);
+                // Closing the socket during Disconnect() lands here; only a still-current
+                // generation is a genuine failure.
+                if (IsCurrent(generation))
+                {
+                    AppLog.Error($"Error in UDP receive loop: {ex.Message}");
+                    Teardown(ConnectionStatus.Error, generation);
+                }
                 break;
             }
         }
     }
 
-    private void OnPacketReceived()
+    private bool IsCurrent(int generation)
     {
-        if (Status != ConnectionStatus.Connected)
-            SetStatus(ConnectionStatus.Connected);
-
-        // Reset inactivity timer on every packet
-        _inactivityTimer?.Change(InactivityTimeoutMs, Timeout.Infinite);
-        if (_inactivityTimer == null)
-            _inactivityTimer = new System.Threading.Timer(_ => SetStatus(ConnectionStatus.Disconnected),
-                null, InactivityTimeoutMs, Timeout.Infinite);
+        lock (_gate) return !_disposed && generation == _generation;
     }
 
-    private void SetStatus(ConnectionStatus status)
+    /// <summary>Records the sender, re-arms the inactivity timer and, on the first packet,
+    /// raises Connected. Returns false if this loop's generation is stale.</summary>
+    private bool OnPacketReceived(IPEndPoint remote, int generation)
     {
-        Status = status;
-        StatusChanged?.Invoke(this, status);
+        var raise = false;
+        lock (_gate)
+        {
+            if (_disposed || generation != _generation) return false;
+            _remoteEndPoint = remote;
+            if (Status != ConnectionStatus.Connected)
+            {
+                Status = ConnectionStatus.Connected;
+                raise = true;
+            }
+
+            if (_inactivityTimer == null)
+                _inactivityTimer = new System.Threading.Timer(OnInactivity, generation, _inactivityTimeoutMs, Timeout.Infinite);
+            else
+                _inactivityTimer.Change(_inactivityTimeoutMs, Timeout.Infinite);
+        }
+
+        if (raise) StatusChanged?.Invoke(this, ConnectionStatus.Connected);
+        return true;
+    }
+
+    private void OnInactivity(object? state)
+    {
+        var generation = (int)state!;
+        lock (_gate)
+        {
+            // A callback already queued when Disconnect() disposed the timer still runs; the
+            // generation check is what discards it.
+            if (_disposed || generation != _generation || Status != ConnectionStatus.Connected) return;
+            Status = ConnectionStatus.Disconnected;
+        }
+
+        StatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
     }
 
     public void Send(byte[] data)
     {
-        if (_udpClient != null && _remoteEndPoint != null)
-            _udpClient.Send(data, data.Length, _remoteEndPoint);
+        UdpClient? client;
+        IPEndPoint? remote;
+        lock (_gate)
+        {
+            client = _udpClient;
+            remote = _remoteEndPoint;
+        }
+
+        if (client == null || remote == null) return;
+
+        try
+        {
+            client.Send(data, data.Length, remote);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            AppLog.Debug($"UDP send dropped (socket closed): {ex.Message}");
+        }
+        catch (SocketException ex)
+        {
+            AppLog.Debug($"UDP send failed: {ex.Message}");
+        }
     }
 
-    public void Disconnect()
+    /// <summary>Takes ownership of everything running under the lock, then releases it outside
+    /// the lock and announces <paramref name="finalStatus"/>. With <paramref name="onlyGeneration"/>
+    /// set, does nothing unless that generation is still current (used by the loop's own failure
+    /// path). Announces when something was running or the status actually changes, so the first
+    /// teardown always reports once and repeated ones report nothing; an Error is always announced
+    /// once per transition.</summary>
+    private void Teardown(ConnectionStatus finalStatus, int? onlyGeneration = null)
     {
-        _cts?.Cancel();
-        _inactivityTimer?.Dispose();
-        _inactivityTimer = null;
-        _udpClient?.Close();
-        _udpClient = null;
-        _cts?.Dispose();
-        _cts = null;
-        _remoteEndPoint = null;
-        SetStatus(ConnectionStatus.Disconnected);
+        UdpClient? client;
+        CancellationTokenSource? cts;
+        System.Threading.Timer? timer;
+        bool announce;
+        lock (_gate)
+        {
+            if (onlyGeneration != null && (_disposed || onlyGeneration != _generation)) return;
+
+            client = _udpClient;
+            cts = _cts;
+            timer = _inactivityTimer;
+            var wasRunning = client != null;
+            _udpClient = null;
+            _cts = null;
+            _inactivityTimer = null;
+            _remoteEndPoint = null;
+            _generation++;
+
+            announce = finalStatus == ConnectionStatus.Error
+                ? Status != ConnectionStatus.Error
+                : wasRunning || Status != ConnectionStatus.Disconnected;
+            if (announce) Status = finalStatus;
+        }
+
+        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { timer?.Dispose(); } catch (ObjectDisposedException) { }
+        try { client?.Close(); } catch (ObjectDisposedException) { }
+        try { cts?.Dispose(); } catch (ObjectDisposedException) { }
+
+        if (announce) StatusChanged?.Invoke(this, finalStatus);
     }
+
+    public void Disconnect() => Teardown(ConnectionStatus.Disconnected);
 
     public void Dispose()
     {
-        Disconnect();
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+
+        Teardown(ConnectionStatus.Disconnected);
     }
 }
