@@ -60,7 +60,7 @@ public static class ActionCatalog
     };
 
     /// <summary>The action that decides the light: the first stateful one, single → double → long
-    /// (the same rule as <see cref="Volco.Core.Communication.ButtonFeedback"/>).</summary>
+    /// (the same rule as <see cref="Volco.Core.Communication.ControllerDisplay"/>).</summary>
     public static (ButtonActionConfig Action, string Slot)? LightSource(ButtonBindingConfig binding)
     {
         if (LightKindOf(binding.SinglePress.Action) != LightKind.None) return (binding.SinglePress, "Press");

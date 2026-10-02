@@ -219,7 +219,7 @@ public class ControllerDisplayTests
         Assert.Empty(ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio));
     }
 
-    // ── LED values (the rules ButtonFeedback had) ─────────────────────────────
+    // ── LED values (the rules the old 0x05 feedback had) ─────────────────────────────
 
     [Fact]
     public void LedValues_FollowTheLivePreset()

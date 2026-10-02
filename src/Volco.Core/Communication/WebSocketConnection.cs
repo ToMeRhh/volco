@@ -78,10 +78,11 @@ public class WebSocketConnection : IControllerConnection
 
     private async Task HandleClientAsync(WebSocket webSocket, CancellationToken ct)
     {
+        // Published before Connected is raised: a Connected handler sends right away (HelloRequest).
+        _activeClient = webSocket;
+
         if (Interlocked.Increment(ref _clientCount) == 1)
             SetStatus(ConnectionStatus.Connected);
-
-        _activeClient = webSocket;
 
         var buffer = new byte[1024];
         try
@@ -113,11 +114,30 @@ public class WebSocketConnection : IControllerConnection
         }
     }
 
+    private readonly object _sendLock = new();
+    private Task _sendTail = Task.CompletedTask;
+
+    /// <summary>Queues a frame. .NET allows one outstanding SendAsync per socket, so frames are
+    /// chained: each send starts after the previous one finished, in call order (spec §3.5).</summary>
     public void Send(byte[] data)
     {
         var ws = _activeClient;
-        if (ws?.State == WebSocketState.Open)
-            _ = ws.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary, true, CancellationToken.None);
+        if (ws?.State != WebSocketState.Open) return;
+        lock (_sendLock)
+        {
+            _sendTail = _sendTail.ContinueWith(async _ =>
+            {
+                try
+                {
+                    if (ws.State == WebSocketState.Open)
+                        await ws.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary, true, CancellationToken.None);
+                }
+                catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException or InvalidOperationException)
+                {
+                    AppLog.Debug($"WebSocket send dropped: {ex.Message}");
+                }
+            }, TaskScheduler.Default).Unwrap();
+        }
     }
 
     private void SetStatus(ConnectionStatus status)

@@ -146,7 +146,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         var live = Config.BindingFor(_owner.LivePresetId);
         var source = ActionCatalog.LightSource(live);
         LightKind = source is { } s ? ActionCatalog.LightKindOf(s.Action.Action) : LightKind.None;
-        LightValue = ButtonFeedback.ValueFor(live, _owner.AppConfig, _owner.LivePresetId, _owner.Audio) ?? 0;
+        LightValue = ControllerDisplay.LedValueFor(live, _owner.AppConfig, _owner.LivePresetId, _owner.Audio);
         PresetDots = LightKind == LightKind.Preset
             ? _owner.AppConfig.Presets.Select((p, i) => LightValue == i + 1).ToList()
             : Array.Empty<bool>();

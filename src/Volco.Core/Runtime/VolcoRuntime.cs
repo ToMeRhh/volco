@@ -1,6 +1,7 @@
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Devices;
 using Volco.Core.Diagnostics;
 using Volco.Core.Input;
 using Volco.Core.Input.Actions;
@@ -10,8 +11,8 @@ namespace Volco.Core.Runtime;
 /// <summary>
 /// Everything Volco does that is not a window: transport construction and restart, inbound
 /// message routing to <see cref="SliderProcessor"/> / <see cref="ButtonPressDetector"/>,
-/// <see cref="ActionFactory"/> dispatch, the pending-mute-OSD correlation, controller-state
-/// (LED) pushes with change detection, and the post-connect re-push mitigations. Headless: a UI
+/// <see cref="ActionFactory"/> dispatch, the pending-mute-OSD correlation, and the controller
+/// session (<see cref="ControllerLink"/>: Hello, keepalive, LED and screen pushes). Headless: a UI
 /// head (the Avalonia head, Volco.App) constructs one, calls <see cref="Start"/>, and renders
 /// what the events publish.
 /// </summary>
@@ -19,7 +20,7 @@ namespace Volco.Core.Runtime;
 /// Threading: every event on this class may be raised on ANY thread - the audio thread
 /// (engine callbacks), a transport's receive/timer threads, the ConfigManager debounce-timer
 /// thread, the SliderProcessor coalescing timer, the ButtonPressDetector timers, or the
-/// post-connect re-push timers. Subscribers marshal to their UI thread themselves.
+/// controller link's keepalive timer. Subscribers marshal to their UI thread themselves.
 /// </remarks>
 public sealed class VolcoRuntime : IDisposable, IPresetController
 {
@@ -31,6 +32,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     private readonly bool _audioReady;
     private readonly Func<ConnectionConfig, IControllerConnection?> _connectionFactory;
     private readonly VolcoRuntimeOptions _options;
+    private readonly ControllerLink _link;
 
     /// <summary>
     /// The current transport. Ownership handoff: whoever removes a transport from this field
@@ -39,7 +41,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     /// Interlocked.Exchange / CompareExchange, so a restart on the ConfigManager debounce thread
     /// and a concurrent Dispose can never both dispose the same transport, and a transport a
     /// racing restart publishes is always found by exactly one of them. Readers
-    /// (PushControllerState, ConnectionStatus, the sender filter) read it once and tolerate
+    /// (ConnectionStatus, the sender filter) read it once and tolerate
     /// null.
     /// </summary>
     private IControllerConnection? _connection;
@@ -82,48 +84,6 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     private sealed record PendingDeviceOsd(string TargetId, long DeadlineTickMs);
     private PendingDeviceOsd? _pendingDeviceOsd;
 
-    /// <summary>
-    /// Guards <see cref="_lastPushedFrames"/> (Bug 4). PushControllerState can be entered from
-    /// several threads: the audio thread (OnDeviceVolumeChanged/OnDevicesChangedForControllerState,
-    /// both invoked from the platform audio engine's dedicated thread), whatever thread raises
-    /// IControllerConnection.StatusChanged (OnConnectionStatusChanged) — for SerialConnection/
-    /// UdpConnection that can be the thread that called <see cref="Start"/> (the UI thread), the
-    /// ConfigManager debounce-timer thread (StartConnection via OnConfigChanged — see Bug 1), or
-    /// UdpConnection's own receive-loop/inactivity-timer threads — plus a transport receive thread
-    /// (OnMessageReceived) and the post-connect re-push timers. The lock only ever protects
-    /// comparing/replacing this field — it is never held across a call into the engine or into
-    /// the connection's Send.
-    /// </summary>
-    private readonly object _pushStateLock = new();
-    private IReadOnlyList<byte[]>? _lastPushedFrames;
-
-    /// <summary>
-    /// Connect-race fix: on a USB replug, the transport (e.g. SerialConnection) can report
-    /// Connected within milliseconds of Windows enumerating the CDC device, while the ESP32 is
-    /// still executing setup() and not yet reading serial — the immediate PushControllerState in
-    /// OnConnectionStatusChanged is sent into a void, leaving the controller's own boot-time LED
-    /// state (both mute LEDs lit — see firmware note) uncorrected until some later event.
-    ///
-    /// Two independent, additive mitigations, both scheduled/armed from OnConnectionStatusChanged
-    /// on every transition to Connected:
-    ///   (a) _postConnectTimers — one-shot re-pushes, one per entry in
-    ///       <see cref="VolcoRuntimeOptions.PostConnectRepushDelays"/> (750ms and 2500ms by
-    ///       default), that don't depend on the controller doing anything. Guarded by
-    ///       _postConnectLock so a second connect (replug twice quickly) disposes the previous
-    ///       set before arming a new one, rather than stacking timers.
-    ///   (b) _awaitingFirstMessageAfterConnect — set on every Connected transition, consumed
-    ///       (via Interlocked.Exchange) by the first MessageReceived after it, which is positive
-    ///       proof the firmware's serial reader is alive. Self-timing, but can't stand alone since
-    ///       an untouched controller (no slider movement past the deadband, no button press) may
-    ///       never send anything.
-    /// Both paths call PushControllerState(force: true), the same call OnConnectionStatusChanged
-    /// already makes — force bypasses _lastPushedFrames change-detection but pushes are otherwise
-    /// idempotent, so a redundant push (e.g. both (a) and (b) firing) is harmless.
-    /// </summary>
-    private readonly object _postConnectLock = new();
-    private System.Threading.Timer[]? _postConnectTimers;
-    private int _awaitingFirstMessageAfterConnect;
-
     /// <param name="config">Already loaded by the head.</param>
     /// <param name="audio">The platform engine, already started. Owned by the head, not by this
     /// runtime.</param>
@@ -141,6 +101,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         _connectionFactory = connectionFactory
                              ?? new Func<ConnectionConfig, IControllerConnection?>(CreateDefaultConnection);
         _options = options ?? VolcoRuntimeOptions.Default;
+        _link = new ControllerLink(
+            () => ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio), _options.Link);
+        _link.StateChanged += (_, state) => { if (!IsDisposed) ControllerStateChanged?.Invoke(this, state); };
+        _link.HelloReceived += OnHello;
     }
 
     public IAudioEngine Audio { get; }
@@ -149,6 +113,16 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
 
     /// <summary>The current transport's status; Disconnected when there is no transport.</summary>
     public ConnectionStatus ConnectionStatus => Volatile.Read(ref _connection)?.Status ?? ConnectionStatus.Disconnected;
+
+    /// <summary>Where the controller session stands (spec §5.5).</summary>
+    public ControllerState ControllerState => _link.State;
+
+    /// <summary>The controller session's state changed. Any thread.</summary>
+    public event EventHandler<ControllerState>? ControllerStateChanged;
+
+    /// <summary>A Hello reported hardware different from the stored <see cref="AppConfig.Controller"/>
+    /// (which has already been updated). Any thread.</summary>
+    public event EventHandler? ControllerInfoChanged;
 
     /// <summary>
     /// Fix D: the most recently processed volume [0,1] for a slider index, or null before
@@ -201,18 +175,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     }
 
     /// <inheritdoc/>
-    public void SetActivePreset(string presetId)
-    {
-        if (IsDisposed) return;
-        if (!Config.Config.Presets.Exists(p => p.Id == presetId)) return;
-        var previous = ActivePresetId;
-        Volatile.Write(ref _activePresetId, presetId);
-        if (previous == presetId) return;
-
-        AppLog.Info($"Active preset: {presetId}");
-        ActivePresetChanged?.Invoke(this, presetId);
-        PushControllerState();
-    }
+    public void SetActivePreset(string presetId) => SetActivePreset(presetId, transition: null);
 
     /// <inheritdoc/>
     public void NextPreset()
@@ -220,7 +183,33 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         var presets = Config.Config.Presets;
         if (presets.Count == 0) return;
         var index = presets.FindIndex(p => p.Id == ActivePresetId);
-        SetActivePreset(presets[(index + 1) % presets.Count].Id);
+        // Next always slides left, including the wrap from the last preset to the first (spec §2.3).
+        SetActivePreset(presets[(index + 1) % presets.Count].Id, ScreenTransition.SlideLeft);
+    }
+
+    private void SetActivePreset(string presetId, ScreenTransition? transition)
+    {
+        if (IsDisposed) return;
+        var presets = Config.Config.Presets;
+        if (!presets.Exists(p => p.Id == presetId)) return;
+        var stored = Volatile.Read(ref _activePresetId);
+        var previous = ActivePresetId;
+        Volatile.Write(ref _activePresetId, presetId);
+        if (previous == presetId)
+        {
+            // The stored live preset was deleted and ActivePresetId already fell back to this one:
+            // nothing slides, but the controller must catch up now (spec §2.3).
+            if (stored is not null && !presets.Exists(p => p.Id == stored)) _link.PushAll();
+            return;
+        }
+
+        AppLog.Info($"Active preset: {presetId}");
+        ActivePresetChanged?.Invoke(this, presetId);
+
+        var from = presets.FindIndex(p => p.Id == previous);
+        var to = presets.FindIndex(p => p.Id == presetId);
+        var slide = transition ?? (to > from ? ScreenTransition.SlideLeft : ScreenTransition.SlideRight);
+        _link.PushPresetChange(slide, _options.SynchronizedPresetTransitions);
     }
 
     /// <summary>Drops the current transport and starts a fresh one from the current connection
@@ -284,6 +273,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         }
 
         Config.ConnectionConfigChanged += OnConfigChanged;
+        Config.ConfigChanged += OnSettingsChanged;
 
         // Input processing
         _buttonPressDetector = new ButtonPressDetector();
@@ -327,6 +317,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
             // WebSocket listener sits Disconnected and raises nothing.
             var lastStatus = old.Status;
             RetireTransport(old);
+            _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
             if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
                 ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
         }
@@ -384,75 +375,19 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         AppLog.Info($"Connection status changed: {status}");
         ConnectionStatusChanged?.Invoke(this, status);
 
-        if (status == ConnectionStatus.Connected)
-        {
-            // force: true — a (re)connect means the controller's own LED state is unknown
-            // (it may just have rebooted, or this may be a brand-new transport after Bug 1/2's
-            // restart path), so always send the full state at least once regardless of whether
-            // it matches the last state we happened to push to a previous connection.
-            PushControllerState(force: true);
-            // Connect-race fix (see field doc above): this immediate push can land before the
-            // controller's own boot sequence is reading serial. Arm both mitigations for this
-            // connect.
-            ArmFirstMessagePush();
-            ScheduleTimedRepushes();
-        }
-    }
-
-    /// <summary>Arms mitigation (b): the very next MessageReceived, of any kind, triggers one
-    /// forced re-push (consumed atomically so only the first message after this connect does).
-    /// Runs on whatever thread raised StatusChanged — see class-level doc on _pushStateLock for
-    /// the set of threads that can be.</summary>
-    private void ArmFirstMessagePush() =>
-        Interlocked.Exchange(ref _awaitingFirstMessageAfterConnect, 1);
-
-    /// <summary>Arms mitigation (a): one-shot re-pushes at each of
-    /// <see cref="VolcoRuntimeOptions.PostConnectRepushDelays"/> (~750ms and ~2500ms by default)
-    /// after this connect. Disposes any set still pending from an earlier connect first, so
-    /// replugging twice in quick succession re-arms rather than stacking timers. Runs on whatever
-    /// thread raised StatusChanged; the timer callbacks themselves later run on a thread-pool
-    /// thread.</summary>
-    private void ScheduleTimedRepushes()
-    {
-        lock (_postConnectLock)
-        {
-            DisposePostConnectTimers();
-            if (IsDisposed) return;
-
-            var delays = _options.PostConnectRepushDelays;
-            var timers = new System.Threading.Timer[delays.Count];
-            for (int i = 0; i < delays.Count; i++)
-            {
-                timers[i] = new System.Threading.Timer(
-                    _ => PushControllerState(force: true), null, delays[i], Timeout.InfiniteTimeSpan);
-            }
-            _postConnectTimers = timers;
-        }
-    }
-
-    /// <summary>Caller holds <see cref="_postConnectLock"/>.</summary>
-    private void DisposePostConnectTimers()
-    {
-        if (_postConnectTimers is null) return;
-        foreach (var timer in _postConnectTimers)
-            timer.Dispose();
-        _postConnectTimers = null;
+        if (status == ConnectionStatus.Connected) _link.Attach((IControllerConnection)sender!);
+        else _link.Detach();
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
     {
         if (IsDisposed) return;
 
-        // Connect-race fix, mitigation (b): an inbound frame is proof the firmware's serial
-        // reader is alive right now, regardless of whether it was ready when the immediate
-        // post-connect push in OnConnectionStatusChanged went out. Interlocked.Exchange both
-        // reads and clears the flag atomically so only the first message after a given connect
-        // does this, not every message afterwards.
-        if (Interlocked.Exchange(ref _awaitingFirstMessageAfterConnect, 0) == 1)
-            PushControllerState(force: true);
-
         switch (msg)
         {
+            case HelloMessage or AliveMessage:
+                _link.OnMessage(msg);
+                break;
             case SliderMessage slider:
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
                 _sliderProcessor?.HandleSliderEvent(slider.SliderIndex, slider.Value);
@@ -622,6 +557,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         // as DevicesChanged; subscribers marshal to the UI thread themselves (this handler runs
         // on the audio thread), and with no settings window open there are simply no subscribers.
         DevicesChanged?.Invoke(this, e);
+        if (RefreshStoredDeviceNames()) Config.RequestSave();
 
         if (e.Kind is DeviceChangeKind.Added or DeviceChangeKind.StateChanged)
         {
@@ -655,12 +591,26 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
             {
                 ShowDeviceOsd(e.Device.Id, e.Device.FriendlyName);
             }
-
-            // Not forced: PushControllerState already skips the send when the encoded state
-            // (mute flags + active-device index) is unchanged, but a real default-device change
-            // always does change the active-device index, so this still pushes (Bug 4 note).
-            PushControllerState();
         }
+
+        // Every kind: added and removed devices change screens too (an unplugged device), and the
+        // link's per-button dedup keeps this cheap.
+        PushControllerState();
+    }
+
+    /// <summary>Keeps each customized device's stored Windows name current (spec §5.1).</summary>
+    private bool RefreshStoredDeviceNames()
+    {
+        var changed = false;
+        var live = Audio.GetDevices(AudioFlow.Render).Concat(Audio.GetDevices(AudioFlow.Capture)).ToList();
+        foreach (var entry in Config.Config.Devices)
+        {
+            var device = live.Find(d => string.Equals(d.Id, entry.Id, StringComparison.OrdinalIgnoreCase));
+            if (device is null || device.FriendlyName == entry.FriendlyName) continue;
+            entry.FriendlyName = device.FriendlyName;
+            changed = true;
+        }
+        return changed;
     }
 
     /// <summary>Raises <see cref="VolumeChanged"/> with an <see cref="OsdKind.Mute"/>
@@ -674,17 +624,19 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         switch (actionConfig.Action)
         {
             case ButtonActionType.MuteCurrentOutput:
-                label = Audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName ?? "Output";
+                label = Audio.GetDefaultDevice(AudioFlow.Render) is { } output
+                    ? DeviceDisplay.For(Config.Config, output).Name : "Output";
                 (level, muted) = Audio.GetStateOrDefault(DeviceRef.DefaultOutput());
                 break;
             case ButtonActionType.MuteSpecificDevice:
                 var specificDevice = ActionFactory.Resolve(actionConfig.Device);
                 if (specificDevice == null) return; // unresolvable device config; nothing to show
-                label = actionConfig.Device?.FriendlyName ?? "Output";
+                label = DeviceDisplay.NameOf(Config.Config, Audio, actionConfig.Device, "Output");
                 (level, muted) = Audio.GetStateOrDefault(specificDevice.Value);
                 break;
             case ButtonActionType.MuteCurrentInput:
-                label = "Microphone";
+                label = Audio.GetDefaultDevice(AudioFlow.Capture) is { } input
+                    ? DeviceDisplay.For(Config.Config, input).Name : "Microphone";
                 (level, muted) = Audio.GetStateOrDefault(DeviceRef.DefaultInput());
                 break;
             default:
@@ -700,7 +652,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     private void ShowDeviceOsd(string deviceId, string friendlyName)
     {
         var (level, muted) = Audio.GetStateOrDefault(DeviceRef.ById(deviceId));
-        var label = string.IsNullOrEmpty(friendlyName) ? "Output" : friendlyName;
+        var device = Audio.GetDevices(AudioFlow.Render)
+            .FirstOrDefault(d => string.Equals(d.Id, deviceId, StringComparison.OrdinalIgnoreCase));
+        var label = device is not null ? DeviceDisplay.For(Config.Config, device).Name
+                  : string.IsNullOrEmpty(friendlyName) ? "Output" : friendlyName;
         RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Device));
     }
 
@@ -718,54 +673,40 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         VolumeChanged?.Invoke(this, n);
     }
 
-    /// <summary>
-    /// Sends the controller-state frames (one 0x05 ButtonFeedback per button — never volume level;
-    /// see <see cref="ButtonFeedback"/>) if they differ from what was last actually sent, or
-    /// unconditionally when <paramref name="force"/> is true.
-    /// </summary>
-    /// <remarks>
-    /// Bug 4: Core Audio's endpoint-volume callback fires for the engine's own writes too, so
-    /// OnDeviceVolumeChanged previously called this unconditionally — up to ~50 times/sec while
-    /// a Device-mapped slider is dragged, each one a synchronous blocking write
-    /// (SerialConnection.Send/UdpConnection.Send) on the audio thread. Since the encoded state
-    /// never includes volume level, a slider drag never actually changes it, so comparing against
-    /// the last-pushed frames and skipping identical pushes eliminates the flood without missing
-    /// any real mute/active-device change (see OnDeviceVolumeChanged/OnDevicesChangedForControllerState).
-    /// </remarks>
-    private void PushControllerState(bool force = false)
+    /// <summary>Sends whatever changed on the controller (the link dedups per button).</summary>
+    private void PushControllerState()
     {
-        if (IsDisposed) return;
-
-        // Read once: _connection can be replaced by StartConnection on another thread, and the
-        // status check and the sends below must talk to the same transport.
-        var connection = Volatile.Read(ref _connection);
-        if (connection?.Status != ConnectionStatus.Connected) return;
-
-        // BuildFrames only performs the read-only engine queries IAudioEngine documents as safe
-        // from any thread (GetDefaultDevice/TryGetDeviceState) — no lock held here.
-        var frames = ButtonFeedback.BuildFrames(Config.Config, ActivePresetId, Audio);
-
-        lock (_pushStateLock)
-        {
-            if (!force && _lastPushedFrames != null && FramesEqual(_lastPushedFrames, frames))
-                return;
-            _lastPushedFrames = frames;
-        }
-
-        // Send happens outside the lock — Send() is a synchronous blocking transport write and
-        // must never run while _pushStateLock is held.
-        foreach (var frame in frames)
-            connection.Send(frame);
+        if (!IsDisposed) _link.Push();
     }
 
-    private static bool FramesEqual(IReadOnlyList<byte[]> a, IReadOnlyList<byte[]> b)
+    /// <summary>Stores the controller's hardware before the link pushes (spec §3.4); saves only
+    /// when it changed.</summary>
+    private void OnHello(object? sender, HelloMessage hello)
     {
-        if (a.Count != b.Count) return false;
-        for (int i = 0; i < a.Count; i++)
+        var info = new ControllerInfoConfig
         {
-            if (!a[i].AsSpan().SequenceEqual(b[i])) return false;
+            ProtocolVersion = hello.Version, Sliders = hello.SliderCount, Buttons = hello.Buttons.ToList(),
+        };
+        if (info.SameAs(Config.Config.Controller)) return;
+        Config.Config.Controller = info;
+        Config.RequestSave();
+        if (!IsDisposed) ControllerInfoChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Any non-connection save (actions, presets, nicknames, icons): the controller
+    /// follows. A deleted live preset falls back to the first one and is pushed instantly.</summary>
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed) return;
+        var stored = Volatile.Read(ref _activePresetId);
+        if (stored is not null && !Config.Config.Presets.Exists(p => p.Id == stored))
+        {
+            Volatile.Write(ref _activePresetId, null);
+            ActivePresetChanged?.Invoke(this, ActivePresetId);
+            _link.PushAll();
+            return;
         }
-        return true;
+        _link.Push();
     }
 
     private void OnConfigChanged(object? sender, EventArgs e)
@@ -784,16 +725,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         Config.ConnectionConfigChanged -= OnConfigChanged;
-
-        // Stop any pending post-connect re-pushes before tearing anything else down — Dispose()
-        // on a System.Threading.Timer only guarantees no *new* callback queues after it returns;
-        // one already queued on the thread pool can still run. That race is unavoidable without a
-        // WaitHandle-based dispose we don't need here: the callback (PushControllerState) checks
-        // IsDisposed, reads _connection once and tolerates null, and no-ops unless Connected.
-        lock (_postConnectLock)
-        {
-            DisposePostConnectTimers();
-        }
+        Config.ConfigChanged -= OnSettingsChanged;
 
         // Take ownership of the current transport (see _connection): a concurrent restart that
         // already took it retires it itself, and one that publishes a new transport after this
@@ -801,6 +733,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         var connection = Interlocked.Exchange(ref _connection, null);
         if (connection != null)
             RetireTransport(connection); // detached first: nothing it raises while shutting down is reported
+        _link.Dispose();
 
         if (_sliderProcessor is not null)
         {

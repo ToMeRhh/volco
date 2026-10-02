@@ -142,4 +142,27 @@ public class WebSocketConnectionTests : IDisposable
         Assert.IsType<ButtonMessage>(_messages[1]);
     }
 
+    [Fact]
+    public async Task Send_ManyFramesQuickly_AllArriveInOrder()
+    {
+        _connection.Connect();
+        using var client = new ClientWebSocket();
+        await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
+        for (int i = 0; i < 100 && _connection.Status != ConnectionStatus.Connected; i++)
+            await Task.Delay(20);
+        await Task.Delay(50);
+
+        for (byte i = 0; i < 100; i++) _connection.Send(new[] { i });
+
+        var received = new List<byte>();
+        var buffer = new byte[256];
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (received.Count < 100)
+        {
+            var r = await client.ReceiveAsync(buffer, cts.Token);
+            received.AddRange(buffer.Take(r.Count));
+        }
+        Assert.Equal(Enumerable.Range(0, 100).Select(i => (byte)i), received);
+    }
+
 }
