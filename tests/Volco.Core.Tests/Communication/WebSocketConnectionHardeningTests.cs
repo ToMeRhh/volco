@@ -130,11 +130,11 @@ public class WebSocketConnectionHardeningTests
         var conn = new WebSocketConnection(new WebSocketConfig { Port = port });
 
         conn.Connect();
-        Assert.True(await WaitUntilAsync(() => CanConnectTcpAsync(port).GetAwaiter().GetResult()),
+        Assert.True(await WaitUntilAsync(() => CanConnectTcpAsync(port), true),
             "precondition: Connect() must start listening");
 
         conn.Dispose();
-        Assert.True(await WaitUntilAsync(() => !CanConnectTcpAsync(port).GetAwaiter().GetResult()),
+        Assert.True(await WaitUntilAsync(() => CanConnectTcpAsync(port), false),
             "Dispose() must stop listening");
 
         conn.Connect();
@@ -261,7 +261,7 @@ public class WebSocketConnectionHardeningTests
         using var conn = new WebSocketConnection(new WebSocketConfig { Port = port });
         var probe = new Probe(conn);
         conn.Connect();
-        Assert.True(await WaitUntilAsync(() => CanConnectTcpAsync(port).GetAwaiter().GetResult()));
+        Assert.True(await WaitUntilAsync(() => CanConnectTcpAsync(port), true));
 
         // Plain HTTP GET, not an upgrade: answered with 400.
         using (var http = new HttpClient())

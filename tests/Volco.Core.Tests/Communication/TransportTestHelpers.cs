@@ -33,6 +33,18 @@ internal static class TransportTestHelpers
         return frame;
     }
 
+    /// <summary>Bounded polling of an async probe until it returns <paramref name="expected"/>.</summary>
+    public static async Task<bool> WaitUntilAsync(Func<Task<bool>> probe, bool expected, int timeoutMs = 5000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            if (await probe() == expected) return true;
+            await Task.Delay(20);
+        }
+        return await probe() == expected;
+    }
+
     /// <summary>Bounded polling; returns whether the condition became true within the timeout.</summary>
     public static async Task<bool> WaitUntilAsync(Func<bool> condition, int timeoutMs = 5000)
     {
