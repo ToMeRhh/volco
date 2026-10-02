@@ -33,7 +33,7 @@
                 <StackPanel Spacing="6">
                   <TextBlock Text="Nickname" FontWeight="SemiBold"/>
                   <TextBox Name="NicknameBox" MaxWidth="320" HorizontalAlignment="Left"
-                           Watermark="{Binding AutoName}" Text="{Binding Nickname, Mode=TwoWay}"
+                           PlaceholderText="{Binding AutoName}" Text="{Binding Nickname, Mode=TwoWay}"
                            FlowDirection="{Binding NicknameFlowDirection}"/>
                   <TextBlock Classes="Caption" Text="{Binding NicknameHint}"/>
                 </StackPanel>
