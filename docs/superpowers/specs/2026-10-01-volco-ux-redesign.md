@@ -276,9 +276,11 @@ The direction: quiet and neutral, letting the content carry the screen. Flat sur
 | `0x04` | host → controller | active device | **removed** |
 | `0x05` | host → controller | **ButtonFeedback**: button index, value (0 = off/unknown, 1..N = on / choice *n*) | **new** |
 
+**This table is superseded by `2026-10-02-oled-screens-design.md`.**
+
 - The firmware ignores unknown message types.
 - **OLED is deferred.** Superseded by `2026-10-02-oled-screens-design.md`, which replaces this protocol.
-- **No Hello/capabilities handshake** and no per-button "indicator type" setting in the app for now.
+- **No Hello/capabilities handshake** and no per-button "indicator type" setting in the app for now. Superseded by `2026-10-02-oled-screens-design.md`, which adds the Hello handshake.
 
 ### 4.4 Firmware
 

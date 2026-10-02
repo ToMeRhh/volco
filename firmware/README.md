@@ -193,8 +193,8 @@ Text is UTF-8 in logical order, at most 60 bytes per slot; the app strips Hebrew
 
 ### Behaviour rules
 
-- **Hello** is sent at boot (which also covers the ESP32 resetting when the serial port is opened), in reply to every HelloRequest, and on the first valid frame after a host timeout. The PC sends no Led or Screen on a connection until it has seen a Hello, then pushes every button's state.
-- **Keepalive.** Each side sends its keepalive (Alive, Heartbeat) when it has sent nothing else for 1 s. Any valid frame from the PC counts as proof of life; after `HOST_TIMEOUT_MS` without one the LEDs go off and the screens show "not connected".
+- **Hello** is sent at boot (which also covers the ESP32 resetting when the serial port is opened), in reply to every HelloRequest, and on the first valid frame from the PC while the PC is not considered alive (the first frame ever, or the first after a host timeout), unless that frame is itself a HelloRequest, whose reply covers it. The PC sends no Led or Screen on a connection until it has seen a Hello, then pushes every button's state.
+- **Keepalive.** The controller sends Alive whenever it has sent nothing for 1 s. The PC sends Heartbeat the same way, but only once its session is Ready. Any valid frame from the PC counts as proof of life; after `HOST_TIMEOUT_MS` without one the LEDs go off and the screens show "not connected".
 - **Begin / Commit.** After Begin the firmware holds every Led and Screen instead of applying it; on Commit it applies them all in the same pass, so every screen starts its slide at the same moment. A newer message for the same button replaces the held one, a second Begin restarts the timer, Commit with nothing held does nothing, and Commit without a Begin is ignored. If no Commit arrives within `COMMIT_FALLBACK_MS` of the Begin, the firmware applies what it holds.
 - **Kind mismatches are ignored.** A Led for a button that is not an LED or LED pair, a Screen for a button that is not a screen, and any out-of-range index are dropped.
 
