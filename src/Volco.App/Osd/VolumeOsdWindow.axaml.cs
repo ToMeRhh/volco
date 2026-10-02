@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Volco.App.Controls;
 using Volco.App.Platform;
 using Volco.Core.Input;
 
@@ -36,6 +37,7 @@ public sealed partial class VolumeOsdWindow : Window
     private readonly PathIcon _mutedIcon;
     private readonly PathIcon _speakerIcon;
     private readonly PathIcon _presetIcon;
+    private readonly Image _deviceIcon;
     private readonly DispatcherTimer _hideTimer;
     private readonly DispatcherTimer _fadeTimer;
     private readonly Stopwatch _fadeClock = new();
@@ -65,6 +67,7 @@ public sealed partial class VolumeOsdWindow : Window
         _mutedIcon = this.FindControl<PathIcon>("MutedIcon")!;
         _speakerIcon = this.FindControl<PathIcon>("SpeakerIcon")!;
         _presetIcon = this.FindControl<PathIcon>("PresetIcon")!;
+        _deviceIcon = this.FindControl<Image>("DeviceIcon")!;
 
         _hideTimer = new DispatcherTimer { Interval = _timings.Visible };
         _hideTimer.Tick += (_, _) => { _hideTimer.Stop(); BeginFade(); };
@@ -96,6 +99,7 @@ public sealed partial class VolumeOsdWindow : Window
     internal PathIcon MutedGlyph => _mutedIcon;
     internal PathIcon SpeakerGlyph => _speakerIcon;
     internal PathIcon PresetGlyph => _presetIcon;
+    internal Image DeviceGlyph => _deviceIcon;
 
     /// <summary>Shows the notification. Safe to call from any thread; posts to the UI thread itself.</summary>
     public void Show(VolumeChangeNotification n)
@@ -167,6 +171,8 @@ public sealed partial class VolumeOsdWindow : Window
         _speakerIcon.IsVisible = _vm.Glyph == OsdGlyph.Speaker;
         _volumeIcon.IsVisible = _vm.Glyph == OsdGlyph.Volume;
         _presetIcon.IsVisible = _vm.Glyph == OsdGlyph.Preset;
+        _deviceIcon.Source = _vm.DeviceIcon is { } icon ? ScreenIcons.Bitmap(icon) : null;
+        _deviceIcon.IsVisible = _vm.Glyph == OsdGlyph.Device;
         _bar.IsVisible = _vm.ShowsLevel;
     }
 

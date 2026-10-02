@@ -655,16 +655,16 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     }
 
     /// <summary>Raises <see cref="VolumeChanged"/> with an <see cref="OsdKind.Device"/>
-    /// notification: the new default output's name plus its current level and mute flag
+    /// notification: the new default output's name and icon plus its current level and mute flag
     /// (level 0, not muted when the state cannot be read).</summary>
     private void ShowDeviceOsd(string deviceId, string friendlyName)
     {
         var (level, muted) = Audio.GetStateOrDefault(DeviceRef.ById(deviceId));
         var device = Audio.GetDevices(AudioFlow.Render)
             .FirstOrDefault(d => string.Equals(d.Id, deviceId, StringComparison.OrdinalIgnoreCase));
-        var label = device is not null ? DeviceDisplay.For(Config.Config, device).Name
-                  : string.IsNullOrEmpty(friendlyName) ? "Output" : friendlyName;
-        RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Device));
+        var look = device is not null ? DeviceDisplay.For(Config.Config, device) : (DeviceLook?)null;
+        var label = look?.Name ?? (string.IsNullOrEmpty(friendlyName) ? "Output" : friendlyName);
+        RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Device, look?.Icon));
     }
 
     private void OnSliderVolumeChanged(object? sender, VolumeChangeNotification n) => RaiseVolumeChanged(n);

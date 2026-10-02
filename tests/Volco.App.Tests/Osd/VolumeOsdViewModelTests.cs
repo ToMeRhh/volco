@@ -1,4 +1,5 @@
 using Volco.App.Osd;
+using Volco.Core.Communication;
 using Volco.Core.Input;
 using Xunit;
 
@@ -78,27 +79,62 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_DeviceKind_UsesSpeakerGlyphAndPercent()
+    public void OsdViewModel_DeviceKind_ShowsTheDeviceIconAndPercent()
     {
         var vm = new VolumeOsdViewModel();
-        vm.Apply(new VolumeChangeNotification("Headphones", 0.37f, false, OsdKind.Device));
+        vm.Apply(new VolumeChangeNotification("Headphones", 0.37f, false, OsdKind.Device, ScreenIcon.Headphones));
 
-        Assert.Equal(OsdGlyph.Speaker, vm.Glyph);
+        Assert.Equal(OsdGlyph.Device, vm.Glyph);
+        Assert.Equal(ScreenIcon.Headphones, vm.DeviceIcon);
         Assert.Equal("37%", vm.ValueText);
         Assert.Equal("Headphones", vm.Label);
         Assert.Equal(1.0, vm.LevelBarOpacity);
     }
 
     [Fact]
-    public void OsdViewModel_DeviceKindMuted_ShowsMutedTextAndMutedGlyph()
+    public void OsdViewModel_DeviceKindWithoutIcon_FallsBackToSpeakerGlyph()
+    {
+        var vm = new VolumeOsdViewModel();
+        vm.Apply(new VolumeChangeNotification("Headphones", 0.37f, false, OsdKind.Device));
+
+        Assert.Equal(OsdGlyph.Speaker, vm.Glyph);
+        Assert.Null(vm.DeviceIcon);
+    }
+
+    [Fact]
+    public void OsdViewModel_DeviceKindMuted_KeepsTheDeviceIcon_AndShowsMutedText()
+    {
+        var vm = new VolumeOsdViewModel();
+        vm.Apply(new VolumeChangeNotification("Headphones", 0.37f, true, OsdKind.Device, ScreenIcon.Headphones));
+
+        Assert.Equal(OsdGlyph.Device, vm.Glyph);   // which device is the point of a switch...
+        Assert.Equal("Muted", vm.ValueText);       // ...the text and dimmed bar show the mute
+        Assert.Equal(37, vm.Level, 1);
+        Assert.Equal(0.4, vm.LevelBarOpacity);
+    }
+
+    [Fact]
+    public void OsdViewModel_DeviceKindMutedWithoutIcon_ShowsMutedGlyph()
     {
         var vm = new VolumeOsdViewModel();
         vm.Apply(new VolumeChangeNotification("Headphones", 0.37f, true, OsdKind.Device));
 
         Assert.Equal(OsdGlyph.Muted, vm.Glyph);
         Assert.Equal("Muted", vm.ValueText);
-        Assert.Equal(37, vm.Level, 1);
-        Assert.Equal(0.4, vm.LevelBarOpacity);
+    }
+
+    [Fact]
+    public void OsdViewModel_DeviceIcon_IsIgnoredOutsideDeviceKind_AndAChangeIsReported()
+    {
+        var vm = new VolumeOsdViewModel();
+        vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Volume, ScreenIcon.Speaker));
+        Assert.Equal(OsdGlyph.Volume, vm.Glyph);
+        Assert.Null(vm.DeviceIcon);
+
+        vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Device, ScreenIcon.Speaker));
+        // Only the icon differs: still a change.
+        Assert.True(vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Device, ScreenIcon.Headset)));
+        Assert.Equal(ScreenIcon.Headset, vm.DeviceIcon);
     }
 
     [Fact]

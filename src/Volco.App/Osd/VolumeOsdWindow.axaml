@@ -28,6 +28,10 @@
                   Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
         <PathIcon Name="PresetIcon" Data="{StaticResource Icon.Preset}" Width="20" Height="20"
                   Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
+        <!-- The device's own controller icon: 28 px white-on-black art, overhanging the 20 px slot
+             so it stays crisp; Screen blending drops the black onto the pill's surface. -->
+        <Image Name="DeviceIcon" Width="28" Height="28" Margin="-4" IsVisible="False"
+               BlendMode="Screen" RenderOptions.BitmapInterpolationMode="None"/>
       </Panel>
       <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="12,0,0,0" Width="210">
         <TextBlock Name="LabelText" Text="Output" Foreground="{DynamicResource OsdTextBrush}" FontSize="12"
