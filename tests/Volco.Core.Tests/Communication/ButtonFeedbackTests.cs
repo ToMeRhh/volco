@@ -147,8 +147,8 @@ public class ButtonFeedbackTests
         var frames = ButtonFeedback.BuildFrames(c, AppConfig.DefaultPresetId, _audio);
 
         Assert.Equal(3, frames.Count);
-        Assert.Equal(ProtocolEncoder.EncodeButtonFeedback(0, 0), frames[0]);
-        Assert.Equal(ProtocolEncoder.EncodeButtonFeedback(1, 1), frames[1]);
-        Assert.Equal(ProtocolEncoder.EncodeButtonFeedback(2, 0), frames[2]);
+        Assert.Equal(ProtocolEncoder.EncodeLed(0, 0), frames[0]);
+        Assert.Equal(ProtocolEncoder.EncodeLed(1, 1), frames[1]);
+        Assert.Equal(ProtocolEncoder.EncodeLed(2, 0), frames[2]);
     }
 }

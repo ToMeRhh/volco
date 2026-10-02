@@ -37,7 +37,7 @@ public static class ButtonFeedback
         var values = Compute(config, activePresetId, audio);
         var frames = new byte[values.Count][];
         for (int i = 0; i < values.Count; i++)
-            frames[i] = ProtocolEncoder.EncodeButtonFeedback(i, values[i]);
+            frames[i] = ProtocolEncoder.EncodeLed(i, values[i]);
         return frames;
     }
 

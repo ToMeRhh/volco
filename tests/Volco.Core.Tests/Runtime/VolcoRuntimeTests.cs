@@ -650,9 +650,9 @@ public sealed class VolcoRuntimeTests : IDisposable
         Connection(0).SetStatus(ConnectionStatus.Connected);
 
         var frames = Connection(0).SentFrames;
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(0, 0)), "button 0 feedback frame missing");
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(1, 0)), "button 1 feedback frame missing");
-        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeButtonFeedback(2, 0)), "button 2 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(0, 0)), "button 0 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(1, 0)), "button 1 feedback frame missing");
+        Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(2, 0)), "button 2 feedback frame missing");
         Assert.Equal(ConnectionStatus.Connected, runtime.ConnectionStatus);
         Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
     }
@@ -691,7 +691,7 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Assert.True(connection.SentCount > baseline, "mute flip did not resend frames");
         var newFrames = connection.SentFrames.Skip(baseline);
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(0, 1)), "muted frame not sent");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(0, 1)), "muted frame not sent");
     }
 
     [Fact]
@@ -1089,9 +1089,9 @@ public sealed class VolcoRuntimeTests : IDisposable
         runtime.SetActivePreset("gaming");
 
         var newFrames = connection.SentFrames.Skip(baseline).ToList();
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(0, 1)), "button 0 not lit for the muted mic");
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(1, 0)), "button 1 has nothing in Gaming, so its light must go off");
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeButtonFeedback(2, 2)), "preset indicator not on preset 2");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(0, 1)), "button 0 not lit for the muted mic");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(1, 0)), "button 1 has nothing in Gaming, so its light must go off");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(2, 2)), "preset indicator not on preset 2");
     }
 
     [Fact]

@@ -1,0 +1,12 @@
+# id  file-stem   C#-name     offered-on-devices-page
+0     generic     Generic     yes
+1     speaker     Speaker     yes
+2     speakers    Speakers    yes
+3     headphones  Headphones  yes
+4     headset     Headset     yes
+5     earbuds     Earbuds     yes
+6     display     Display     yes
+7     mic         Mic         yes
+8     studiomic   StudioMic   yes
+9     webcam      Webcam      yes
+10    presets     Presets     no

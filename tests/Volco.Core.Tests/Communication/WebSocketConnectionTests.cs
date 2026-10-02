@@ -110,7 +110,7 @@ public class WebSocketConnectionTests : IDisposable
         using var client = new ClientWebSocket();
         await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
 
-        var frame = FramePayload(new byte[] { 0x01, 0x00, 0x02, 0x00 }); // slider 0, value 512
+        var frame = FramePayload(new byte[] { 0x03, 0x00, 0x02, 0x00 }); // slider 0, value 512
         await client.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None);
 
         // Give time for processing
@@ -130,8 +130,8 @@ public class WebSocketConnectionTests : IDisposable
         using var client = new ClientWebSocket();
         await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
 
-        var frame1 = FramePayload(new byte[] { 0x01, 0x01, 0x01, 0x00 }); // slider 1, value 256
-        var frame2 = FramePayload(new byte[] { 0x02, 0x02, 0x01 });       // button 2, pressed
+        var frame1 = FramePayload(new byte[] { 0x03, 0x01, 0x01, 0x00 }); // slider 1, value 256
+        var frame2 = FramePayload(new byte[] { 0x04, 0x02, 0x01 });       // button 2, pressed
         await client.SendAsync(frame1, WebSocketMessageType.Binary, true, CancellationToken.None);
         await client.SendAsync(frame2, WebSocketMessageType.Binary, true, CancellationToken.None);
 

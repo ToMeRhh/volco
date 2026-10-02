@@ -82,17 +82,27 @@ public class ProtocolParser
 
     private static ControllerMessage? ParsePayload(ReadOnlySpan<byte> payload)
     {
-        if (payload.Length < 3)
+        if (payload.Length < 1)
             return null;
 
-        var type = (MessageType)payload[0];
-        return type switch
+        switch ((MessageType)payload[0])
         {
-            MessageType.Slider when payload.Length >= 4 =>
-                new SliderMessage(payload[1], (ushort)((payload[2] << 8) | payload[3])),
-            MessageType.Button =>
-                new ButtonMessage(payload[1], (ButtonState)payload[2]),
-            _ => null
-        };
+            case MessageType.Hello when payload.Length >= 4:
+            {
+                int buttons = payload[3];
+                if (payload.Length < 4 + buttons) return null;
+                var kinds = new IndicatorKind[buttons];
+                for (int i = 0; i < buttons; i++) kinds[i] = (IndicatorKind)payload[4 + i];
+                return new HelloMessage(payload[1], payload[2], kinds);
+            }
+            case MessageType.Alive:
+                return new AliveMessage();
+            case MessageType.Slider when payload.Length >= 4:
+                return new SliderMessage(payload[1], (ushort)((payload[2] << 8) | payload[3]));
+            case MessageType.Button when payload.Length >= 3:
+                return new ButtonMessage(payload[1], (ButtonState)payload[2]);
+            default:
+                return null;   // PC to controller types, unknown types, or a body too short for its type
+        }
     }
 }
