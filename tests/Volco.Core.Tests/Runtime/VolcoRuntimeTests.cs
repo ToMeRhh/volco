@@ -837,6 +837,25 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void DeletingTheFallbackLivePreset_NeverSetExplicitly_PushesInstantly()
+    {
+        // No SetActivePreset before: the live preset is the first one only by fallback.
+        var config = TwoPresetConfig();
+        var runtime = StartRuntime(config);
+        var connection = Connection(0);
+        ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
+        var baseline = connection.SentCount;
+
+        config.Config.Presets.RemoveAll(p => p.Id == AppConfig.DefaultPresetId);
+        runtime.SetActivePreset("gaming");                        // what ButtonsViewModel does
+
+        var burst = connection.SentFrames.Skip(baseline).ToList();
+        var screen = burst.First(f => f[2] == (byte)MessageType.Screen);
+        Assert.Equal((byte)ScreenTransition.None, screen[4]);
+        Assert.DoesNotContain(burst, f => f[2] == (byte)MessageType.Begin);
+    }
+
+    [Fact]
     public void ConfigChanged_PushesActionEdits()
     {
         var config = NewConfig();

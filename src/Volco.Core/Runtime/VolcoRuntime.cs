@@ -197,9 +197,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         Volatile.Write(ref _activePresetId, presetId);
         if (previous == presetId)
         {
-            // The stored live preset was deleted and ActivePresetId already fell back to this one:
+            // The live preset was deleted and ActivePresetId already fell back to this one (also
+            // when none was ever set explicitly, so the deleted one was itself the fallback):
             // nothing slides, but the controller must catch up now (spec §2.3).
-            if (stored is not null && !presets.Exists(p => p.Id == stored)) _link.PushAll();
+            if (stored is null || !presets.Exists(p => p.Id == stored)) _link.PushAll();
             return;
         }
 
@@ -334,7 +335,11 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         // Publish. Anything displaced is a transport a concurrent StartConnection published in
         // the meantime; by the ownership rule, removing it makes it ours to retire.
         var displaced = Interlocked.Exchange(ref _connection, connection);
-        if (displaced != null) RetireTransport(displaced);
+        if (displaced != null)
+        {
+            RetireTransport(displaced);
+            _link.Detach();
+        }
 
         // Dispose() may have started after the IsDisposed check at the top. Both the publish
         // above and Dispose()'s flag write are full fences, so if this read still sees 0, any
@@ -386,7 +391,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         switch (msg)
         {
             case HelloMessage or AliveMessage:
-                _link.OnMessage(msg);
+                // Only the current transport's session: a Hello still in flight from a retired
+                // transport must not mark the new session Ready.
+                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) _link.OnMessage(msg);
                 break;
             case SliderMessage slider:
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
@@ -603,7 +610,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     {
         var changed = false;
         var live = Audio.GetDevices(AudioFlow.Render).Concat(Audio.GetDevices(AudioFlow.Capture)).ToList();
-        foreach (var entry in Config.Config.Devices)
+        foreach (var entry in Config.Config.Devices.ToList())
         {
             var device = live.Find(d => string.Equals(d.Id, entry.Id, StringComparison.OrdinalIgnoreCase));
             if (device is null || device.FriendlyName == entry.FriendlyName) continue;
@@ -699,9 +706,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     {
         if (IsDisposed) return;
         var stored = Volatile.Read(ref _activePresetId);
-        if (stored is not null && !Config.Config.Presets.Exists(p => p.Id == stored))
+        if (stored is not null && !Config.Config.Presets.Exists(p => p.Id == stored)
+            && Interlocked.CompareExchange(ref _activePresetId, null, stored) == stored)
         {
-            Volatile.Write(ref _activePresetId, null);
             ActivePresetChanged?.Invoke(this, ActivePresetId);
             _link.PushAll();
             return;
@@ -727,13 +734,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         Config.ConnectionConfigChanged -= OnConfigChanged;
         Config.ConfigChanged -= OnSettingsChanged;
 
+        // Before the transport goes: nothing may be sent to it while it is being retired.
+        _link.Dispose();
+
         // Take ownership of the current transport (see _connection): a concurrent restart that
         // already took it retires it itself, and one that publishes a new transport after this
         // point sees IsDisposed and retires that one itself.
         var connection = Interlocked.Exchange(ref _connection, null);
         if (connection != null)
             RetireTransport(connection); // detached first: nothing it raises while shutting down is reported
-        _link.Dispose();
 
         if (_sliderProcessor is not null)
         {
