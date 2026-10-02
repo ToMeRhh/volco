@@ -41,20 +41,37 @@ public class WebSocketConnectionHardeningTests
         await client.SendAsync(Frame(0x02, 0x00, 0x01), WebSocketMessageType.Binary, true, CancellationToken.None);
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref received) == 1), "server never saw the client's frame");
 
+        // Frames are large and the client does not read until every Send() has returned, so the
+        // socket's send buffer fills and a SendAsync stays outstanding while the next Send() is
+        // issued - the situation that makes a fire-and-forget SendAsync throw (a WebSocket
+        // allows one outstanding send). Tiny frames would complete synchronously and hide it.
         const int count = 20;
+        const int frameSize = 512 * 1024;
         for (var i = 0; i < count; i++)
-            conn.Send(new byte[] { (byte)i });
+        {
+            var frame = new byte[frameSize];
+            frame[0] = (byte)i;
+            conn.Send(frame);
+        }
 
-        var buffer = new byte[16];
+        var buffer = new byte[64 * 1024];
         var got = new List<byte>();
-        using var cts = new CancellationTokenSource(5000);
+        using var cts = new CancellationTokenSource(10000);
         try
         {
             while (got.Count < count)
             {
-                var r = await client.ReceiveAsync(buffer, cts.Token);
-                Assert.Equal(1, r.Count);
-                got.Add(buffer[0]);
+                var total = 0;
+                var first = (byte)0;
+                ValueWebSocketReceiveResult r;
+                do
+                {
+                    r = await client.ReceiveAsync(buffer.AsMemory(), cts.Token);
+                    if (total == 0) first = buffer[0];
+                    total += r.Count;
+                } while (!r.EndOfMessage);
+                Assert.Equal(frameSize, total);
+                got.Add(first);
             }
         }
         catch (OperationCanceledException) { }
