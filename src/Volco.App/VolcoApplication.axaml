@@ -1,8 +1,12 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Volco.App.Converters"
              xmlns:themes="using:Avalonia.Themes.Fluent"
              x:Class="Volco.App.VolcoApplication"
              RequestedThemeVariant="Default">
+  <Application.Resources>
+    <conv:ScreenIconToBitmapConverter x:Key="ScreenIconToBitmap"/>
+  </Application.Resources>
   <Application.Styles>
     <themes:FluentTheme/>
     <StyleInclude Source="avares://Volco.App/Styles/VolcoStyles.axaml"/>
