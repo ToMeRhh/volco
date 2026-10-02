@@ -5,6 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>Volco.App</RootNamespace>
+    <!-- AVLN3001: windows/controls built only from code with constructor arguments have no
+         public parameterless constructor, so the runtime XAML loader and previewer can't
+         create them. Nothing loads them that way. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -23,7 +23,7 @@ public class SettingsViewModelTests
         Assert.Equal(new[] { SliderItemViewModel.CurrentDefaultOutput, "Speakers" }, slider.DeviceChoices);
 
         engine.Devices.Add(Headphones);
-        await Task.Run(() => engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones));
+        await Task.Run(() => engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones), TestContext.Current.CancellationToken);
 
         // Nothing mutated yet: the handler only queued work.
         Assert.True(ui.Pending > 0);
@@ -86,7 +86,7 @@ public class SettingsViewModelTests
         var connection = vm.Connection;
         Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
 
-        await Task.Run(() => rig.Connection!.SetStatus(ConnectionStatus.Connected));
+        await Task.Run(() => rig.Connection!.SetStatus(ConnectionStatus.Connected), TestContext.Current.CancellationToken);
 
         Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
         ui.RunAll();
@@ -108,7 +108,7 @@ public class SettingsViewModelTests
         {
             engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones);
             rig.Connection!.SetStatus(ConnectionStatus.Connected);
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Equal(0, ui.Pending);
         Assert.Equal(ConnectionStatus.Disconnected, vm.Connection.Status);
@@ -129,7 +129,7 @@ public class SettingsViewModelTests
         {
             engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones);
             rig.Connection!.SetStatus(ConnectionStatus.Connected);
-        });
+        }, TestContext.Current.CancellationToken);
         Assert.True(ui.Pending > 0);
 
         vm.Dispose();
@@ -152,7 +152,7 @@ public class SettingsViewModelTests
         using var vm = rig.CreateSettings(ui);
         var card = vm.Buttons.Items[1];
 
-        await Task.Run(() => rig.Connection!.RaiseMessage(new ButtonMessage(1, ButtonState.Pressed)));
+        await Task.Run(() => rig.Connection!.RaiseMessage(new ButtonMessage(1, ButtonState.Pressed)), TestContext.Current.CancellationToken);
 
         Assert.False(card.IsActive);
         ui.RunAll();
