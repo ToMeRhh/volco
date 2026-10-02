@@ -10,6 +10,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Tests.Audio;
 using Volco.Core.Updates;
@@ -207,5 +208,25 @@ public class SettingsCoverageTests
         var u = SaveAndReload(rig).Updates;
         Assert.Equal("ghp_cover", u.GitHubToken);
         Assert.True(u.UseCiArtifact);
+    }
+
+    [AvaloniaFact]
+    public void Devices_NicknameAndIcon()
+    {
+        using var rig = new TestRig(Engine());
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var page = new DevicesPage(vm.Devices);
+        Host(page);
+        var item = vm.Devices.Outputs.Single(d => d.Id == "dev-1");
+        item.IsExpanded = true;
+        Dispatcher.UIThread.RunJobs();
+        var card = page.GetVisualDescendants().OfType<Border>().First(b => b.Name == "DeviceCard" && b.DataContext == item);
+
+        Named<TextBox>(card, "NicknameBox").Text = "Desk";                                      // Devices[].Nickname
+        Named<Button>(card, "IconChoice", (int)ScreenIcon.Headphones).Command!.Execute(null);   // Devices[].Icon
+
+        var d = SaveAndReload(rig).FindDevice("dev-1")!;
+        Assert.Equal("Desk", d.Nickname);
+        Assert.Equal(ScreenIcon.Headphones, d.Icon);
     }
 }

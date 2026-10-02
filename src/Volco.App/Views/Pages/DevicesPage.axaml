@@ -1,0 +1,95 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Pages.DevicesPage"
+             x:DataType="vm:DevicesViewModel">
+  <UserControl.Resources>
+    <DataTemplate x:Key="DeviceCardTemplate" x:DataType="vm:DeviceItemViewModel">
+      <Border Name="DeviceCard" Classes="Card">
+        <StackPanel>
+          <Button Name="DeviceHeader" Classes="CardHeader" Margin="4" Command="{Binding ToggleExpandedCommand}"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+              <Border Width="40" Height="40" CornerRadius="6" Background="#05070A" Margin="0,0,12,0">
+                <Image Width="28" Height="28" RenderOptions.BitmapInterpolationMode="None"
+                       Source="{Binding Icon, Converter={StaticResource ScreenIconToBitmap}}"/>
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Name="DeviceTitle" Classes="Subtitle" Text="{Binding DisplayName}"
+                           Classes.auto="{Binding IsAutoName}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Classes="Caption" Text="{Binding WindowsName}" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+              <Border Grid.Column="2" Classes="Chip" IsVisible="{Binding HasStatus}" VerticalAlignment="Center" Margin="8,0">
+                <TextBlock Name="DeviceStatus" Classes="Caption" Text="{Binding StatusText}"/>
+              </Border>
+              <PathIcon Grid.Column="3" Width="12" Height="12" VerticalAlignment="Center"
+                        Data="{StaticResource Icon.ChevronDown}"/>
+            </Grid>
+          </Button>
+          <Border Classes="CardBody" IsVisible="{Binding IsExpanded}">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+              <StackPanel Spacing="16">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="Nickname" FontWeight="SemiBold"/>
+                  <TextBox Name="NicknameBox" MaxWidth="320" HorizontalAlignment="Left"
+                           Watermark="{Binding AutoName}" Text="{Binding Nickname, Mode=TwoWay}"
+                           FlowDirection="{Binding NicknameFlowDirection}"/>
+                  <TextBlock Classes="Caption" Text="{Binding NicknameHint}"/>
+                </StackPanel>
+                <StackPanel Spacing="6">
+                  <TextBlock Text="Icon" FontWeight="SemiBold"/>
+                  <ItemsControl ItemsSource="{Binding IconChoices}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:IconChoiceViewModel">
+                        <Button Name="IconChoice" Classes="IconChoice" Classes.selected="{Binding IsSelected}"
+                                Width="44" Height="44" Margin="0,0,6,6" Padding="0" Background="#05070A"
+                                ToolTip.Tip="{Binding Label}" Command="{Binding SelectCommand}">
+                          <Image Width="28" Height="28" RenderOptions.BitmapInterpolationMode="None"
+                                 Source="{Binding Icon, Converter={StaticResource ScreenIconToBitmap}}"/>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+              <controls:ScreenPreview Name="DevicePreview" Grid.Column="1" Margin="16,0,0,0" Scale="2"
+                                      VerticalAlignment="Top" Screen="{Binding Preview}"/>
+              <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="16" Margin="0,12,0,0">
+                <TextBlock Classes="Caption" Text="{Binding FooterText}"/>
+                <Button Name="ForgetButton" Classes="Ghost Danger" Content="Forget this device"
+                        IsVisible="{Binding CanForget}" Command="{Binding ForgetCommand}"/>
+                <TextBlock Name="UsedByText" Classes="Caption" Text="{Binding UsedBy}" IsVisible="{Binding ShowUsedBy}"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{StaticResource PagePadding}" Spacing="{StaticResource SpaceL}" MaxWidth="{StaticResource PageMaxWidth}">
+      <StackPanel Spacing="2" Margin="0,8,0,0">
+        <TextBlock Text="Devices" Classes="Title"/>
+        <TextBlock Classes="Secondary" TextWrapping="Wrap"
+                   Text="Give your audio devices short names and icons. Volco uses them on your controller's screens, in the volume pop-up and in its own device lists."/>
+      </StackPanel>
+      <StackPanel Spacing="8">
+        <TextBlock Text="OUTPUTS" Classes="Caption" FontWeight="SemiBold"/>
+        <ItemsControl Name="OutputList" ItemsSource="{Binding Outputs}" ItemTemplate="{StaticResource DeviceCardTemplate}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        </ItemsControl>
+      </StackPanel>
+      <StackPanel Spacing="8">
+        <TextBlock Text="INPUTS" Classes="Caption" FontWeight="SemiBold"/>
+        <ItemsControl Name="InputList" ItemsSource="{Binding Inputs}" ItemTemplate="{StaticResource DeviceCardTemplate}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        </ItemsControl>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

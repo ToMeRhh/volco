@@ -13,6 +13,7 @@ namespace Volco.App.ViewModels;
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 {
+    private DevicesViewModel? _devicesViewModel;
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
     private readonly VolcoRuntime _runtime;
@@ -35,6 +36,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     public SlidersViewModel Sliders =>
         _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast);
+
+    public DevicesViewModel Devices => _devicesViewModel ??= new DevicesViewModel(_config, _audio);
 
     public ButtonsViewModel Buttons =>
         _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast);
@@ -72,6 +75,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             var devices = _audio.GetDevices(AudioFlow.Render);
             _slidersViewModel?.RefreshDevices(devices);
             _buttonsViewModel?.RefreshDevices(devices);
+            _devicesViewModel?.Refresh();
         });
 
     private void OnSliderLevelChanged(object? sender, SliderLevelEventArgs e)
