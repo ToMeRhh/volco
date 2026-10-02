@@ -76,7 +76,7 @@ public class UdpConnectionTests
     }
 
     [Fact]
-    public void Dispose_FromManyThreads_DoesNotThrowAndRaisesAtMostOneDisconnected()
+    public async Task Dispose_FromManyThreads_DoesNotThrowAndRaisesAtMostOneDisconnected()
     {
         var port = FreeUdpPort();
         var conn = new UdpConnection(new UdpConfig { ListenPort = port });
@@ -96,7 +96,7 @@ public class UdpConnectionTests
             catch (Exception ex) { errors.Enqueue(ex); }
         }, TaskCreationOptions.LongRunning)).ToArray();
 
-        Assert.True(Task.WaitAll(tasks, 10000));
+        await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Empty(errors);
         Assert.True(probe.Count(ConnectionStatus.Disconnected) <= 1);
         Assert.False(PortIsBound(port));

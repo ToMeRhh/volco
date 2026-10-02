@@ -186,7 +186,7 @@ public class WebSocketConnectionHardeningTests
             catch (Exception ex) { errors.Enqueue(ex); }
         }, TaskCreationOptions.LongRunning)).ToArray();
 
-        Assert.True(Task.WaitAll(tasks, 10000));
+        await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Empty(errors);
         Assert.True(probe.Count(ConnectionStatus.Disconnected) <= 1);
     }

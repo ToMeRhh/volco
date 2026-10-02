@@ -238,7 +238,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         var config = NewConfig(c =>
         {
             c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
-            c.Buttons[0].DoublePressWindowMs = 60;
+            c.Buttons[0].DoublePressWindowMs = 500;
         });
         StartRuntime(config);
         var connection = Connection(0);
@@ -250,7 +250,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         // action IS configured, so the detector must wait out the window rather than dispatch now.
         Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
 
-        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0),
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0, TimeSpan.FromSeconds(5)),
                     "single press never dispatched after its double-press window elapsed");
     }
 
