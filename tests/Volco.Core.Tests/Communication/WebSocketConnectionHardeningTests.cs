@@ -82,6 +82,21 @@ public class WebSocketConnectionHardeningTests
         Assert.Equal(Enumerable.Range(0, count).Select(i => (byte)i), got);
     }
 
+    /// <summary>A ClientWebSocket only learns the server went away by reading; read until it does.</summary>
+    private static async Task<bool> WaitUntilClosedAsync(ClientWebSocket client)
+    {
+        using var cts = new CancellationTokenSource(5000);
+        var buffer = new byte[64];
+        try
+        {
+            while (client.State == WebSocketState.Open)
+                await client.ReceiveAsync(buffer, cts.Token);
+        }
+        catch (WebSocketException) { }
+        catch (OperationCanceledException) { }
+        return client.State != WebSocketState.Open;
+    }
+
     private sealed class Probe
     {
         public readonly ConcurrentQueue<ConnectionStatus> Statuses = new();
@@ -97,7 +112,7 @@ public class WebSocketConnectionHardeningTests
         try
         {
             using var cts = new CancellationTokenSource(2000);
-            await tcp.ConnectAsync(IPAddress.Loopback, port, cts.Token);
+            await tcp.ConnectAsync("localhost", port, cts.Token);
             return true;
         }
         catch (Exception)
@@ -141,7 +156,7 @@ public class WebSocketConnectionHardeningTests
 
         Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
         // The client handler unwinding afterwards must not add a second one.
-        Assert.True(await WaitUntilAsync(() => client.State != WebSocketState.Open));
+        Assert.True(await WaitUntilClosedAsync(client));
         await Task.Delay(200);
         Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
     }
@@ -221,7 +236,7 @@ public class WebSocketConnectionHardeningTests
         Assert.Equal(ConnectionStatus.Connected, conn.Status);
 
         // The first client's handler unwinding must not flip the new connection to Disconnected.
-        Assert.True(await WaitUntilAsync(() => first.State != WebSocketState.Open));
+        Assert.True(await WaitUntilClosedAsync(first));
         await Task.Delay(300);
         Assert.Equal(ConnectionStatus.Connected, conn.Status);
         Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
