@@ -94,6 +94,14 @@ public class SliderProcessor : IDisposable
         return DeviceRef.DefaultOutput();
     }
 
+    /// <summary>
+    /// The device whose mute flag the OSD shows for this slider: a Device slider's own device;
+    /// for Processes/Unmapped, the default output, since muting it silences every app session
+    /// (Volco has no per-app mute).
+    /// </summary>
+    internal static DeviceRef MuteSourceFor(SliderConfig slider)
+        => slider.Type == SliderMappingType.Device ? DeviceRefFor(slider) : DeviceRef.DefaultOutput();
+
     /// <summary>Every process name claimed by a Processes-type slider.</summary>
     internal static List<string> MappedProcessNames(AppConfig config)
     {
@@ -259,7 +267,8 @@ public class SliderProcessor : IDisposable
                     ? _audio.GetDefaultDevice(AudioFlow.Render)?.FriendlyName
                     : null;
                 var label = BuildSliderLabel(sliderConfig, currentOutput);
-                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, Muted: false, OsdKind.Volume));
+                var muted = _audio.IsMuted(MuteSourceFor(sliderConfig));
+                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume));
             }
         }
     }

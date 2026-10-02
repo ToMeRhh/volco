@@ -190,6 +190,21 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void SliderMessage_DefaultOutputMuted_RaisesMutedVolumeOsd()
+    {
+        _engine.DeviceStates[Speakers] = (0.5f, true);
+        var runtime = StartRuntime(); // slider 0 defaults to Device / current default output
+        var volumes = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += volumes.Handler;
+
+        Connection(0).RaiseMessage(new SliderMessage(0, 4095));
+
+        Assert.True(WaitUntil(() => volumes.Count > 0), "no slider OSD raised");
+        Assert.Equal(OsdKind.Volume, volumes.Items[0].Kind);
+        Assert.True(volumes.Items[0].Muted);
+    }
+
+    [Fact]
     public void ButtonPress_MuteCurrentOutput_TogglesDefaultOutput()
     {
         StartRuntime();

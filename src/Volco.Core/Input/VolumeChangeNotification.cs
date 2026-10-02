@@ -2,10 +2,12 @@ namespace Volco.Core.Input;
 
 /// <summary>What produced an OSD notification.</summary>
 /// <remarks>
-/// <see cref="Volume"/>: a slider moved. <see cref="Mute"/>: a mute button was pressed (the
-/// notification carries the target's real level; the OSD shows "Muted" while muted, the
-/// percentage otherwise). <see cref="Device"/>: a button switched the default output device
-/// (label = the new default's name, level/muted = that device's state). <see cref="Preset"/>: a
+/// <see cref="Volume"/>: a slider moved (level = the new slider level; muted = the mute flag of
+/// the device that governs it, see SliderProcessor.MuteSourceFor; the OSD still shows the
+/// percentage, with the muted glyph and a dimmed bar). <see cref="Mute"/>: a mute button was
+/// pressed (the notification carries the target's real level; the OSD shows "Muted" while
+/// muted, the percentage otherwise). <see cref="Device"/>: a button switched the default output
+/// device (label = the new default's name, level/muted = that device's state). <see cref="Preset"/>: a
 /// button switched the live preset (label = the new preset's name; level and muted unused).
 /// </remarks>
 public enum OsdKind { Volume, Mute, Device, Preset }

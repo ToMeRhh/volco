@@ -16,7 +16,8 @@ internal sealed class VolumeOsdViewModel
     /// <summary>0 to 100, for the level bar.</summary>
     public double Level { get; private set; }
 
-    /// <summary>"37%", or "Muted" for a muted Mute/Device notification (unmuted shows the percentage).</summary>
+    /// <summary>"37%", or "Muted" for a muted Mute/Device notification. A slider drag (Volume)
+    /// always shows the percentage, even while muted - the glyph and dimmed bar show the mute.</summary>
     public string ValueText { get; private set; } = "0%";
 
     /// <summary>The icon: muted whenever the target is muted, else speaker for an output-device
