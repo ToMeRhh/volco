@@ -72,4 +72,18 @@ public class ScreenPreviewTests
     {
         Assert.Same(ScreenIcons.Bitmap(ScreenIcon.Generic), ScreenIcons.Bitmap((ScreenIcon)42));
     }
+
+    [AvaloniaFact]
+    public void EveryIcon_HasDistinctVectorArt()
+    {
+        var geometries = Enum.GetValues<ScreenIcon>().Select(ScreenIcons.Geometry).ToList();
+        Assert.All(geometries, Assert.NotNull);
+        Assert.Equal(geometries.Count, geometries.Distinct().Count());
+    }
+
+    [AvaloniaFact]
+    public void UndefinedIcon_FallsBackToGenericVectorArt()
+    {
+        Assert.Same(ScreenIcons.Geometry(ScreenIcon.Generic), ScreenIcons.Geometry((ScreenIcon)42));
+    }
 }

@@ -137,10 +137,10 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_DeviceIcon_IsIgnoredOutsideDeviceKind_AndAChangeIsReported()
+    public void OsdViewModel_DeviceIcon_IsIgnoredForAMuteButton_AndAChangeIsReported()
     {
         var vm = new VolumeOsdViewModel();
-        vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Volume, ScreenIcon.Speaker));
+        vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Mute, ScreenIcon.Speaker));
         Assert.Equal(OsdGlyph.Volume, vm.Glyph);
         Assert.Null(vm.DeviceIcon);
 
@@ -148,6 +148,30 @@ public class VolumeOsdViewModelTests
         // Only the icon differs: still a change.
         Assert.True(vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Device, ScreenIcon.Headset)));
         Assert.Equal(ScreenIcon.Headset, vm.DeviceIcon);
+    }
+
+    [Fact]
+    public void OsdViewModel_VolumeKindWithIcon_ShowsTheDeviceIconAndPercent()
+    {
+        var vm = new VolumeOsdViewModel();
+        vm.Apply(new VolumeChangeNotification("Spotify", 0.37f, false, OsdKind.Volume, ScreenIcon.Headphones));
+
+        Assert.Equal(OsdGlyph.Device, vm.Glyph);
+        Assert.Equal(ScreenIcon.Headphones, vm.DeviceIcon);
+        Assert.False(vm.DeviceIconMuted);
+        Assert.Equal("37%", vm.ValueText);
+    }
+
+    [Fact]
+    public void OsdViewModel_VolumeKindWithIconWhileMuted_StrikesTheIconThrough_AndKeepsThePercent()
+    {
+        var vm = new VolumeOsdViewModel();
+        vm.Apply(new VolumeChangeNotification("Spotify", 0.37f, true, OsdKind.Volume, ScreenIcon.Headphones));
+
+        Assert.Equal(OsdGlyph.Device, vm.Glyph);
+        Assert.True(vm.DeviceIconMuted);
+        Assert.Equal("37%", vm.ValueText);   // a drag shows the level being set
+        Assert.Equal(0.4, vm.LevelBarOpacity);
     }
 
     [Fact]

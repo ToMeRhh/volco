@@ -182,7 +182,7 @@ public class VolumeOsdWindowTests
         osd.Show(new VolumeChangeNotification("Headphones", 0.37f, true, OsdKind.Device, ScreenIcon.Headphones));
         Dispatcher.UIThread.RunJobs();
         Assert.True(osd.DeviceGlyph.IsVisible);
-        Assert.NotNull(osd.DeviceGlyph.Source);
+        Assert.NotNull(osd.DeviceGlyph.Data);
         Assert.False(osd.SpeakerGlyph.IsVisible);
         Assert.False(osd.MutedGlyph.IsVisible);
         Assert.False(osd.VolumeGlyph.IsVisible);
