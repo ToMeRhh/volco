@@ -19,11 +19,13 @@ public partial class GeneralViewModel : ObservableObject
     [ObservableProperty]
     private bool _debugLogging;
 
-    public GeneralViewModel(ConfigManager config, bool showUpdates)
+    public GeneralViewModel(ConfigManager config, bool isRelease)
     {
         _config = config;
         _debugLogging = config.Config.DebugLogging;
-        ShowUpdates = showUpdates;
+        ShowUpdates = isRelease;
+        VersionText = $"Volco {BuildInfo.FormatVersion(isRelease, BuildInfo.Version, BuildInfo.Commit)}";
+        BuildDetails = isRelease ? null : BuildInfo.BuildDetails;
     }
 
     public GeneralViewModel(ConfigManager config) : this(config, BuildInfo.IsRelease) { }
@@ -34,10 +36,13 @@ public partial class GeneralViewModel : ObservableObject
     internal ConfigManager ConfigManager => _config;
 
     /// <summary>"Volco v1.2.3" on releases, "Volco dev a1b2c3d" on other builds.</summary>
-    public string VersionText => $"Volco {BuildInfo.DisplayVersion}";
+    public string VersionText { get; }
 
-    /// <summary>The commit and build time, or null when neither was stamped.</summary>
-    public string? BuildDetails => BuildInfo.BuildDetails;
+    /// <summary>
+    /// Branch, commit, build time and origin, one per line, on non-release builds; null on
+    /// releases, which show just the version.
+    /// </summary>
+    public string? BuildDetails { get; }
 
     public string LogPath => AppLog.LogPath;
 

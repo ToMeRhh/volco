@@ -51,7 +51,7 @@ internal sealed class CompositionRoot : IDisposable
 
     public void Start()
     {
-        AppLog.Info($"App launching: Volco {BuildInfo.DisplayVersion} ({BuildInfo.BuildDetails ?? "no build details"})");
+        AppLog.Info($"App launching: Volco {BuildInfo.DisplayVersion} ({BuildInfo.BuildDetails?.Replace("\n", " · ") ?? "no build details"})");
 
         _config = new ConfigManager(_configPath);
         _config.Load();

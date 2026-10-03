@@ -50,10 +50,12 @@ public class UpdateTests
     public void FormatDetails_JoinsWhateverIsKnown()
     {
         var t = new DateTimeOffset(2026, 10, 3, 16, 22, 59, TimeSpan.FromHours(2));
-        Assert.Equal("Commit a1b2c3d · built 2026-10-03 14:22 UTC", BuildInfo.FormatDetails("a1b2c3d", t));
-        Assert.Equal("Commit a1b2c3d", BuildInfo.FormatDetails("a1b2c3d", null));
-        Assert.Equal("Built 2026-10-03 14:22 UTC", BuildInfo.FormatDetails(null, t));
-        Assert.Null(BuildInfo.FormatDetails(null, null));
+        Assert.Equal("Branch main · commit a1b2c3d\nBuilt 2026-10-03 14:22 UTC\nLocal build on PC",
+            BuildInfo.FormatDetails("main", "a1b2c3d", t, "Local build on PC"));
+        Assert.Equal("Commit a1b2c3d\nGitHub Actions: Build Volco run #7",
+            BuildInfo.FormatDetails(null, "a1b2c3d", null, "GitHub Actions: Build Volco run #7"));
+        Assert.Equal("Branch main\nBuilt 2026-10-03 14:22 UTC", BuildInfo.FormatDetails("main", null, t, null));
+        Assert.Null(BuildInfo.FormatDetails(null, null, null, null));
     }
 
     [Fact]

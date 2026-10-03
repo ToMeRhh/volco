@@ -5,11 +5,35 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <!-- Read by BuildInfo.BuiltAt. Only this assembly is stamped: BuildInfo reads its own assembly,
-       and a value that changes every build would otherwise recompile every project. -->
-  <ItemGroup>
-    <AssemblyMetadata Include="BuildTimestamp" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" />
-  </ItemGroup>
+  <!-- Build details read by BuildInfo (the commit comes from SourceLink's "+sha" on
+       InformationalVersion). Only this assembly is stamped: BuildInfo reads its own assembly, and a
+       value that changes every build would otherwise recompile every project. On GitHub Actions the
+       branch and run come from its environment variables; elsewhere the branch is asked of git. -->
+  <PropertyGroup>
+    <VolcoBuildBranch Condition="'$(VolcoBuildBranch)' == ''">$(GITHUB_HEAD_REF)</VolcoBuildBranch>
+    <VolcoBuildBranch Condition="'$(VolcoBuildBranch)' == ''">$(GITHUB_REF_NAME)</VolcoBuildBranch>
+    <VolcoBuildOrigin Condition="'$(VolcoBuildOrigin)' == '' and '$(GITHUB_ACTIONS)' == 'true'">GitHub Actions: $(GITHUB_WORKFLOW) run #$(GITHUB_RUN_NUMBER)</VolcoBuildOrigin>
+    <VolcoBuildOrigin Condition="'$(VolcoBuildOrigin)' == ''">Local build on $([System.Environment]::MachineName)</VolcoBuildOrigin>
+  </PropertyGroup>
+
+  <Target Name="VolcoReadGitBranch" BeforeTargets="GetAssemblyAttributes" Condition="'$(VolcoBuildBranch)' == ''">
+    <Exec Command="git rev-parse --abbrev-ref HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true"
+          ContinueOnError="true" EchoOff="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_VolcoGitBranch" />
+      <Output TaskParameter="ExitCode" PropertyName="_VolcoGitExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <VolcoBuildBranch Condition="'$(_VolcoGitExitCode)' == '0'">$(_VolcoGitBranch.Trim())</VolcoBuildBranch>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="VolcoStampBuildInfo" BeforeTargets="GetAssemblyAttributes" DependsOnTargets="VolcoReadGitBranch">
+    <ItemGroup>
+      <AssemblyMetadata Include="BuildTimestamp" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" />
+      <AssemblyMetadata Include="BuildBranch" Value="$(VolcoBuildBranch)" Condition="'$(VolcoBuildBranch)' != ''" />
+      <AssemblyMetadata Include="BuildOrigin" Value="$(VolcoBuildOrigin)" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
