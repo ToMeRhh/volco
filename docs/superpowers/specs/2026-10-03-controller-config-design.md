@@ -44,7 +44,7 @@ These were settled while brainstorming and are not reopened by this spec.
 - Chip families other than the classic ESP32.
 - Encrypting the Wi-Fi password, either in NVS or in Volco's `config.json`. It is stored in plain text, as it is in `config.h` today.
 - Restricting which LAN hosts Volco's UDP listener accepts. That behaviour is unchanged.
-- Tray notifications. Avalonia's `TrayIcon` has no balloon API, so notices appear only on the Controller page.
+- Tray balloon or toast notifications. Avalonia's `TrayIcon` has no balloon API. An available firmware update is signalled by a dot on the tray icon and on the sidebar entry instead (§8.3).
 - Avoiding reflashes when the firmware didn't change between app releases. The build id changes with every release, so every app update offers a firmware update. Updates are quick and keep the app and firmware in lock-step (D4).
 
 ## 4. Overview
@@ -647,7 +647,16 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
   - the catalog has firmware
   - Hello `FirmwareVersion` ≠ the bundled manifest version
 
-  That excludes the simulator and alternative controllers. It appears on the Controller page only, never as a tray notification.
+  That excludes the simulator and alternative controllers.
+- **Where the update is signalled.** When the firmware notice applies, or the firmware is incompatible (below), the update shows in three places:
+  - **Controller page:** the banner and the Update button.
+  - **Settings sidebar:** a small accent dot on the **Controller** navigation entry, with the accessible name "Controller, firmware update available".
+  - **Tray:**
+    - The tray icon switches to a variant with a dot (`volco-update.ico`, next to `volco.ico`; set through Avalonia's `TrayIcon.Icon`, which is platform-free).
+    - The tooltip gains a line: "Controller firmware update available".
+    - The tray menu gains **Update controller firmware…**, which opens Settings on the Controller page.
+
+  These three come from one view-model property, `FirmwareUpdateAvailable`, recomputed with the banner. They clear as soon as a Hello reports the bundled build id. There is still no balloon or toast; Avalonia has no API for one.
 - **Protocol version mismatch:** a version-only Hello keeps the link out of Ready. Its `Chip` is unknown, so **Update** is offered whenever the connection type is Serial and the catalog has firmware; the flasher checks the chip itself (§8.6).
 
 ### 8.4 Editing model
@@ -698,7 +707,7 @@ public void SetTestIndicator(int button, TestIndicator state); // Off, On, A, B 
 
   No audio call, action or OSD can happen.
 - **Indicators show test state:**
-  - `ControllerLink`'s compute delegate stays the same delegate (`_compute` is readonly). The runtime's lambda branches on a test-mode flag:
+  - `ControllerLink`'s compute delegate stays the same delegate (`_compute` is readonly; since PR #60 it is `Func<int?, …>` and takes the preset-change announce step). The runtime's lambda branches on a test-mode flag and **ignores the announce step in test mode**, so no preset blink or flash appears during a test:
     - each LED button shows its `TestIndicator` (default Off)
     - each screen button shows a test screen: top "Test", main "Button N", the generic icon
   - `SetTestIndicator` updates the state and calls `Push()`. Dedup and the outbox work unchanged.
@@ -1057,6 +1066,7 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
   - every probe result → its message
   - Install/Update disabled when the catalog is empty or the connection isn't Serial
   - the UDP-change warning
+  - `FirmwareUpdateAvailable` drives the sidebar dot, the tray icon variant, the tooltip line and the tray menu item, and all four clear on a Hello with the bundled build id
 - `ArchitectureTests` stays green; EspDotNet is referenced only by `Volco.Windows`.
 
 ### 12.5 CI checks (tests of the pipeline itself)
