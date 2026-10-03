@@ -17,11 +17,11 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 | Partition table (nvs / otadata / app0 offsets and sizes) | default.csv: nvs 0x9000/0x5000, otadata 0xE000/0x2000, app0 0x10000/0x140000, app1 0x150000/0x140000, spiffs 0x290000/0x160000, coredump 0x3F0000/0x10000. Matches spec §6.6. | `tools/partitions/default.csv` |
 | `pio run -t upload` command line: which offsets it writes | `esptool ... write-flash -z --flash-mode dio --flash-freq 40m --flash-size detect 0x1000 bootloader 0x8000 partitions 0xe000 boot_app0 0x10000 firmware`. It **never writes 0x9000–0xDFFF**. **Finding:** the `--flash-mode/--flash-size` arguments make esptool **patch the bootloader header**, so after a PlatformIO upload the bootloader region won't MD5-match `bootloader.bin`. The app region isn't patched. | `pio run -t upload -v` |
 | `initArduino` erases NVS on NO_FREE_PAGES / NEW_VERSION_FOUND | **Yes.** `nvs_flash_init()`; on either error it calls `esp_partition_erase_range(nvs, 0, size)`, then `nvs_flash_init()` again. | `cores/esp32/esp32-hal-misc.c` ~L328–340 (3.3.8) |
-| nanopb generation from `../proto` works in `native` and `esp32` | | |
-| Exact `custom_nanopb_*` keys that work | | |
-| Generated names (prefix, oneof, has_ flags, string arrays) | | |
-| Empty blob: are absent submessages filled with defaults? | | |
-| Maximal blob encoded size (≤ 1024?) | | |
+| nanopb generation from `../proto` works in `native` and `esp32` | **Yes, both.** `[nanopb] Processing '../proto/volco_config.proto' (volco_config.options)`: the `.options` file next to the proto is picked up automatically. esp32 spike: RAM 22 KB, flash 295 KB (it is the bare spike, not Volco). | `spikes/nanopb_pio`, `pio test -e native`, `pio run -e esp32` |
+| Exact `custom_nanopb_*` keys that work | `lib_deps = nanopb/Nanopb@0.4.92` (**the registry name of 0.4.9.2**; `@0.4.9.2` is rejected as "Invalid simple block"), `custom_nanopb_protos = +<../proto/volco_config.proto>`, `custom_nanopb_options = --error-on-unmatched`, `build_flags = -DPB_VALIDATE_UTF8`. `custom_nanopb_project_dir` is not needed. | same |
+| Generated names (prefix, oneof, has_ flags, string arrays) | Prefix `volco_config_`. Types `volco_config_ControllerConfig` etc.; `_init_default`, `_fields`. Repeated: `sliders[16]` + `sliders_count`. oneof: `which_indicator` + `union { ... } indicator` (named union: `indicator.screen.bus`), tags `volco_config_Button_screen_tag`. Every optional field has `has_<name>`. Strings: `char ssid[33]`, `char password[65]`, `char preset[25]`. | `.pio/build/native/nanopb/generated-src/volco_config.pb.h` |
+| Empty blob: are absent submessages filled with defaults? | **Yes.** After decoding an empty blob, `has_screens=0` but `screens.brightness=255` and `screens.dim_enabled=1`: `_init_default` plus `pb_decode` fill absent submessages with the proto2 defaults. `toRuntime` can read the values directly. | test_empty |
+| Maximal blob encoded size (≤ 1024?) | **663 bytes** (≤ 1024), matching the spec's estimate. | test_maximal_blob_size |
 
 ## S3: Grpc.Tools / Google.Protobuf
 
@@ -38,15 +38,15 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 
 | Vector | Hex | nanopb | C# | Spec expectation |
 |---|---|---|---|---|
-| empty | (none) | | | decode ok, all defaults |
-| screen_default | `12 02 22 00` | | | ok; screen bus 0, address 0x3C |
-| brightness_only | `32 02 08 64` | | | ok; brightness 100, dim_enabled true, transition 360 |
-| buttons33 | `12 00` ×33 | | | fail (max_count 32) |
-| ssid33 | `2A 23 12 21` + `61`×33 | | | fail (max_size) |
-| bad_utf8 | `42 02 C3 28` | | | fail |
-| nul_in_string | `42 03 61 00 62` | | | fail (spec: our own check) |
-| u32_overflow | `0A 06 08 80 80 80 80 10` | | | nanopb fail; C# truncates (spec §6.1 known divergence) |
-| unknown_field | `98 06 01 32 02 08 64` | | | ok, brightness 100 |
+| empty | (none) | ok; absent submessages default-filled | | decode ok, all defaults |
+| screen_default | `12 02 22 00` | ok; which=screen, bus 0, address 0x3C | | ok; screen bus 0, address 0x3C |
+| brightness_only | `32 02 08 64` | ok; 100 / true / 360 | | ok; brightness 100, dim_enabled true, transition 360 |
+| buttons33 | `12 00` ×33 | **fail** "array overflow" | | fail (max_count 32) |
+| ssid33 | `2A 23 12 21` + `61`×33 | **fail** "string overflow" | | fail (max_size) |
+| bad_utf8 | `42 02 C3 28` | **fail** "invalid utf8" (with `PB_VALIDATE_UTF8`) | | fail |
+| nul_in_string | `42 03 61 00 62` | **ok, silently truncated** (`strlen(preset)=1`) | | fail (spec: our own check) |
+| u32_overflow | `0A 06 08 80 80 80 80 10` | **fail** "integer too large" | | nanopb fail; C# truncates (spec §6.1 known divergence) |
+| unknown_field | `98 06 01 32 02 08 64` | ok; skipped, brightness 100 | | ok, brightness 100 |
 
 ## S1: flashing
 
