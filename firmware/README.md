@@ -90,7 +90,7 @@ static constexpr ButtonDef BUTTONS[] = {
 | `IND_LED_PAIR(pinA, pinB, polarity)` | two LEDs | a value: 0 both off, 1 lights A, 2 lights B |
 | `IND_SCREEN(bus, address)` | an SSD1306 128x64 screen | a screen description (icon, top, name) |
 
-`polarity` is `ACTIVE_HIGH` when driving the pin HIGH lights the LED, or `ACTIVE_LOW` when driving it LOW does. `bus` is 0 or 1, `address` is `0x3C` or `0x3D`. A button has a screen or LEDs, never both. Every indicator starts dark at boot.
+`polarity` is `ACTIVE_HIGH` when driving the pin HIGH lights the LED, or `ACTIVE_LOW` when driving it LOW does. `bus` is 0-3 (0 and 1 are hardware I2C, 2 and 3 software I2C), `address` is `0x3C` or `0x3D`. A button has a screen or LEDs, never both. Every indicator starts dark at boot.
 
 To describe different hardware, edit these two tables. The sizes of every array in `main.cpp` are derived from them, so there is nothing else to keep in sync.
 
@@ -100,7 +100,9 @@ To describe different hardware, edit these two tables. The sizes of every array 
 |---|---|
 | `I2C0_SDA`, `I2C0_SCL` | Bus 0 data and clock pins. |
 | `I2C1_SDA`, `I2C1_SCL` | Bus 1 data and clock pins. A bus is only started when a screen uses it. |
-| `I2C_CLOCK_HZ` | Bus speed. 400000 by default; SSD1306 modules usually tolerate 1000000. |
+| `I2C2_SDA`, `I2C2_SCL`, `I2C3_SDA`, `I2C3_SCL` | Data and clock pins of the software buses 2 and 3. |
+| `I2C_CLOCK_HZ` | Speed of buses 0 and 1. 400000 by default; SSD1306 modules usually tolerate 1000000. |
+| `I2C_SW_CLOCK_HZ` | Target speed of buses 2 and 3, 400000 by default. Lower it if a screen on them glitches. |
 | `SCREEN_BRIGHTNESS` | Normal brightness (contrast), 0-255. |
 | `SCREEN_TRANSITION_MS` | How long a slide between two screens takes. |
 | `SCREEN_SCROLL_HOLD_MS` | Long text waits this long before it scrolls. |
@@ -140,8 +142,9 @@ Burn-in protection. Any button press or slider move counts as activity.
 
 ## Wiring screens and choosing pins
 
-- The ESP32 has **two hardware I2C buses**, and an SSD1306 answers on `0x3C` or `0x3D`, so there are at most **4 screens**. Two modules on the same bus need different addresses: move the address resistor on at least one module per bus to `0x3D`.
-- Free, safe GPIOs on the current board: **13, 16, 17, 22, 23, 25, 26, 27**. The defaults use 25/26 for bus 0 and 27/13 for bus 1.
+- The ESP32 has **two hardware I2C buses** (0 and 1); the firmware adds **two software buses** (2 and 3). An SSD1306 answers on `0x3C` or `0x3D`, and a bus takes at most two screens. Two modules on the same bus need different addresses: move the address resistor on one of them to `0x3D`. Modules whose address is fixed need a bus each, so up to 4 of them.
+- The software buses drive SCL push-pull and SDA open-drain, without clock stretching, which suits SSD1306 modules (they never hold SCL). A full frame on them takes about as long as on a hardware bus at 400 kHz, but the CPU is busy for all of it.
+- Free, safe GPIOs on the current board: **13, 16, 17, 22, 23, 25, 26, 27**. The defaults use 25/26 for bus 0, 27/13 for bus 1, 16/17 for bus 2 and 22/23 for bus 3.
 - Avoid GPIO 21 while it drives an LED (it is Arduino's default SDA), and avoid the strapping pins 0, 2 and 15.
 - If slides look rough, try `I2C_CLOCK_HZ 1000000`. A full frame takes about 25-30 ms per panel at 400 kHz, and panels are updated one after another.
 

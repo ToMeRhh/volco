@@ -47,13 +47,14 @@ static constexpr uint8_t SLIDER_PINS[] = {33, 35, 32, 36, 34};
 //   IND_NONE                             nothing to show
 //   IND_LED(pin, polarity)               one LED: on for any value except 0
 //   IND_LED_PAIR(pinA, pinB, polarity)   two LEDs: 1 lights A, 2 lights B
-//   IND_SCREEN(bus, address)             an SSD1306 screen: bus 0 or 1, address 0x3C or 0x3D
+//   IND_SCREEN(bus, address)             an SSD1306 screen: bus 0-3, address 0x3C or 0x3D
 // polarity is ACTIVE_HIGH (HIGH lights the LED) or ACTIVE_LOW (LOW does).
 #ifdef VOLCO_SCREENS_CHECK  // CI-only: proves the screen code compiles (see platformio.ini)
 static constexpr ButtonDef BUTTONS[] = {
     {4, IND_SCREEN(0, 0x3C)},
     {14, IND_SCREEN(0, 0x3D)},
     {5, IND_LED_PAIR(18, 19, ACTIVE_HIGH)},
+    {39, IND_SCREEN(2, 0x3C)},
 };
 #else
 static constexpr ButtonDef BUTTONS[] = {
@@ -67,11 +68,18 @@ static constexpr ButtonDef BUTTONS[] = {
 // Screens — only used when a button in BUTTONS is IND_SCREEN
 // ============================================================
 // I2C buses. A bus is only started when a screen uses it, so these pins are free otherwise.
+// Buses 0 and 1 are the ESP32's two I2C controllers; 2 and 3 are software I2C, for screens
+// whose address can't be changed (each needs a bus of its own then).
 #define I2C0_SDA 25                 // bus 0 data pin
 #define I2C0_SCL 26                 // bus 0 clock pin
 #define I2C1_SDA 27                 // bus 1 data pin
 #define I2C1_SCL 13                 // bus 1 clock pin
-#define I2C_CLOCK_HZ 400000         // bus speed; SSD1306 modules usually tolerate 1000000
+#define I2C2_SDA 16                 // bus 2 (software) data pin
+#define I2C2_SCL 17                 // bus 2 (software) clock pin
+#define I2C3_SDA 22                 // bus 3 (software) data pin
+#define I2C3_SCL 23                 // bus 3 (software) clock pin
+#define I2C_CLOCK_HZ 400000         // bus 0 and 1 speed; SSD1306 modules usually tolerate 1000000
+#define I2C_SW_CLOCK_HZ 400000      // bus 2 and 3 target speed; lower it if those screens glitch
 
 #define SCREEN_BRIGHTNESS 255           // normal brightness (contrast), 0-255
 #define SCREEN_TRANSITION_MS 360        // how long a slide between two screens takes
