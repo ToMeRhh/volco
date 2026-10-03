@@ -45,7 +45,6 @@ These were settled while brainstorming and are not reopened by this spec.
 - Encrypting the Wi-Fi password, either in NVS or in Volco's `config.json`. It is stored in plain text, as it is in `config.h` today.
 - Restricting which LAN hosts Volco's UDP listener accepts. That behaviour is unchanged.
 - Tray balloon or toast notifications. Avalonia's `TrayIcon` has no balloon API. An available firmware update is signalled by a dot on the tray icon and on the sidebar entry instead (§8.3).
-- Avoiding reflashes when the firmware didn't change between app releases. The build id changes with every release, so every app update offers a firmware update. Updates are quick and keep the app and firmware in lock-step (D4).
 
 ## 4. Overview
 
@@ -646,6 +645,7 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
   - Hello `Chip` is `Esp32`
   - the catalog has firmware
   - Hello `FirmwareVersion` ≠ the bundled manifest version
+  - Hello `FirmwareVersion` ≠ `dev`. Development firmware (§9.4) is never offered an update automatically; the page shows "Development firmware", and **Install firmware…** still offers the bundled build.
 
   That excludes the simulator and alternative controllers.
 - **Where the update is signalled.** When the firmware notice applies, or the firmware is incompatible (below), the update shows in three places:
@@ -857,7 +857,7 @@ A sixth settings page, **Controller**, after Connection. The sections, top to bo
 
 ### 9.1 Firmware artifact
 
-A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp32/dist/` and writes `firmware-manifest.json` there. It copies each part from the path PlatformIO reports:
+A post-build `extra_scripts` step (`firmware/scripts/manifest.py`) **copies all four parts** into `.pio/build/esp32/dist/` and writes `firmware-manifest.json` there. It copies each part from the path PlatformIO reports:
 - `boot_app0.bin` lives in the framework's `tools/partitions/`
 - `bootloader.bin` may be a prebuilt SDK file
 
@@ -882,12 +882,23 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
 
 ### 9.2 Build id
 
-- **One string** identifies a build of the firmware, and equality is the only comparison:
-  - release: the release version, e.g. `1.2.0`
-  - CI non-release: `0.0.0-ci+<short sha>`
-  - local: `dev`
-- **The app compares Hello's `fw` with the bundled manifest's `version`.** The app's own assembly version is not involved, so no new assembly attribute is needed.
-- A local build of the app has no bundled firmware, so it never prompts.
+**The build id is a hash of the firmware's source, not a release version.** A release whose firmware source didn't change therefore produces the same id, and the app offers no update.
+
+- **Why not hash the binary:** Arduino/ESP-IDF builds embed the compile date and time, so the same source gives a different binary on every build.
+- **How CI computes it** (in `firmware-test` and in the release `firmware` job), from git's content hashes of exactly the files that make up the firmware:
+  ```bash
+  git rev-parse HEAD:firmware/src HEAD:firmware/lib HEAD:firmware/platformio.ini \
+                HEAD:firmware/scripts HEAD:proto/volco_config.proto HEAD:proto/volco_config.options \
+    | sha256sum | cut -c1-12
+  ```
+  - `platformio.ini` carries the exact platform and library pins, so a toolchain change also changes the id.
+  - README, tests, presets, generated simulator files and app code don't affect it.
+  - `firmware/scripts/` holds the build scripts (the manifest script). `firmware/tools/` (asset generators) is not included: its outputs are committed under `firmware/lib`, which is.
+  - **The list is defined once,** in `firmware/scripts/firmware_id.sh`. CI calls it and passes the result as `VOLCO_FW_VERSION`. A unit check in `firmware-test` fails if a directory referenced by `platformio.ini` (`src_dir`, `lib_dir`, `extra_scripts`) isn't in the list.
+- **Format:** 12 lowercase hex characters, e.g. `3f9c2a1b5d07`. The manifest also carries `displayVersion` (the release version, or `ci+<short sha>`), but **the comparison uses only the id**. The page shows "Firmware 3f9c2a1b5d07", plus "(from Volco 1.2.0)" when the manifest's id matches.
+- **The app compares Hello's `fw` with the bundled manifest's `version`** (the id). The app's own version is not involved.
+- **Development firmware:** a local PlatformIO build reports `dev` (§9.4). The app never offers an update for it.
+- A local build of the app has no bundled firmware, so it never offers an update.
 
 ### 9.3 Workflows
 
@@ -922,6 +933,25 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
   - A small script, `tools/simulator/gen_config_proto.py` (standard library only), writes `tools/simulator/config_proto.js`, the `.proto` text as a JS string that protobufjs parses at runtime.
   - The output is committed.
   - `firmware-test` re-runs the script and fails on a diff.
+
+### 9.4 Development firmware (PlatformIO)
+
+The firmware stays a normal PlatformIO project, so a developer can build and flash their own firmware without the app:
+
+```bash
+cd firmware && pio run -e esp32 -t upload   # build and flash local firmware
+cd firmware && pio device monitor           # DEBUG_LOG output
+```
+
+- **It is the same generic firmware.** A local build reports build id `dev`, unless `VOLCO_FW_VERSION` is set.
+- **The config survives.** `pio run -t upload` writes the bootloader, the partition table, `boot_app0` and the app at their offsets, and never touches NVS. Switching between Volco-installed and PlatformIO-installed firmware keeps the controller's config. Spike S2 confirms that upload doesn't erase NVS on the pinned platform.
+- **A blank board** flashed this way boots with built-in defaults, and the app sets it up as usual.
+- **The app treats `dev` as development firmware:**
+  - it shows "Development firmware"
+  - it offers no update and shows no indicators
+  - **Install firmware…** stays available to go back to the bundled build
+- **Hello's other fields are unchanged.** A `dev` board otherwise behaves exactly like an installed one.
+- **README and CLAUDE.md** keep these commands, under "Developing the firmware".
 
 ## 10. Simulator changes
 
@@ -1102,6 +1132,8 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
 3. Normal mode: volume and mute work; the actions are unchanged.
 4. Change a pin → save → the old pin no longer reacts and the new one does.
 5. Update firmware (a second build id) → the config survives (same CRC, no banner).
+5a. Flash a `dev` build with `pio run -t upload` → the config survives; the page shows "Development firmware" with no update indicator; Install brings back the bundled build.
+5b. Release dry run: two consecutive CI builds with no firmware change → the same build id → no update offered.
 6. Enable UDP with a wrong password → save → still works over USB. Fix it → set the app's connection to UDP → it connects. Then save a behaviour change over UDP → confirmed after the reboot.
 7. UDP from a different PC IP is ignored.
 8. Unplug during a save → the old config, or the new one, is reported correctly after reconnecting.
@@ -1127,4 +1159,19 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
 ## 14. Open points
 
 1. **The Wi-Fi password is plain text** in NVS and in `config.json`'s mirror, as in `config.h` today. Accepted (§3).
-2. **Every app release offers a firmware update,** even if the firmware is unchanged. Accepted (§3).
+2. (Resolved) Firmware updates are offered only when the firmware source changed (§9.2).
+
+## 15. Delivery stages
+
+The work is delivered in stages. **Each stage is its own PR that merges to `main`** with green CI and its listed checks, so there is never a long-lived branch. Between stages, `main` must always build, pass its tests, and drive the DIY hardware.
+
+| Stage | Contents | Done when | User-visible change |
+|---|---|---|---|
+| **1. Spikes** | S1 (EspDotNet on the DIY board), S2 (platform pin, nanopb, NVS behaviour of `initArduino` and `pio upload`), S3 (Grpc.Tools in both CI jobs). Throwaway code; results recorded in the plan. | Each question answered. Any spec change it forces is agreed with the user. | none |
+| **2. Schema and codecs** | `proto/`, nanopb and Google.Protobuf generation, `volco_config` (decode, validate, chip table, CRC, `BlobReceiver`), the C# codec and validator, the DIY preset, `config.txt` goldens, `firmware_id.sh`. Nothing calls it yet. | Both test suites pass the shared vectors. | none |
+| **3. Firmware on runtime config** | `RuntimeConfig` throughout `src/`; NVS load at boot; dual transport with the active-transport rule; the WebSocket client and LOCAL_DEBUG removed; platform pinned. Until stage 4, the stored config is seeded from the DIY preset blob when NVS is empty, which keeps today's hardware working with the current app. The seed is removed in stage 4. | Native tests pass. Checklist items 3, 4 (pin change via a re-seeded blob) and 12 pass on hardware. | The ESP32 behaves the same; the WebSocket client is gone. |
+| **4. Protocol and config session** | New Hello, config frames, `seq`, the firmware receiver/store/reboot, `ControllerConfigService`, the mirror and schema v5, the simulator's config support, the banner logic (Core only). The DIY seed is removed. | Goldens and service tests pass. The simulator round-trips a config. A save over serial and over UDP is confirmed on hardware (items 6, 8, 13). | Baud setting removed. Config can be saved through tests or the simulator; no UI yet. |
+| **5. Controller page and test mode** | The page (status, hardware, test, behaviour, advanced), the editing model, `ButtonPressDetector.Reset`, test mode, the sidebar dot. | App tests pass. Items 2, 3, 4, 11 and 12 pass. | Configure and test the controller from Volco. |
+| **6. Firmware install and CI** | The flasher in `Volco.Windows`, `FirmwareService`, the probe, the suspension guard, embedded firmware with `RequireFirmware`, the build id, the release zip and notices, the tray indicators, the docs (§13). | Items 1, 5, 5a, 5b, 7, 9 and 10 pass. A release dry run produces an exe with firmware. | Install/update from Volco, update indicators, dev-firmware handling. |
+
+**Each stage gets its own implementation plan,** written when the previous stage merges, so later plans can include what earlier stages taught us.
