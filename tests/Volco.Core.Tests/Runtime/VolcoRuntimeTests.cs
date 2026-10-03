@@ -331,6 +331,31 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void MutePress_MuteOsd_CarriesTheDeviceIcon()
+    {
+        _engine.Devices[0] = DeviceById(Speakers) with { FormFactor = DeviceFormFactor.Speakers };
+        _engine.DefaultRender = DeviceById(Speakers);
+        var runtime = StartRuntime(NewConfig(c =>
+            c.Devices.Add(new DeviceSettingsConfig { Id = Microphone, Flow = AudioFlow.Capture, Icon = ScreenIcon.StudioMic })));
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);   // MuteCurrentOutput: icon from the form factor
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count == 1), "output press never executed");
+        _engine.RaiseDeviceVolumeChanged(Speakers, 0.5f, muted: true, isOwnChange: true);
+        Assert.True(WaitUntil(() => osd.Count == 1), "no output mute OSD");
+
+        Press(Connection(0), 1);   // MuteCurrentInput: the chosen icon
+        Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count == 2), "input press never executed");
+        _engine.RaiseDeviceVolumeChanged(Microphone, 0.5f, muted: true, isOwnChange: true);
+        Assert.True(WaitUntil(() => osd.Count == 2), "no input mute OSD");
+
+        var items = osd.Items;
+        Assert.Equal(ScreenIcon.Speaker, items[0].Icon);
+        Assert.Equal(ScreenIcon.StudioMic, items[1].Icon);
+    }
+
+    [Fact]
     public void MutePress_ExternalChange_DoesNotRaiseOsd()
     {
         var runtime = StartRuntime();
