@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Diagnostics;
+using Volco.Core.Updates;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
@@ -49,6 +50,19 @@ public class GeneralPageTests
 
         Assert.Equal(AppLog.LogPath, page.FindControl<TextBlock>("LogPathText")!.Text);
         Assert.NotNull(page.FindControl<Button>("OpenLogFolderButton")!.Command);
+    }
+
+    [AvaloniaFact]
+    public void GeneralPage_ShowsTheVersionAndBuildDetails()
+    {
+        using var rig = new TestRig();
+        var page = new GeneralPage(new GeneralViewModel(rig.Config, showUpdates: false));
+        new Window { Content = page }.Show();
+
+        Assert.Equal($"Volco {BuildInfo.DisplayVersion}", page.FindControl<TextBlock>("VersionText")!.Text);
+        var details = page.FindControl<TextBlock>("BuildDetailsText")!;
+        Assert.Equal(BuildInfo.BuildDetails, details.Text);
+        Assert.True(details.IsVisible);
     }
 
     [AvaloniaFact]

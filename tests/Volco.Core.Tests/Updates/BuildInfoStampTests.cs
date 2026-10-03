@@ -23,6 +23,21 @@ public class BuildInfoStampTests
     }
 
     [Fact]
+    public void BuildInfo_BuiltAt_IsStampedOnVolcoCore()
+    {
+        Assert.NotNull(BuildInfo.BuiltAt);
+        Assert.InRange(BuildInfo.BuiltAt!.Value, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddMinutes(5));
+    }
+
+    [Fact]
+    public void BuildInfo_Commit_ComesFromSourceLink()
+    {
+        // CI builds from a git checkout, so the SDK's SourceLink appends "+sha".
+        Assert.NotNull(BuildInfo.Commit);
+        Assert.StartsWith("dev ", BuildInfo.DisplayVersion);
+    }
+
+    [Fact]
     public void BuildInfo_Channel_DefaultsToLocal()
     {
         Assert.Equal("local", BuildInfo.Channel);
