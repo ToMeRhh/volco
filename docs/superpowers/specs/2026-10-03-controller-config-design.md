@@ -551,7 +551,10 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
     6. `Link` with the runtime counts and kinds
 - **`screens.cpp`:**
   - The `constexpr` counting and the `static_assert`s become runtime code. Their rules are validation steps 3–4.
-  - Panels are created once in `setup()`, one `U8G2_SSD1306_128X64_NONAME_F_HW_I2C` (bus 0, `Wire.setPins`) or `..._2ND_HW_I2C` (bus 1, `Wire1.setPins`) per screen. They live in a static `Screen[kMaxScreens]` array.
+  - Panels are created once in `setup()`, keeping the per-bus approach from PR #64:
+    - Each used bus is started with `Wire.begin(sda, scl, clock_hz)` / `Wire1.begin(...)`, using `RuntimeConfig` values instead of the `I2C*_` defines.
+    - Each panel is the `Ssd1306` class writing through `i2cByte<bus>`. U8g2's `2ND_HW_I2C` driver sends nothing on ESP32 core 3.x, which is why PR #64 replaced it.
+    - The panels live in a static `Screen[kMaxScreens]` array.
   - The timings come from `RuntimeConfig`.
 - **`indicators.cpp`:** unchanged logic; reads `RuntimeConfig`.
 - **`transport.cpp`** is rewritten:
