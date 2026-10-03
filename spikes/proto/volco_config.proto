@@ -1,0 +1,81 @@
+syntax = "proto2";
+package volco.config;
+option csharp_namespace = "Volco.Core.ControllerConfig.Proto";
+
+message ControllerConfig {
+  repeated Slider sliders = 1;
+  repeated Button buttons = 2;
+  optional I2cBus i2c0 = 3;
+  optional I2cBus i2c1 = 4;
+  optional Udp udp = 5;
+  optional ScreenBehaviour screens = 6;
+  optional InputTuning input = 7;
+  optional string preset = 8;
+}
+
+message Slider {
+  optional uint32 pin = 1;
+}
+
+message Button {
+  optional uint32 pin = 1;
+  oneof indicator {
+    Led led = 2;
+    LedPair led_pair = 3;
+    Screen screen = 4;
+  }
+}
+
+message Led {
+  optional uint32 pin = 1;
+  optional bool active_low = 2 [default = false];
+}
+
+message LedPair {
+  optional uint32 pin_a = 1;
+  optional uint32 pin_b = 2;
+  optional bool active_low = 3 [default = false];
+}
+
+message Screen {
+  optional uint32 bus = 1 [default = 0];
+  optional uint32 address = 2 [default = 0x3C];
+}
+
+message I2cBus {
+  optional uint32 sda = 1;
+  optional uint32 scl = 2;
+  optional uint32 clock_hz = 3 [default = 400000];
+}
+
+message Udp {
+  optional bool enabled = 1 [default = false];
+  optional string ssid = 2;
+  optional string password = 3;
+  optional fixed32 pc_ip = 4;
+  optional uint32 pc_port = 5 [default = 12345];
+  optional uint32 local_port = 6 [default = 12346];
+}
+
+message ScreenBehaviour {
+  optional uint32 brightness = 1 [default = 255];
+  optional uint32 transition_ms = 2 [default = 360];
+  optional uint32 scroll_hold_ms = 3 [default = 2000];
+  optional uint32 scroll_speed_px_s = 4 [default = 30];
+  optional uint32 scroll_end_hold_ms = 5 [default = 1200];
+  optional bool dim_enabled = 6 [default = true];
+  optional uint32 dim_after_s = 7 [default = 120];
+  optional uint32 dim_brightness = 8 [default = 8];
+  optional bool off_enabled = 9 [default = true];
+  optional uint32 off_after_s = 10 [default = 1800];
+  optional bool pixel_shift_enabled = 11 [default = true];
+  optional uint32 pixel_shift_every_s = 12 [default = 180];
+  optional bool wake_swallows_press = 13 [default = true];
+}
+
+message InputTuning {
+  optional uint32 debounce_ms = 1 [default = 30];
+  optional uint32 slider_interval_ms = 2 [default = 10];
+  optional uint32 filter_weight_pct = 3 [default = 20];
+  optional uint32 slider_deadband = 4 [default = 25];
+}
