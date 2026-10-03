@@ -423,6 +423,40 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void SetOutputDevicePress_DeviceOsd_CarriesTheFormFactorIcon()
+    {
+        _engine.Devices[1] = DeviceById(Headphones) with { FormFactor = DeviceFormFactor.Headphones };
+        var (_, osd) = StartWithButton0(SetDevice(Headphones));
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+
+        Assert.Equal(ScreenIcon.Headphones, Assert.Single(osd.Items).Icon);
+    }
+
+    [Fact]
+    public void SetOutputDevicePress_DeviceOsd_CarriesTheChosenIconAndNickname()
+    {
+        _engine.Devices[1] = DeviceById(Headphones) with { FormFactor = DeviceFormFactor.Headphones };
+        var runtime = StartRuntime(NewConfig(c =>
+        {
+            c.Buttons[0].Default().SinglePress = SetDevice(Headphones);
+            c.Devices.Add(new DeviceSettingsConfig { Id = Headphones, Nickname = "Desk", Icon = ScreenIcon.Earbuds });
+        }));
+        var osd = new Recorder<VolumeChangeNotification>();
+        runtime.VolumeChanged += osd.Handler;
+
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
+
+        var n = Assert.Single(osd.Items);
+        Assert.Equal("Desk", n.Label);
+        Assert.Equal(ScreenIcon.Earbuds, n.Icon);
+    }
+
+    [Fact]
     public void SetOutputDevicePress_TargetMuted_CarriesMuteFlag()
     {
         _engine.DeviceStates[Headphones] = (0.3f, true);

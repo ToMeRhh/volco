@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Volco.App.Osd;
 using Volco.App.Platform;
+using Volco.Core.Communication;
 using Volco.Core.Input;
 using Xunit;
 
@@ -160,15 +161,45 @@ public class VolumeOsdWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Headphones", osd.LabelBlock.Text);
         Assert.Equal("37%", osd.ValueBlock.Text);
-        Assert.True(osd.SpeakerGlyph.IsVisible);
+        Assert.True(osd.SpeakerGlyph.IsVisible);   // no icon known: the generic speaker
         Assert.False(osd.VolumeGlyph.IsVisible);
         Assert.False(osd.MutedGlyph.IsVisible);
+        Assert.False(osd.DeviceGlyph.IsVisible);
 
         osd.Show(new VolumeChangeNotification("Headphones", 0.37f, true, OsdKind.Device));
         PumpUntil(() => osd.ValueBlock.Text == "Muted");
         Assert.Equal("Muted", osd.ValueBlock.Text);
         Assert.True(osd.MutedGlyph.IsVisible);
         Assert.False(osd.SpeakerGlyph.IsVisible);
+        osd.Close();
+    }
+
+    [AvaloniaFact]
+    public void OsdWindow_DeviceNotificationWithIcon_ShowsTheDeviceIconInsteadOfTheSpeaker()
+    {
+        var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000));
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.37f, true, OsdKind.Device, ScreenIcon.Headphones));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(osd.DeviceGlyph.IsVisible);
+        Assert.NotNull(osd.DeviceGlyph.Source);
+        Assert.False(osd.SpeakerGlyph.IsVisible);
+        Assert.False(osd.MutedGlyph.IsVisible);
+        Assert.False(osd.VolumeGlyph.IsVisible);
+        Assert.Equal("Muted", osd.ValueBlock.Text);
+        Assert.True(osd.MuteSlash.IsVisible);   // muted: struck through...
+        Assert.Equal(0.4, osd.DeviceGlyph.Opacity);    // ...and dimmed
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.37f, false, OsdKind.Device, ScreenIcon.Headphones));
+        PumpUntil(() => !osd.MuteSlash.IsVisible);
+        Assert.False(osd.MuteSlash.IsVisible);
+        Assert.Equal(1.0, osd.DeviceGlyph.Opacity);
+
+        osd.Show(Vol);
+        PumpUntil(() => osd.VolumeGlyph.IsVisible);
+        Assert.True(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.DeviceGlyph.IsVisible);
+        Assert.False(osd.MuteSlash.IsVisible);
         osd.Close();
     }
 
