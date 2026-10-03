@@ -950,7 +950,7 @@ jobs:
     - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
-    - run: pip install platformio==6.1.18
+    - run: pip install platformio==6.1.19
     - name: Build denky32
       working-directory: firmware
       run: pio run -e denky32
