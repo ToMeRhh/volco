@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Diagnostics;
+using Volco.Core.Updates;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
@@ -52,12 +53,37 @@ public class GeneralPageTests
     }
 
     [AvaloniaFact]
+    public void GeneralPage_DevBuild_ShowsTheCommitAndBuildDetails()
+    {
+        using var rig = new TestRig();
+        var page = new GeneralPage(new GeneralViewModel(rig.Config, isRelease: false));
+        new Window { Content = page }.Show();
+
+        Assert.Equal($"Volco dev {BuildInfo.Commit}", page.FindControl<TextBlock>("VersionText")!.Text);
+        var details = page.FindControl<TextBlock>("BuildDetailsText")!;
+        Assert.Equal(BuildInfo.BuildDetails, details.Text);
+        Assert.Contains("Branch ", details.Text);
+        Assert.True(details.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void GeneralPage_ReleaseBuild_ShowsJustTheVersion()
+    {
+        using var rig = new TestRig();
+        var page = new GeneralPage(new GeneralViewModel(rig.Config, isRelease: true));
+        new Window { Content = page }.Show();
+
+        Assert.Equal($"Volco v{BuildInfo.Version}", page.FindControl<TextBlock>("VersionText")!.Text);
+        Assert.False(page.FindControl<TextBlock>("BuildDetailsText")!.IsVisible);
+    }
+
+    [AvaloniaFact]
     public void GeneralPage_UpdatesPanel_OnlyWhenUpdatesAreShown()
     {
         using var rig = new TestRig();
 
-        var withUpdates = new GeneralPage(new GeneralViewModel(rig.Config, showUpdates: true));
-        var without = new GeneralPage(new GeneralViewModel(rig.Config, showUpdates: false));
+        var withUpdates = new GeneralPage(new GeneralViewModel(rig.Config, isRelease: true));
+        var without = new GeneralPage(new GeneralViewModel(rig.Config, isRelease: false));
 
         Assert.NotNull(withUpdates.Updates);
         Assert.Same(withUpdates.Updates, withUpdates.FindControl<ContentControl>("UpdatesHost")!.Content);

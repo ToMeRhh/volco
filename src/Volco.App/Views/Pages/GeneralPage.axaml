@@ -37,6 +37,17 @@
         </StackPanel>
       </Border>
 
+      <Border Name="AboutPanel" Classes="Panel">
+        <StackPanel Spacing="14">
+          <TextBlock Text="About" Classes="Subtitle"/>
+          <StackPanel Spacing="2">
+            <TextBlock Name="VersionText" Text="{Binding VersionText}"/>
+            <TextBlock Name="BuildDetailsText" Classes="Caption" Text="{Binding BuildDetails}"
+                       IsVisible="{Binding BuildDetails, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
     </StackPanel>
   </ScrollViewer>
 </UserControl>

@@ -28,6 +28,36 @@ public class UpdateTests
     public void ParseVersion_ReturnsNull_ForJunk(string? raw)
         => Assert.Null(BuildInfo.ParseVersion(raw));
 
+    [Theory]
+    [InlineData("0.0.0+A1B2C3D4E5F60718293a4b5c6d7e8f9012345678", "a1b2c3d")]
+    [InlineData("1.2.3+a1b2c3d", "a1b2c3d")]
+    [InlineData("1.2.3", null)]
+    [InlineData("1.2.3+abc", null)]
+    [InlineData("1.2.3+not-a-sha", null)]
+    [InlineData(null, null)]
+    public void ParseCommit_TakesTheShortShaFromTheSuffix(string? raw, string? expected)
+        => Assert.Equal(expected, BuildInfo.ParseCommit(raw));
+
+    [Fact]
+    public void FormatVersion_ReleaseShowsTheVersion_OtherBuildsShowTheCommit()
+    {
+        Assert.Equal("v1.2.3", BuildInfo.FormatVersion(true, new Version(1, 2, 3), "a1b2c3d"));
+        Assert.Equal("dev a1b2c3d", BuildInfo.FormatVersion(false, new Version(0, 0, 0), "a1b2c3d"));
+        Assert.Equal("dev", BuildInfo.FormatVersion(false, new Version(0, 0, 0), null));
+    }
+
+    [Fact]
+    public void FormatDetails_JoinsWhateverIsKnown()
+    {
+        var t = new DateTimeOffset(2026, 10, 3, 16, 22, 59, TimeSpan.FromHours(2));
+        Assert.Equal("Branch main · commit a1b2c3d\nBuilt 2026-10-03 14:22 UTC\nLocal build on PC",
+            BuildInfo.FormatDetails("main", "a1b2c3d", t, "Local build on PC"));
+        Assert.Equal("Commit a1b2c3d\nGitHub Actions: Build Volco run #7",
+            BuildInfo.FormatDetails(null, "a1b2c3d", null, "GitHub Actions: Build Volco run #7"));
+        Assert.Equal("Branch main\nBuilt 2026-10-03 14:22 UTC", BuildInfo.FormatDetails("main", null, t, null));
+        Assert.Null(BuildInfo.FormatDetails(null, null, null, null));
+    }
+
     [Fact]
     public void ParseLatestRelease_FindsExeAsset()
     {

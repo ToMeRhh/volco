@@ -8,7 +8,8 @@ using Volco.Core.Updates;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The General page: updates (release builds only, as before) and troubleshooting. The update
+/// The General page: updates (release builds only, as before), troubleshooting and the app's
+/// version. The update
 /// flow itself lives in <see cref="Controls.UpdatesPanel"/>, which needs the config it saves to.
 /// </summary>
 public partial class GeneralViewModel : ObservableObject
@@ -18,11 +19,13 @@ public partial class GeneralViewModel : ObservableObject
     [ObservableProperty]
     private bool _debugLogging;
 
-    public GeneralViewModel(ConfigManager config, bool showUpdates)
+    public GeneralViewModel(ConfigManager config, bool isRelease)
     {
         _config = config;
         _debugLogging = config.Config.DebugLogging;
-        ShowUpdates = showUpdates;
+        ShowUpdates = isRelease;
+        VersionText = $"Volco {BuildInfo.FormatVersion(isRelease, BuildInfo.Version, BuildInfo.Commit)}";
+        BuildDetails = isRelease ? null : BuildInfo.BuildDetails;
     }
 
     public GeneralViewModel(ConfigManager config) : this(config, BuildInfo.IsRelease) { }
@@ -31,6 +34,15 @@ public partial class GeneralViewModel : ObservableObject
     public bool ShowUpdates { get; }
 
     internal ConfigManager ConfigManager => _config;
+
+    /// <summary>"Volco v1.2.3" on releases, "Volco dev a1b2c3d" on other builds.</summary>
+    public string VersionText { get; }
+
+    /// <summary>
+    /// Branch, commit, build time and origin, one per line, on non-release builds; null on
+    /// releases, which show just the version.
+    /// </summary>
+    public string? BuildDetails { get; }
 
     public string LogPath => AppLog.LogPath;
 

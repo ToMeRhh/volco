@@ -51,7 +51,7 @@ internal sealed class CompositionRoot : IDisposable
 
     public void Start()
     {
-        AppLog.Info("App launching");
+        AppLog.Info($"App launching: Volco {BuildInfo.DisplayVersion} ({BuildInfo.BuildDetails?.Replace("\n", " · ") ?? "no build details"})");
 
         _config = new ConfigManager(_configPath);
         _config.Load();
@@ -93,7 +93,7 @@ internal sealed class CompositionRoot : IDisposable
                 Icon = new WindowIcon(iconStream),
                 ToolTipText = _runtime!.AudioEngineFailed
                     ? "Volco — audio engine failed to start; see volco.log"
-                    : "Volco",
+                    : $"Volco {BuildInfo.DisplayVersion}",
                 Command = new ActionCommand(() =>
                 {
                     AppLog.Info("Tray icon left-clicked");
