@@ -50,6 +50,29 @@ static_assert(addressesUnique(), "Two screens share the same bus and address");
 
 constexpr uint32_t kFrameMs = 20;  // at most one redraw per panel every 20 ms
 
+// U8g2's own Wire1 driver (the *_2ND_HW_I2C panels) only exists when the core defines
+// WIRE_INTERFACES_COUNT > 1, which ESP32 core 3.x doesn't: those panels silently sent nothing.
+// So both buses are started in screens_init, and each panel writes through this for its bus.
+template <int Bus>
+uint8_t i2cByte(u8x8_t* u8x8, uint8_t msg, uint8_t argInt, void* argPtr) {
+  TwoWire& wire = Bus == 0 ? Wire : Wire1;
+  switch (msg) {
+    case U8X8_MSG_BYTE_SEND: wire.write(static_cast<uint8_t*>(argPtr), argInt); return 1;
+    case U8X8_MSG_BYTE_START_TRANSFER: wire.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1); return 1;
+    case U8X8_MSG_BYTE_END_TRANSFER: wire.endTransmission(); return 1;
+    case U8X8_MSG_BYTE_INIT:  // the bus is already started
+    case U8X8_MSG_BYTE_SET_DC: return 1;
+    default: return 0;
+  }
+}
+
+class Ssd1306 : public U8G2 {
+ public:
+  explicit Ssd1306(u8x8_msg_cb byteCb) {
+    u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, byteCb, u8x8_gpio_and_delay_arduino);
+  }
+};
+
 struct Screen {
   uint8_t button = 0;
   U8G2* panel = nullptr;
@@ -106,14 +129,13 @@ void screens_init(uint32_t now) {
     s.button = b;
     screenOf[b] = (int8_t)n;
     if (ind.bus == 0) {
-      if (!bus0) { Wire.setPins(I2C0_SDA, I2C0_SCL); bus0 = true; }
-      s.panel = new U8G2_SSD1306_128X64_NONAME_F_HW_I2C(U8G2_R0, U8X8_PIN_NONE);
+      if (!bus0) { Wire.begin(I2C0_SDA, I2C0_SCL, I2C_CLOCK_HZ); bus0 = true; }
+      s.panel = new Ssd1306(i2cByte<0>);
     } else {
-      if (!bus1) { Wire1.setPins(I2C1_SDA, I2C1_SCL); bus1 = true; }
-      s.panel = new U8G2_SSD1306_128X64_NONAME_F_2ND_HW_I2C(U8G2_R0, U8X8_PIN_NONE);
+      if (!bus1) { Wire1.begin(I2C1_SDA, I2C1_SCL, I2C_CLOCK_HZ); bus1 = true; }
+      s.panel = new Ssd1306(i2cByte<1>);
     }
     s.panel->setI2CAddress(ind.address << 1);  // U8g2 takes the 8-bit form
-    s.panel->setBusClock(I2C_CLOCK_HZ);
     s.panel->begin();
     s.panel->setContrast(SCREEN_BRIGHTNESS);
     s.slot.show(volco::notConnectedScreen(), volco::TRANSITION_NONE, now, false);
