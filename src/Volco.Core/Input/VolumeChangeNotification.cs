@@ -8,8 +8,8 @@ namespace Volco.Core.Input;
 /// the device that governs it, see SliderProcessor.MuteSourceFor; icon = the slider's own device,
 /// else the current output's; the OSD still shows the percentage, with the icon struck through and
 /// a dimmed bar). <see cref="Mute"/>: a mute button was
-/// pressed (the notification carries the target's real level; the OSD shows "Muted" while
-/// muted, the percentage otherwise). <see cref="Device"/>: a button switched the default output
+/// pressed (the notification carries the target's real level and icon; the OSD shows "Muted"
+/// while muted, the percentage otherwise). <see cref="Device"/>: a button switched the default output
 /// device (label = the new default's display name, icon = its icon, level/muted = that device's state). <see cref="Preset"/>: a
 /// button switched the live preset (label = the new preset's name; level and muted unused).
 /// </remarks>
@@ -20,7 +20,8 @@ public enum OsdKind { Volume, Mute, Device, Preset }
 /// should display. Carries only primitive data so it can be raised from the
 /// cross-platform input layer without referencing Windows UI types.
 /// <see cref="Icon"/> is a device's icon (chosen icon, else form factor) on a
-/// <see cref="OsdKind.Device"/> or <see cref="OsdKind.Volume"/> notification, null otherwise or
+/// <see cref="OsdKind.Device"/>, <see cref="OsdKind.Mute"/> or <see cref="OsdKind.Volume"/>
+/// notification, null otherwise or
 /// when the device is unknown.
 /// </summary>
 public sealed record VolumeChangeNotification(

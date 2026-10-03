@@ -22,11 +22,11 @@ internal sealed class VolumeOsdViewModel
     /// always shows the percentage, even while muted - the glyph and dimmed bar show the mute.</summary>
     public string ValueText { get; private set; } = "0%";
 
-    /// <summary>The icon. An output-device switch or a slider drag shows the notification's device
-    /// icon (the new device; the slider's device, or the current output for an app slider), dimmed
-    /// and struck through while muted (see <see cref="DeviceIconMuted"/>). Without an icon: the
-    /// muted glyph whenever the target is muted, else the speaker glyph for a switch and the
-    /// volume glyph otherwise. A mute button keeps the volume/muted glyphs.</summary>
+    /// <summary>The icon. An output-device switch, a mute press or a slider drag shows the
+    /// notification's device icon (the new device; the muted device; the slider's device, or the
+    /// current output for an app slider), dimmed and struck through while muted (see
+    /// <see cref="DeviceIconMuted"/>). Without an icon: the muted glyph whenever the target is
+    /// muted, else the speaker glyph for a switch and the volume glyph otherwise.</summary>
     public OsdGlyph Glyph { get; private set; } = OsdGlyph.Volume;
 
     /// <summary>The device icon shown when <see cref="Glyph"/> is <see cref="OsdGlyph.Device"/>, else null.</summary>
@@ -57,7 +57,7 @@ internal sealed class VolumeOsdViewModel
         var label = n.Label;
         if (n.Kind == OsdKind.Preset) valueText = "Preset";
 
-        var deviceIcon = n.Kind is OsdKind.Device or OsdKind.Volume ? n.Icon : null;
+        var deviceIcon = n.Kind is OsdKind.Device or OsdKind.Mute or OsdKind.Volume ? n.Icon : null;
         var glyph = n.Kind == OsdKind.Preset ? OsdGlyph.Preset
             : deviceIcon is not null ? OsdGlyph.Device
             : n.Muted ? OsdGlyph.Muted

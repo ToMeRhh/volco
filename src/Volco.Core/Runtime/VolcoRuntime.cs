@@ -624,35 +624,37 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
 
     /// <summary>Raises <see cref="VolumeChanged"/> with an <see cref="OsdKind.Mute"/>
     /// notification reflecting the target device's post-write mute flag and real level (the
-    /// OSD shows "Muted", or the percentage on unmute).</summary>
+    /// OSD shows "Muted", or the percentage on unmute), plus its name and icon.</summary>
     private void ShowMuteOsd(ButtonActionConfig actionConfig)
     {
-        string? label;
+        DeviceLook? look;
+        string fallback;
         bool muted;
         float level;
         switch (actionConfig.Action)
         {
             case ButtonActionType.MuteCurrentOutput:
-                label = Audio.GetDefaultDevice(AudioFlow.Render) is { } output
-                    ? DeviceDisplay.For(Config.Config, output).Name : "Output";
+                look = Audio.GetDefaultDevice(AudioFlow.Render) is { } output ? DeviceDisplay.For(Config.Config, output) : null;
+                fallback = "Output";
                 (level, muted) = Audio.GetStateOrDefault(DeviceRef.DefaultOutput());
                 break;
             case ButtonActionType.MuteSpecificDevice:
                 var specificDevice = ActionFactory.Resolve(actionConfig.Device);
                 if (specificDevice == null) return; // unresolvable device config; nothing to show
-                label = DeviceDisplay.NameOf(Config.Config, Audio, actionConfig.Device, "Output");
+                look = DeviceDisplay.For(Config.Config, Audio, actionConfig.Device);
+                fallback = "Output";
                 (level, muted) = Audio.GetStateOrDefault(specificDevice.Value);
                 break;
             case ButtonActionType.MuteCurrentInput:
-                label = Audio.GetDefaultDevice(AudioFlow.Capture) is { } input
-                    ? DeviceDisplay.For(Config.Config, input).Name : "Microphone";
+                look = Audio.GetDefaultDevice(AudioFlow.Capture) is { } input ? DeviceDisplay.For(Config.Config, input) : null;
+                fallback = "Microphone";
                 (level, muted) = Audio.GetStateOrDefault(DeviceRef.DefaultInput());
                 break;
             default:
                 return; // non-mute actions don't show the OSD
         }
 
-        RaiseVolumeChanged(new VolumeChangeNotification(label, level, muted, OsdKind.Mute));
+        RaiseVolumeChanged(new VolumeChangeNotification(look?.Name ?? fallback, level, muted, OsdKind.Mute, look?.Icon));
     }
 
     /// <summary>Raises <see cref="VolumeChanged"/> with an <see cref="OsdKind.Device"/>

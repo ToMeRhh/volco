@@ -137,11 +137,28 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_DeviceIcon_IsIgnoredForAMuteButton_AndAChangeIsReported()
+    public void OsdViewModel_MuteKindWithIcon_ShowsTheDeviceIcon_StruckThroughOnlyWhileMuted()
     {
         var vm = new VolumeOsdViewModel();
-        vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Mute, ScreenIcon.Speaker));
-        Assert.Equal(OsdGlyph.Volume, vm.Glyph);
+
+        vm.Apply(new VolumeChangeNotification("Mic", 0.6f, true, OsdKind.Mute, ScreenIcon.Mic));
+        Assert.Equal(OsdGlyph.Device, vm.Glyph);
+        Assert.Equal(ScreenIcon.Mic, vm.DeviceIcon);
+        Assert.True(vm.DeviceIconMuted);
+        Assert.Equal("Muted", vm.ValueText);
+
+        vm.Apply(new VolumeChangeNotification("Mic", 0.6f, false, OsdKind.Mute, ScreenIcon.Mic));
+        Assert.Equal(OsdGlyph.Device, vm.Glyph);
+        Assert.False(vm.DeviceIconMuted);
+        Assert.Equal("60%", vm.ValueText);
+    }
+
+    [Fact]
+    public void OsdViewModel_DeviceIcon_IsIgnoredForAPresetSwitch_AndAChangeIsReported()
+    {
+        var vm = new VolumeOsdViewModel();
+        vm.Apply(new VolumeChangeNotification("A", 0f, false, OsdKind.Preset, ScreenIcon.Speaker));
+        Assert.Equal(OsdGlyph.Preset, vm.Glyph);
         Assert.Null(vm.DeviceIcon);
 
         vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Device, ScreenIcon.Speaker));
