@@ -22,11 +22,17 @@ public sealed record ControllerLinkOptions(TimeSpan HelloRetryInterval, TimeSpan
 /// logged and dropped. Events are raised outside every lock. For a single-threaded caller the
 /// frames have all been sent by the time a public method returns.
 /// </para>
+/// <para>
+/// A preset change is announced for a few ticks (the LED blink and the screen's preset flash):
+/// <c>compute</c> gets the announce step (0 at the change, +1 per tick, null once it is over), and
+/// each tick sends what changed, sliding screens the way the preset change did.
+/// </para>
 /// </summary>
 public sealed class ControllerLink : IDisposable
 {
     private readonly object _gate = new();
-    private readonly Func<IReadOnlyList<ButtonDisplay?>> _compute;
+    private readonly Func<int?, IReadOnlyList<ButtonDisplay?>> _compute;
+    private readonly int _announceSteps;
     private readonly ControllerLinkOptions _options;
     private readonly Timer _timer;
 
@@ -41,13 +47,22 @@ public sealed class ControllerLink : IDisposable
     private ButtonDisplay?[] _sent = Array.Empty<ButtonDisplay?>();
     private long _lastSendMs;
     private long _lastHelloRequestMs;
+    private int? _announceStep;
+    private ScreenTransition _announceTransition;
     private bool _disposed;
 
     /// <param name="compute">What every controller button should show now (ControllerDisplay).
     /// Called with the lock held; must only read. If it throws, the push is skipped and logged.</param>
     public ControllerLink(Func<IReadOnlyList<ButtonDisplay?>> compute, ControllerLinkOptions? options = null)
+        : this(_ => compute(), 0, options) { }
+
+    /// <param name="compute">As above, given the announce step (null when no preset change is
+    /// being announced).</param>
+    /// <param name="announceSteps">How many ticks a preset change is announced for.</param>
+    public ControllerLink(Func<int?, IReadOnlyList<ButtonDisplay?>> compute, int announceSteps, ControllerLinkOptions? options = null)
     {
         _compute = compute;
+        _announceSteps = announceSteps;
         _options = options ?? ControllerLinkOptions.Default;
         _timer = new Timer(_ => Tick(), null, _options.TickInterval, _options.TickInterval);
     }
@@ -71,6 +86,7 @@ public sealed class ControllerLink : IDisposable
             ClearOutbox();
             _connection = connection;
             _sent = Array.Empty<ButtonDisplay?>();
+            _announceStep = null;
             changed = SetState(ControllerState.AwaitingHello);
             SendHelloRequest();
         }
@@ -107,6 +123,7 @@ public sealed class ControllerLink : IDisposable
         {
             if (_connection is null || _disposed) return;
             _sent = Array.Empty<ButtonDisplay?>();
+            _announceStep = null;
             changed = SetState(ok ? ControllerState.Ready : ControllerState.VersionMismatch);
             if (ok) PushLocked(ScreenTransition.None, everything: true);
         }
@@ -135,12 +152,15 @@ public sealed class ControllerLink : IDisposable
     }
 
     /// <summary>A preset change: every screen slides (even unchanged ones) and every LED is
-    /// re-sent; wrapped in Begin/Commit when <paramref name="synchronized"/>.</summary>
+    /// re-sent; wrapped in Begin/Commit when <paramref name="synchronized"/>. Starts the announce
+    /// steps.</summary>
     public void PushPresetChange(ScreenTransition transition, bool synchronized)
     {
         lock (_gate)
         {
             if (_state != ControllerState.Ready) return;
+            _announceStep = _announceSteps > 0 ? 0 : null;
+            _announceTransition = transition;
             // Computed before Begin is queued, so a compute that throws leaves no open burst.
             if (TryCompute() is not { } displays) return;
             if (synchronized) Send(ProtocolEncoder.EncodeBegin());
@@ -179,7 +199,7 @@ public sealed class ControllerLink : IDisposable
     /// sends whatever differs.</summary>
     private IReadOnlyList<ButtonDisplay?>? TryCompute()
     {
-        try { return _compute(); }
+        try { return _compute(_announceStep); }
         catch (Exception ex)
         {
             AppLog.Error($"Controller display compute failed: {ex.GetType().Name}: {ex.Message}");
@@ -199,6 +219,11 @@ public sealed class ControllerLink : IDisposable
             lock (_gate)
             {
                 if (_connection is null || _disposed) return;
+                if (_state == ControllerState.Ready && _announceStep is { } step)
+                {
+                    _announceStep = step + 1 < _announceSteps ? step + 1 : null;
+                    PushLocked(_announceTransition, everything: false);
+                }
                 var now = Environment.TickCount64;
                 if (_state == ControllerState.AwaitingHello
                     && now - _lastHelloRequestMs >= (long)_options.HelloRetryInterval.TotalMilliseconds)
@@ -264,6 +289,7 @@ public sealed class ControllerLink : IDisposable
     {
         _connection = null;
         _sent = Array.Empty<ButtonDisplay?>();
+        _announceStep = null;
         ClearOutbox();
         return SetState(ControllerState.NoController);
     }

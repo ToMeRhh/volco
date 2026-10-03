@@ -178,6 +178,61 @@ public sealed class ControllerLinkTests : IDisposable
         Assert.Equal(2, Count(Screen1()));
     }
 
+    /// <summary>A link whose LED blinks while a preset change is announced (on in even steps) and
+    /// whose screen says FLASH; it records the steps compute was called with.</summary>
+    private ControllerLink AnnouncingLink(List<int?> steps, int announceSteps, ControllerLinkOptions options)
+    {
+        _link = new ControllerLink(step =>
+        {
+            lock (steps) steps.Add(step);
+            return new ButtonDisplay?[]
+            {
+                new LedDisplay(step is { } s && s % 2 == 0 ? (byte)1 : (byte)0),
+                new ScreenDisplay(ScreenContent.Text(step is null ? "LIVE" : "FLASH", ScreenIcon.Mic, false, "Mic")),
+                null,
+            };
+        }, announceSteps, options);
+        _link.Attach(_conn);
+        _link.OnMessage(GoodHello);
+        return _link;
+    }
+
+    [Fact]
+    public void PresetChange_IsAnnouncedForItsSteps_ThenSlidesBackToTheSteadyState()
+    {
+        var steps = new List<int?>();
+        var link = AnnouncingLink(steps, announceSteps: 4, SlowHeartbeat);
+        var baseline = _conn.SentCount;
+
+        link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: false);
+        Assert.True(WaitUntil(() => Count(Screen1(ScreenTransition.SlideLeft)) == 1));
+        Thread.Sleep(100);   // ten more ticks: nothing else changes
+
+        var shown = _conn.SentFrames.Skip(baseline)
+            .Where(f => f[2] is (byte)MessageType.Led or (byte)MessageType.Screen).ToList();
+        Assert.True(Same(Screen1(ScreenTransition.SlideLeft, "FLASH"), shown[0]));
+        Assert.Equal(new byte[] { 1, 0, 1, 0 }, shown.Where(f => f[2] == (byte)MessageType.Led).Select(f => f[4]));
+        Assert.True(Same(Screen1(ScreenTransition.SlideLeft), shown[^1]));       // back, sliding the same way
+        Assert.Equal(6, shown.Count);
+        lock (steps) Assert.Equal(new int?[] { 0, 1, 2, 3 }, steps.Where(s => s is not null).Distinct());
+    }
+
+    [Fact]
+    public void PushDuringAnAnnounce_UsesTheCurrentStep_AndReattachingEndsIt()
+    {
+        var steps = new List<int?>();
+        var link = AnnouncingLink(steps, announceSteps: 4, Quiet);
+        link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: false);
+        steps.Clear();
+
+        link.Push();
+        Assert.Equal(new int?[] { 0 }, steps);
+
+        link.Attach(_conn);
+        link.OnMessage(GoodHello);
+        Assert.Equal(new int?[] { 0, null }, steps);
+    }
+
     [Fact]
     public void SecondHello_ClearsDedupAndPushesAgain()
     {

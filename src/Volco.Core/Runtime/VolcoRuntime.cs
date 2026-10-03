@@ -102,7 +102,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
                              ?? new Func<ConnectionConfig, IControllerConnection?>(CreateDefaultConnection);
         _options = options ?? VolcoRuntimeOptions.Default;
         _link = new ControllerLink(
-            () => ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio), _options.Link);
+            step => ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step),
+            ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) => { if (!IsDisposed) ControllerStateChanged?.Invoke(this, state); };
         _link.HelloReceived += OnHello;
     }

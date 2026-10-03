@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
@@ -181,6 +182,13 @@ public class ButtonsPageTests
         foreach (var name in new[] { "DeviceACombo", "DeviceBCombo" })
             Assert.Equal(new[] { "Speakers", "Headphones" },
                 Assert.IsAssignableFrom<IEnumerable<string>>(InRow<ComboBox>(page, "PressRow", name, 2).ItemsSource));
+
+        // B sits under A (side by side, B overflowed the card).
+        var comboA = InRow<ComboBox>(page, "PressRow", "DeviceACombo", 2);
+        var comboB = InRow<ComboBox>(page, "PressRow", "DeviceBCombo", 2);
+        var offset = comboB.TranslatePoint(new Point(0, 0), comboA)!.Value;
+        Assert.Equal(0, offset.X);
+        Assert.True(offset.Y >= comboA.Bounds.Height);
 
         InRow<ComboBox>(page, "PressRow", "DeviceACombo", 2).SelectedItem = "Headphones";
         InRow<ComboBox>(page, "PressRow", "DeviceBCombo", 2).SelectedItem = "Speakers";

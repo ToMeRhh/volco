@@ -63,16 +63,16 @@
       </Border>
 
       <Border Name="PairParams" Classes="Indent" IsVisible="{Binding NeedsPair}">
-        <StackPanel Orientation="Horizontal" Spacing="8">
+        <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="8">
           <TextBlock Text="A" Classes="Caption" VerticalAlignment="Center"/>
-          <ComboBox Name="DeviceACombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" MinWidth="200" PlaceholderText="Choose a device"
+          <ComboBox Name="DeviceACombo" Grid.Column="1" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" MinWidth="240" PlaceholderText="Choose a device"
                     ItemsSource="{Binding DeviceNames}"
                     SelectedItem="{Binding Device, Mode=TwoWay}"/>
-          <TextBlock Text="B" Classes="Caption" VerticalAlignment="Center" Margin="8,0,0,0"/>
-          <ComboBox Name="DeviceBCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" MinWidth="200" PlaceholderText="Choose a device"
+          <TextBlock Grid.Row="1" Text="B" Classes="Caption" VerticalAlignment="Center"/>
+          <ComboBox Name="DeviceBCombo" Grid.Row="1" Grid.Column="1" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}" MinWidth="240" PlaceholderText="Choose a device"
                     ItemsSource="{Binding DeviceNames}"
                     SelectedItem="{Binding DeviceB, Mode=TwoWay}"/>
-        </StackPanel>
+        </Grid>
       </Border>
 
       <Border Name="PresetParams" Classes="Indent" IsVisible="{Binding NeedsPreset}">

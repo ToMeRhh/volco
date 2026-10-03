@@ -89,7 +89,7 @@ Bidirectional binary protocol. Frame: `0xAA | length | type | body | XOR checksu
 | `0x85` | Begin | PC→controller | none (hold updates) |
 | `0x86` | Commit | PC→controller | none (apply held updates together) |
 
-`Communication/ControllerDisplay` decides what each button shows (its LED value or screen content) from its action in the live preset. `Runtime/ControllerLink` runs the session: Hello, keepalive, dedup, and the Begin/Commit bursts for preset changes. (The old `0x03` mute state, `0x04` active device and `0x05` feedback messages are gone with protocol v1.)
+`Communication/ControllerDisplay` decides what each button shows (its LED value or screen content) from its action in the live preset. A single LED and an LED pair differ: a pair shows a toggle's side (1 = A, 2 = B) and the live preset's position, while one LED is lit on the toggle's B and while a "Go to preset" target is live. For `AnnounceSteps` link ticks (~1.5 s) after a preset change, a button with a preset action announces it: one LED blinks, and a screen that shows another action flashes the live preset. The firmware needs no change for this, because the link re-sends on each tick. `Runtime/ControllerLink` runs the session: Hello, keepalive, dedup, the Begin/Commit bursts for preset changes, and the announce ticks. (The old `0x03` mute state, `0x04` active device and `0x05` feedback messages are gone with protocol v1.)
 
 ### Web Simulator (`tools/simulator/`)
 
