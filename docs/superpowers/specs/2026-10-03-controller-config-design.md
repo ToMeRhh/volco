@@ -1,6 +1,6 @@
 # Controller configuration and firmware installation: design
 
-Date: 2026-10-03. Status: revision 2. This revision includes the findings of two independent reviews, one of the firmware and protocol and one of the app, UX and CI. It is waiting for the user's review.
+Date: 2026-10-03. Status: revision 3, waiting for the user's review. Revision 2 applied two independent first-round reviews (firmware and protocol; app, UX and CI). Revision 3 applies a second-round review of revision 2.
 
 ## 1. Goal
 
@@ -83,6 +83,7 @@ New and changed pieces:
 | App, Core | `Communication/` (Hello parsing, config frames encode/parse) | changed |
 | App, Core | `Runtime/VolcoRuntime` (test mode, connection suspend, routing), `ControllerLink` (`SendRaw`) | changed |
 | App, Core | `Config/` (schema v5: mirror blob, baud removed) | changed |
+| App, Core | `Input/ButtonPressDetector` (`Reset()`, unmatched release ignored) | changed |
 | App, UI | `Views/ControllerPage`, `ViewModels/Controller*` | new |
 | App, UI | `ConnectionViewModel` (baud setting removed) | changed |
 | Windows | `EspDotNetFirmwareFlasher`, embedded firmware images, `IFirmwareSource` | new |
@@ -159,7 +160,9 @@ data           0–240 bytes
 
 - If `total` is 0, exactly one frame is sent, with no data.
 - Otherwise the chunks are sent at offsets 0, 240, 480, … in order. Every chunk except the last carries 240 bytes.
-- A damaged stored blob (configState 2) is still returned when its length is ≤ `kMaxConfigBlob`, so the app can show what was there if it decodes on the PC side.
+- A damaged stored blob (configState 2) is returned like any other when its length is ≤ `kMaxConfigBlob`.
+- **The whole reply is one send:** one serial write, or **one UDP datagram** (at most about 1.1 KB). Back-to-back datagrams risk lwIP send failures.
+- The reply goes to the transport the ConfigRead arrived on.
 - The firmware keeps no read state. Each ConfigRead produces a full fresh reply.
 
 The app accepts the reply when all of these hold:
@@ -190,10 +193,10 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
 
 | Code | Name | Meaning |
 |---|---|---|
-| 0 | OK | Stored (or erased, for a factory reset). The controller reboots. |
+| 0 | OK | Stored. The controller reboots. |
 | 1 | BAD_SEQUENCE | Within an open transfer: a chunk whose offset ≠ bytes received, a chunk overrunning `total`, End before `total` bytes, or a chunk or End whose `seq` ≠ the open transfer's `seq`. |
 | 2 | BAD_CRC | The CRC-32 of the received bytes ≠ `crc32` from Begin. |
-| 3 | TOO_LARGE | Begin's `total` > `kMaxConfigBlob` (1024). Sent in reply to the Begin. |
+| 3 | TOO_LARGE | Begin's `total` is 0 or > `kMaxConfigBlob` (1024). Sent in reply to the Begin. |
 | 4 | DECODE_FAILED | nanopb could not decode the blob. This includes a string or repeated field over its limit, and a string containing a NUL byte. |
 | 5 | INVALID | Decoded, but violates a §6.4 rule. `item` and `field` say where. |
 | 6 | STORAGE_FAILED | The NVS write failed. The old config is unchanged. |
@@ -201,8 +204,7 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
 **Firmware receiver rules** (`volco_config::BlobReceiver`, pure and host-tested; time is passed in):
 
 1. **ConfigWriteBegin** always (re)starts a transfer. It discards any open one, records `seq`, `total`, `crc32` and the **transport it arrived on**, and sets received = 0.
-   - `total` > 1024 → reply TOO_LARGE and close.
-   - `total` = 0 is a **factory reset**: `crc32` must be 0, which is the CRC-32 of empty input. The matching End erases the stored config (no decode or validate), replies OK, and reboots into defaults.
+   - `total` = 0 or > 1024 → reply TOO_LARGE and close. A saved blob is never empty: `ControllerConfigCodec.Encode` always sets `preset` (`"blank"` for a config not based on a preset). There is **no factory-reset frame**: Install already wipes NVS (§8.6), and saving a Blank config covers "start fresh".
 2. **Chunks and End from a different transport** than the open transfer's are ignored.
 3. **A chunk or End with no open transfer is ignored silently.** After a transfer closes, by success or by error, nothing more is sent for it. This guarantees **at most one ConfigResult per Begin**.
 4. **Within an open transfer**, a chunk with the wrong `seq` or offset, or overrunning `total` → reply BAD_SEQUENCE and close. An End with the wrong `seq`, or received ≠ `total` → reply BAD_SEQUENCE and close.
@@ -212,7 +214,7 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
    - validate → INVALID
    - store → STORAGE_FAILED
 
-   The first failure replies with its code and closes. If all pass → reply OK, close, then reboot (§6.7).
+   The first failure replies with its code and closes. If all pass → reply OK, close, then reboot (§6.7). The ConfigResult always goes out on the transport the Begin arrived on.
 6. **Timeout:** an open transfer with no accepted config frame for **2000 ms** closes silently.
 7. **Nothing else stops:** inputs are still reported during a transfer, and Led, Screen, Begin and Commit still apply.
 
@@ -224,7 +226,8 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
   - **BAD_SEQUENCE or BAD_CRC** → a transport error. Start the next attempt.
   - **TOO_LARGE, DECODE_FAILED, INVALID or STORAGE_FAILED** → fail immediately with the specific message (§8.7). No retry.
   - **Nothing within 3 s** → start the next attempt.
-  - After **3 attempts**, fail with "The controller didn't answer."
+  - **No connection attached:** `SendRaw` returns false when no connection is attached, for example while `UdpConnection` is detached after 3 s of silence during a reboot. That attempt counts as sent and unanswered.
+  - **After the 3rd attempt ends with no ConfigResult,** the service doesn't fail yet. It waits the confirming timeout (10 s, or 20 s on UDP) for an implied-OK Hello. Only then does it fail with "The controller didn't answer." This covers an OK lost over UDP followed by a reboot and Wi-Fi rejoin that takes longer than the retries.
 - **Implied OK.** From the first Begin onward, in **any** phase, a Hello with configState 1 and configCrc = the CRC of the bytes being saved **confirms the save** immediately. That covers an OK lost over UDP: the controller rebooted with the new config. If a retry's burst still reaches the controller after it stored the config, it stores the same bytes again and reboots once more. That is harmless.
 - **Any other Hello** before a ConfigResult (for example, the board was reset by hand) fails the current attempt and starts the next one.
 - **Confirming:** wait up to **10 s** (serial, WebSocket) or **20 s** (UDP, which includes rejoining Wi-Fi) for a Hello.
@@ -235,7 +238,6 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
 - **Connection drops** (§8.2): a Detach followed by a re-Attach of the **same** connection does not fail the save. The reboot itself can cause one, through the UDP inactivity timeout, the simulator's reconnect, or a serial error during the reboot. Only a connection *replacement* fails the save: a connection config change, `SuspendConnection`, `Reconnect()`, or runtime dispose. The message is then "Connection lost while saving. Reconnect to see which setup the controller has." The mirror is left unchanged.
 - **Cancellation** is honoured only before the first burst is enqueued.
 - **The save belongs to the runtime-owned service.** Closing the settings window never cancels a save, and a confirmed save still updates the mirror.
-- **Factory reset** (`FactoryResetAsync`) is the same procedure with `total` = 0. It is confirmed by a Hello with configState 0. The mirror is kept, so "Apply my saved setup" stays available.
 - **Only one read or write runs at a time.** The service rejects a second request.
 
 **Throughput:** a full 1024-byte blob is one burst of about 1.07 KB, roughly 0.1 s at 115200 baud.
@@ -247,7 +249,7 @@ USB serial is always on. When UDP is enabled, each transport has its **own** `Fr
 - **Unlatched** (at boot, and after every host timeout): every outgoing frame (Hello, Alive, Slider, Button) goes to **every transport that is up**. Serial is always up; UDP is up once Wi-Fi is connected.
 - **Latching:** the first valid frame from the PC latches its transport as **active**. The latch is set **before** the frame is passed to `Link::onPayload`, so the reply (for example, Hello to a HelloRequest) goes to the new transport. While latched, every outgoing frame goes to the active transport only, and a valid frame from the other transport moves the latch to it.
 - **The host timeout** (`hostLost`) clears the latch.
-- **When Wi-Fi connects** (`WL_CONNECTED`, including after a drop), the controller sends a Hello on UDP.
+- **When Wi-Fi connects** (`WL_CONNECTED`, including after a drop), the controller sends a Hello on UDP. This is the **one exception** to "latched → active transport only": it is sent even when serial is latched.
 - **The UDP source filter:** datagrams are accepted only from the configured PC IP, through a pure helper `acceptUdpSource(srcIp, configuredIp)`. Datagrams from any other address are dropped before parsing. The controller sends to `pc_ip:pc_port` and listens on `local_port`.
 
 Why this works:
@@ -361,6 +363,8 @@ volco.config.Udp.password              max_size:65
   - repeated counts
   - string UTF-8 byte lengths, excluding the NUL
 - **A NUL byte inside any string is a decode failure on both sides.** nanopb would otherwise silently truncate the string.
+- **Invalid UTF-8 in a string is a decode failure on both sides.** nanopb is built with `PB_VALIDATE_UTF8`; Google.Protobuf already rejects it.
+- **Known divergence:** a `uint32` varint wider than 32 bits fails in nanopb but is truncated by C#. Volco never produces one, so this concerns foreign blobs only, and the firmware's verdict counts. It is deliberately kept out of the shared vectors.
 
 Notes:
 
@@ -467,7 +471,8 @@ Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHEC
    - `pin` absent or not usable → field 2.
    - **LED:** `pin` absent or not output-capable → field 3.
    - **LED pair:** `pin_a` absent or not output-capable → field 4. `pin_b` absent, not output-capable, or equal to `pin_a` → field 5.
-   - **Screen:** `bus` ∉ {0, 1} → field 6. `address` ∉ {0x3C, 0x3D} → field 7. Then, in button order, a screen whose (bus, address) is already used by an earlier screen → field 7. A third screen on one bus → field 6. Both are reported on the **later** button.
+   - **Screen:** `bus` ∉ {0, 1} → field 6. `address` ∉ {0x3C, 0x3D} → field 7. (bus, address) already used by an earlier button's screen → field 7, reported on the **later** button. There are only two addresses, so this also limits each bus to two screens; there is no separate "third screen" rule.
+   - **This is a single pass, one button at a time:** its pin, then its indicator fields, then the (bus, address) duplicate check. All of button *n* is checked before button *n+1*.
 4. **I2C**, for each bus that some screen uses:
    - `I2cBus` message absent → field 8, `item` = bus.
    - `sda` or `scl` absent, not output-capable, or `sda` = `scl` → field 9, `item` = bus.
@@ -498,7 +503,6 @@ The DIY reference passes every step. Its sliders on 34/35/36 are input-only ADC1
 - **Location:** NVS namespace `volco`, key `cfg`, as a blob, through Arduino `Preferences`.
 - **Saving:** the firmware writes only after decode and validate succeed. `putBytes` writes and commits (`nvs_set_blob` + `nvs_commit`). **Success means `putBytes` returned `total`.** Anything else is STORAGE_FAILED.
 - **Atomicity:** NVS replaces a blob key atomically. A power loss during the write leaves the old value or the new one.
-- **Factory reset** removes the key.
 - **Boot:**
 
   | Stored key | Result |
@@ -520,11 +524,13 @@ The DIY reference passes every step. Its sliders on 34/35/36 are input-only ADC1
 
 ### 6.7 Reboot after save
 
-After replying OK, the firmware:
+After replying OK, the firmware **processes no further frames and runs no more of the loop**. It:
 
 1. flushes the reply's transport (`Serial.flush()` waits for the TX FIFO to empty; a UDP packet is sent with `endPacket()`)
-2. waits about 200 ms
+2. waits 200 ms with a blocking `delay(200)`
 3. calls `ESP.restart()`
+
+This ensures no Hello is sent that reports the new CRC while the old config is still running, and that no retry burst is stored a second time before the reboot.
 
 On serial the USB bridge stays enumerated, so Volco's COM port stays open. The ESP32 boot ROM log runs at 115200 baud and never forms a valid frame. The boot Hello then confirms the save.
 
@@ -588,7 +594,7 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 
   A version-only `HelloMessage` (§5.2) has the defaults for these.
 - **`ProtocolParser`** parses the new Hello per §5.2, plus ConfigData and ConfigResult. Short or overlong bodies are dropped.
-- **`ProtocolEncoder`** adds `EncodeConfigRead(seq)`, `EncodeConfigWrite(seq, blob) → byte[]` (the whole burst, §5.4) and `EncodeFactoryReset(seq) → byte[]`.
+- **`ProtocolEncoder`** adds `EncodeConfigRead(seq)`, and `EncodeConfigWrite(seq, blob) → byte[]` (the whole burst, §5.4).
 - **`ControllerInfoConfig`** gains `Chip` and `FirmwareVersion`, and `SameAs` compares them too.
 - **`SerialConnection`:** uses the fixed 115200 baud rate. It logs `SerialError.Frame` and `SerialError.RXParity` and **does not** treat them as a disconnect. Other `ErrorReceived` kinds and I/O exceptions keep today's behaviour. Spike S1 records which errors fire during an `ESP.restart()` with the port open.
 
@@ -602,11 +608,11 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
   - **API:**
     - `ReadAsync()`: §5.3. It adopts the result as the mirror only when the caller asks.
     - `SaveAsync(byte[] blob)`: §5.4.
-    - `FactoryResetAsync()`.
     - `Banner` (§8.3), with `BannerChanged` and `MirrorChanged` events.
   - **Sending:** through `ControllerLink.SendRaw(byte[] burst)`. That enqueues one item on the existing single-consumer outbox under `_gate`, and requires only an **attached** connection, not Ready. (The runtime's `HelloReceived` handling runs before the link goes Ready.)
   - **Receiving:** ConfigData, ConfigResult and Hello arrive from `VolcoRuntime.OnMessageReceived`, after the **same stale-sender filter** Hello uses today: messages from a connection other than the current one are dropped.
-  - **Threading:** every `TaskCompletionSource` uses `TaskCreationOptions.RunContinuationsAsynchronously`, so no continuation runs on the serial `DataReceived` thread. Timers use the runtime's time abstraction, so tests can drive them.
+  - **Threading:** every `TaskCompletionSource` uses `TaskCreationOptions.RunContinuationsAsynchronously`, so no continuation runs on the serial `DataReceived` thread.
+  - **Time:** a .NET 8 `TimeProvider` is added to `VolcoRuntimeOptions` (default `TimeProvider.System`) and passed to the service and `FirmwareService`. All their timeouts use it, and tests use `FakeTimeProvider` (Microsoft.Extensions.TimeProvider.Testing). Moving `ControllerLink` and `ButtonPressDetector` to it is not required.
   - **Connection lifecycle:** the runtime tells the service when the connection is *replaced* (config change, suspend, `Reconnect()`, dispose). A replacement fails an in-flight operation as §5.4 describes. A plain Detach and re-Attach of the same connection does not.
 - **Mirror:** `AppConfig.ControllerConfigBlob` (`string?`, base64 of the exact bytes).
   - **Config schema v5:** adds `controllerConfigBlob` and removes `connection.serial.baudRate`.
@@ -620,18 +626,21 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
 | Hello `configState` | Mirror | Banner | Actions |
 |---|---|---|---|
 | 1, CRC = mirror CRC | present | none (in sync) | — |
-| 1, CRC ≠ mirror CRC | present | "This controller has a different setup." | **Use the controller's** (read, adopt as mirror) · **Apply mine** (save the mirror bytes) |
-| 1 | absent | none; an automatic read adopts it as the mirror. If the read fails: "Couldn't read the controller's setup." | **Retry** |
+| 1, CRC ≠ mirror CRC | present | "This controller has a different setup." If "Use the controller's" fails (read error or undecodable bytes): "Couldn't read the controller's setup." | **Use the controller's** (read, adopt as mirror) · **Apply mine** (save the mirror bytes) · after a failed read also **Retry** |
+| 1 | absent | none; an automatic read adopts it as the mirror. If the read fails, or returns bytes the app can't `Decode`: "Couldn't read the controller's setup." | **Retry** · **Set up from scratch** |
 | 0 | present | "This controller isn't set up." | **Apply my saved setup** · **Set up from scratch** |
 | 0 | absent | "Set up your controller." | **Set up** (opens Hardware, blank draft) |
 | 2, CRC ≠ mirror CRC (or no mirror) | any | "The controller's saved setup can't be used." | **Apply my saved setup** (if mirror) · **Set up from scratch** |
 | 2, CRC = mirror CRC | present | "Your saved setup doesn't work with this firmware." | **Fix it** (loads the mirror into the draft and shows the local validator's errors). There is no Apply, because it would just fail again. |
+| version-only Hello (`version` ≠ 1) | any | "This controller's firmware is incompatible. Update it to use it." | **Update** (see below) |
 
 **Rules:**
 
-- **During a read or write,** the banner shows the operation's progress instead, and Hellos go to the operation (§5.3, §5.4).
-  - A Hello during a **read** cancels the read; the table is then re-evaluated.
-  - Exception: the automatic read in the "no mirror" row is restarted once if the Hello still matches that row.
+- **The version check comes first.** A version-only Hello has the default `ConfigState` (None), so the banner function tests `version` before any configState row.
+- **A mirror that fails `Decode`** (for example, written by a newer app) is treated as **absent** for the table, and the page offers **Set up from scratch**.
+- **During a write,** the banner shows the operation's progress instead, and Hellos go to the operation (§5.4).
+- **During a read,** a Hello whose (configState, configCrc) equals the Hello the read started under is ignored. A ConfigRead sent after a host timeout provokes exactly such a Hello. A Hello that differs cancels the read, and the table is re-evaluated.
+- **Disabled during test mode or an operation:** every action that writes to the controller (Apply mine, Apply my saved setup, Save, Install, Update, Check firmware).
 - **Firmware notice:** "Firmware update available" shows when **all** of these hold:
   - connection type is Serial
   - Hello `Chip` is `Esp32`
@@ -639,7 +648,7 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
   - Hello `FirmwareVersion` ≠ the bundled manifest version
 
   That excludes the simulator and alternative controllers. It appears on the Controller page only, never as a tray notification.
-- **Protocol version mismatch:** a version-only Hello with `version` ≠ 1 keeps the link out of Ready. The page shows "This controller's firmware is incompatible. Update it to use it." with only Update offered (when the conditions above allow it).
+- **Protocol version mismatch:** a version-only Hello keeps the link out of Ready. Its `Chip` is unknown, so **Update** is offered whenever the connection type is Serial and the catalog has firmware; the flasher checks the chip itself (§8.6).
 
 ### 8.4 Editing model
 
@@ -649,7 +658,10 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
   - the controller is in sync with the mirror (Hello configState 1 and CRC = mirror CRC), **or** the user chose an action that starts a new draft ("Set up", "Set up from scratch", "Fix it").
 
   Otherwise the page is read-only and shows the mirror. This stops a draft based on a stale mirror from overwriting a different controller setup without the user deciding.
+- **How long a "new draft" permission lasts:** until the mirror changes, or a Hello arrives with a different (configState, configCrc).
 - **Dirty:** `baseline = Encode(Decode(mirror))` is computed whenever the mirror changes, and **dirty** = `Encode(draft) ≠ baseline`. Both encodings use the same codec in the same process, so the comparison is deterministic, even when the mirror holds fields this app version doesn't know. "Apply mine" sends the original mirror bytes, never re-encoded.
+  - With no mirror, or a mirror that fails `Decode`, the baseline is empty bytes. Any draft, even Blank (which encodes `preset` = `"blank"`), is then dirty.
+  - **A "Fix it" draft always counts as dirty**, so Save is available. If it passes the local validator, the app and firmware disagree, so the page also shows the firmware-update notice when its conditions hold.
 - **When the mirror changes** (adopt, confirmed save):
   - a **clean** draft is rebased onto the new mirror
   - a **dirty** draft is kept, and the page says "The controller's setup changed. Revert to load it."
@@ -669,15 +681,19 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
 public bool InTestMode { get; }
 public event EventHandler<bool>? InTestModeChanged;   // the runtime can end test mode itself
 public IDisposable EnterTestMode();                   // dispose = exit; idempotent
-public event EventHandler<RawInputEventArgs>? RawInput; // every Slider/Button message, always
-public void SetTestIndicator(int button, TestIndicator state); // Off, On, A, B, TestScreen
+public event EventHandler<RawInputEventArgs>? RawInput; // Slider/Button messages, in test mode only
+public void SetTestIndicator(int button, TestIndicator state); // Off, On, A, B (LED buttons only)
 ```
+
+**`ButtonPressDetector` changes** (`Input/ButtonPressDetector`, added to the §4 table as changed):
+- **`Reset()`:** cancels and disposes both CTSs of every tracker (`_longPressCts`, `_singlePressCts`) and clears all tracker flags (`_longPressFired`, `_waitingForDoublePress`, …).
+- **Each tracker tracks `_down`:** set on Pressed, cleared on Released. `OnReleased` returns immediately when `_down` is false, so **a release with no matching press does nothing**. Today such a release fires a Single.
 
 **While in test mode:**
 
 - **Input is blocked:**
   - Slider and Button messages raise `RawInput` and are **not** passed to `SliderProcessor` or `ButtonPressDetector`.
-  - **On entry,** the runtime cancels `ButtonPressDetector`'s pending timers (long-press and double-press windows), so a gesture started before test mode cannot fire during it.
+  - The runtime calls `ButtonPressDetector.Reset()` **on entry**, so a gesture started before test mode cannot fire during it.
   - **As a second guard,** the runtime's `OnButtonPressDetected` returns early while `InTestMode` is true.
 
   No audio call, action or OSD can happen.
@@ -689,8 +705,8 @@ public void SetTestIndicator(int button, TestIndicator state); // Off, On, A, B,
 
 **On exit:**
 
-- The flag clears and `PushAll()` restores the real indicator state.
-- A **release** for a button whose press the detector didn't see is dropped, so a button held across the exit doesn't fire a Single.
+- The flag clears, the runtime calls `ButtonPressDetector.Reset()` **again**, and `PushAll()` restores the real indicator state.
+- A button held across the exit: the detector never saw its press, so its release does nothing (`_down` is false).
 - Sliders don't jump the volume: volume changes only on the next Slider message, as today.
 
 **Exit is guaranteed:**
@@ -698,7 +714,7 @@ public void SetTestIndicator(int button, TestIndicator state); // Off, On, A, B,
 - The page disposes its handle when it is left or the settings window closes.
 - The runtime ends test mode itself on connection replacement, on Detach, and on dispose. It raises `InTestModeChanged` so the page updates.
 
-**Normal mode:** `RawInput` is raised in normal mode too, so the Test section can show live values without test mode. The view model throttles its UI updates (one per frame per control). The indicator controls need test mode.
+**`RawInput` is raised only in test mode.** The Test section shows live values only while a test is running, so normal operation has no extra path to throttle.
 
 ### 8.6 Firmware install, update, probe
 
@@ -741,15 +757,17 @@ The result is one of: `NoDevice | UnsupportedChip(name) | VolcoMatches | Differe
    - This detaches `ControllerLink`, disposes the connection and frees the port.
    - Test mode and config operations end (connection replacement).
    - While any suspension is held, `StartConnection()` returns immediately, so a `ConnectionConfigChanged` restart or `Reconnect()` cannot reopen the port mid-flash.
+   - **Race guard:** `StartConnection` also runs on the ConfigManager debounce thread, so it can pass that check just before a suspension starts. After publishing the new connection, it therefore re-checks `IsSuspended || IsDisposed`. If either is set, it retires that connection with `CompareExchange` and returns **without calling `Connect()`**. This is the same pattern used today for `IsDisposed`.
    - Disposing the suspension restarts the connection from the **current** config. Disposing it after the runtime is disposed does nothing.
 2. Run the probe or flash, with progress shown.
-3. Dispose the suspension.
-4. **After a flash,** wait up to 10 s for a Hello. Success means `FirmwareVersion` = the bundled manifest version. The page then offers "Test your controller now". No Hello → "The firmware was installed but the controller didn't answer. Check the connection settings."
+3. If it succeeded and the dialog's port differs from the configured one, **write the new port to the config while still suspended**.
+4. Dispose the suspension, which restarts from the current config, now with the new port.
+5. **After a flash,** wait up to 10 s for a Hello. Success means `FirmwareVersion` = the bundled manifest version. The page then offers "Test your controller now". No Hello → "The firmware was installed but the controller didn't answer. Check the connection settings."
 
 **Rules:**
 
 - **Serial only:** probe, Install and Update require the connection type to be **Serial**. Otherwise the buttons are disabled with "Connect the controller with USB and set the connection to Serial."
-- **Port:** the dialog's port defaults to the configured `Serial.ComPort` and lists `SerialPort.GetPortNames()`. A different port chosen in the dialog is written to the config **only after** the operation ends successfully, so it can't trigger a restart mid-operation.
+- **Port:** the dialog's port defaults to the configured `Serial.ComPort` and lists `SerialPort.GetPortNames()`. A different port chosen in the dialog is written to the config only at step 3, so it can't trigger a restart mid-operation.
 - **When the probe runs:**
   - when the user clicks **Check firmware**
   - when they accept the hint shown after the serial port has been open for 5 s with no Hello: "No Volco controller answered on COM3. Check what's connected?"
@@ -795,7 +813,7 @@ A sixth settings page, **Controller**, after Connection. The sections, top to bo
 **3. Test** (§8.5)
 - **Start test / Stop test.**
 - A live bar plus raw value per slider, and a lamp per button lit while pressed.
-- Per LED button: Off / On (LED) or Off / A / B (pair). Per screen button: Show test screen.
+- Per LED button: Off / On (LED) or Off / A / B (pair). Screen buttons always show the test screen while testing.
 - A note: "While testing, the controller doesn't change volume or run actions."
 
 **4. Behaviour**
@@ -811,7 +829,6 @@ A sixth settings page, **Controller**, after Connection. The sections, top to bo
 - Input tuning: debounce, slider sample interval, smoothing (%), deadband.
 - I2C clock per used bus.
 - **Wi-Fi (UDP):** enable; SSID; password (masked, with a show toggle); PC IP address; PC port; controller port. A hint: "USB keeps working. If the Wi-Fi settings are wrong, fix them over USB."
-- **Factory reset controller…:** a confirmation, then `FactoryResetAsync`.
 
 **Footer** (sticky while dirty): **Save to controller** and **Revert**.
 - During a save it shows a progress line: *Sending… → Restarting… → Saved ✓*, or the error.
@@ -887,6 +904,7 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
 - A new Linux `version` step/job resolves the version once and exposes it as an output. (Today the version is resolved inside the Windows job.)
 - A Linux `firmware` job runs `pio test -e native`, builds with the release version, and uploads `firmware-esp32`.
 - The Windows release job `needs` both, embeds the firmware with `RequireFirmware=true`, and attaches `volco-firmware-esp32-<version>.zip` (parts and manifest) to the release.
+- **Licensing:** releases now ship a firmware binary, both embedded and in the zip. The zip and the app's About/licence notices include `firmware/assets/fonts/OFL.txt` (Arimo) and a `THIRD-PARTY-NOTICES.txt` covering nanopb (zlib), U8g2 (BSD-2) and Arduino-ESP32 / ESP-IDF (LGPL-2.1 / Apache-2.0), with each licence's text.
 
 **Protobuf generation:**
 - **C#:** `Volco.Core.csproj` references `Google.Protobuf` and `Grpc.Tools` (`PrivateAssets="all"`), with `<Protobuf Include="../../proto/volco_config.proto" ProtoRoot="../../proto" GrpcServices="None" />`. Grpc.Tools bundles protoc for Linux and Windows. Spike S3 verifies it in both CI jobs.
@@ -938,12 +956,11 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
   - ConfigRead
   - ConfigData: empty, single-chunk and multi-chunk
   - a full write burst
-  - a factory-reset burst
   - every ConfigResult code
 - **New `firmware/test/golden/config.txt`**, where each case is a name, a blob in hex, and an expectation:
   - **`decode-ok <field assertions>`:** the DIY reference; the maximal config (asserting ≤ 1024 bytes); an empty blob (all defaults); a blob with an unknown field; `screens.brightness` only; `screen {}` → bus 0, address 0x3C.
-  - **`decode-fail`:** truncated; bad varint; SSID of 33 bytes; 33 buttons; 17 sliders; a NUL inside a string.
-  - **`invalid <code> <item> <field>`:** at least one case per step and field in §6.4. That includes reserved, nonexistent and input-only pins for each role; ADC2 + UDP; each duplicate-pin pairing (slider/button, button/LED, LED/I2C); a third screen on a bus; a duplicate address; a missing bus; equal SDA and SCL; each UDP rule (including a 7-byte password, a broadcast IP and a loopback IP); and the minimum and maximum of every range field. Plus **ordering cases**, where a config with two violations must report the first by §6.4 order.
+  - **`decode-fail`:** truncated; bad varint; SSID of 33 bytes; 33 buttons; 17 sliders; a NUL inside a string; invalid UTF-8 in a string.
+  - **`invalid <code> <item> <field>`:** at least one case per step and field in §6.4. That includes reserved, nonexistent and input-only pins for each role; ADC2 + UDP; each duplicate-pin pairing (slider/button, button/LED, LED/I2C); a duplicate (bus, address), which is also what a third screen on a bus produces; a missing bus; equal SDA and SCL; each UDP rule (including a 7-byte password, a broadcast IP and a loopback IP); and the minimum and maximum of every range field. Plus **ordering cases**, where a config with two violations must report the first by §6.4 order.
   - **`crc <hex>`:** CRC vectors, including `123456789` → `CBF43926` and empty → `00000000`.
 - **Generation:** `firmware/tools/gen_config_vectors.py` (protobuf Python package) produces the blobs once, and they are committed. Both suites read the file and check every expectation. The firmware embeds it the way `golden_frames.h` embeds `frames.txt`, and the C# side reads it through `RepoPaths`.
 
@@ -956,9 +973,8 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
   - a chunk or End with no transfer → no output
   - frames from another transport → ignored
   - a Begin mid-transfer restarts it
-  - TOO_LARGE
+  - TOO_LARGE (`total` 0 and `total` 1025)
   - the timeout closes silently
-  - factory reset (`total` 0, `crc32` 0)
   - **at most one result per Begin**, across every scenario
 - **`test_protocol`:**
   - new Hello encoding against the goldens
@@ -978,7 +994,7 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
     - frames with a stale `seq` are ignored
     - a gap or CRC mismatch → a new attempt
     - three failures → error and Retry
-    - a Hello during a read cancels it
+    - a Hello equal to the read's starting Hello is ignored; a different Hello cancels the read
   - **Save:**
     - OK + confirming Hello → mirror updated
     - OK + Hello with the old CRC → error, mirror unchanged
@@ -992,18 +1008,30 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
     - connection replaced mid-save → "Connection lost while saving", mirror unchanged
     - a second request while busy → rejected
     - closing the page doesn't cancel the save
-  - **Factory reset:** confirmed on configState 0; the mirror is kept.
-  - **Banner function:** every row of the §8.3 table; **repeated identical Hellos → one automatic read and an unchanged banner**; the firmware-notice conditions (simulator excluded).
+  - **Encode:** a Blank draft encodes to a non-empty blob (`preset` = `"blank"`).
+  - **The final implied-OK wait:** after the 3rd unanswered attempt, a new-CRC Hello within the confirming timeout → confirmed. `SendRaw` with no attached connection → counted as unanswered.
+  - **Banner function:**
+    - every row of the §8.3 table
+    - the version-only Hello is checked before the configState rows
+    - an undecodable mirror is treated as absent
+    - the failed-read states offer Set up from scratch
+    - **repeated identical Hellos → one automatic read and an unchanged banner**
+    - the firmware-notice conditions (simulator excluded)
+    - Update offered on a version mismatch even though `Chip` is unknown
 - **Test mode:**
   - Slider and Button messages → zero `IAudioEngine` calls, zero action executions, and `RawInput` raised.
   - **A button held across entry:** its long-press timer doesn't fire an action.
-  - **Held across exit:** the release fires nothing.
+  - **Held across exit:** the release fires nothing, with `doublePressWindowMs` both 0 and non-zero.
+  - **`ButtonPressDetector.Reset()`:** pending timers never fire after it; all flags are cleared.
+  - **An unmatched release:** no event.
+  - `RawInput` is not raised outside test mode.
   - `SetTestIndicator` → the expected Led and Screen frames.
   - Exit → `PushAll` restores the real state.
   - The runtime ends test mode on Detach and on dispose, raising `InTestModeChanged`.
 - **Suspension:**
   - `SuspendConnection` releases the connection.
   - **A connection config change and `Reconnect()` while suspended don't open a connection.**
+  - **A config change racing a suspend** (`StartConnection` past its first check when the suspension starts) → the published connection is retired and `Connect()` is never called.
   - Dispose restarts from the current config.
   - Dispose after the runtime is disposed does nothing.
 - **`FirmwareService`** (fake flasher):
@@ -1011,7 +1039,7 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
   - progress forwarded
   - a failure mid-flash → error and the connection resumed
   - no Hello after flash → error
-  - the dialog's port is persisted only after success
+  - the dialog's port is persisted after success while still suspended, and the resumed connection and the Hello wait use the new port
 - **Manifest:** a valid manifest parses; a part overlapping NVS is rejected.
 - **Config migration:** v4 → v5 writes `config.v4.bak`, removes `baudRate`, and stamps v5.
 
@@ -1069,7 +1097,7 @@ A post-build `extra_scripts` step **copies all four parts** into `.pio/build/esp
 8. Unplug during a save → the old config, or the new one, is reported correctly after reconnecting.
 9. Unplug during a flash → Install again succeeds.
 10. Probe: a blank board → "doesn't have this version of Volco's firmware"; another Volco build → the same; a board with no ESP32 on the port → "No ESP32 found".
-11. Factory reset → "This controller isn't set up" (mirror kept) → Apply my saved setup.
+11. Install over a configured board (NVS wiped) → "This controller isn't set up" (mirror kept) → Apply my saved setup.
 12. Screens: a layout with screens from the form → screens render; behaviour settings take effect after save.
 13. Reboot with the COM port open (save over serial) → no "Connection lost"; confirmed.
 
