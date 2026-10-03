@@ -266,18 +266,17 @@ public class SliderProcessor : IDisposable
 
             if (deviceResolved && VolumeChanged != null)
             {
-                // Display names (nickname, else the automatic short name), as everywhere else.
-                string? currentOutput = null, configured = null;
-                if (sliderConfig.Type == SliderMappingType.Device)
-                {
-                    if (string.IsNullOrEmpty(sliderConfig.DeviceName))
-                        currentOutput = _audio.GetDefaultDevice(AudioFlow.Render) is { } d ? DeviceDisplay.For(config, d).Name : null;
-                    else
-                        configured = DeviceDisplay.NameOf(config, _audio, sliderConfig.Device, sliderConfig.DeviceName);
-                }
-                var label = BuildSliderLabel(sliderConfig, currentOutput, configured);
+                // Display names (nickname, else the automatic short name) and icons, as everywhere
+                // else. The icon is the slider's own device, else the current output's (the device
+                // every app slider plays through).
+                var configuredLook = sliderConfig.Type == SliderMappingType.Device
+                    ? DeviceDisplay.For(config, _audio, sliderConfig.Device) : null;
+                var currentOutputLook = configuredLook is null && _audio.GetDefaultDevice(AudioFlow.Render) is { } d
+                    ? DeviceDisplay.For(config, d) : (DeviceLook?)null;
+                var label = BuildSliderLabel(sliderConfig, currentOutputLook?.Name, configuredLook?.Name);
+                var icon = (configuredLook ?? currentOutputLook)?.Icon;
                 var muted = _audio.IsMuted(MuteSourceFor(sliderConfig));
-                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume));
+                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume, icon));
             }
         }
     }

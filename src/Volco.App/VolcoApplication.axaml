@@ -5,7 +5,7 @@
              x:Class="Volco.App.VolcoApplication"
              RequestedThemeVariant="Default">
   <Application.Resources>
-    <conv:ScreenIconToBitmapConverter x:Key="ScreenIconToBitmap"/>
+    <conv:ScreenIconToGeometryConverter x:Key="ScreenIconToGeometry"/>
   </Application.Resources>
   <Application.Styles>
     <themes:FluentTheme/>

@@ -1,4 +1,5 @@
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Input;
 using Volco.Core.Tests.Audio;
@@ -331,6 +332,70 @@ public class SliderProcessorTests
         Assert.True(n.Muted);
     }
 
+    // ── The slider OSD's icon: the slider's own device, else the current output ──────────────
+
+    [Fact]
+    public async Task DeviceSlider_CarriesItsOwnDevicesIcon()
+    {
+        using var audio = EngineWithIconDevices();
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "hp", FriendlyName = "Headphones (USB)" },
+        });
+        Assert.Equal(ScreenIcon.Headphones, n.Icon);
+        Assert.Equal("Headphones", n.Label);
+    }
+
+    [Fact]
+    public async Task DeviceSlider_CarriesTheChosenIcon_OverTheFormFactor()
+    {
+        using var audio = EngineWithIconDevices();
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "hp", FriendlyName = "Headphones (USB)" },
+        }, config => config.Devices.Add(new DeviceSettingsConfig { Id = "hp", Nickname = "Cans", Icon = ScreenIcon.Earbuds }));
+        Assert.Equal(ScreenIcon.Earbuds, n.Icon);
+        Assert.Equal("Cans", n.Label);
+    }
+
+    [Fact]
+    public async Task DeviceSlider_ForTheCurrentOutput_CarriesTheCurrentOutputsIcon()
+    {
+        using var audio = EngineWithIconDevices();
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Device, Device = null });
+        Assert.Equal(ScreenIcon.Speaker, n.Icon);
+        Assert.Equal("Speakers", n.Label);
+    }
+
+    [Fact]
+    public async Task ProcessesSlider_CarriesTheCurrentOutputsIcon()
+    {
+        using var audio = EngineWithIconDevices();
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Processes, Processes = { "spotify.exe" } });
+        Assert.Equal(ScreenIcon.Speaker, n.Icon);
+        Assert.Equal("Spotify", n.Label);
+    }
+
+    [Fact]
+    public async Task UnmappedSlider_CarriesTheCurrentOutputsIcon()
+    {
+        using var audio = EngineWithIconDevices();
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Unmapped });
+        Assert.Equal(ScreenIcon.Speaker, n.Icon);
+    }
+
+    [Fact]
+    public async Task ProcessesSlider_WithoutACurrentOutput_CarriesNoIcon()
+    {
+        using var audio = new FakeAudioEngine();
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig { Index = 0, Type = SliderMappingType.Processes, Processes = { "spotify.exe" } });
+        Assert.Null(n.Icon);
+    }
+
     // ── Fix D: GetLastLevel ──────────────────────────────────────────────────
 
     [Fact]
@@ -386,11 +451,26 @@ public class SliderProcessorTests
         return audio;
     }
 
-    private static async Task<VolumeChangeNotification> MoveSliderAndCaptureOsd(FakeAudioEngine audio, SliderConfig slider)
+    /// <summary>Speakers (the default output) and headphones, each with its form factor.</summary>
+    private static FakeAudioEngine EngineWithIconDevices()
+    {
+        var audio = new FakeAudioEngine();
+        var spk = new AudioDevice("spk", "Speakers (Realtek)", AudioFlow.Render, true, DeviceFormFactor.Speakers);
+        var hp = new AudioDevice("hp", "Headphones (USB)", AudioFlow.Render, false, DeviceFormFactor.Headphones);
+        audio.Devices = new List<AudioDevice> { spk, hp };
+        audio.DefaultRender = spk;
+        audio.DeviceStates["spk"] = (0.5f, false);
+        audio.DeviceStates["hp"] = (0.5f, false);
+        return audio;
+    }
+
+    private static async Task<VolumeChangeNotification> MoveSliderAndCaptureOsd(
+        FakeAudioEngine audio, SliderConfig slider, Action<AppConfig>? configure = null)
     {
         var configManager = NewConfigManager();
         configManager.Config.Sliders.Clear();
         configManager.Config.Sliders.Add(slider);
+        configure?.Invoke(configManager.Config);
         using var processor = new SliderProcessor(audio, configManager);
 
         var tcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);

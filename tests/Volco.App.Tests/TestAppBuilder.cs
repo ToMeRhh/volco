@@ -17,7 +17,7 @@ public class TestApp : Application
     public override void Initialize()
     {
         RequestedThemeVariant = ThemeVariant.Dark;
-        Resources["ScreenIconToBitmap"] = new Volco.App.Converters.ScreenIconToBitmapConverter();
+        Resources["ScreenIconToGeometry"] = new Volco.App.Converters.ScreenIconToGeometryConverter();
         Styles.Add(new FluentTheme());
         Styles.Add(new StyleInclude(new Uri("avares://Volco.App/"))
         {

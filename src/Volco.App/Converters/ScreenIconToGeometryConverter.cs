@@ -5,11 +5,11 @@ using Volco.Core.Communication;
 
 namespace Volco.App.Converters;
 
-/// <summary>ScreenIcon → its 28×28 bitmap (for icon tiles and the icon picker).</summary>
-public sealed class ScreenIconToBitmapConverter : IValueConverter
+/// <summary>ScreenIcon → its vector art (for icon tiles and the icon picker).</summary>
+public sealed class ScreenIconToGeometryConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is ScreenIcon icon ? ScreenIcons.Bitmap(icon) : null;
+        => value is ScreenIcon icon ? ScreenIcons.Geometry(icon) : null;
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

@@ -11,9 +11,9 @@
           <Button Name="DeviceHeader" Classes="CardHeader" Margin="4" Command="{Binding ToggleExpandedCommand}"
                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-              <Border Width="40" Height="40" CornerRadius="6" Background="#05070A" Margin="0,0,12,0">
-                <Image Width="28" Height="28" RenderOptions.BitmapInterpolationMode="None"
-                       Source="{Binding Icon, Converter={StaticResource ScreenIconToBitmap}}"/>
+              <Border Width="40" Height="40" CornerRadius="6" Background="{DynamicResource SubtleBrush}" Margin="0,0,12,0">
+                <PathIcon Width="22" Height="22" Foreground="{DynamicResource TextPrimaryBrush}"
+                          Data="{Binding Icon, Converter={StaticResource ScreenIconToGeometry}}"/>
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <TextBlock Name="DeviceTitle" Classes="Subtitle" Text="{Binding DisplayName}"
@@ -46,10 +46,10 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:IconChoiceViewModel">
                         <Button Name="IconChoice" Classes="IconChoice" Classes.selected="{Binding IsSelected}"
-                                Width="44" Height="44" Margin="0,0,6,6" Padding="0" Background="#05070A"
+                                Width="44" Height="44" Margin="0,0,6,6" Padding="0"
                                 ToolTip.Tip="{Binding Label}" Command="{Binding SelectCommand}">
-                          <Image Width="28" Height="28" RenderOptions.BitmapInterpolationMode="None"
-                                 Source="{Binding Icon, Converter={StaticResource ScreenIconToBitmap}}"/>
+                          <PathIcon Width="22" Height="22"
+                                    Data="{Binding Icon, Converter={StaticResource ScreenIconToGeometry}}"/>
                         </Button>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
