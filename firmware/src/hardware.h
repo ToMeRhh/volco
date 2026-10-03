@@ -22,7 +22,7 @@ struct Indicator {
   uint8_t pinA;     // the LED (IND_KIND_LED) or LED A (IND_KIND_LED_PAIR)
   uint8_t pinB;     // LED B (IND_KIND_LED_PAIR only)
   bool activeLow;   // true when driving the pin LOW lights the LED
-  uint8_t bus;      // screen: I2C bus 0 or 1
+  uint8_t bus;      // screen: I2C bus 0-3 (0 and 1 hardware, 2 and 3 software)
   uint8_t address;  // screen: 7-bit I2C address, 0x3C or 0x3D
 };
 
