@@ -10,7 +10,7 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 | Unpinned resolution on a fresh machine (= CI before this stage) | **platformio/espressif32 7.1.3 with framework-arduinoespressif32 4.20017.x, i.e. Arduino core 2.0.17.** This differs from the dev machine (3.3.8). | `pio pkg install -e denky32` with an empty `PLATFORMIO_CORE_DIR` |
 | Dev machine platform/framework | pioarduino 55.03.38 / Arduino 3.3.8 | `~/.platformio/platforms/espressif32/platform.json` |
 | Pinned platform builds `denky32`, the 3 check envs and `native` locally | **Yes.** 4× SUCCESS; native 45/45 passed (after installing host `g++` in the container) | local run |
-| CI builds with the pinned platform and logs framework 3.3.8 | | |
+| CI builds with the pinned platform and logs framework 3.3.8 | **Yes**, after bumping CI's `pip install platformio` from 6.1.18 to **6.1.19**. pioarduino 55.03.38 requires Core ≥ 6.1.19, and 6.1.18 fails with `IncompatiblePlatform`. The CI log shows `framework-arduinoespressif32 @ 3.3.8`, and all four ESP32 envs build. | runs 37150867357 (fail, 6.1.18) and 37151017070 (pass) |
 | Exact U8g2 / WebSockets versions pinned | U8g2 **2.36.18**, WebSockets **2.7.3** (what `^` resolved to). Platform 55.3.38 brings Arduino 3.3.8, ESP-IDF 5.5.4 and esptool 5.2.0. | `pio pkg list -e denky32` |
 | Flash parts and offsets (`FLASH_EXTRA_IMAGES`, app offset) | `0x1000` bootloader.bin, `0x8000` partitions.bin, `0xe000` boot_app0.bin, app `0x10000` firmware.bin | `spike_layout` env |
 | Where `bootloader.bin` and `boot_app0.bin` come from | bootloader.bin and partitions.bin: **build dir** (`.pio/build/<env>/`). boot_app0.bin: **framework** (`framework-arduinoespressif32/tools/partitions/boot_app0.bin`). | `spike_layout` env |
@@ -27,26 +27,26 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 
 | Question | Answer | Evidence |
 |---|---|---|
-| Generation works in the Linux job | | |
-| Generation works in the Windows single-file publish | | |
-| Required csproj items (`PrivateAssets`, `ProtoRoot`, …) | | |
-| Maximal blob size (must equal nanopb's) | | |
-| Encoding determinism (same message twice → same bytes) | | |
-| Unknown field position after Decode+Encode | | |
+| Generation works in the Linux job | **Yes** (`dotnet run`, net8.0, global.json SDK 10) | spike run 37151101930, job proto-linux |
+| Generation works in the Windows single-file publish | **Yes** (`-r win-x64 --self-contained -p:PublishSingleFile=true`, then the exe ran) | same run, job windows |
+| Required csproj items (`PrivateAssets`, `ProtoRoot`, …) | `Google.Protobuf 3.36.2`; `Grpc.Tools 2.84.0` with `PrivateAssets="all"`; `<Protobuf Include="../proto/volco_config.proto" ProtoRoot="../proto" GrpcServices="None" />`. Nothing else is needed. Generated C# names: `I2C0`/`I2C1`, `LedPair`, `IndicatorCase` (enum `IndicatorOneofCase.Screen`), proto2 `HasX` on scalars. | spikes/ProtoSpike |
+| Maximal blob size (must equal nanopb's) | **663 bytes, the same as nanopb** | VECTOR maximal_size |
+| Encoding determinism (same message twice → same bytes) | **Yes** | VECTOR determinism |
+| Unknown field position after Decode+Encode | **Moved to the end**: `98 06 01 32 02 08 64` re-encodes as `32 02 08 64 98 06 01`. This confirms the spec §8.4 baseline rule (compare against `Encode(Decode(mirror))`, never against the raw mirror bytes). | VECTOR unknown_field |
 
 ## Vectors: nanopb vs C#
 
 | Vector | Hex | nanopb | C# | Spec expectation |
 |---|---|---|---|---|
-| empty | (none) | ok; absent submessages default-filled | | decode ok, all defaults |
-| screen_default | `12 02 22 00` | ok; which=screen, bus 0, address 0x3C | | ok; screen bus 0, address 0x3C |
-| brightness_only | `32 02 08 64` | ok; 100 / true / 360 | | ok; brightness 100, dim_enabled true, transition 360 |
-| buttons33 | `12 00` ×33 | **fail** "array overflow" | | fail (max_count 32) |
-| ssid33 | `2A 23 12 21` + `61`×33 | **fail** "string overflow" | | fail (max_size) |
-| bad_utf8 | `42 02 C3 28` | **fail** "invalid utf8" (with `PB_VALIDATE_UTF8`) | | fail |
-| nul_in_string | `42 03 61 00 62` | **ok, silently truncated** (`strlen(preset)=1`) | | fail (spec: our own check) |
-| u32_overflow | `0A 06 08 80 80 80 80 10` | **fail** "integer too large" | | nanopb fail; C# truncates (spec §6.1 known divergence) |
-| unknown_field | `98 06 01 32 02 08 64` | ok; skipped, brightness 100 | | ok, brightness 100 |
+| empty | (none) | ok; absent submessages default-filled | ok; `Screens` is **null** (a new message has the defaults: brightness 255) | decode ok, all defaults |
+| screen_default | `12 02 22 00` | ok; which=screen, bus 0, address 0x3C | ok; case Screen, bus 0, address 0x3C (`HasAddress` false) | ok; screen bus 0, address 0x3C |
+| brightness_only | `32 02 08 64` | ok; 100 / true / 360 | ok; 100 / true / 360 | ok; brightness 100, dim_enabled true, transition 360 |
+| buttons33 | `12 00` ×33 | **fail** "array overflow" | **ok, 33 buttons** (no limit) | fail (max_count 32) |
+| ssid33 | `2A 23 12 21` + `61`×33 | **fail** "string overflow" | **ok, 33 chars** (no limit) | fail (max_size) |
+| bad_utf8 | `42 02 C3 28` | **fail** "invalid utf8" (with `PB_VALIDATE_UTF8`) | **fail**, `InvalidProtocolBufferException: String is invalid UTF-8` | fail |
+| nul_in_string | `42 03 61 00 62` | **ok, silently truncated** (`strlen(preset)=1`) | **ok, kept** (length 3) | fail (spec: our own check) |
+| u32_overflow | `0A 06 08 80 80 80 80 10` | **fail** "integer too large" | **ok, truncated to 0** | nanopb fail; C# truncates (spec §6.1 known divergence) |
+| unknown_field | `98 06 01 32 02 08 64` | ok; skipped, brightness 100 | ok; brightness 100; unknown field kept and moved to the end on re-encode | ok, brightness 100 |
 
 ## S1: flashing
 
