@@ -27,6 +27,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private SlidersViewModel? _slidersViewModel;
     private ButtonsViewModel? _buttonsViewModel;
     private GeneralViewModel? _generalViewModel;
+    private ControllerViewModel? _controllerViewModel;
 
     /// <summary>The window's one "… · Undo" message.</summary>
     public UndoToastViewModel Toast { get; } = new();
@@ -56,6 +57,14 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config);
 
+    public ControllerViewModel Controller =>
+        _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui);
+
+    /// <summary>The dot on the Controller navigation entry (spec §8.3): a firmware update is
+    /// available. Read from the runtime's config session, so it is right before the page is opened.</summary>
+    [ObservableProperty]
+    private bool _controllerNavDot;
+
     public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui)
     {
         _config = config;
@@ -69,6 +78,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ActivePresetChanged += OnActivePresetChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
+        _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
+        _controllerNavDot = _runtime.ControllerConfig.Banner.FirmwareUpdateAvailable;
 
         // The controller only reports a slider when it moves, so levels reported before this VM
         // existed would never reach the bars. Seed them now; the subscription above (kept for the
@@ -127,6 +138,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             _slidersViewModel?.RefreshController();
         });
 
+    private void OnBannerChanged(object? sender, EventArgs e)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) ControllerNavDot = _runtime.ControllerConfig.Banner.FirmwareUpdateAvailable;
+        });
+
     /// <summary>A mute flipped (from a button, the Windows mixer, anywhere): light previews follow.</summary>
     private void OnDeviceVolumeChanged(object? sender, DeviceVolumeChangedEventArgs e)
         => _ui.Post(() =>
@@ -145,6 +162,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ActivePresetChanged -= OnActivePresetChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
+        _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
+        _controllerViewModel?.Dispose();
         if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();
     }

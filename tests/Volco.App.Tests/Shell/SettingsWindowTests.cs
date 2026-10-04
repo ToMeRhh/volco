@@ -50,16 +50,16 @@ public class SettingsWindowTests
 
         var expected = new[]
         {
-            typeof(SlidersPage), typeof(ButtonsPage), typeof(DevicesPage), typeof(ConnectionPage), typeof(GeneralPage),
+            typeof(SlidersPage), typeof(ButtonsPage), typeof(DevicesPage), typeof(ConnectionPage), typeof(ControllerPage), typeof(GeneralPage),
         };
-        Assert.Equal(5, nav.ItemCount);
+        Assert.Equal(6, nav.ItemCount);
         for (var i = 0; i < expected.Length; i++)
         {
             nav.SelectedIndex = i;
             Assert.IsType(expected[i], host.Content);
         }
         Assert.Equal(
-            new[] { "Sliders", "Buttons", "Devices", "Connection", "General" },
+            new[] { "Sliders", "Buttons", "Devices", "Connection", "Controller", "General" },
             nav.Items.Cast<NavItem>().Select(n => n.Label).ToArray());
     }
 

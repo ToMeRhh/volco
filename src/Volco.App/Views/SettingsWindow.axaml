@@ -25,12 +25,16 @@
       <ListBox Name="NavList" Classes="Nav">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="views:NavItem">
-            <Grid ColumnDefinitions="Auto,Auto,*">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
               <Border Classes="NavMarker" Width="3" Height="16" CornerRadius="2" Margin="-10,0,8,0"
                       Background="{DynamicResource AccentBrush}"/>
               <PathIcon Grid.Column="1" Data="{Binding Icon}" Width="16" Height="16"
                         Foreground="{DynamicResource TextSecondaryBrush}"/>
               <TextBlock Grid.Column="2" Text="{Binding Label}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+              <Ellipse Name="NavDot" Grid.Column="3" Width="7" Height="7" Margin="8,0,4,0" VerticalAlignment="Center"
+                       Fill="{DynamicResource AccentBrush}"
+                       AutomationProperties.Name="Controller, firmware update available"
+                       IsVisible="{Binding ShowDot}"/>
             </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>

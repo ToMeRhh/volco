@@ -1,0 +1,427 @@
+using System.Diagnostics;
+using Volco.App.ViewModels;
+using Volco.Core.Communication;
+using Volco.Core.Config;
+using Volco.Core.Controller;
+using Volco.Core.Controller.Proto;
+using Volco.Core.Runtime;
+using Volco.Core.Tests.Runtime;
+using Xunit;
+
+namespace Volco.App.Tests.ViewModels;
+
+/// <summary>Spec §8.4 and §12.4: the Controller page's editing model, against a real runtime over
+/// a fake connection.</summary>
+public sealed class ControllerViewModelTests : IDisposable
+{
+    private readonly TestRig _rig = new();
+    private readonly RecordingDispatcher _ui = new();
+    private ControllerViewModel? _vm;
+
+    public void Dispose()
+    {
+        _vm?.Dispose();
+        _rig.Dispose();
+    }
+
+    private static ControllerPreset Diy => ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId);
+    private static ControllerPreset Blank => ControllerPresets.All.Single(p => p.Id == ControllerPresets.BlankId);
+    private static readonly byte[] DiyBlob = ControllerConfigCodec.Encode(ControllerPresets.ApplyTo(new ControllerConfig(), Diy));
+    private static readonly IndicatorKind[] DiyKinds = { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair };
+
+    private FakeControllerConnection Conn => _rig.Connection!;
+
+    private ControllerViewModel Vm(byte[]? mirror = null)
+    {
+        if (mirror is not null) _rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(mirror);
+        _vm = new ControllerViewModel(_rig.Config, _rig.Runtime, _ui);
+        return _vm;
+    }
+
+    private static HelloMessage Hello(ControllerConfigState state, uint crc, int sliders = 5, IndicatorKind[]? kinds = null)
+        => new(ProtocolVersion.Current, ChipFamily.Esp32, "dev", state, crc, sliders, kinds ?? DiyKinds);
+
+    private void Greet(HelloMessage hello)
+    {
+        Conn.SetStatus(ConnectionStatus.Connected);
+        Conn.RaiseMessage(hello);
+        _ui.RunAll();
+    }
+
+    private void GreetInSync(byte[] mirror) => Greet(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(mirror)));
+
+    private void Until(Func<bool> condition, int ms = 5000)
+    {
+        var sw = Stopwatch.StartNew();
+        while (true)
+        {
+            _ui.RunAll();
+            if (condition()) return;
+            if (sw.ElapsedMilliseconds > ms) throw new TimeoutException("condition not met");
+            Thread.Sleep(5);
+        }
+    }
+
+    private byte[] LastWriteBurst() => Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
+
+    /// <summary>Answers the last write burst with OK and a confirming Hello.</summary>
+    private void ConfirmLastWrite(byte[] blob)
+    {
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(blob)));
+    }
+
+    // ── The editing-allowed rule ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void NotReady_ReadOnly_ShowingTheMirror()
+    {
+        var vm = Vm(DiyBlob);
+        Assert.False(vm.CanEdit);
+        Assert.Equal(5, vm.Sliders.Count);
+        Assert.False(vm.Sliders[0].CanEdit);
+    }
+
+    [Fact]
+    public void InSync_Editable()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        Assert.True(vm.InSync);
+        Assert.True(vm.CanEdit);
+        Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public void ADifferentSetup_ReadOnly()
+    {
+        var vm = Vm(DiyBlob);
+        Greet(Hello(ControllerConfigState.Stored, 0x1234));
+        Assert.Equal(BannerKind.DifferentSetup, vm.Banner.Kind);
+        Assert.False(vm.CanEdit);
+        Assert.True(vm.ShowUseControllers);
+        Assert.True(vm.ShowApplyMine);
+    }
+
+    [Fact]
+    public void SetUp_GrantsEditing_UntilADifferentHello()
+    {
+        var vm = Vm();
+        Greet(Hello(ControllerConfigState.None, 0));
+        Assert.Equal("Set up your controller.", vm.BannerText);
+        Assert.False(vm.CanEdit);
+        vm.SetUpCommand.Execute(null);
+        Assert.True(vm.CanEdit);
+
+        Conn.RaiseMessage(Hello(ControllerConfigState.None, 0));   // the same Hello: still allowed
+        _ui.RunAll();
+        Assert.True(vm.CanEdit);
+
+        Conn.RaiseMessage(Hello(ControllerConfigState.Damaged, 0x77));
+        _ui.RunAll();
+        Assert.False(vm.CanEdit);
+    }
+
+    // ── Dirty ──────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AMirrorWithUnknownFields_IsNotDirty_AndAPinChangeIs()
+    {
+        var mirror = new byte[] { 0x98, 0x06, 0x01 }.Concat(DiyBlob).ToArray();   // field 99, unknown to this app
+        var vm = Vm(mirror);
+        GreetInSync(mirror);
+        Assert.False(vm.IsDirty);
+
+        vm.Sliders[0].Pin = 39;
+        Assert.True(vm.IsDirty);
+        Assert.True(vm.CanSave);
+        vm.Sliders[0].Pin = 33;
+        Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public void AMirrorChange_RebasesACleanDraft_KeepsADirtyOneWithTheNotice()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+
+        var changed = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        changed.Sliders[0].Pin = 39;
+        var blob1 = ControllerConfigCodec.Encode(changed);
+        var save1 = _rig.Runtime.ControllerConfig.SaveAsync(blob1);
+        ConfirmLastWrite(blob1);
+        Until(() => save1.IsCompleted && vm.Sliders.Count == 5 && vm.Sliders[0].Pin == 39);
+        Assert.False(vm.IsDirty);
+        Assert.Null(vm.Notice);
+
+        vm.Sliders[1].Pin = 34;   // dirty now
+        changed.Sliders[0].Pin = 33;
+        var blob2 = ControllerConfigCodec.Encode(changed);
+        var save2 = _rig.Runtime.ControllerConfig.SaveAsync(blob2);
+        ConfirmLastWrite(blob2);
+        Until(() => save2.IsCompleted && vm.Notice is not null);
+        Assert.Equal("The controller's setup changed. Revert to load it.", vm.Notice);
+        Assert.Equal(34m, vm.Sliders[1].Pin);
+
+        vm.RevertCommand.Execute(null);
+        Assert.Null(vm.Notice);
+        Assert.Equal(33m, vm.Sliders[0].Pin);
+        Assert.Equal(35m, vm.Sliders[1].Pin);
+    }
+
+    // ── Presets ────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void APreset_KeepsBehaviourAndWifi_AndAsksOnlyWhenTheDraftHasHardware()
+    {
+        var vm = Vm();
+        Greet(Hello(ControllerConfigState.None, 0));
+        vm.SetUpCommand.Execute(null);
+        vm.Brightness = 40;
+        vm.UdpEnabled = true;
+
+        vm.SelectedPreset = Diy;                       // a blank draft: no question
+        Assert.Null(vm.Confirmation);
+        Assert.Equal(5, vm.Sliders.Count);
+        Assert.Equal(40m, vm.Brightness);
+        Assert.True(vm.UdpEnabled);
+        Assert.Equal("Based on DIY reference", vm.BasedOnText);
+
+        vm.SelectedPreset = Blank;                     // replaces hardware: asks
+        Assert.Equal("Replace the current hardware with Blank?", vm.Confirmation!.Message);
+        vm.Confirmation.CancelCommand.Execute(null);
+        Assert.Equal(5, vm.Sliders.Count);
+
+        vm.SelectedPreset = Blank;
+        vm.Confirmation!.ConfirmCommand.Execute(null);
+        Assert.Empty(vm.Sliders);
+        Assert.Null(vm.Confirmation);
+    }
+
+    [Fact]
+    public void TheModifiedCaption()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        Assert.Equal("Based on DIY reference", vm.BasedOnText);
+        vm.Buttons[0].Pin = 13;
+        Assert.Equal("Based on DIY reference (modified)", vm.BasedOnText);
+    }
+
+    // ── Errors ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ALocalViolation_IsShownOnItsRow()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Sliders[0].Pin = 6;
+        Assert.NotNull(vm.Sliders[0].ErrorText);
+        Assert.All(vm.Sliders.Skip(1), r => Assert.Null(r.ErrorText));
+
+        vm.SaveCommand.Execute(null);
+        Assert.Equal("Fix the slider pin on Slider 0 first.", vm.ProgressText);
+        Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
+    }
+
+    [Fact]
+    public void AnInvalidResult_IsShownOnItsRow_WithTheFooterMessage()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Brightness = 50;
+        vm.SaveCommand.Execute(null);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Invalid, 0, 2));
+        Until(() => !vm.IsSaving);
+        Assert.Equal("The controller rejected the setup: the button pin on Button 0.", vm.ProgressText);
+        Assert.NotNull(vm.Buttons[0].ErrorText);
+    }
+
+    [Fact]
+    public void Hints_AppearOnTheirRows()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Buttons[0].Pin = 35;
+        Assert.Equal("This pin has no internal pull-up; add a resistor to 3.3 V.", vm.Buttons[0].HintText);
+        vm.Sliders[0].Pin = 25;
+        Assert.Equal("This pin can't be read if you enable Wi-Fi.", vm.Sliders[0].HintText);
+    }
+
+    // ── Rows ───────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void RemovingARowWithLaterRows_AsksAboutRenumbering()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Sliders[0].RemoveCommand.Execute(null);
+        Assert.Equal("Sliders after it are renumbered, and their actions move with the number.", vm.Confirmation!.Message);
+        vm.Confirmation.CancelCommand.Execute(null);
+        Assert.Equal(5, vm.Sliders.Count);
+
+        vm.Sliders[4].RemoveCommand.Execute(null);     // the last one: no question
+        Assert.Null(vm.Confirmation);
+        Assert.Equal(4, vm.Sliders.Count);
+
+        vm.Buttons[0].RemoveCommand.Execute(null);
+        vm.Confirmation!.ConfirmCommand.Execute(null);
+        Assert.Equal(2, vm.Buttons.Count);
+        Assert.Equal("Button 0", vm.Buttons[0].Title);
+    }
+
+    [Fact]
+    public void AScreenButton_ShowsItsBusRow_AndBehaviour()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        Assert.False(vm.ShowBehaviour);
+        Assert.False(vm.HasBuses);
+        vm.Buttons[0].IndicatorIndex = 3;
+        vm.Buttons[0].ScreenBusIndex = 2;
+        Assert.True(vm.ShowBehaviour);
+        Assert.Equal(new[] { 2 }, vm.Buses.Select(b => b.Index));
+    }
+
+    // ── Save ───────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Save_Confirmed_ShowsSaved_AndIsClean()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Sliders[0].Pin = 39;
+        vm.SaveCommand.Execute(null);
+        Assert.Equal("Sending…", vm.ProgressText);
+        var expected = ControllerConfigCodec.Encode(vm.Draft);
+        ConfirmLastWrite(expected);
+        Until(() => !vm.IsSaving);
+        Assert.Equal("Saved. The controller restarted with the new setup.", vm.ProgressText);
+        Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public void Save_DisabledDuringTestModeAndOperations()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Sliders[0].Pin = 39;
+        Assert.True(vm.CanSave);
+
+        vm.StartTestCommand.Execute(null);
+        Assert.False(vm.CanSave);
+        vm.StopTestCommand.Execute(null);
+        Assert.True(vm.CanSave);
+
+        var read = _rig.Runtime.ControllerConfig.ReadAsync(adopt: false);
+        _ui.RunAll();
+        Assert.False(vm.CanSave);
+        Assert.False(vm.CanStartTest);
+        _rig.Runtime.Reconnect();   // ends the read
+        Until(() => read.IsCompleted);
+    }
+
+    [Fact]
+    public void ChangingWifiOverAUdpConnection_AsksFirst()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        _rig.Config.Config.Connection.Type = ConnectionType.Udp;   // not saved: no restart
+        vm.UdpEnabled = true;
+        vm.SaveCommand.Execute(null);
+        Assert.StartsWith("Changing the Wi-Fi settings may disconnect the controller.", vm.Confirmation!.Message);
+        Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
+        vm.Confirmation.ConfirmCommand.Execute(null);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+    }
+
+    [Fact]
+    public void ChangingWifiOverSerial_DoesNotAsk()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.UdpEnabled = true;
+        Assert.Equal((decimal)_rig.Config.Config.Connection.Udp.ListenPort, vm.PcPort);   // pre-filled
+        vm.SaveCommand.Execute(null);
+        Assert.Null(vm.Confirmation);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+    }
+
+    [Fact]
+    public void ApplyMine_SendsTheMirrorBytesUnchanged()
+    {
+        var mirror = new byte[] { 0x98, 0x06, 0x01 }.Concat(DiyBlob).ToArray();
+        var vm = Vm(mirror);
+        Greet(Hello(ControllerConfigState.Stored, 0x1234));
+        vm.ApplyMineCommand.Execute(null);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        var burst = LastWriteBurst();
+        var chunk = burst.Skip(burst[1] + 3).ToArray();          // the frame after Begin
+        Assert.Equal(0x89, chunk[2]);
+        Assert.Equal(mirror, chunk[6..(2 + chunk[1])]);
+    }
+
+    [Fact]
+    public void FixIt_IsDirty_AndShowsTheLocalError()
+    {
+        var broken = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        broken.Sliders[0].Pin = 6;
+        var mirror = ControllerConfigCodec.Encode(broken);
+        var vm = Vm(mirror);
+        Greet(Hello(ControllerConfigState.Damaged, ControllerConfigCodec.Crc32(mirror)));
+        Assert.True(vm.ShowFixIt);
+        vm.FixItCommand.Execute(null);
+        Assert.True(vm.CanEdit);
+        Assert.True(vm.IsDirty);
+        Assert.NotNull(vm.Sliders[0].ErrorText);
+    }
+
+    // ── Test mode ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TestMode_LiveInput_Indicators_AndLeavingThePage()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.StartTestCommand.Execute(null);
+        Assert.True(vm.IsTesting);
+        Assert.True(_rig.Runtime.InTestMode);
+        Assert.Equal(5, vm.TestSliders.Count);
+
+        Conn.RaiseMessage(new SliderMessage(1, 2000));
+        Conn.RaiseMessage(new ButtonMessage(2, ButtonState.Pressed));
+        _ui.RunAll();
+        Assert.Equal(2000, vm.TestSliders[1].Value);
+        Assert.True(vm.TestButtons[2].IsPressed);
+
+        vm.TestButtons[0].IndicatorIndex = 1;
+        Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(0, 1)));
+        vm.TestButtons[2].IndicatorIndex = 2;   // pair: B
+        Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(2, 2)));
+
+        vm.OnPageLeft();
+        Assert.False(_rig.Runtime.InTestMode);
+        Assert.False(vm.IsTesting);
+    }
+
+    [Fact]
+    public void TestMode_EndedByTheRuntime_ClearsIsTesting()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.StartTestCommand.Execute(null);
+        Conn.SetStatus(ConnectionStatus.Disconnected);
+        _ui.RunAll();
+        Assert.False(vm.IsTesting);
+        Assert.False(_rig.Runtime.InTestMode);
+    }
+
+    [Fact]
+    public void TheNavDot_StartsFromTheBanner()
+    {
+        using var settings = _rig.CreateSettings(_ui);
+        Assert.False(settings.ControllerNavDot);   // no bundled firmware until stage 6
+    }
+}
