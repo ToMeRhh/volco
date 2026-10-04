@@ -66,19 +66,7 @@ jobs:
 
     - name: Build firmware (ESP32)
       working-directory: firmware
-      run: pio run -e denky32
-
-    - name: Build-check screens
-      working-directory: firmware
-      run: pio run -e denky32_screens_check
-
-    - name: Build-check UDP transport
-      working-directory: firmware
-      run: pio run -e denky32_udp_check
-
-    - name: Build-check WebSocket transport
-      working-directory: firmware
-      run: pio run -e denky32_websocket_check
+      run: pio run -e esp32
 
   build:
     name: Build and Publish
