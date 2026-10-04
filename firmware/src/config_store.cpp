@@ -3,12 +3,13 @@
 #include <Preferences.h>
 
 #include "debug_log.h"
-#include "seed_config.h"
+#include "volco_chip.h"
 #include "volco_config.h"
 #include "volco_crc32.h"
 
 namespace {
 uint8_t blob[volco::kMaxConfigBlob];
+uint16_t blobLen = 0;                   // the stored bytes, kept for ConfigRead replies
 volco_config_ControllerConfig decoded;  // static: ~1.5 KB kept off the loop task's stack
 
 void useDefaults(LoadedConfig& out, ConfigState state, uint32_t crc) {
@@ -20,14 +21,12 @@ void useDefaults(LoadedConfig& out, ConfigState state, uint32_t crc) {
 }  // namespace
 
 void config_load(LoadedConfig& out) {
+  blobLen = 0;
   Preferences prefs;
-  prefs.begin("volco", false);
-  if (!prefs.isKey("cfg")) {  // stage 3 bridge (spec §15)
-    size_t written = prefs.putBytes("cfg", kSeedConfig, sizeof kSeedConfig);
-    DEBUG_LOG(written == sizeof kSeedConfig ? "[DBG] Config: stored the seed" : "[DBG] Config: storing the seed failed");
-  }
+  prefs.begin("volco", true);
   if (!prefs.isKey("cfg")) {
     prefs.end();
+    DEBUG_LOG("[DBG] Config: none stored, running defaults");
     useDefaults(out, CONFIG_NONE, 0);
     return;
   }
@@ -43,6 +42,7 @@ void config_load(LoadedConfig& out) {
     useDefaults(out, CONFIG_DAMAGED, 0);
     return;
   }
+  blobLen = (uint16_t)len;
   const uint32_t crc = volco::crc32(blob, len);
   if (!volco::decodeConfig(blob, len, decoded) || volco::validateConfig(decoded, volco::esp32Chip()).code != volco::CFG_OK) {
     useDefaults(out, CONFIG_DAMAGED, crc);
@@ -51,4 +51,17 @@ void config_load(LoadedConfig& out) {
   volco::toRuntime(decoded, out.rc);
   out.state = CONFIG_STORED;
   out.crc = crc;
+}
+
+const uint8_t* config_store_blob(uint16_t& len) {
+  len = blobLen;
+  return blob;
+}
+
+bool config_store_save(const uint8_t* data, size_t len) {
+  Preferences prefs;
+  if (!prefs.begin("volco", false)) return false;
+  const size_t written = prefs.putBytes("cfg", data, len);  // nvs_set_blob + nvs_commit: atomic per key
+  prefs.end();
+  return written == len;
 }

@@ -1,5 +1,6 @@
 #pragma once
 // The controller config in NVS (spec §6.6): namespace "volco", key "cfg", the exact bytes.
+#include <stddef.h>
 #include <stdint.h>
 
 #include "volco_runtime.h"
@@ -14,5 +15,11 @@ struct LoadedConfig {
 
 // Boot (spec §6.6): absent -> defaults/NONE; longer than kMaxConfigBlob -> defaults/DAMAGED/crc 0;
 // fails decode or validate -> defaults/DAMAGED/crc of the bytes; otherwise STORED.
-// Stage 3 only: when nothing is stored, seed_config.h is stored first (removed in stage 4).
 void config_load(LoadedConfig& out);
+
+// The stored bytes as loaded at boot, for a ConfigRead reply (spec §5.3): len 0 when nothing is
+// stored or the stored value is longer than kMaxConfigBlob.
+const uint8_t* config_store_blob(uint16_t& len);
+
+// Stores a new blob (already decoded and validated). True when NVS took every byte (spec §6.6).
+bool config_store_save(const uint8_t* blob, size_t len);

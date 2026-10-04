@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include "config.h"
+#include "config_session.h"
 #include "config_store.h"
 #include "debug_log.h"
 #include "indicators.h"
@@ -109,6 +110,7 @@ void setup() {
                            1, VOLCO_FW_VERSION, (uint8_t)loaded.state, loaded.crc},
                           sink);
   pcLink = &link;
+  config_session_begin(link);
   pcLink->begin(millis());  // Hello: the ESP32 may have just reset because the PC opened the port
   DEBUG_LOG("[DBG] Setup complete");
 }
@@ -157,12 +159,13 @@ void loop() {
       for (int i = 0; i < n; i++)
         if (parsers[t].feed(buf[i])) {
           active.onValidFrame(t);
-          pcLink->onPayload(parsers[t].payload(), parsers[t].length(), now);
+          pcLink->onPayload(parsers[t].payload(), parsers[t].length(), now, t);
         }
   }
 
-  // 4. Link: keepalive, host timeout, Commit fallback.
+  // 4. Link: keepalive, host timeout, Commit fallback; the config write timeout.
   pcLink->tick(now);
+  config_session_tick(now);
 
   // 5. Screens: power state, then redraw at most one panel.
   screens_tick(now);

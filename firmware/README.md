@@ -18,8 +18,8 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | Path | Contents |
 |---|---|
 | `src/config.h` | Fixed constants: serial baud, buffer sizes, protocol timing. |
-| `src/config_store.*` | Loads the controller config from NVS (and, in stage 3, stores the seed). |
-| `src/seed_config.h` | Generated stage 3 seed (DIY reference). |
+| `src/config_store.*` | Loads the controller config from NVS, keeps its bytes for read replies, and saves new ones. |
+| `src/config_session.*` | The config session: read replies, chunked writes, validate, store, reboot (spec §5.3, §5.4, §6.7). |
 | `src/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
 | `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
 | `src/indicators.*` | LED rendering. |
@@ -31,7 +31,7 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `lib/volco_screen_state/` | The state machine of each screen: current, previous and pending content, slide progress, dim, off, pixel shift, wake handling. |
 | `lib/volco_render/` | Volco's own 1-bit canvas and layout 1 renderer, with the generated fonts and icons. U8g2 is only the SSD1306 driver underneath. |
 | `assets/` | Icon sources (`icons/manifest.txt` and a PNG per icon) and fonts (`fonts/`: Arimo, SIL Open Font License 1.1). |
-| `tools/` | `draw_icons.py` and `gen_assets.py` (icons and fonts), `gen_config_vectors.py` (shared config test vectors), `gen_seed_config.py` (stage 3 seed), `hello_check.py` (checks a board's boot Hello), `check_firmware_id_paths.py` (CI). |
+| `tools/` | `draw_icons.py` and `gen_assets.py` (icons and fonts), `gen_config_vectors.py` (shared config test vectors), `config_tool.py` (read or write a controller's config over serial or UDP), `hello_check.py` (checks a board's boot Hello), `check_firmware_id_paths.py` (CI). |
 | `scripts/` | `firmware_id.sh`: the firmware build id, a hash of the firmware's sources. |
 | `test/` | Native tests of everything in `lib/`, and the shared `golden/frames.txt` and `golden/config.txt` that the C# tests read too. |
 
@@ -47,12 +47,11 @@ The firmware is generic: nothing about a build's hardware is compiled in. At boo
 
 The schema, with every default and range, is `proto/volco_config.proto`. A config that is missing, oversized, or fails decoding or validation leaves the firmware on built-in defaults (no inputs, serial only), still answering Hello.
 
-**Until Volco can send a config (stage 4),** an empty NVS is seeded from `src/seed_config.h`. To try another layout, write a preset JSON (the protobuf JSON mapping of `ControllerConfig`, like `proto/presets/diy-reference.json`), then:
+**Until Volco's Controller page (stage 5),** set a config with `config_tool.py`. A layout is a preset JSON (the protobuf JSON mapping of `ControllerConfig`, like `proto/presets/diy-reference.json`):
 
 ```
-~/.platformio/penv/bin/python firmware/tools/gen_seed_config.py my-layout.json
-esptool --port <port> erase-region 0x9000 0x5000
-cd firmware && pio run -e esp32 -t upload
+~/.platformio/penv/bin/python firmware/tools/config_tool.py --port <port> write my-layout.json   # stores it; the board reboots into it
+~/.platformio/penv/bin/python firmware/tools/config_tool.py --port <port> read                   # prints the stored config as JSON
 ```
 
 `firmware/tools/hello_check.py --port <port> --sliders N --kinds 1,1,2` resets the board and confirms the Hello matches the layout. Fixed constants (serial baud, buffer sizes, protocol timing) stay in `src/config.h`.
@@ -67,7 +66,7 @@ cd firmware && pio run -e esp32 -t upload
 
 ### Migrating a button from LED to screen
 
-Change the button's indicator in its config from `led` to `screen` (bus and address), and make sure that bus has `sda`/`scl`. In stage 3 that is a seed change (see Configuration); from stage 4, Volco's Controller page. The app picks the change up from Hello; there is nothing to change in Volco's actions.
+Change the button's indicator in its config from `led` to `screen` (bus and address), and make sure that bus has `sda`/`scl`. Until stage 5 that is a `config_tool.py write` (see Configuration); from stage 5, Volco's Controller page. The app picks the change up from Hello; there is nothing to change in Volco's actions.
 
 ## Wire protocol
 

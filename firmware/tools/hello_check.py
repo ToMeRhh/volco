@@ -54,6 +54,27 @@ def frames(data):
             i += 1
 
 
+def parse_hello(p):
+    """A version-1 Hello payload (spec §5.2) as a dict, or None when it doesn't add up."""
+    if len(p) < 4 or p[0] != 0x01 or p[1] != 0x01:
+        return None
+    fw_len = p[3]
+    i = 4 + fw_len
+    if fw_len > 32 or len(p) < i + 7:
+        return None
+    sliders, buttons = p[i + 5], p[i + 6]
+    if len(p) != i + 7 + buttons:
+        return None
+    return {
+        "chip": p[2],
+        "firmware": p[4:i].decode("ascii", "replace"),
+        "state": p[i],
+        "crc": int.from_bytes(p[i + 1:i + 5], "big"),
+        "sliders": sliders,
+        "kinds": list(p[i + 7:]),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", required=True)
@@ -86,13 +107,13 @@ def main():
     hellos = [p for p in all_frames if p[0] == 0x01]
     print(f"--- {len(all_frames)} frame(s), {len(hellos)} Hello ---")
     for p in hellos:
-        print(" ".join(f"{b:02X}" for b in p))
+        print(" ".join(f"{b:02X}" for b in p), "->", parse_hello(p))
     if a.sliders is None:
         return
     kinds = [int(k) for k in a.kinds.split(",") if k != ""]
-    want = bytes([0x01, 0x01, a.sliders, len(kinds), *kinds])
-    print("expected payload:", " ".join(f"{b:02X}" for b in want))
-    if any(p == want for p in hellos):
+    print(f"expected: {a.sliders} sliders, kinds {kinds}")
+    parsed = [h for h in map(parse_hello, hellos) if h]
+    if any(h["sliders"] == a.sliders and h["kinds"] == kinds for h in parsed):
         print("HELLO OK")
     else:
         sys.exit("HELLO MISMATCH or missing")
