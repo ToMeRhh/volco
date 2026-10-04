@@ -223,9 +223,12 @@ void Link::sendFrame(const uint8_t* payload, uint8_t len, uint32_t now) {
   lastTx_ = now;
 }
 
+// Hello, then every slider's current position: the PC may have just started, so it knows
+// nothing until a slider moves otherwise.
 void Link::sendHello(uint32_t now) {
   uint8_t f[4 + kMaxButtons + 3];
   sink_.send(f, encodeHello(config_.sliders, config_.kinds, config_.buttons, f));
+  for (uint8_t i = 0; i < config_.sliders; i++) sink_.send(f, encodeSlider(i, sink_.sliderValue(i), f));
   lastTx_ = now;
 }
 
