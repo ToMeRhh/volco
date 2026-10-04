@@ -23,7 +23,7 @@ public static class ControllerPresets
     };
 
     /// <summary>A copy of <paramref name="draft"/> with exactly the hardware fields (sliders,
-    /// buttons, i2c0, i2c1, preset) replaced by the preset's; behaviour, input tuning and UDP stay.</summary>
+    /// buttons, i2c0..i2c3, preset) replaced by the preset's; behaviour, input tuning and UDP stay.</summary>
     public static ControllerConfig ApplyTo(ControllerConfig draft, ControllerPreset preset)
     {
         if (!preset.IsAvailable || preset.Hardware is null)
@@ -36,6 +36,8 @@ public static class ControllerPresets
         result.Buttons.AddRange(hw.Buttons.Select(b => b.Clone()));
         result.I2C0 = hw.I2C0?.Clone();
         result.I2C1 = hw.I2C1?.Clone();
+        result.I2C2 = hw.I2C2?.Clone();
+        result.I2C3 = hw.I2C3?.Clone();
         result.Preset = hw.Preset;
         return result;
     }

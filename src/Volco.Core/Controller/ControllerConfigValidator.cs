@@ -10,6 +10,17 @@ public static class ControllerConfigValidator
 {
     private const byte None = ValidationResult.NoItem;
 
+    /// <summary>I2C buses 0 and 1 are the ESP32's controllers; 2 and 3 are software I2C.</summary>
+    public const int I2cBuses = 4;
+
+    private static I2cBus? Bus(ControllerConfig c, int bus) => bus switch
+    {
+        0 => c.I2C0,
+        1 => c.I2C1,
+        2 => c.I2C2,
+        _ => c.I2C3,
+    };
+
     public static ValidationResult Validate(ControllerConfig c, ChipInfo chip)
     {
         // 1. Counts (decode already enforces them; reachable only for configs built in code).
@@ -44,7 +55,7 @@ public static class ControllerConfigValidator
                     break;
                 case Button.IndicatorOneofCase.Screen:
                     var screen = b.Screen;
-                    if (screen.Bus > 1) return ValidationResult.Invalid(item, ConfigField.ScreenBus);
+                    if (screen.Bus >= I2cBuses) return ValidationResult.Invalid(item, ConfigField.ScreenBus);
                     if (screen.Address != 0x3C && screen.Address != 0x3D) return ValidationResult.Invalid(item, ConfigField.ScreenAddress);
                     for (var j = 0; j < i; j++)
                     {
@@ -58,13 +69,13 @@ public static class ControllerConfigValidator
         }
 
         // 4. I2C, for each bus some screen uses (an unused I2cBus is ignored entirely).
-        var used = new bool[2];
+        var used = new bool[I2cBuses];
         foreach (var b in c.Buttons)
             if (b.IndicatorCase == Button.IndicatorOneofCase.Screen) used[b.Screen.Bus] = true;
-        for (byte bus = 0; bus < 2; bus++)
+        for (byte bus = 0; bus < I2cBuses; bus++)
         {
             if (!used[bus]) continue;
-            var i2c = bus == 0 ? c.I2C0 : c.I2C1;
+            var i2c = Bus(c, bus);
             if (i2c is null) return ValidationResult.Invalid(bus, ConfigField.I2cMissing);
             if (!i2c.HasSda || !i2c.HasScl || !chip.OutputCapable(i2c.Sda) || !chip.OutputCapable(i2c.Scl) || i2c.Sda == i2c.Scl)
                 return ValidationResult.Invalid(bus, ConfigField.I2cPins);
@@ -88,10 +99,10 @@ public static class ControllerConfigValidator
                 if (!seen.Add(b.LedPair.PinB)) return ValidationResult.Invalid(item, ConfigField.PairPinB);
             }
         }
-        for (byte bus = 0; bus < 2; bus++)
+        for (byte bus = 0; bus < I2cBuses; bus++)
         {
             if (!used[bus]) continue;
-            var i2c = bus == 0 ? c.I2C0! : c.I2C1!;
+            var i2c = Bus(c, bus)!;
             if (!seen.Add(i2c.Sda) || !seen.Add(i2c.Scl)) return ValidationResult.Invalid(bus, ConfigField.I2cPins);
         }
 
