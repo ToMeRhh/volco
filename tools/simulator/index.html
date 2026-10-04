@@ -86,6 +86,11 @@ function send(payload) {
 function sendHello() {
   const k = TYPES[type].buttons;
   send([MSG.HELLO, 1, TYPES[type].sliders, k.length, ...k]);
+  // Like the firmware: every Hello is followed by each slider's current position.
+  document.querySelectorAll('#sliders input').forEach((input, i) => {
+    const v = +input.value;
+    send([MSG.SLIDER, i, v >> 8, v & 255]);
+  });
 }
 
 let rx = { state: 0, len: 0, buf: [] };

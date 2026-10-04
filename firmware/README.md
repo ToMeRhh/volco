@@ -6,7 +6,7 @@ ESP32 firmware for the Volco hardware controller. This document explains how the
 
 The controller is a plain input and display surface:
 
-- It reports **raw input**: every slider's position and every button's press and release. At boot, on request, and after a silence from the PC it also reports its **hardware** (Hello): how many sliders and buttons it has, and what each button shows.
+- It reports **raw input**: every slider's position and every button's press and release. At boot, on request, and after a silence from the PC it also reports its **hardware** (Hello): how many sliders and buttons it has, and what each button shows. Every Hello is followed by every slider's current position, so the PC knows where the sliders are without waiting for them to move.
 - It shows **LED values the PC sends it**, one per button, rendered on that button's light.
 - It **draws screens** from descriptions the PC sends (an icon, a top line, a name) on SSD1306 OLED modules.
 - It runs **scrolling, slides and burn-in protection locally** (dimming, switching off, pixel shift), so the PC never streams frames.
@@ -139,6 +139,7 @@ Burn-in protection. Any button press or slider move counts as activity.
 | `SLIDER_READ_INTERVAL_MS` | How often sliders are sampled. |
 | `FILTER_WEIGHT` | Exponential moving average weight for slider readings (0-1). Lower is smoother but slower. |
 | `SLIDER_DEADBAND` | A smoothed slider reading must move more than this many ADC units before it is reported. |
+| `SLIDER_SEED_READS` | Reads averaged for each slider's starting value at boot (reported right after the boot Hello). |
 
 ## Wiring screens and choosing pins
 
@@ -168,7 +169,7 @@ The high bit of `type` is the direction: `0x0_` comes from the controller, `0x8_
 |---|---|---|---|
 | `0x01` | Hello | `version` (1), `sliders`, `buttons`, then one `kind` per button: 0 none, 1 LED, 2 LED pair, 3 screen | The controller's hardware. |
 | `0x02` | Alive | none | Keepalive from the controller. |
-| `0x03` | Slider | `index`, value u16 (0-4095) | A slider moved. |
+| `0x03` | Slider | `index`, value u16 (0-4095) | A slider moved, or its position after a Hello. |
 | `0x04` | Button | `index`, `pressed` (1 or 0) | A button changed. |
 | `0x81` | HelloRequest | none | The PC asks for Hello. |
 | `0x82` | Heartbeat | none | Keepalive from the PC. |
@@ -196,7 +197,7 @@ Text is UTF-8 in logical order, at most 60 bytes per slot; the app strips Hebrew
 
 ### Behaviour rules
 
-- **Hello** is sent at boot (which also covers the ESP32 resetting when the serial port is opened), in reply to every HelloRequest, and on the first valid frame from the PC while the PC is not considered alive (the first frame ever, or the first after a host timeout), unless that frame is itself a HelloRequest, whose reply covers it. The PC sends no Led or Screen on a connection until it has seen a Hello, then pushes every button's state.
+- **Hello** is sent at boot (which also covers the ESP32 resetting when the serial port is opened), in reply to every HelloRequest, and on the first valid frame from the PC while the PC is not considered alive (the first frame ever, or the first after a host timeout), unless that frame is itself a HelloRequest, whose reply covers it. Hello is always followed by one Slider frame per slider carrying its current smoothed value; the app sets the volumes from these without showing the volume OSD. The PC sends no Led or Screen on a connection until it has seen a Hello, then pushes every button's state.
 - **Keepalive.** The controller sends Alive whenever it has sent nothing for 1 s. The PC sends Heartbeat the same way, but only once its session is Ready. Any valid frame from the PC counts as proof of life; after `HOST_TIMEOUT_MS` without one the LEDs go off and the screens show "not connected".
 - **Begin / Commit.** After Begin the firmware holds every Led and Screen instead of applying it; on Commit it applies them all in the same pass, so every screen starts its slide at the same moment. A newer message for the same button replaces the held one, a second Begin restarts the timer, Commit with nothing held does nothing, and Commit without a Begin is ignored. If no Commit arrives within `COMMIT_FALLBACK_MS` of the Begin, the firmware applies what it holds.
 - **Kind mismatches are ignored.** A Led for a button that is not an LED or LED pair, a Screen for a button that is not a screen, and any out-of-range index are dropped.
