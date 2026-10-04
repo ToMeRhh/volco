@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Controller;
 using Volco.Core.Input;
 using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
@@ -814,6 +815,91 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Connection(0).RaiseMessage(LedHello);         // same hardware again: no new info event
         Assert.Equal(1, infos);
+    }
+
+    // ---- config session plumbing (spec §8.2) --------------------------------------------------
+
+    private static readonly byte[] SmallBlob = { 0x32, 0x02, 0x08, 0x64 };
+
+    private static HelloMessage StoredHello(uint crc) => new(ProtocolVersion.Current, ChipFamily.Esp32, "dev",
+        ControllerConfigState.Stored, crc, 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair });
+
+    private static byte LastWriteSeq(FakeControllerConnection c) => c.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88)[3];
+
+    private static async Task<T> Within<T>(Task<T> task)
+    {
+        Assert.Same(task, await Task.WhenAny(task, Task.Delay(WaitTimeout * 2)));
+        return await task;
+    }
+
+    [Fact]
+    public void Hello_ReachesTheConfigService_AfterTheLink()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        Assert.Same(LedHello, runtime.ControllerConfig.LastHello);
+        Assert.Equal(BannerKind.NotSetUp, runtime.ControllerConfig.Banner.Kind);
+    }
+
+    [Fact]
+    public async Task Save_DetachAndReattachOfTheSameConnectionWhileConfirming_StillConfirmed()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var save = runtime.ControllerConfig.SaveAsync(SmallBlob);
+        c.RaiseMessage(new ConfigResultMessage(LastWriteSeq(c), ConfigResultCode.Ok, 0xFF, 0xFF));
+        Assert.True(WaitUntil(() => runtime.ControllerConfig.Progress?.Phase == SavePhase.Confirming));
+
+        c.SetStatus(ConnectionStatus.Disconnected);   // the reboot drops the transport for a moment
+        c.SetStatus(ConnectionStatus.Connected);
+        c.RaiseMessage(StoredHello(ControllerConfigCodec.Crc32(SmallBlob)));
+
+        Assert.Equal(SaveStatus.Confirmed, (await Within(save)).Status);
+        Assert.Equal(Convert.ToBase64String(SmallBlob), runtime.Config.Config.ControllerConfigBlob);
+    }
+
+    [Fact]
+    public async Task Save_ReconnectMidSave_ConnectionLost()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        var save = runtime.ControllerConfig.SaveAsync(SmallBlob);
+        runtime.Reconnect();
+        Assert.Equal(SaveStatus.ConnectionLost, (await Within(save)).Status);
+        Assert.Null(runtime.Config.Config.ControllerConfigBlob);
+    }
+
+    [Fact]
+    public async Task ConfigMessages_FromARetiredConnection_AreDropped()
+    {
+        var runtime = StartRuntime();
+        var old = Connection(0);
+        ConnectAndGreet(old);
+        runtime.Reconnect();
+        var current = Connection(1);
+        ConnectAndGreet(current);
+
+        var save = runtime.ControllerConfig.SaveAsync(SmallBlob);
+        var seq = LastWriteSeq(current);
+        old.RaiseMessage(new ConfigResultMessage(seq, ConfigResultCode.Invalid, 0, 1));   // retired: ignored
+        old.RaiseMessage(StoredHello(ControllerConfigCodec.Crc32(SmallBlob)));
+        await Task.Delay(100);
+        Assert.False(save.IsCompleted);
+
+        current.RaiseMessage(new ConfigResultMessage(seq, ConfigResultCode.Invalid, 0, 1));
+        Assert.Equal(SaveStatus.Rejected, (await Within(save)).Status);
+    }
+
+    [Fact]
+    public void ConfigSession_SendsNothing_ForATestHelloWithNoStoredConfig()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        Thread.Sleep(100);
+        Assert.DoesNotContain(c.SentFrames, f => f.Length > 2 && f[2] is 0x87 or 0x88);
+        Assert.Equal(ConfigOperation.Idle, runtime.ControllerConfig.Operation);
     }
 
     [Fact]

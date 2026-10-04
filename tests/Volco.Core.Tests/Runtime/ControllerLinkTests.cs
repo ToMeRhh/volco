@@ -52,6 +52,31 @@ public sealed class ControllerLinkTests : IDisposable
         return true;
     }
 
+    [Fact]
+    public void SendRaw_WithoutAConnection_ReturnsFalse()
+        => Assert.False(NewLink().SendRaw(new byte[] { 0xAA, 0x02, 0x87, 0x01, 0x86 }));
+
+    [Fact]
+    public void SendRaw_AttachedButAwaitingHello_SendsTheBurstAsOneFrame()
+    {
+        var link = NewLink();
+        link.Attach(_conn);
+        Assert.Equal(ControllerState.AwaitingHello, link.State);
+        var burst = ProtocolEncoder.EncodeConfigWrite(5, new byte[] { 0x32, 0x02, 0x08, 0x64 });
+        Assert.True(link.SendRaw(burst));
+        Assert.Equal(1, Count(burst));
+        Assert.True(Same(burst, _conn.SentFrames[^1]));
+    }
+
+    [Fact]
+    public void SendRaw_AfterDispose_ReturnsFalse()
+    {
+        var link = NewLink();
+        link.Attach(_conn);
+        link.Dispose();
+        Assert.False(link.SendRaw(new byte[] { 0xAA, 0x02, 0x87, 0x01, 0x86 }));
+    }
+
     private ControllerLink Ready()
     {
         var link = NewLink();

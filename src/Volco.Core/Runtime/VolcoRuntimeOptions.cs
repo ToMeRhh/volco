@@ -15,6 +15,9 @@ public sealed record VolcoRuntimeOptions
     /// arrives; a test switch for judging the delay.</summary>
     public bool SynchronizedPresetTransitions { get; init; } = true;
 
+    /// <summary>The clock the config session's timeouts use (spec §8.2); tests pass a fake.</summary>
+    public TimeProvider Time { get; init; } = TimeProvider.System;
+
     /// <summary>HelloRequest retry, heartbeat and tick intervals.</summary>
     public ControllerLinkOptions Link { get; init; } = ControllerLinkOptions.Default;
 }

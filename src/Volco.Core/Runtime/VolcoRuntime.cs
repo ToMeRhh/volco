@@ -1,6 +1,7 @@
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Controller;
 using Volco.Core.Devices;
 using Volco.Core.Diagnostics;
 using Volco.Core.Input;
@@ -22,7 +23,7 @@ namespace Volco.Core.Runtime;
 /// thread, the SliderProcessor coalescing timer, the ButtonPressDetector timers, or the
 /// controller link's keepalive timer. Subscribers marshal to their UI thread themselves.
 /// </remarks>
-public sealed class VolcoRuntime : IDisposable, IPresetController
+public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessionLink
 {
     /// <summary>The live preset's id as last set; null until the first set. Read through
     /// <see cref="ActivePresetId"/>, which falls back to the first preset when this one is gone
@@ -106,9 +107,17 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
             ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) => { if (!IsDisposed) ControllerStateChanged?.Invoke(this, state); };
         _link.HelloReceived += OnHello;
+        ControllerConfig = new ControllerConfigService(Config, this, _options.Time);
     }
 
     public IAudioEngine Audio { get; }
+
+    /// <summary>The controller config session: reads, saves, the mirror and the banner (spec §8.2).</summary>
+    public ControllerConfigService ControllerConfig { get; }
+
+    bool IConfigSessionLink.SendRaw(byte[] burst) => !IsDisposed && _link.SendRaw(burst);
+
+    ConnectionType IConfigSessionLink.ConnectionType => Config.Config.Connection.Type;
     public ConfigManager Config { get; }
     public bool AudioEngineFailed => !_audioReady;
 
@@ -320,6 +329,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
             var lastStatus = old.Status;
             RetireTransport(old);
             _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
+            ControllerConfig.OnConnectionReplaced();
             if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
                 ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
         }
@@ -340,6 +350,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         {
             RetireTransport(displaced);
             _link.Detach();
+            ControllerConfig.OnConnectionReplaced();
         }
 
         // Dispose() may have started after the IsDisposed check at the top. Both the publish
@@ -395,7 +406,13 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
             case HelloMessage or AliveMessage:
                 // Only the current transport's session: a Hello still in flight from a retired
                 // transport must not mark the new session Ready.
-                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) _link.OnMessage(msg);
+                if (!ReferenceEquals(sender, Volatile.Read(ref _connection))) break;
+                _link.OnMessage(msg);
+                ControllerConfig.OnMessage(msg);   // after the link: the controller info is stored
+                break;
+            case ConfigDataMessage or ConfigResultMessage:
+                // Same stale-sender filter as Hello (spec §8.2).
+                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) ControllerConfig.OnMessage(msg);
                 break;
             case SliderMessage slider:
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
@@ -743,7 +760,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         Config.ConnectionConfigChanged -= OnConfigChanged;
         Config.ConfigChanged -= OnSettingsChanged;
 
-        // Before the transport goes: nothing may be sent to it while it is being retired.
+        // Before the transport goes: nothing may be sent to it while it is being retired. An
+        // operation in flight ends as if the connection were replaced.
+        ControllerConfig.Dispose();
         _link.Dispose();
 
         // Take ownership of the current transport (see _connection): a concurrent restart that
