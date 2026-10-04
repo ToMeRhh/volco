@@ -388,6 +388,60 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.NotNull(vm.Sliders[0].ErrorText);
     }
 
+    [Fact]
+    public void Revert_ClosesAPendingQuestion_AndResetsTheIpBox()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.AddSliderCommand.Execute(null);
+        vm.PcIp = "192.168.1.5";
+        vm.Sliders[4].RemoveCommand.Execute(null);   // later rows exist: asks
+        var stale = vm.Confirmation!;
+
+        vm.RevertCommand.Execute(null);
+        Assert.Null(vm.Confirmation);
+        Assert.Equal("", vm.PcIp);
+        stale.ConfirmCommand.Execute(null);          // a stale button does nothing
+        Assert.Equal(5, vm.Sliders.Count);
+    }
+
+    [Fact]
+    public void LosingEditing_ClosesAPendingQuestion()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Sliders[0].RemoveCommand.Execute(null);
+        Assert.NotNull(vm.Confirmation);
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, 0x9999));   // a different setup now
+        _ui.RunAll();
+        Assert.False(vm.CanEdit);
+        Assert.Null(vm.Confirmation);
+    }
+
+    [Fact]
+    public void AnUnencodableDraft_SaysSo()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.UdpEnabled = true;
+        vm.Ssid = new string('x', 40);   // over the limit; the box caps it, this is the model path
+        vm.UdpEnabled = false;           // the validator skips Wi-Fi now
+        vm.SaveCommand.Execute(null);
+        Assert.StartsWith("This setup can't be saved:", vm.ProgressText);
+        Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
+    }
+
+    [Fact]
+    public void AnInputTuningError_OpensAdvanced()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        Assert.False(vm.IsAdvancedOpen);
+        vm.DebounceMs = 0;               // below 1
+        Assert.NotNull(vm.InputError);
+        Assert.True(vm.IsAdvancedOpen);
+    }
+
     // ── Test mode ──────────────────────────────────────────────────────────────────────────
 
     [Fact]

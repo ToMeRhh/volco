@@ -185,7 +185,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             }
             if (ControllerDraft.HasHardware(_draft))
             {
-                Ask($"Replace the current hardware with {value.DisplayName}?", "Replace", () => ApplyPreset(value));
+                Ask($"Replace the current hardware with {value.DisplayName}?", "Replace", () => { if (CanEdit) ApplyPreset(value); });
                 OnPropertyChanged();
             }
             else ApplyPreset(value);
@@ -233,6 +233,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (!keepFixIt) _fixIt = false;
         _remoteError = null;
+        _pcIpText = null;          // Important 3: the box shows the new draft's address
+        Confirmation = null;       // a question about the old draft must not act on the new one
         _draft = draft;
         _selectedPreset = ControllerDraft.BasedOn(draft);
         RebuildRows();
@@ -306,7 +308,13 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     internal void RequestRemoveSlider(int index)
     {
         if (!CanEdit || index >= _draft.Sliders.Count) return;
-        void Remove() { _draft.Sliders.RemoveAt(index); RebuildRows(); OnDraftEdited(structural: true); }
+        void Remove()
+        {
+            if (!CanEdit || index >= _draft.Sliders.Count) return;
+            _draft.Sliders.RemoveAt(index);
+            RebuildRows();
+            OnDraftEdited(structural: true);
+        }
         if (index < _draft.Sliders.Count - 1)
             Ask("Sliders after it are renumbered, and their actions move with the number.", "Remove", Remove);
         else Remove();
@@ -315,7 +323,13 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     internal void RequestRemoveButton(int index)
     {
         if (!CanEdit || index >= _draft.Buttons.Count) return;
-        void Remove() { _draft.Buttons.RemoveAt(index); RebuildRows(); OnDraftEdited(structural: true); }
+        void Remove()
+        {
+            if (!CanEdit || index >= _draft.Buttons.Count) return;
+            _draft.Buttons.RemoveAt(index);
+            RebuildRows();
+            OnDraftEdited(structural: true);
+        }
         if (index < _draft.Buttons.Count - 1)
             Ask("Buttons after it are renumbered, and their actions move with the number.", "Remove", Remove);
         else Remove();
@@ -328,6 +342,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         foreach (var r in AllRows()) r.ErrorText = null;
         BehaviourError = null;
         WifiError = null;
+        InputError = null;
+        PageError = null;
     }
 
     private IEnumerable<HardwareRowViewModel> AllRows()
@@ -353,14 +369,26 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock => Buses.FirstOrDefault(b => b.Index == item),
             _ => null,
         };
+        var described = $"Check {ControllerDraft.Describe(item, field)}.";
         if (row is not null) row.ErrorText = text;
         else if ((ConfigField)field is ConfigField.UdpSsid or ConfigField.UdpPassword or ConfigField.UdpPcIp or ConfigField.UdpPort)
+        {
             WifiError = text;
-        else BehaviourError = $"Check {ControllerDraft.Describe(item, field)}.";
+            IsAdvancedOpen = true;   // the error must be visible
+        }
+        else if ((ConfigField)field == ConfigField.InputValue)
+        {
+            InputError = described;
+            IsAdvancedOpen = true;
+        }
+        else if ((ConfigField)field == ConfigField.ScreenValue && ShowBehaviour) BehaviourError = described;
+        else PageError = described;   // counts, a row that isn't there, screen values with no screen shown
     }
 
     [ObservableProperty] private string? _behaviourError;
     [ObservableProperty] private string? _wifiError;
+    [ObservableProperty] private string? _inputError;
+    [ObservableProperty] private string? _pageError;
 
     private void ShowHints()
     {
@@ -396,8 +424,22 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         bool udpChanged = !UdpBytes(_draft).AsSpan().SequenceEqual(UdpBytes(BaselineConfig()));
         if (udpChanged && _config.Config.Connection.Type == ConnectionType.Udp)
             Ask("Changing the Wi-Fi settings may disconnect the controller. If it doesn't come back, connect it with USB.",
-                "Save", () => SaveBytes(ControllerConfigCodec.Encode(_draft), udpChanged));
-        else SaveBytes(ControllerConfigCodec.Encode(_draft), udpChanged);
+                "Save", () => { if (CanSave) EncodeAndSave(udpChanged); });
+        else EncodeAndSave(udpChanged);
+    }
+
+    /// <summary>Encode can still refuse what the validator skips (Wi-Fi strings over their limit
+    /// while Wi-Fi is off): say so instead of failing silently.</summary>
+    private void EncodeAndSave(bool udpChanged)
+    {
+        byte[] blob;
+        try { blob = ControllerConfigCodec.Encode(_draft); }
+        catch (ControllerConfigFormatException ex)
+        {
+            ProgressText = $"This setup can't be saved: {ex.Message}";
+            return;
+        }
+        SaveBytes(blob, udpChanged);
     }
 
     private ControllerConfig BaselineConfig()
@@ -666,7 +708,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private void OnInTestModeChanged(object? sender, bool on) => _ui.Post(() =>
     {
-        if (_disposed || on) return;
+        if (_disposed || on || _runtime.InTestMode) return;   // stale: a newer session is running
         _testHandle = null;   // the runtime ended it (Detach, replacement)
         IsTesting = false;
         foreach (var b in TestButtons) b.ResetIndicator();
@@ -694,6 +736,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private void RefreshAll()
     {
+        // A pending question is only valid while the page could still act on it.
+        if (Confirmation is not null && (!CanEdit || Busy)) Confirmation = null;
         RefreshStatus();
         OnPropertyChanged(nameof(InSync));
         OnPropertyChanged(nameof(CanEdit));

@@ -34,6 +34,7 @@ public abstract partial class HardwareRowViewModel : ObservableObject
     /// <summary>Applies a pin edit: a value sets it, empty clears it.</summary>
     protected void Edit(decimal? value, Action<uint> set, Action clear, string property)
     {
+        if (!CanEdit) { OnPropertyChanged(property); return; }
         if (value is { } v && v >= 0) set((uint)v); else clear();
         OnPropertyChanged(property);
         Owner.OnDraftEdited();
@@ -96,7 +97,7 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
         };
         set
         {
-            if (value == IndicatorIndex) return;
+            if (value == IndicatorIndex || !CanEdit) { OnPropertyChanged(); return; }
             switch (value)
             {
                 case 1: _button.Led = new Led(); break;
@@ -123,7 +124,7 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
     public int LedPolarityIndex
     {
         get => _button.Led is { ActiveLow: true } ? 1 : 0;
-        set { if (_button.Led is { } l) { l.ActiveLow = value == 1; OnPropertyChanged(); Owner.OnDraftEdited(); } }
+        set { if (_button.Led is { } l && CanEdit) { l.ActiveLow = value == 1; Owner.OnDraftEdited(); } OnPropertyChanged(); }
     }
 
     public decimal? PairPinA
@@ -141,7 +142,7 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
     public int PairPolarityIndex
     {
         get => _button.LedPair is { ActiveLow: true } ? 1 : 0;
-        set { if (_button.LedPair is { } p) { p.ActiveLow = value == 1; OnPropertyChanged(); Owner.OnDraftEdited(); } }
+        set { if (_button.LedPair is { } p && CanEdit) { p.ActiveLow = value == 1; Owner.OnDraftEdited(); } OnPropertyChanged(); }
     }
 
     public int ScreenBusIndex
@@ -149,7 +150,7 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
         get => _button.Screen is { } s && s.Bus <= 3 ? (int)s.Bus : 0;
         set
         {
-            if (_button.Screen is not { } s || value < 0 || value > 3 || value == ScreenBusIndex) return;
+            if (_button.Screen is not { } s || value < 0 || value > 3 || value == ScreenBusIndex || !CanEdit) { OnPropertyChanged(); return; }
             s.Bus = (uint)value;
             OnPropertyChanged();
             Owner.OnDraftEdited(structural: true);
@@ -159,7 +160,7 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
     public int ScreenAddressIndex
     {
         get => _button.Screen is { Address: 0x3D } ? 1 : 0;
-        set { if (_button.Screen is { } s) { s.Address = value == 1 ? 0x3Du : 0x3Cu; OnPropertyChanged(); Owner.OnDraftEdited(); } }
+        set { if (_button.Screen is { } s && CanEdit) { s.Address = value == 1 ? 0x3Du : 0x3Cu; Owner.OnDraftEdited(); } OnPropertyChanged(); }
     }
 }
 
@@ -183,13 +184,13 @@ public sealed partial class I2cBusRowViewModel : HardwareRowViewModel
     public decimal? Sda
     {
         get => Message is { } m ? Get(m.HasSda, m.Sda) : null;
-        set { var m = Ensure(); Edit(value, v => m.Sda = v, m.ClearSda, nameof(Sda)); }
+        set { if (!CanEdit) { OnPropertyChanged(); return; } var m = Ensure(); Edit(value, v => m.Sda = v, m.ClearSda, nameof(Sda)); }
     }
 
     public decimal? Scl
     {
         get => Message is { } m ? Get(m.HasScl, m.Scl) : null;
-        set { var m = Ensure(); Edit(value, v => m.Scl = v, m.ClearScl, nameof(Scl)); }
+        set { if (!CanEdit) { OnPropertyChanged(); return; } var m = Ensure(); Edit(value, v => m.Scl = v, m.ClearScl, nameof(Scl)); }
     }
 
     /// <summary>The clock in kHz (100–1000).</summary>
@@ -198,6 +199,7 @@ public sealed partial class I2cBusRowViewModel : HardwareRowViewModel
         get => (Message?.ClockHz ?? 400_000u) / 1000m;
         set
         {
+            if (!CanEdit) { OnPropertyChanged(); return; }
             var m = Ensure();
             if (value is { } v) m.ClockHz = (uint)(v * 1000); else m.ClearClockHz();
             OnPropertyChanged();

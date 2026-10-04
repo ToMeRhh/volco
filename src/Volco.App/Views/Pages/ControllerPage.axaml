@@ -79,6 +79,8 @@
         <Border Name="HardwarePanel" Classes="Panel">
           <StackPanel Spacing="14">
             <TextBlock Text="Hardware" Classes="Subtitle"/>
+            <TextBlock Name="PageErrorText" Classes="Caption" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}"
+                       Text="{Binding PageError}" IsVisible="{Binding PageError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
             <Grid ColumnDefinitions="150,Auto,*">
               <TextBlock Text="Start from" Classes="Secondary" VerticalAlignment="Center"/>
               <ComboBox Name="PresetCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
@@ -342,6 +344,8 @@
                 <NumericUpDown Name="DeadbandBox" Grid.Column="1" Width="120" Minimum="0" Maximum="500" FormatString="0"
                                Value="{Binding Deadband, Mode=TwoWay}"/>
               </Grid>
+              <TextBlock Name="InputErrorText" Classes="Caption" Foreground="{DynamicResource DangerBrush}" Text="{Binding InputError}"
+                         IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
 
               <TextBlock Text="Screen bus clock" Classes="Secondary" IsVisible="{Binding HasBuses}"/>
               <ItemsControl Name="BusClockRows" ItemsSource="{Binding Buses}">
@@ -364,11 +368,11 @@
               <StackPanel Spacing="10" IsVisible="{Binding UdpEnabled}">
                 <Grid ColumnDefinitions="200,Auto">
                   <TextBlock Text="Network name (SSID)" VerticalAlignment="Center"/>
-                  <TextBox Name="SsidBox" Grid.Column="1" Width="220" Text="{Binding Ssid, Mode=TwoWay}"/>
+                  <TextBox Name="SsidBox" Grid.Column="1" Width="220" MaxLength="32" Text="{Binding Ssid, Mode=TwoWay}"/>
                 </Grid>
                 <Grid ColumnDefinitions="200,Auto,Auto">
                   <TextBlock Text="Password" VerticalAlignment="Center"/>
-                  <TextBox Name="PasswordBox" Grid.Column="1" Width="220" PasswordChar="{Binding PasswordChar}"
+                  <TextBox Name="PasswordBox" Grid.Column="1" Width="220" MaxLength="64" PasswordChar="{Binding PasswordChar}"
                            Text="{Binding Password, Mode=TwoWay}"/>
                   <CheckBox Name="ShowPasswordBox" Grid.Column="2" Content="Show" Margin="8,0,0,0"
                             IsChecked="{Binding ShowPassword, Mode=TwoWay}"/>

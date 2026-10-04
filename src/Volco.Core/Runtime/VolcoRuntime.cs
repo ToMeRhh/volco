@@ -154,6 +154,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         {
             AppLog.Info("Test mode on");
             _buttonPressDetector?.Reset();   // a gesture started before the test can't fire during it
+            _sliderProcessor?.DropPending();  // nor a slider value queued just before it
             _link.PushAll();
             InTestModeChanged?.Invoke(this, true);
         }
