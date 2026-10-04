@@ -278,7 +278,7 @@ Wire your sliders, buttons and indicators to an ESP32, then describe them in [`f
 
 ```bash
 cd firmware
-pio run -t upload        # build & flash (needs PlatformIO)
+pio run -t upload        # build & flash (needs PlatformIO Core >= 6.1.19)
 pio device monitor       # optional: watch the serial log
 ```
 

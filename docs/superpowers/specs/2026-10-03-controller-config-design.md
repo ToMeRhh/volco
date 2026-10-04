@@ -368,6 +368,9 @@ volco.config.Udp.password              max_size:65
 Notes:
 
 - **Defaults live only in the `.proto`.** The app reads them from the generated C# properties (proto2 presence: `HasX` / `ClearX`), and the firmware from nanopb's generated initialiser. A golden case checks that `screen {}` decodes to bus 0, address 0x3C on both sides.
+  - **An absent submessage behaves differently on the two sides.** C# returns `null` for it (`Screens == null`), while nanopb fills it with defaults (stage 1).
+  - `ControllerConfigCodec` therefore reads an absent submessage as a default instance (`config.Screens ?? new ScreenBehaviour()`, and likewise `Input`, `Udp`, `I2c0`/`I2c1`). It never dereferences a possibly-null submessage.
+  - A golden case asserts that the empty blob gives `screens.brightness == 255` on both sides.
 - **The ranges in the comments are normative.** They are enforced by §6.4 on the firmware and the app, and the UI uses them as its control limits.
 - **Sizes:** the largest valid blob is about 663 bytes. `kMaxConfigBlob` = 1024, and a golden case asserts the maximal blob fits.
 - **Units:** times are seconds where the old constants were minutes, and milliseconds where they were sub-second. The firmware converts to milliseconds at load.
@@ -576,6 +579,8 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
   - `Link` routes `0x87`–`0x8A`, together with the arriving transport, to a new `ConfigSink` interface. `main.cpp` implements it, connecting `BlobReceiver`, the store, the read reply and the reboot.
   - `Link::begin` and `hostLost` interact with `ActiveTransport` as §5.5 specifies.
 - **`lib/volco_config`** (new, pure C++, no Arduino): `crc32`, `ChipInfo` and the ESP32 table, `decode` (nanopb, plus the NUL-in-string check), `validate`, `toRuntime`, `BlobReceiver`.
+  - **The NUL check works on the wire bytes, not on the decoded struct.** nanopb copies a string into a zeroed `char[]`, so `"a\0"` and `"a"` look identical once decoded (stage 1: `strlen` was 1).
+  - Each string field (`preset`, `udp.ssid`, `udp.password`) is checked as it is decoded, through a nanopb string callback or an equivalent pre-scan of the string fields' bytes.
 - **Build id:** `-DVOLCO_FW_VERSION=\"…\"` is passed by CI (§9.2). The default is `"dev"`.
 - **`platformio.ini` (the rest):**
   - Rename `denky32` → `esp32`.
