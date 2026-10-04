@@ -61,7 +61,7 @@ cd firmware && pio run -e esp32 -t upload
 
 - The ESP32 has **two hardware I2C buses** (0 and 1); the firmware adds **two software buses** (2 and 3). An SSD1306 answers on `0x3C` or `0x3D`, and a bus takes at most two screens. Two modules on the same bus need different addresses: move the address resistor on one of them to `0x3D`. Modules whose address is fixed need a bus each, so up to 4 of them.
 - The software buses drive SCL push-pull and SDA open-drain, without clock stretching, which suits SSD1306 modules (they never hold SCL). A full frame on them takes about as long as on a hardware bus at 400 kHz, but the CPU is busy for all of it.
-- Free, safe GPIOs on the current board: **13, 16, 17, 22, 23, 25, 26, 27**. The defaults use 25/26 for bus 0, 27/13 for bus 1, 16/17 for bus 2 and 22/23 for bus 3.
+- Free, safe GPIOs on the current board: **13, 16, 17, 22, 23, 25, 26, 27**. Suggested pins: 25/26 for bus 0, 27/13 for bus 1, 16/17 for bus 2 and 22/23 for bus 3.
 - Avoid GPIO 21 while it drives an LED (it is Arduino's default SDA), and avoid the strapping pins 0, 2 and 15.
 - If slides look rough, raise the bus's `clock_hz` to 1000000. A full frame takes about 25-30 ms per panel at 400 kHz, and panels are updated one after another.
 

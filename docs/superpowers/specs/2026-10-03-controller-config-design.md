@@ -374,7 +374,7 @@ Notes:
   - `ControllerConfigCodec` therefore reads an absent submessage as a default instance (`config.Screens ?? new ScreenBehaviour()`, and likewise `Input`, `Udp`, `I2c0`/`I2c1`). It never dereferences a possibly-null submessage.
   - A golden case asserts that the empty blob gives `screens.brightness == 255` on both sides.
 - **The ranges in the comments are normative.** They are enforced by §6.4 on the firmware and the app, and the UI uses them as its control limits.
-- **Sizes:** the largest valid blob is about 663 bytes. `kMaxConfigBlob` = 1024, and a golden case asserts the maximal blob fits.
+- **Sizes:** the largest valid blob is about 683 bytes (with all four I2C buses). `kMaxConfigBlob` = 1024, and a golden case asserts the maximal blob fits.
 - **Units:** times are seconds where the old constants were minutes, and milliseconds where they were sub-second. The firmware converts to milliseconds at load.
 
 ### 6.2 Presets
@@ -458,7 +458,7 @@ Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHEC
 
 - **`item`:**
   - Slider and button rules: the slider or button index.
-  - I2C rules (fields 8–10): the bus number (0 or 1).
+  - I2C rules (fields 8–10): the bus number (0–3).
   - UDP rules (fields 11–14): 0xFF.
   - Range rules (fields 15–16): the protobuf field number within `ScreenBehaviour` or `InputTuning`.
 
@@ -828,8 +828,8 @@ A sixth settings page, **Controller**, after Connection. The sections, top to bo
   - Indicator: None / LED / LED pair / Screen.
   - LED: pin and "Lights when the pin is: High / Low".
   - LED pair: pin A, pin B and polarity.
-  - Screen: bus 0/1 and address 0x3C/0x3D.
-- **I2C buses:** bus 0 and bus 1 rows (SDA, SCL), shown only when a screen uses that bus.
+  - Screen: bus 0–3 (2 and 3 are software I2C) and address 0x3C/0x3D.
+- **I2C buses:** rows for buses 0–3 (SDA, SCL), each shown only when a screen uses that bus.
 - **Hints** (informational, never blocking):
   - a button on GPIO 34–39: "This pin has no internal pull-up; add a resistor to 3.3 V."
   - a slider on ADC2 while UDP is off: "This pin can't be read if you enable Wi-Fi."

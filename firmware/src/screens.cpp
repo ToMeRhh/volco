@@ -24,7 +24,8 @@ class SoftI2c {
     sda_ = static_cast<gpio_num_t>(sda);
     scl_ = static_cast<gpio_num_t>(scl);
     half_ = getCpuFrequencyMhz() * 1000000u / (2 * hz);
-    hold_ = half_ / 4;  // >= 300 ns of data hold after SCL falls at up to 400 kHz
+    // >= 300 ns of data hold after SCL falls, also when the config raises the clock to 1 MHz.
+    hold_ = max(half_ / 4, getCpuFrequencyMhz() * 3u / 10u);
     gpio_set_level(sda_, 1);
     gpio_set_level(scl_, 1);
     gpio_config_t c = {};

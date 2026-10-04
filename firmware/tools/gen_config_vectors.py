@@ -87,7 +87,7 @@ def maximal():
     for _ in range(32):
         b = m.buttons.add(pin=39)
         b.led_pair.pin_a, b.led_pair.pin_b, b.led_pair.active_low = 39, 39, True
-    for bus in (m.i2c0, m.i2c1):
+    for bus in (m.i2c0, m.i2c1, m.i2c2, m.i2c3):
         bus.sda, bus.scl, bus.clock_hz = 39, 39, 1000000
     u = m.udp
     u.enabled, u.ssid, u.password = True, "a" * 32, "a" * 64
@@ -137,8 +137,8 @@ decode_ok("brightness_only", bytes.fromhex("32020864"), screens__brightness=100,
           screens__dim_enabled=1, screens__transition_ms=360)
 decode_ok("unknown_field", bytes.fromhex("98060132020864"), screens__brightness=100)
 mx = blob(maximal())
-assert len(mx) == 663, len(mx)  # stage 1 measured 663 bytes in nanopb and C#
-decode_ok("maximal", mx, size=663, sliders=16, buttons=32)
+assert len(mx) == 683, len(mx)  # 663 bytes measured in stage 1 with two buses; buses 2 and 3 add 20
+decode_ok("maximal", mx, size=683, sliders=16, buttons=32)
 
 # ---- decode-fail -----------------------------------------------------------------------------
 lines.append("# decode-fail <name> <hex>")
