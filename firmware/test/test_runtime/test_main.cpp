@@ -94,8 +94,21 @@ void test_screen_buses_used_only() {
   c.has_i2c1 = true;
   c.i2c1.has_sda = true; c.i2c1.sda = 27; c.i2c1.has_scl = true; c.i2c1.scl = 13;
   c.i2c1.has_clock_hz = true; c.i2c1.clock_hz = 1000000;
+  c.buttons_count = 3;  // a screen on software bus 3 too
+  c.buttons[2].has_pin = true;
+  c.buttons[2].pin = 18;
+  c.buttons[2].which_indicator = volco_config_Button_screen_tag;
+  c.buttons[2].indicator.screen = volco_config_Screen_init_default;
+  c.buttons[2].indicator.screen.bus = 3;
+  c.has_i2c3 = true;
+  c.i2c3.has_sda = true; c.i2c3.sda = 22; c.i2c3.has_scl = true; c.i2c3.scl = 23;
   RuntimeConfig r;
   toRuntime(c, r);
+  TEST_ASSERT_FALSE(r.i2c[2].used);
+  TEST_ASSERT_TRUE(r.i2c[3].used);
+  TEST_ASSERT_EQUAL_UINT(22, r.i2c[3].sda);
+  TEST_ASSERT_EQUAL_UINT(23, r.i2c[3].scl);
+  TEST_ASSERT_EQUAL_UINT(400000, r.i2c[3].clockHz);
   TEST_ASSERT_EQUAL_UINT(KIND_SCREEN, r.buttons[0].kind);
   TEST_ASSERT_EQUAL_UINT(1, r.buttons[0].bus);
   TEST_ASSERT_EQUAL_UINT(0x3D, r.buttons[0].address);

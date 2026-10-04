@@ -13,6 +13,8 @@ message ControllerConfig {
   optional ScreenBehaviour screens = 6;
   optional InputTuning input = 7;
   optional string preset = 8;      // max 24 bytes; informational, e.g. "diy-reference"
+  optional I2cBus i2c2 = 9;        // required when a screen uses bus 2 (software I2C)
+  optional I2cBus i2c3 = 10;       // required when a screen uses bus 3 (software I2C)
 }
 
 message Slider {
@@ -40,7 +42,7 @@ message LedPair {
 }
 
 message Screen {
-  optional uint32 bus = 1 [default = 0];        // 0 or 1
+  optional uint32 bus = 1 [default = 0];        // 0-3: 0 and 1 hardware I2C, 2 and 3 software I2C
   optional uint32 address = 2 [default = 0x3C]; // 0x3C or 0x3D
 }
 

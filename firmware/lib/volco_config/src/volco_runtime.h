@@ -9,14 +9,14 @@
 namespace volco {
 
 constexpr uint8_t kMaxSliders = 16;
-constexpr uint8_t kMaxScreens = 4;  // 2 buses x 2 addresses
+constexpr uint8_t kMaxScreens = 8;  // 4 buses x 2 addresses
 
 struct RuntimeButton {
   uint8_t pin;
   uint8_t kind;          // Kind: KIND_NONE, KIND_LED, KIND_LED_PAIR or KIND_SCREEN
   uint8_t pinA, pinB;    // the LED (pinA), or LED pair A and B
   bool activeLow;
-  uint8_t bus, address;  // screen: I2C bus 0/1, 7-bit address
+  uint8_t bus, address;  // screen: I2C bus 0-3 (2 and 3 software), 7-bit address
 };
 
 struct RuntimeBus {
@@ -51,7 +51,7 @@ struct RuntimeConfig {
   uint8_t sliderPins[kMaxSliders];
   uint8_t buttonCount;
   RuntimeButton buttons[kMaxButtons];
-  RuntimeBus i2c[2];
+  RuntimeBus i2c[kI2cBuses];  // 0, 1 hardware; 2, 3 software
   RuntimeUdp udp;
   RuntimeScreens screens;
   RuntimeInput input;

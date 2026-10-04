@@ -110,7 +110,7 @@ ValidationResult validateConfig(const volco_config_ControllerConfig& c, const Ch
       if (!p.has_pin_b || !chip.outputCapable(p.pin_b) || p.pin_b == p.pin_a) return invalid(item, FIELD_PAIR_PIN_B);
     } else if (b.which_indicator == volco_config_Button_screen_tag) {
       const volco_config_Screen& s = b.indicator.screen;
-      if (s.bus > 1) return invalid(item, FIELD_SCREEN_BUS);
+      if (s.bus >= kI2cBuses) return invalid(item, FIELD_SCREEN_BUS);
       if (s.address != 0x3C && s.address != 0x3D) return invalid(item, FIELD_SCREEN_ADDRESS);
       for (pb_size_t j = 0; j < i; j++) {
         const volco_config_Button& o = c.buttons[j];
@@ -122,13 +122,13 @@ ValidationResult validateConfig(const volco_config_ControllerConfig& c, const Ch
   }
 
   // 4. I2C, for each bus some screen uses (an unused I2cBus is ignored entirely).
-  bool used[2] = {false, false};
+  bool used[kI2cBuses] = {false, false, false, false};
   for (pb_size_t i = 0; i < c.buttons_count; i++)
     if (c.buttons[i].which_indicator == volco_config_Button_screen_tag) used[c.buttons[i].indicator.screen.bus] = true;
-  for (uint8_t bus = 0; bus < 2; bus++) {
+  for (uint8_t bus = 0; bus < kI2cBuses; bus++) {
     if (!used[bus]) continue;
-    const bool present = bus == 0 ? c.has_i2c0 : c.has_i2c1;
-    const volco_config_I2cBus& i2c = bus == 0 ? c.i2c0 : c.i2c1;
+    const bool present = hasI2cBus(c, bus);
+    const volco_config_I2cBus& i2c = i2cBus(c, bus);
     if (!present) return invalid(bus, FIELD_I2C_MISSING);
     if (!i2c.has_sda || !i2c.has_scl || !chip.outputCapable(i2c.sda) || !chip.outputCapable(i2c.scl) ||
         i2c.sda == i2c.scl)
@@ -151,9 +151,9 @@ ValidationResult validateConfig(const volco_config_ControllerConfig& c, const Ch
       if (walk.repeat(b.indicator.led_pair.pin_b)) return invalid(item, FIELD_PAIR_PIN_B);
     }
   }
-  for (uint8_t bus = 0; bus < 2; bus++) {
+  for (uint8_t bus = 0; bus < kI2cBuses; bus++) {
     if (!used[bus]) continue;
-    const volco_config_I2cBus& i2c = bus == 0 ? c.i2c0 : c.i2c1;
+    const volco_config_I2cBus& i2c = i2cBus(c, bus);
     if (walk.repeat(i2c.sda) || walk.repeat(i2c.scl)) return invalid(bus, FIELD_I2C_PINS);
   }
 

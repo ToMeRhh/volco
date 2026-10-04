@@ -177,7 +177,13 @@ case("led_reserved", lambda m: setattr(m.buttons[0].led, "pin", 10), bad(0, 3))
 case("pair_a_missing", lambda m: m.buttons[2].led_pair.ClearField("pin_a"), bad(2, 4))
 case("pair_b_reserved", lambda m: setattr(m.buttons[2].led_pair, "pin_b", 7), bad(2, 5))
 case("pair_b_equals_a", lambda m: setattr(m.buttons[2].led_pair, "pin_b", 18), bad(2, 5))
-case("screen_bad_bus", lambda m: screen(m, 0, 2, 0x3C), bad(0, 6))
+case("screen_bad_bus", lambda m: screen(m, 0, 4, 0x3C), bad(0, 6))
+case("valid_screen_bus2",
+     lambda m: (screen(m, 0, 2, 0x3C), setattr(m.i2c2, "sda", 16), setattr(m.i2c2, "scl", 17)), OK)
+case("valid_screens_all_buses",
+     lambda m: (screen(m, 0, 1, 0x3C), screen(m, 1, 2, 0x3C), screen(m, 2, 3, 0x3C),
+                setattr(m.i2c2, "sda", 16), setattr(m.i2c2, "scl", 17),
+                setattr(m.i2c3, "sda", 22), setattr(m.i2c3, "scl", 23)), OK)
 case("screen_bad_address", lambda m: screen(m, 0, 0, 0x3E), bad(0, 7))
 case("screen_duplicate", lambda m: (screen(m, 0, 0, 0x3C), screen(m, 1, 0, 0x3C)), bad(1, 7))
 case("screen_third_on_bus",
@@ -190,6 +196,12 @@ case("i2c_input_only", lambda m: (screen(m, 0, 0, 0x3C), setattr(m.i2c0, "sda", 
 case("i2c_clock_low", lambda m: (screen(m, 0, 0, 0x3C), setattr(m.i2c0, "clock_hz", 99999)), bad(0, 10))
 case("i2c_clock_high", lambda m: (screen(m, 0, 0, 0x3C), setattr(m.i2c0, "clock_hz", 1000001)), bad(0, 10))
 case("i2c_unused_bus_ignored", lambda m: setattr(m.i2c1, "sda", 1), OK)
+case("i2c_missing_bus2", lambda m: screen(m, 0, 2, 0x3C), bad(2, 8))
+case("i2c_missing_bus3", lambda m: screen(m, 0, 3, 0x3C), bad(3, 8))
+case("order_bus2_before_bus3", lambda m: (screen(m, 0, 3, 0x3C), screen(m, 1, 2, 0x3C)), bad(2, 8))
+case("dup_led_i2c2",
+     lambda m: (screen(m, 0, 2, 0x3C), setattr(m.i2c2, "sda", 16), setattr(m.i2c2, "scl", 17),
+                setattr(m.buttons[1].led, "pin", 16)), bad(2, 9))
 
 case("dup_slider_button", lambda m: setattr(m.buttons[0], "pin", 33), bad(0, 2))
 case("dup_button_led", lambda m: setattr(m.buttons[1].led, "pin", 4), bad(1, 3))

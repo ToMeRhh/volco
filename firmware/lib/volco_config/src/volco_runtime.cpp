@@ -33,9 +33,9 @@ void toRuntime(const volco_config_ControllerConfig& c, RuntimeConfig& r) {
     }
   }
 
-  for (uint8_t bus = 0; bus < 2; bus++) {
+  for (uint8_t bus = 0; bus < kI2cBuses; bus++) {
     if (!r.i2c[bus].used) continue;
-    const volco_config_I2cBus& src = bus == 0 ? c.i2c0 : c.i2c1;
+    const volco_config_I2cBus& src = i2cBus(c, bus);
     r.i2c[bus].sda = (uint8_t)src.sda;
     r.i2c[bus].scl = (uint8_t)src.scl;
     r.i2c[bus].clockHz = src.clock_hz;

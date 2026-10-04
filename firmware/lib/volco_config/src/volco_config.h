@@ -11,6 +11,25 @@ namespace volco {
 
 constexpr size_t kMaxConfigBlob = 1024;
 constexpr uint8_t kNoItem = 0xFF;
+constexpr uint8_t kI2cBuses = 4;  // 0 and 1: the ESP32's I2C controllers; 2 and 3: software I2C
+
+// The config's I2C bus n (i2c0..i2c3) and whether it is present.
+inline bool hasI2cBus(const volco_config_ControllerConfig& c, uint8_t bus) {
+  switch (bus) {
+    case 0: return c.has_i2c0;
+    case 1: return c.has_i2c1;
+    case 2: return c.has_i2c2;
+    default: return c.has_i2c3;
+  }
+}
+inline const volco_config_I2cBus& i2cBus(const volco_config_ControllerConfig& c, uint8_t bus) {
+  switch (bus) {
+    case 0: return c.i2c0;
+    case 1: return c.i2c1;
+    case 2: return c.i2c2;
+    default: return c.i2c3;
+  }
+}
 
 // ConfigResult codes (spec §5.4).
 enum ConfigResultCode : uint8_t {
