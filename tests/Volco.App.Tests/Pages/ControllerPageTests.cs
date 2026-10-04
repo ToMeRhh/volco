@@ -8,7 +8,7 @@ using Volco.App.Views;
 using Volco.App.Views.Pages;
 using Volco.Core.Communication;
 using Volco.Core.Controller;
-using Volco.Core.Controller.Proto;
+using ControllerConfig = Volco.Core.Controller.Proto.ControllerConfig;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
