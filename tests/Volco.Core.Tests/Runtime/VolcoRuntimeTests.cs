@@ -232,7 +232,8 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Assert.True(WaitUntil(() => levels.Count > 0), "sync value did not reach the slider processor");
         Assert.Equal(1.0, (double)Snapshot(_engine.DeviceVolumeCalls)[0].Level, 3);
-        Assert.True(StaysUnchanged(() => volumes.Count), "a sync value raised the volume OSD");
+        // The OSD would have fired in the same tick as the level, so it is already counted if raised.
+        Assert.False(WaitUntil(() => volumes.Count > 0, QuietWindow), "a sync value raised the volume OSD");
     }
 
     [Fact]
