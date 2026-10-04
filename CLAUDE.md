@@ -32,6 +32,7 @@ cd firmware && pio device monitor   # serial monitor
 cd firmware && pio test -e native   # host-side tests of firmware/lib (no hardware)
 ~/.platformio/penv/bin/python firmware/tools/gen_config_vectors.py  # regenerate firmware/test/golden/config.txt after a proto change
 bash firmware/scripts/firmware_id.sh  # the firmware build id (hash of the firmware's sources)
+~/.platformio/penv/bin/python firmware/tools/config_tool.py --port P read|write preset.json  # a controller's config (guarded port)
 python3 firmware/tools/gen_assets.py  # regenerate icons and fonts (needs Pillow >= 10)
 ```
 
@@ -82,16 +83,20 @@ Bidirectional binary protocol. Frame: `0xAA | length | type | body | XOR checksu
 
 | Type | Name | Direction | Body |
 |---|---|---|---|
-| `0x01` | Hello | controller→PC | version, slider count, button count, one kind per button (0 none, 1 LED, 2 LED pair, 3 screen) |
+| `0x01` | Hello | controller→PC | version, chip, firmware id, config state and CRC, slider count, button count, one kind per button (0 none, 1 LED, 2 LED pair, 3 screen) |
 | `0x02` | Alive | controller→PC | none (keepalive) |
 | `0x03` | Slider | controller→PC | index + 16-bit value |
 | `0x04` | Button | controller→PC | index + pressed |
+| `0x05` | ConfigData | controller→PC | seq, total, offset, CRC, one chunk of the stored config |
+| `0x06` | ConfigResult | controller→PC | seq, code, item, field (the answer to a config write) |
 | `0x81` | HelloRequest | PC→controller | none |
 | `0x82` | Heartbeat | PC→controller | none (keepalive) |
 | `0x83` | Led | PC→controller | button + value |
 | `0x84` | Screen | PC→controller | button, transition, layout, top, icon, flags, main text |
 | `0x85` | Begin | PC→controller | none (hold updates) |
 | `0x86` | Commit | PC→controller | none (apply held updates together) |
+| `0x87` | ConfigRead | PC→controller | seq |
+| `0x88`/`0x89`/`0x8A` | ConfigWriteBegin/Chunk/End | PC→controller | seq + total and CRC / offset and data / none |
 
 `Communication/ControllerDisplay` decides what each button shows (its LED value or screen content) from its action in the live preset. A single LED and an LED pair differ: a pair shows a toggle's side (1 = A, 2 = B) and the live preset's position, while one LED is lit on the toggle's B and while a "Go to preset" target is live. For `AnnounceSteps` link ticks (~1.5 s) after a preset change, a button with a preset action announces it: one LED blinks, and a screen that shows another action flashes the live preset. The firmware needs no change for this, because the link re-sends on each tick. `Runtime/ControllerLink` runs the session: Hello, keepalive, dedup, the Begin/Commit bursts for preset changes, and the announce ticks. (The old `0x03` mute state, `0x04` active device and `0x05` feedback messages are gone with protocol v1.)
 

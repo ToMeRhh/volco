@@ -82,16 +82,38 @@ The high bit of `type` is the direction: `0x0_` comes from the controller, `0x8_
 
 | Type | Name | Body | Meaning |
 |---|---|---|---|
-| `0x01` | Hello | `version` (1), `sliders`, `buttons`, then one `kind` per button: 0 none, 1 LED, 2 LED pair, 3 screen | The controller's hardware. |
+| `0x01` | Hello | see below | The controller's chip, firmware, config and hardware. |
 | `0x02` | Alive | none | Keepalive from the controller. |
 | `0x03` | Slider | `index`, value u16 (0-4095) | A slider moved, or its position after a Hello. |
 | `0x04` | Button | `index`, `pressed` (1 or 0) | A button changed. |
+| `0x05` | ConfigData | `seq`, total u16, offset u16, crc32 u32, data (0-240 bytes) | One chunk of a config read reply. |
+| `0x06` | ConfigResult | `seq`, `code`, `item`, `field` | The answer to a config write. |
 | `0x81` | HelloRequest | none | The PC asks for Hello. |
 | `0x82` | Heartbeat | none | Keepalive from the PC. |
 | `0x83` | Led | `button`, `value` | LED: lit when the value is not 0. LED pair: 1 lights A, 2 lights B, anything else neither. |
 | `0x84` | Screen | see below | What a screen shows. |
 | `0x85` | Begin | none | Start holding updates. |
 | `0x86` | Commit | none | Apply everything held. |
+| `0x87` | ConfigRead | `seq` | The PC asks for the stored config. |
+| `0x88` | ConfigWriteBegin | `seq`, total u16, crc32 u32 | Starts a config write. |
+| `0x89` | ConfigWriteChunk | `seq`, offset u16, data (1-240 bytes) | Part of a config write. |
+| `0x8A` | ConfigWriteEnd | `seq` | Ends a config write. |
+
+### Hello body
+
+```
+version      u8    1; a PC that doesn't speak this version reads only this byte
+chip         u8    1 = ESP32
+fwLen        u8    0-32
+firmware     fwLen ASCII bytes: the firmware build id ("dev" for local builds)
+configState  u8    0 none stored, 1 stored and running, 2 stored but unusable (running defaults)
+configCrc    u32   CRC-32 of the stored bytes; 0 when none
+sliders      u8
+buttons      u8
+kinds        one per button: 0 none, 1 LED, 2 LED pair, 3 screen
+```
+
+Every Hello is followed by one Slider frame per slider, with its current position.
 
 ### Screen body
 
@@ -109,6 +131,26 @@ main        mainLen bytes of UTF-8
 ```
 
 Text is UTF-8 in logical order, at most 60 bytes per slot; the app strips Hebrew combining marks first. A Screen whose lengths overrun the frame is dropped. An unknown `transition` is treated as 0, an unknown `layout` draws only the main text centred, and an unknown icon ID draws `generic`.
+
+### Config read and write
+
+The config is the protobuf blob of `proto/volco_config.proto`, at most 1024 bytes. Each request carries a `seq` that its replies echo, and replies go back on the transport the request came in on.
+
+- **Read:** `ConfigRead` → the stored bytes as `ConfigData` frames, 240 bytes each (one empty frame when nothing is stored), all in one transport send. Each frame carries the CRC of the whole blob.
+- **Write:** the PC sends `ConfigWriteBegin`, the chunks in order, then `ConfigWriteEnd`, all in one send. The controller answers once with `ConfigResult`. A transfer that stalls for 2 s is dropped without an answer, and frames for another `seq` or from the other transport are ignored while one is open.
+- **After OK** the controller has stored the config; it flushes, waits 200 ms and reboots into it, so the next Hello reports state 1 and the new CRC. Any other answer leaves the old config in place.
+
+| Code | Name | `item` / `field` |
+|---|---|---|
+| 0 | OK | 0xFF |
+| 1 | BAD_SEQUENCE | 0xFF |
+| 2 | BAD_CRC | 0xFF |
+| 3 | TOO_LARGE | 0xFF |
+| 4 | DECODE_FAILED | 0xFF |
+| 5 | INVALID | the first failing rule (spec §6.4) |
+| 6 | STORAGE_FAILED | 0xFF |
+
+`tools/config_tool.py` speaks this from the command line (see Configuration).
 
 ### Behaviour rules
 
