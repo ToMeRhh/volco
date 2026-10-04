@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include <driver/gpio.h>
 #include <string.h>
 
 #include "debug_log.h"
@@ -13,19 +14,112 @@ namespace {
 
 constexpr uint32_t kFrameMs = 20;  // at most one redraw per panel every 20 ms
 
-// U8g2's own Wire1 driver (the *_2ND_HW_I2C panels) only exists when the core defines
-// WIRE_INTERFACES_COUNT > 1, which ESP32 core 3.x doesn't: those panels silently sent nothing.
-// So both buses are started in screens_init, and each panel writes through this for its bus.
+// Buses 2 and 3: the ESP32 has only two I2C controllers, so these are bit-banged (PR #66). Only
+// screens talk on them and an SSD1306 never holds SCL low, so SCL is driven push-pull (sharp
+// edges) and only SDA is open-drain, for the ACK, which is clocked but not read (as U8g2's own
+// soft I2C). Interrupts only stretch the timing, which I2C allows.
+class SoftI2c {
+ public:
+  void begin(uint8_t sda, uint8_t scl, uint32_t hz) {
+    sda_ = static_cast<gpio_num_t>(sda);
+    scl_ = static_cast<gpio_num_t>(scl);
+    half_ = getCpuFrequencyMhz() * 1000000u / (2 * hz);
+    hold_ = half_ / 4;  // >= 300 ns of data hold after SCL falls at up to 400 kHz
+    gpio_set_level(sda_, 1);
+    gpio_set_level(scl_, 1);
+    gpio_config_t c = {};
+    c.pin_bit_mask = 1ULL << sda_;
+    c.mode = GPIO_MODE_INPUT_OUTPUT_OD;
+    c.pull_up_en = GPIO_PULLUP_ENABLE;
+    gpio_config(&c);
+    c.pin_bit_mask = 1ULL << scl_;
+    c.mode = GPIO_MODE_OUTPUT;
+    c.pull_up_en = GPIO_PULLUP_DISABLE;
+    gpio_config(&c);
+  }
+
+  void start(uint8_t address8) {  // the bus is idle: both lines high
+    gpio_set_level(sda_, 0);
+    spin(half_);
+    gpio_set_level(scl_, 0);
+    spin(hold_);
+    write(address8);
+  }
+
+  void write(const uint8_t* p, size_t n) {
+    while (n--) write(*p++);
+  }
+
+  void stop() {
+    gpio_set_level(sda_, 0);
+    spin(half_);
+    gpio_set_level(scl_, 1);
+    spin(half_);
+    gpio_set_level(sda_, 1);
+    spin(half_);
+  }
+
+ private:
+  void write(uint8_t b) {
+    for (uint8_t m = 0x80; m; m >>= 1) clockBit(b & m);
+    clockBit(true);  // release SDA for the ACK clock
+  }
+
+  void clockBit(bool high) {
+    gpio_set_level(sda_, high);
+    spin(half_);  // data setup, and the open-drain rise, while SCL is low
+    gpio_set_level(scl_, 1);
+    spin(half_);
+    gpio_set_level(scl_, 0);
+    spin(hold_);
+  }
+
+  static void spin(uint32_t cycles) {
+    const uint32_t t = ESP.getCycleCount();
+    while (ESP.getCycleCount() - t < cycles) {}
+  }
+
+  gpio_num_t sda_ = GPIO_NUM_NC, scl_ = GPIO_NUM_NC;
+  uint32_t half_ = 0, hold_ = 0;
+};
+
+SoftI2c softBus[2];  // buses 2 and 3; pins and clock come from the config in screens_init
+
+// Every bus is started in screens_init, and each panel writes through this for its bus. (U8g2's
+// own Wire1 driver, the *_2ND_HW_I2C panels, only exists when the core defines
+// WIRE_INTERFACES_COUNT > 1, which ESP32 core 3.x doesn't: those panels silently sent nothing.)
 template <int Bus>
 uint8_t i2cByte(u8x8_t* u8x8, uint8_t msg, uint8_t argInt, void* argPtr) {
-  TwoWire& wire = Bus == 0 ? Wire : Wire1;
-  switch (msg) {
-    case U8X8_MSG_BYTE_SEND: wire.write(static_cast<uint8_t*>(argPtr), argInt); return 1;
-    case U8X8_MSG_BYTE_START_TRANSFER: wire.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1); return 1;
-    case U8X8_MSG_BYTE_END_TRANSFER: wire.endTransmission(); return 1;
-    case U8X8_MSG_BYTE_INIT:  // the bus is already started
-    case U8X8_MSG_BYTE_SET_DC: return 1;
-    default: return 0;
+  if constexpr (Bus < 2) {
+    TwoWire& wire = Bus == 0 ? Wire : Wire1;
+    switch (msg) {
+      case U8X8_MSG_BYTE_SEND: wire.write(static_cast<uint8_t*>(argPtr), argInt); return 1;
+      case U8X8_MSG_BYTE_START_TRANSFER: wire.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1); return 1;
+      case U8X8_MSG_BYTE_END_TRANSFER: wire.endTransmission(); return 1;
+      case U8X8_MSG_BYTE_INIT:  // the bus is already started
+      case U8X8_MSG_BYTE_SET_DC: return 1;
+      default: return 0;
+    }
+  } else {
+    SoftI2c& bus = softBus[Bus - 2];
+    switch (msg) {
+      case U8X8_MSG_BYTE_SEND: bus.write(static_cast<uint8_t*>(argPtr), argInt); return 1;
+      case U8X8_MSG_BYTE_START_TRANSFER: bus.start(u8x8_GetI2CAddress(u8x8)); return 1;  // 8-bit write address
+      case U8X8_MSG_BYTE_END_TRANSFER: bus.stop(); return 1;
+      case U8X8_MSG_BYTE_INIT:
+      case U8X8_MSG_BYTE_SET_DC: return 1;
+      default: return 0;
+    }
+  }
+}
+
+constexpr u8x8_msg_cb kByteCb[volco::kI2cBuses] = {i2cByte<0>, i2cByte<1>, i2cByte<2>, i2cByte<3>};
+
+void startBus(uint8_t index, const volco::RuntimeBus& bus) {
+  switch (index) {
+    case 0: Wire.begin(bus.sda, bus.scl, bus.clockHz); break;
+    case 1: Wire1.begin(bus.sda, bus.scl, bus.clockHz); break;
+    default: softBus[index - 2].begin(bus.sda, bus.scl, bus.clockHz); break;
   }
 }
 
@@ -89,20 +183,19 @@ void screens_init(const volco::RuntimeConfig& rc, uint32_t now) {
   brightness = sc.brightness;
   dimBrightness = sc.dimBrightness;
 
-  bool started[2] = {false, false};
+  bool started[volco::kI2cBuses] = {false, false, false, false};
   for (uint8_t b = 0; b < rc.buttonCount && numScreens < volco::kMaxScreens; b++) {
     const volco::RuntimeButton& btn = rc.buttons[b];
     if (btn.kind != volco::KIND_SCREEN) continue;
-    const volco::RuntimeBus& bus = rc.i2c[btn.bus];
     if (!started[btn.bus]) {  // only buses a screen uses are started (GPIO 21 may be an LED)
-      (btn.bus == 0 ? Wire : Wire1).begin(bus.sda, bus.scl, bus.clockHz);
+      startBus(btn.bus, rc.i2c[btn.bus]);
       started[btn.bus] = true;
     }
     Screen& s = screens[numScreens];
     s.button = b;
     screenOf[b] = (int8_t)numScreens;
     s.slot = volco::ScreenSlot(sc.transitionMs);
-    s.panel = new Ssd1306(btn.bus == 0 ? &i2cByte<0> : &i2cByte<1>);
+    s.panel = new Ssd1306(kByteCb[btn.bus]);
     s.panel->setI2CAddress(btn.address << 1);  // U8g2 takes the 8-bit form
     s.panel->begin();
     s.panel->setContrast(brightness);
