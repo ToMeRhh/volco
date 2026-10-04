@@ -47,12 +47,12 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         set { if (value) ConnectionType = ConnectionType.WebSocket; }
     }
 
-    /// <summary>What the status panel says under the state, e.g. "COM3 · 115,200 baud".</summary>
+    /// <summary>What the status panel says under the state, e.g. "COM3 · USB cable".</summary>
     public string TransportDetails => ConnectionType switch
     {
         ConnectionType.Serial => string.IsNullOrEmpty(ComPort)
             ? "USB cable · no port selected"
-            : $"{ComPort} · {BaudRate.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} baud",
+            : $"{ComPort} · USB cable",
         ConnectionType.Udp => $"Wi-Fi (UDP) · port {UdpListenPort}",
         ConnectionType.WebSocket => $"WebSocket · port {WebSocketPort}",
         _ => "",
@@ -144,39 +144,10 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         };
     }
 
-    /// <summary>
-    /// Zero-based index into the baud-rate list: 9600=0, 19200=1, 38400=2, 57600=3, 115200=4.
-    /// Used by the baud-rate ComboBox in ConnectionTab.xaml.
-    /// </summary>
-    public int BaudRateIndex
-    {
-        get => BaudRate switch
-        {
-            9600   => 0,
-            19200  => 1,
-            38400  => 2,
-            57600  => 3,
-            115200 => 4,
-            _      => 4, // default to 115200
-        };
-        set => BaudRate = value switch
-        {
-            0 => 9600,
-            1 => 19200,
-            2 => 38400,
-            3 => 57600,
-            4 => 115200,
-            _ => 115200,
-        };
-    }
-
     // ── Serial settings ────────────────────────────────────────────────────────
 
     [ObservableProperty]
     private string _comPort = "";
-
-    [ObservableProperty]
-    private int _baudRate;
 
     public ObservableCollection<string> ComPorts { get; } = new();
 
@@ -210,7 +181,6 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         var cfg = config.Config.Connection;
         _connectionType  = cfg.Type;
         _comPort         = cfg.Serial.ComPort;
-        _baudRate        = cfg.Serial.BaudRate;
         _udpListenPort   = cfg.Udp.ListenPort;
         _webSocketPort   = cfg.WebSocket.Port;
 
@@ -311,14 +281,6 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // nothing to save, and no reason to restart the connection.
         if (value == _config.Config.Connection.Serial.ComPort) return;
         _config.Config.Connection.Serial.ComPort = value;
-        Persist();
-    }
-
-    partial void OnBaudRateChanged(int value)
-    {
-        _config.Config.Connection.Serial.BaudRate = value;
-        OnPropertyChanged(nameof(BaudRateIndex));
-        OnPropertyChanged(nameof(TransportDetails));
         Persist();
     }
 

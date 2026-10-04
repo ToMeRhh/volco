@@ -84,7 +84,7 @@ public class ConnectionPageTests
         Assert.True(serial.IsVisible);
         Assert.False(udp.IsVisible);
         Assert.False(ws.IsVisible);
-        Assert.True(page.FindControl<ComboBox>("BaudCombo")!.IsEffectivelyVisible);   // not under "Advanced"
+        Assert.Null(page.FindControl<ComboBox>("BaudCombo"));   // fixed at 115200 since schema v5
 
         page.FindControl<RadioButton>("UdpOption")!.IsChecked = true;
         Assert.Equal(ConnectionType.Udp, rig.Config.Config.Connection.Type);
@@ -100,18 +100,16 @@ public class ConnectionPageTests
     }
 
     [AvaloniaFact]
-    public void ConnectionPage_PortsAndBaudRate_WriteThrough()
+    public void ConnectionPage_Ports_WriteThrough()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
         using var __ = vm;
 
-        page.FindControl<ComboBox>("BaudCombo")!.SelectedIndex = 0;
         page.FindControl<NumericUpDown>("UdpPortBox")!.Value = 23456;
         page.FindControl<NumericUpDown>("WebSocketPortBox")!.Value = 9876;
 
         var c = rig.Config.Config.Connection;
-        Assert.Equal(9600, c.Serial.BaudRate);
         Assert.Equal(23456, c.Udp.ListenPort);
         Assert.Equal(9876, c.WebSocket.Port);
     }

@@ -116,9 +116,9 @@ public sealed class HelloMessage : ControllerMessage
     public static HelloMessage VersionOnly(byte version)
         => new(version, ChipFamily.Unknown, "", ControllerConfigState.None, 0, 0, Array.Empty<IndicatorKind>());
 
-    /// <summary>Tests: a version-1 ESP32 with a stored config.</summary>
+    /// <summary>Tests: an ESP32 with no stored config (so no automatic config read follows).</summary>
     public HelloMessage(byte version, int sliderCount, IReadOnlyList<IndicatorKind> buttons)
-        : this(version, ChipFamily.Esp32, "", ControllerConfigState.Stored, 0, sliderCount, buttons) { }
+        : this(version, ChipFamily.Esp32, "", ControllerConfigState.None, 0, sliderCount, buttons) { }
 }
 
 /// <summary>One chunk of the controller's reply to a ConfigRead (spec §5.3): the stored bytes from
