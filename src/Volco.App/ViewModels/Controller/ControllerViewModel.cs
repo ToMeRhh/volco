@@ -511,8 +511,15 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowFooter));
     }
 
+    /// <summary>Asks inline. The answer only acts on the draft it was asked about: a question that
+    /// outlived its draft (Revert, a rebase, a new preset) does nothing.</summary>
     private void Ask(string message, string confirmLabel, Action onConfirm)
-        => Confirmation = new Confirmation(message, confirmLabel, onConfirm, () => Confirmation = null);
+    {
+        var askedAbout = _draft;
+        Confirmation = new Confirmation(message, confirmLabel,
+            () => { if (ReferenceEquals(askedAbout, _draft)) onConfirm(); },
+            () => Confirmation = null);
+    }
 
     // ── Behaviour (ScreenBehaviour) ──────────────────────────────────────────────────────────
 
