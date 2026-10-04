@@ -817,6 +817,167 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Equal(1, infos);
     }
 
+    // ---- test mode (spec §8.5) -----------------------------------------------------------------
+
+    private static byte[]? LastLed(FakeControllerConnection c, int button)
+        => c.SentFrames.LastOrDefault(f => f.Length == 6 && f[2] == 0x83 && f[3] == button);
+
+    [Fact]
+    public void TestMode_SliderAndButtonMessages_RaiseRawInput_AndReachNothingElse()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var raw = new ConcurrentQueue<RawInputEventArgs>();
+        runtime.RawInput += (_, e) => raw.Enqueue(e);
+        var activity = 0;
+        runtime.ButtonActivity += (_, _) => activity++;
+
+        using (runtime.EnterTestMode())
+        {
+            Assert.True(runtime.InTestMode);
+            c.RaiseMessage(new SliderMessage(2, 1234));
+            Press(c, 0);
+            Thread.Sleep(100);
+        }
+
+        Assert.Equal(new[] { (RawInputKind.Slider, 2, 1234), (RawInputKind.Button, 0, 1), (RawInputKind.Button, 0, 0) },
+                     raw.Select(e => (e.Kind, e.Index, e.Value)).ToArray());
+        Assert.Empty(Snapshot(_engine.DeviceVolumeCalls));
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+        Assert.Equal(0, activity);
+        Assert.False(runtime.InTestMode);
+    }
+
+    [Fact]
+    public void TestMode_RawInputIsNotRaisedOutsideTestMode()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var raw = 0;
+        runtime.RawInput += (_, _) => raw++;
+        c.RaiseMessage(new SliderMessage(0, 100));
+        Press(c, 0);
+        Assert.Equal(0, raw);
+        Assert.True(WaitUntil(() => Snapshot(_engine.ToggleMuteCalls).Count == 1));
+    }
+
+    [Fact]
+    public void TestMode_AButtonHeldAcrossEntry_FiresNoLongPress()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].Default().LongPress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+            c.Buttons[0].LongPressMs = 150;
+        });
+        var runtime = StartRuntime(config);
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        c.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        using (runtime.EnterTestMode())
+        {
+            Thread.Sleep(400);
+            c.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+        }
+        Assert.True(StaysUnchanged(() => Snapshot(_engine.ToggleMuteCalls).Count));
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(80)]
+    public void TestMode_AButtonHeldAcrossExit_ItsReleaseFiresNothing(int doublePressWindowMs)
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].DoublePressWindowMs = doublePressWindowMs;
+            if (doublePressWindowMs > 0)
+                c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+        });
+        var runtime = StartRuntime(config);
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var test = runtime.EnterTestMode();
+        c.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        test.Dispose();
+        c.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+        Assert.True(StaysUnchanged(() => Snapshot(_engine.ToggleMuteCalls).Count));
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+    }
+
+    [Fact]
+    public void TestMode_Indicators_ThenExitRestoresTheRealState()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var real0 = LastLed(c, 0)!;
+        var real2 = LastLed(c, 2)!;
+
+        var test = runtime.EnterTestMode();
+        runtime.SetTestIndicator(0, TestIndicator.On);
+        runtime.SetTestIndicator(2, TestIndicator.B);
+        Assert.Equal(ProtocolEncoder.EncodeLed(0, 1), LastLed(c, 0));
+        Assert.Equal(ProtocolEncoder.EncodeLed(2, 2), LastLed(c, 2));
+
+        test.Dispose();
+        Assert.Equal(real0, LastLed(c, 0));
+        Assert.Equal(real2, LastLed(c, 2));
+    }
+
+    [Fact]
+    public void TestMode_ScreenButtons_ShowTheTestScreen()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen, IndicatorKind.Screen }));
+        using (runtime.EnterTestMode())
+        {
+            var expected = ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
+                ScreenContent.Text("Test", ScreenIcon.Generic, false, "Button 1"));   // the app numbers inputs from 0
+            Assert.True(ContainsFrame(c.SentFrames, expected));
+        }
+    }
+
+    [Fact]
+    public void TestMode_EndsOnDetach_Reconnect_AndDispose()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var changes = new ConcurrentQueue<bool>();
+        runtime.InTestModeChanged += (_, on) => changes.Enqueue(on);
+
+        runtime.EnterTestMode();
+        c.SetStatus(ConnectionStatus.Disconnected);
+        Assert.False(runtime.InTestMode);
+
+        c.SetStatus(ConnectionStatus.Connected);
+        runtime.EnterTestMode();
+        runtime.Reconnect();
+        Assert.False(runtime.InTestMode);
+
+        runtime.EnterTestMode();
+        runtime.Dispose();
+        Assert.False(runtime.InTestMode);
+        Assert.Equal(new[] { true, false, true, false, true, false }, changes.ToArray());
+    }
+
+    [Fact]
+    public void TestMode_AStaleHandle_DoesNotEndANewerSession()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        var first = runtime.EnterTestMode();
+        first.Dispose();
+        var second = runtime.EnterTestMode();
+        first.Dispose();
+        Assert.True(runtime.InTestMode);
+        second.Dispose();
+        Assert.False(runtime.InTestMode);
+    }
+
     // ---- config session plumbing (spec §8.2) --------------------------------------------------
 
     private static readonly byte[] SmallBlob = { 0x32, 0x02, 0x08, 0x64 };

@@ -44,6 +44,57 @@ public class ButtonPressDetectorTests
     }
 
     [Fact]
+    public async Task UnmatchedRelease_FiresNothing()
+    {
+        _detector.HandleButtonEvent(0, ButtonState.Released, 500, 0);
+        _detector.HandleButtonEvent(1, ButtonState.Released, 500, 100);
+        await Task.Delay(300);
+        lock (_eventsLock) Assert.Empty(_events);
+    }
+
+    [Fact]
+    public async Task Reset_CancelsAPendingLongPress()
+    {
+        _detector.HandleButtonEvent(0, ButtonState.Pressed, 150, 0);
+        _detector.Reset();
+        await Task.Delay(400);
+        lock (_eventsLock) Assert.Empty(_events);
+    }
+
+    [Fact]
+    public async Task Reset_CancelsAPendingSingle()
+    {
+        _detector.HandleButtonEvent(0, ButtonState.Pressed, 500, 100);
+        _detector.HandleButtonEvent(0, ButtonState.Released, 500, 100);
+        _detector.Reset();
+        await Task.Delay(350);
+        lock (_eventsLock) Assert.Empty(_events);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(100)]
+    public async Task Reset_ThenRelease_FiresNothing(int doublePressWindowMs)
+    {
+        _detector.HandleButtonEvent(0, ButtonState.Pressed, 500, doublePressWindowMs);
+        _detector.Reset();
+        _detector.HandleButtonEvent(0, ButtonState.Released, 500, doublePressWindowMs);
+        await Task.Delay(350);
+        lock (_eventsLock) Assert.Empty(_events);
+    }
+
+    [Fact]
+    public async Task AfterReset_NormalPressesWork()
+    {
+        _detector.HandleButtonEvent(0, ButtonState.Pressed, 500, 0);
+        _detector.Reset();
+        _detector.HandleButtonEvent(0, ButtonState.Pressed, 500, 0);
+        _detector.HandleButtonEvent(0, ButtonState.Released, 500, 0);
+        await WaitForEventsAsync(1);
+        lock (_eventsLock) Assert.Equal((0, PressType.Single), _events.Single());
+    }
+
+    [Fact]
     public async Task SinglePress_DetectedAfterTimeout()
     {
         _detector.HandleButtonEvent(0, ButtonState.Pressed);

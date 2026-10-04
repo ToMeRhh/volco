@@ -102,8 +102,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         _connectionFactory = connectionFactory
                              ?? new Func<ConnectionConfig, IControllerConnection?>(CreateDefaultConnection);
         _options = options ?? VolcoRuntimeOptions.Default;
+        // In test mode the same delegate shows the test state and ignores the announce step
+        // (spec §8.5), so no preset blink or flash appears during a test.
         _link = new ControllerLink(
-            step => ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step),
+            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step),
             ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) => { if (!IsDisposed) ControllerStateChanged?.Invoke(this, state); };
         _link.HelloReceived += OnHello;
@@ -111,6 +113,117 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     }
 
     public IAudioEngine Audio { get; }
+
+    // ── Test mode (spec §8.5) ────────────────────────────────────────────────────────────────
+
+    private readonly object _testGate = new();
+    private int _testGeneration;                 // guarded by _testGate; 0 = not testing
+    private TestIndicator[] _testIndicators = Array.Empty<TestIndicator>();   // guarded by _testGate
+
+    /// <summary>A hardware test is running: Slider and Button messages raise <see cref="RawInput"/>
+    /// and reach neither audio nor actions.</summary>
+    public bool InTestMode { get { lock (_testGate) return _testGeneration != 0; } }
+
+    /// <summary>Test mode started (true) or ended (false), also when the runtime ended it itself
+    /// (Detach, connection replaced, dispose). Any thread.</summary>
+    public event EventHandler<bool>? InTestModeChanged;
+
+    /// <summary>Slider and Button messages, in test mode only. Any thread (the transport's).</summary>
+    public event EventHandler<RawInputEventArgs>? RawInput;
+
+    private int _nextTestGeneration;
+
+    /// <summary>Starts a hardware test, or joins the one running. Disposing the handle ends the
+    /// session it belongs to (never a later one); it is idempotent.</summary>
+    public IDisposable EnterTestMode()
+    {
+        int generation;
+        bool started = false;
+        lock (_testGate)
+        {
+            if (IsDisposed) return new TestHandle(this, -1);
+            if (_testGeneration == 0)
+            {
+                _testGeneration = ++_nextTestGeneration;
+                _testIndicators = Array.Empty<TestIndicator>();
+                started = true;
+            }
+            generation = _testGeneration;
+        }
+        if (started)
+        {
+            AppLog.Info("Test mode on");
+            _buttonPressDetector?.Reset();   // a gesture started before the test can't fire during it
+            _link.PushAll();
+            InTestModeChanged?.Invoke(this, true);
+        }
+        return new TestHandle(this, generation);
+    }
+
+    /// <summary>What LED button <paramref name="button"/> shows during the test.</summary>
+    public void SetTestIndicator(int button, TestIndicator state)
+    {
+        if (button < 0) return;
+        lock (_testGate)
+        {
+            if (_testGeneration == 0) return;
+            if (_testIndicators.Length <= button) Array.Resize(ref _testIndicators, button + 1);
+            _testIndicators[button] = state;
+        }
+        _link.Push();
+    }
+
+    /// <summary>Ends the test (only <paramref name="generation"/>'s session; -1 for any).</summary>
+    private void ExitTestMode(int generation)
+    {
+        lock (_testGate)
+        {
+            if (_testGeneration == 0 || (generation != -1 && generation != _testGeneration)) return;
+            _testGeneration = 0;
+            _testIndicators = Array.Empty<TestIndicator>();
+        }
+        AppLog.Info("Test mode off");
+        _buttonPressDetector?.Reset();       // a button held across the exit fires nothing
+        _link.PushAll();                     // the real indicator state
+        if (!IsDisposed) InTestModeChanged?.Invoke(this, false);
+    }
+
+    private sealed class TestHandle(VolcoRuntime runtime, int generation) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (generation < 0 || Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            runtime.ExitTestMode(generation);
+        }
+    }
+
+    /// <summary>The test state of every button: LED buttons their <see cref="TestIndicator"/>,
+    /// screens "Test" / "Button N" with the generic icon.</summary>
+    private IReadOnlyList<ButtonDisplay?> TestDisplays()
+    {
+        var kinds = Config.Config.Controller?.Buttons ?? new List<IndicatorKind>();
+        TestIndicator[] indicators;
+        lock (_testGate) indicators = _testIndicators;
+        var result = new ButtonDisplay?[kinds.Count];
+        for (int i = 0; i < kinds.Count; i++)
+        {
+            var state = i < indicators.Length ? indicators[i] : TestIndicator.Off;
+            result[i] = kinds[i] switch
+            {
+                IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(state switch
+                {
+                    TestIndicator.On or TestIndicator.A => (byte)1,
+                    TestIndicator.B => (byte)2,
+                    _ => (byte)0,
+                }),
+                IndicatorKind.Screen => new ScreenDisplay(ScreenContent.Text("Test", ScreenIcon.Generic, false, $"Button {i}")),
+                _ => null,
+            };
+        }
+        return result;
+    }
 
     /// <summary>The controller config session: reads, saves, the mirror and the banner (spec §8.2).</summary>
     public ControllerConfigService ControllerConfig { get; }
@@ -330,6 +443,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             RetireTransport(old);
             _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
             ControllerConfig.OnConnectionReplaced();
+            ExitTestMode(-1);
             if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
                 ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
         }
@@ -351,6 +465,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             RetireTransport(displaced);
             _link.Detach();
             ControllerConfig.OnConnectionReplaced();
+            ExitTestMode(-1);
         }
 
         // Dispose() may have started after the IsDisposed check at the top. Both the publish
@@ -394,7 +509,11 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         ConnectionStatusChanged?.Invoke(this, status);
 
         if (status == ConnectionStatus.Connected) _link.Attach((IControllerConnection)sender!);
-        else _link.Detach();
+        else
+        {
+            _link.Detach();
+            ExitTestMode(-1);
+        }
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
@@ -413,6 +532,13 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             case ConfigDataMessage or ConfigResultMessage:
                 // Same stale-sender filter as Hello (spec §8.2).
                 if (ReferenceEquals(sender, Volatile.Read(ref _connection))) ControllerConfig.OnMessage(msg);
+                break;
+            case SliderMessage or ButtonMessage when InTestMode:
+                // Spec §8.5: raw input only; nothing reaches the slider processor or the detector.
+                RawInput?.Invoke(this, msg is SliderMessage s
+                    ? new RawInputEventArgs(RawInputKind.Slider, s.SliderIndex, s.Value)
+                    : new RawInputEventArgs(RawInputKind.Button, ((ButtonMessage)msg).ButtonIndex,
+                                            ((ButtonMessage)msg).State == ButtonState.Pressed ? 1 : 0));
                 break;
             case SliderMessage slider:
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
@@ -437,7 +563,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
     private void OnButtonPressDetected(object? sender, ButtonPressEventArgs e)
     {
-        if (IsDisposed) return;
+        if (IsDisposed || InTestMode) return;   // second guard (spec §8.5): no action during a test
 
         AppLog.Info($"Button press detected: Index={e.ButtonIndex}, Type={e.PressType}");
         var config = Config.Config;
@@ -763,6 +889,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         // Before the transport goes: nothing may be sent to it while it is being retired. An
         // operation in flight ends as if the connection were replaced.
         ControllerConfig.Dispose();
+        bool wasTesting;
+        lock (_testGate)
+        {
+            wasTesting = _testGeneration != 0;
+            _testGeneration = 0;
+        }
+        // The one event raised after Dispose began (spec §8.5): a page holding a test handle learns
+        // that the test is over.
+        if (wasTesting) InTestModeChanged?.Invoke(this, false);
         _link.Dispose();
 
         // Take ownership of the current transport (see _connection): a concurrent restart that
