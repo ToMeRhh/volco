@@ -68,7 +68,7 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 
 ## Decisions and spec amendments
 
-Each line is a finding and the spec change it implies. They are proposals until the user approves them.
+Each line is a finding and the spec change it implies. **All seven amendments were approved by the user on 2026-10-04 and are applied to the spec.**
 
 **Confirmed, no spec change:**
 - **The core flashing design works with EspDotNet 5.0.2 as-is:** MD5, deflated writes, NVS preserved, no header patching, NVS wipe. The flasher stays in `Volco.Windows` (§8.6).

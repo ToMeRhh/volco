@@ -537,8 +537,9 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 
 - **Platform pinning:**
   - `platformio.ini` pins an **exact** platform version, so the bootloader, the core's NVS behaviour and the build output stay reproducible.
-  - Candidate: the pioarduino release that ships Arduino-ESP32 3.3.8, the version installed on the dev machine. Spike S2 fixes the exact value.
-  - It also pins `nanopb/Nanopb@0.4.9.2` and `olikraus/U8g2` to exact versions.
+  - `platform = https://github.com/pioarduino/platform-espressif32/releases/download/55.03.38/platform-espressif32.zip` (Arduino-ESP32 3.3.8, ESP-IDF 5.5.4, esptool 5.2.0). This was already applied in stage 1. Before that, `platform = espressif32` resolved to Arduino 2.0.17 in CI and 3.3.8 on the dev machine.
+  - The pioarduino platform needs **PlatformIO Core ≥ 6.1.19**, so CI installs `platformio==6.1.19`.
+  - Exact library pins: `olikraus/U8g2@2.36.18`, `links2004/WebSockets@2.7.3` (until stage 3 removes it), and `nanopb/Nanopb@0.4.92`. That last one is the PlatformIO registry's name for nanopb 0.4.9.2; `@0.4.9.2` is rejected.
 - **`main.cpp`:**
   - The arrays are sized by `kMaxSliders` and `kMaxButtons` and iterate over the runtime counts.
   - Debounce, sampling, filter (`filter_weight_pct / 100.0`) and deadband come from `RuntimeConfig`.
@@ -578,7 +579,12 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 - **Build id:** `-DVOLCO_FW_VERSION=\"…\"` is passed by CI (§9.2). The default is `"dev"`.
 - **`platformio.ini` (the rest):**
   - Rename `denky32` → `esp32`.
-  - nanopb generation from `../proto` with the options file; the exact `custom_nanopb_*` keys are fixed by Spike S2.
+  - **nanopb generation,** for both `esp32` and `native` (verified in stage 1):
+    - `custom_nanopb_protos = +<../proto/volco_config.proto>`
+    - `custom_nanopb_options = --error-on-unmatched`
+    - `build_flags` gain `-DPB_VALIDATE_UTF8`
+    - The `.options` file next to the proto is picked up automatically.
+    - nanopb fills absent submessages with the proto2 defaults, so `toRuntime` reads values directly.
   - Remove the `*_check` environments.
   - `board_build.partitions = default.csv`.
   - A post-build manifest script (§9.1).
@@ -598,7 +604,7 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 - **`ProtocolParser`** parses the new Hello per §5.2, plus ConfigData and ConfigResult. Short or overlong bodies are dropped.
 - **`ProtocolEncoder`** adds `EncodeConfigRead(seq)`, and `EncodeConfigWrite(seq, blob) → byte[]` (the whole burst, §5.4).
 - **`ControllerInfoConfig`** gains `Chip` and `FirmwareVersion`, and `SameAs` compares them too.
-- **`SerialConnection`:** uses the fixed 115200 baud rate. It logs `SerialError.Frame` and `SerialError.RXParity` and **does not** treat them as a disconnect. Other `ErrorReceived` kinds and I/O exceptions keep today's behaviour. Spike S1 records which errors fire during an `ESP.restart()` with the port open.
+- **`SerialConnection`:** uses the fixed 115200 baud rate. Its error handling is otherwise unchanged. Stage 1 found that Windows raises no `ErrorReceived` when the board resets with the port open, and the ROM banner is clean at 115200.
 
 ### 8.2 Core: `ControllerConfig/`
 
@@ -746,9 +752,10 @@ enum FlashMode { Install, Update }
 
 1. Open the port, retrying for up to 1 s if Windows still holds it from the released connection.
 2. DTR/RTS auto-reset into the ROM bootloader, sync, detect the chip, upload the stub loader.
-3. **Check the chip and flash size:**
-   - The detected chip must match the image's family; otherwise fail with "This board is an <chip>; this version of Volco only includes firmware for ESP32."
-   - The detected flash must be ≥ 4 MB.
+   - **Switch to 460800 baud** (`ChangeBaudRateTool`) once the stub is running.
+   - If the switch fails, carry on at 115200.
+   - At 115200 a full install took about 67 s in stage 1; stage 6 verifies the speed-up (target under 20 s).
+3. **Check the chip:** the detected chip must match the image's family; otherwise fail with "This board is an <chip>; this version of Volco only includes firmware for ESP32." There is no flash-size check: EspDotNet can't read the flash ID, a read-based proxy can't prove the size, and an undersized chip fails the write or the verify anyway.
 4. **Write the parts:** each part at its manifest offset, then verify each part's MD5 with `SPI_FLASH_MD5`.
 5. **Install only:** also write 0xFF over the whole NVS partition, 0x9000–0xDFFF. This clears any old or foreign settings. It avoids a full-chip erase, which needs the stub and takes 10–20 s, and it wipes exactly what matters.
 6. Hard-reset via RTS.
@@ -947,7 +954,8 @@ cd firmware && pio device monitor           # DEBUG_LOG output
 ```
 
 - **It is the same generic firmware.** A local build reports build id `dev`, unless `VOLCO_FW_VERSION` is set.
-- **The config survives.** `pio run -t upload` writes the bootloader, the partition table, `boot_app0` and the app at their offsets, and never touches NVS. Switching between Volco-installed and PlatformIO-installed firmware keeps the controller's config. Spike S2 confirms that upload doesn't erase NVS on the pinned platform.
+- **The config survives.** `pio run -t upload` writes the bootloader, the partition table, `boot_app0` and the app at their offsets, and never touches NVS. Switching between Volco-installed and PlatformIO-installed firmware keeps the controller's config. Stage 1 confirmed that the upload's offsets never include NVS.
+- **The bootloader is patched on upload.** PlatformIO's upload passes `--flash-mode/--flash-size`, so esptool patches the bootloader header, and the bootloader in flash then won't match `bootloader.bin`. That's harmless, because the probe compares the app region only.
 - **A blank board** flashed this way boots with built-in defaults, and the app sets it up as usual.
 - **The app treats `dev` as development firmware:**
   - it shows "Development firmware"
@@ -1107,7 +1115,9 @@ cd firmware && pio device monitor           # DEBUG_LOG output
 - A deliberately missing manifest with `RequireFirmware=true` fails the build. This is checked once while implementing, and documented.
 - The stale `config_proto.js` check fails on a diff.
 
-### 12.6 Spikes (first plan tasks, with results recorded in the plan)
+### 12.6 Spikes (done in stage 1)
+
+All answered: results and decisions are in `docs/superpowers/spikes/2026-10-03-controller-config-spikes.md`, and the spec above includes the approved amendments. The list below is kept as the record of what was asked.
 
 - **S1, EspDotNet on the real DIY board:**
   - target framework compatibility with `net8.0-windows`
@@ -1156,6 +1166,7 @@ cd firmware && pio device monitor           # DEBUG_LOG output
   - the firmware section, the protocol table, the build commands (`esp32` environment, no `*_check` environments)
   - CI (the artifact flow, `RequireFirmware`)
   - the Core/Windows split for the flasher
+  - `pio test -e native` needs a host C/C++ compiler (`g++`). CI has one; a fresh dev container may not.
 - **`tools/simulator/README.md`:** config support.
 - **Root `README.md`:** the install and setup story.
 

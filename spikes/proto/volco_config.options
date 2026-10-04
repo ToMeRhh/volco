@@ -1,5 +1,0 @@
-volco.config.ControllerConfig.sliders  max_count:16
-volco.config.ControllerConfig.buttons  max_count:32
-volco.config.ControllerConfig.preset   max_size:25
-volco.config.Udp.ssid                  max_size:33
-volco.config.Udp.password              max_size:65
