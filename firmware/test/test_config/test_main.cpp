@@ -106,8 +106,31 @@ void test_chip_table() {
   TEST_ASSERT_FALSE(c.isAdc2(33));
 }
 
+void test_validate_cases() {
+  for (auto& c : configCases("validate")) {
+    volco_config_ControllerConfig cfg;
+    TEST_ASSERT_TRUE_MESSAGE(decodeConfig(c.blob.data(), c.blob.size(), cfg), c.name.c_str());
+    ValidationResult r = validateConfig(cfg, esp32Chip());
+    char got[32], want[32];
+    snprintf(got, sizeof got, "%u %u %u", r.code, r.item, r.field);
+    snprintf(want, sizeof want, "%s %s %s", c.rest[0].c_str(), c.rest[1].c_str(), c.rest[2].c_str());
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(want, got, c.name.c_str());
+  }
+}
+
+void test_validate_counts_guard() {
+  volco_config_ControllerConfig cfg = volco_config_ControllerConfig_init_default;
+  cfg.sliders_count = 17;  // impossible after decode; the step exists for parity with C#
+  ValidationResult r = validateConfig(cfg, esp32Chip());
+  TEST_ASSERT_EQUAL_UINT(CFG_INVALID, r.code);
+  TEST_ASSERT_EQUAL_UINT(kNoItem, r.item);
+  TEST_ASSERT_EQUAL_UINT(FIELD_SLIDER_PIN, r.field);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
+  RUN_TEST(test_validate_cases);
+  RUN_TEST(test_validate_counts_guard);
   RUN_TEST(test_golden_file_loaded);
   RUN_TEST(test_crc_cases);
   RUN_TEST(test_decode_ok_cases);
