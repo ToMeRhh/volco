@@ -95,13 +95,16 @@ bool transport_maintain(uint32_t now) {
   const bool connected = st == WL_CONNECTED;
   bool edge = false;
   if (connected && !wasConnected) {
-    if (!udpStarted) udpStarted = udp.begin(cfg.localPort);
     DEBUG_LOG("[DBG] Wi-Fi: connected, " + WiFi.localIP().toString());
     edge = true;
   }
-  if (!connected && (st == WL_CONNECT_FAILED || st == WL_NO_SSID_AVAIL || st == WL_DISCONNECTED) &&
-      now - lastBegin >= WIFI_RETRY_MS)
-    joinWifi(now);
+  if (connected && !udpStarted) {  // retried every pass, so a failed bind doesn't leave UDP dead
+    udpStarted = udp.begin(cfg.localPort);
+    if (!udpStarted) DEBUG_LOG("[DBG] UDP: bind failed, retrying");
+  }
+  // Any state but connected (failed, no SSID, dropped, lost, or associated without an IP) is
+  // retried, at most every WIFI_RETRY_MS so a slow attempt isn't interrupted.
+  if (!connected && now - lastBegin >= WIFI_RETRY_MS) joinWifi(now);
   wasConnected = connected;
   return edge;
 }

@@ -413,7 +413,6 @@ Notes:
 | `HOST_TIMEOUT_MS` | 3000 |
 | `KEEPALIVE_MS` | 1000 |
 | `COMMIT_FALLBACK_MS` | 500 |
-| `RECONNECT_INTERVAL_MS` | 3000 |
 | `WIFI_RETRY_MS` | 10000 |
 | `kMaxConfigBlob` | 1024 |
 | `kMaxSliders` | 16 |
@@ -568,7 +567,7 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
     - Init never blocks; today's wait-for-connect loop is removed.
     - The UDP socket binds to `local_port`.
     - The source filter and the active-transport rule (§5.5) apply.
-  - **Wi-Fi retry:** `transport_reconnect()` calls `WiFi.begin` again only when the status is `WL_CONNECT_FAILED`, `WL_NO_SSID_AVAIL` or `WL_DISCONNECTED`, and at most every `WIFI_RETRY_MS`.
+  - **Wi-Fi retry:** `transport_maintain()`, which runs every loop pass, calls `WiFi.begin` again whenever the status isn't `WL_CONNECTED`, at most every `WIFI_RETRY_MS`. That includes `WL_CONNECTION_LOST` and `WL_IDLE_STATUS` (associated but no IP). It also retries a failed `udp.begin` on every pass while connected.
   - **Wi-Fi connect events:** the transition to `WL_CONNECTED` is noticed in the loop (a status edge), and it triggers the §5.5 Hello on UDP.
   - Wi-Fi is explicitly off (`WIFI_OFF`) when UDP is disabled.
   - The WebSocket and LOCAL_DEBUG code is deleted, along with the `links2004/WebSockets` dependency.

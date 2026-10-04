@@ -37,8 +37,12 @@ void config_load(LoadedConfig& out) {
     useDefaults(out, CONFIG_DAMAGED, 0);
     return;
   }
-  prefs.getBytes("cfg", blob, len);
+  const size_t read = prefs.getBytes("cfg", blob, len);
   prefs.end();
+  if (read != len) {  // a read error: don't report a CRC of stale bytes
+    useDefaults(out, CONFIG_DAMAGED, 0);
+    return;
+  }
   const uint32_t crc = volco::crc32(blob, len);
   if (!volco::decodeConfig(blob, len, decoded) || volco::validateConfig(decoded, volco::esp32Chip()).code != volco::CFG_OK) {
     useDefaults(out, CONFIG_DAMAGED, crc);
