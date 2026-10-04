@@ -28,6 +28,7 @@
 | D4 | **C# control plane plus a small native tap library.** `MacAudioEngine` and its registries are C# with P/Invoke to the Core Audio C API, mirroring the Windows engine. Only the process tap, its aggregate device and the real-time gain IO proc live in `libvolcotap.dylib` (Objective-C, ~300 lines, C ABI). Managed code never runs on a real-time audio thread. |
 | D5 | **New platform seams instead of `OperatingSystem.IsMacOS()` checks** in Core/App: `IPlatformShell`, `IUpdateApplier`, `AppIdentity` (§3). Core and App stay platform-free. |
 | D6 | **Spike first.** A throwaway probe on the user's Mac settles the tap semantics (§4.5) before the engine is built. |
+| D7 | **The extra latency of tapped apps is documented** in the README, `CLAUDE.md` and the hardware checklist, with the figure measured in the spike (§4.6). |
 
 ## 2. Project layout
 
@@ -180,7 +181,7 @@ Core Audio notifications carry no context, so `IsOwnChange` cannot come from the
   ```
 
 - **Permission:** the first tap triggers the "System Audio Recording" prompt. A creation failure caused by a denied permission sets `PerAppStatus = NeedsPermission`; the engine retries tap creation when a per-app slider next moves, so granting the permission takes effect without a restart. macOS earlier than 14.2 never reaches here (`LSMinimumSystemVersion`), but the engine reports `Unsupported` if the tap API is missing.
-- **Accepted differences:** tapped audio gains roughly 10–20 ms latency (measured in the spike); per-app levels are not persisted by the OS.
+- **Accepted differences:** tapped audio gains extra latency (§4.6); per-app levels are not persisted by the OS.
 
 ### 4.5 Spike (first task; throwaway)
 
@@ -192,6 +193,19 @@ A standalone probe on the user's Mac, not kept, answering:
 4. Does muting a process via `mutedWhenTapped` leave other processes on the same device untouched?
 
 Findings update §4.4 before the engine work starts.
+
+### 4.6 Added latency for turned-down apps (must be documented)
+
+- **What happens.** An app at 100% plays straight to its output device. An app turned below 100% is tapped: macOS captures its audio, Volco's IO proc scales each buffer by the slider level, and the aggregate device plays it out. That detour adds one or two IO buffers, so the app's sound reaches the speakers later than it otherwise would. Estimate: **about 10–20 ms** (one buffer of 512 frames at 48 kHz is 10.7 ms). The spike (§4.5 item 3) measures the real figure; the measured number replaces this estimate everywhere below.
+- **Who notices.** Not noticeable for music, podcasts, browsers, voice calls or video (audio lag under about 45 ms is generally not perceived as lip-sync error). It can matter for rhythm games, competitive games and live music work through a DAW, and only when that app is turned below 100%.
+- **Not affected:** apps at 100% (no tap exists), Device sliders (hardware volume), button actions, and the Windows build.
+- **Mitigation:** if the measured latency is above 15 ms, the aggregate device requests a smaller IO buffer (`kAudioDevicePropertyBufferFrameSize`, 128–256 frames, about 3–5 ms) at some CPU cost; the chosen size and its measured latency are recorded here.
+- **Documentation requirement.** The latency is a user-visible behaviour difference from Windows and ships documented:
+  - the README's macOS section explains it in user terms (what it is, the measured figure, who it affects, that apps at 100% are unaffected);
+  - `CLAUDE.md`'s `Volco.Mac` architecture entry states it next to the tap design, so future changes to `TapManager` or the buffer size keep the figure current;
+  - the hardware checklist records the measured value on the user's Mac.
+
+  This is a done-criterion for step 5 of §10 (`TapManager` + `libvolcotap`), not a follow-up.
 
 ## 5. Shell and UX on macOS
 
@@ -244,6 +258,6 @@ Each step ends with a branch that builds and passes CI; steps 3–6 are tried on
 2. **Shared-code seams and cleanups** (§3), Windows behaviour unchanged.
 3. **`Volco.Mac` head:** shell, window effects, bundle, signing, CI job; a device-only engine (`PerAppStatus = Unsupported`).
 4. **Device and process registries** (§4.1–4.3).
-5. **`TapManager` + `libvolcotap`** (§4.4).
+5. **`TapManager` + `libvolcotap`** (§4.4), including the latency documentation (§4.6).
 6. **Updater** (§7).
 7. **Release wiring and README** (§6).
