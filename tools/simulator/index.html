@@ -85,7 +85,8 @@ function send(payload) {
 }
 function sendHello() {
   const k = TYPES[type].buttons;
-  send([MSG.HELLO, 1, TYPES[type].sliders, k.length, ...k]);
+  // Hello (spec §5.2): version, chip 1, firmware "sim", config state 0 (none) and CRC 0, hardware.
+  send([MSG.HELLO, 1, 1, 3, 0x73, 0x69, 0x6D, 0, 0, 0, 0, 0, TYPES[type].sliders, k.length, ...k]);
   // Like the firmware: every Hello is followed by each slider's current position.
   document.querySelectorAll('#sliders input').forEach((input, i) => {
     const v = +input.value;
