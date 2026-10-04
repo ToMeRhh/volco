@@ -232,6 +232,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private void SetDraft(ControllerConfig draft, bool keepFixIt)
     {
         if (!keepFixIt) _fixIt = false;
+        _remoteError = null;
         _draft = draft;
         _selectedPreset = ControllerDraft.BasedOn(draft);
         RebuildRows();
@@ -262,8 +263,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     internal void OnDraftEdited(bool structural = false)
     {
         ProgressText = null;
+        _remoteError = null;
         Recompute(structural);
     }
+
+    /// <summary>The (item, field) of the controller's last INVALID, shown until the next edit.</summary>
+    private (byte Item, byte Field)? _remoteError;
 
     /// <summary>Dirty, errors, hints, the caption, the I2C rows.</summary>
     private void Recompute(bool structural = false)
@@ -333,6 +338,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         ClearErrors();
         var v = ControllerConfigValidator.Validate(_draft, ChipInfo.Esp32);
         if (!v.IsOk) ShowError(v.Item, v.Field);
+        else if (_remoteError is { } r) ShowError(r.Item, r.Field);
     }
 
     /// <summary>Puts "&lt;field&gt; isn't valid" on the row (item, field) points at.</summary>
@@ -438,11 +444,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             SaveStatus.Busy => "Another operation is running. Try again in a moment.",
             _ => null,
         };
-        if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid)
-        {
-            ClearErrors();
-            ShowError(r.Item, r.Field);
-        }
+        if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid) _remoteError = (r.Item, r.Field);
         if (r.Status == SaveStatus.Confirmed) _fixIt = false;
         RefreshAll();
     }

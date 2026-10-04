@@ -323,13 +323,23 @@ public sealed class ControllerViewModelTests : IDisposable
         Until(() => read.IsCompleted);
     }
 
+    /// <summary>A valid Wi-Fi setup. The DIY sliders on 32-36 are ADC1, so Wi-Fi doesn't block them.</summary>
+    private static void EnableWifi(ControllerViewModel vm)
+    {
+        vm.UdpEnabled = true;
+        vm.Ssid = "home";
+        vm.Password = "password1";
+        vm.PcIp = "192.168.1.10";
+        Assert.Null(vm.WifiError);
+    }
+
     [Fact]
     public void ChangingWifiOverAUdpConnection_AsksFirst()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
         _rig.Config.Config.Connection.Type = ConnectionType.Udp;   // not saved: no restart
-        vm.UdpEnabled = true;
+        EnableWifi(vm);
         vm.SaveCommand.Execute(null);
         Assert.StartsWith("Changing the Wi-Fi settings may disconnect the controller.", vm.Confirmation!.Message);
         Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
@@ -342,7 +352,7 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.UdpEnabled = true;
+        EnableWifi(vm);
         Assert.Equal((decimal)_rig.Config.Config.Connection.Udp.ListenPort, vm.PcPort);   // pre-filled
         vm.SaveCommand.Execute(null);
         Assert.Null(vm.Confirmation);
