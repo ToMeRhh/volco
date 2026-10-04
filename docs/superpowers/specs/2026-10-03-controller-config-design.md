@@ -276,6 +276,8 @@ message ControllerConfig {
   optional ScreenBehaviour screens = 6;
   optional InputTuning input = 7;
   optional string preset = 8;      // max 24 bytes; informational, e.g. "diy-reference"
+  optional I2cBus i2c2 = 9;        // required when a screen uses bus 2 (software I2C)
+  optional I2cBus i2c3 = 10;       // required when a screen uses bus 3 (software I2C)
 }
 
 message Slider {
@@ -303,7 +305,7 @@ message LedPair {
 }
 
 message Screen {
-  optional uint32 bus = 1 [default = 0];        // 0 or 1
+  optional uint32 bus = 1 [default = 0];        // 0-3: 0 and 1 hardware I2C, 2 and 3 software I2C
   optional uint32 address = 2 [default = 0x3C]; // 0x3C or 0x3D
 }
 
@@ -416,7 +418,7 @@ Notes:
 | `WIFI_RETRY_MS` | 10000 |
 | `kMaxConfigBlob` | 1024 |
 | `kMaxSliders` | 16 |
-| `kMaxScreens` | 4 (2 buses × 2 addresses) |
+| `kMaxScreens` | 8 (4 buses × 2 addresses) |
 
 Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHECK` and the transport `#define`s are removed.
 
@@ -472,9 +474,9 @@ Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHEC
    - `pin` absent or not usable → field 2.
    - **LED:** `pin` absent or not output-capable → field 3.
    - **LED pair:** `pin_a` absent or not output-capable → field 4. `pin_b` absent, not output-capable, or equal to `pin_a` → field 5.
-   - **Screen:** `bus` ∉ {0, 1} → field 6. `address` ∉ {0x3C, 0x3D} → field 7. (bus, address) already used by an earlier button's screen → field 7, reported on the **later** button. There are only two addresses, so this also limits each bus to two screens; there is no separate "third screen" rule.
+   - **Screen:** `bus` ∉ {0, 1, 2, 3} → field 6. `address` ∉ {0x3C, 0x3D} → field 7. (bus, address) already used by an earlier button's screen → field 7, reported on the **later** button. There are only two addresses, so this also limits each bus to two screens; there is no separate "third screen" rule.
    - **This is a single pass, one button at a time:** its pin, then its indicator fields, then the (bus, address) duplicate check. All of button *n* is checked before button *n+1*.
-4. **I2C**, for each bus that some screen uses:
+4. **I2C**, for each bus that some screen uses, in bus order 0, 1, 2, 3 (`item` = the bus):
    - `I2cBus` message absent → field 8, `item` = bus.
    - `sda` or `scl` absent, not output-capable, or `sda` = `scl` → field 9, `item` = bus.
    - `clock_hz` out of range → field 10, `item` = bus.
@@ -555,7 +557,7 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 - **`screens.cpp`:**
   - The `constexpr` counting and the `static_assert`s become runtime code. Their rules are validation steps 3–4.
   - Panels are created once in `setup()`, keeping the per-bus approach from PR #64:
-    - Each used bus is started with `Wire.begin(sda, scl, clock_hz)` / `Wire1.begin(...)`, using `RuntimeConfig` values instead of the `I2C*_` defines.
+    - Each used bus is started from `RuntimeConfig`: buses 0 and 1 with `Wire.begin(sda, scl, clock_hz)` / `Wire1.begin(...)`; buses 2 and 3 are software I2C (PR #66's bit-banged `SoftI2c`, SCL push-pull, SDA open-drain), for fixed-address screens that need a bus of their own.
     - Each panel is the `Ssd1306` class writing through `i2cByte<bus>`. U8g2's `2ND_HW_I2C` driver sends nothing on ESP32 core 3.x, which is why PR #64 replaced it.
     - The panels live in a static `Screen[kMaxScreens]` array.
   - The timings come from `RuntimeConfig`.

@@ -41,7 +41,7 @@ Everything in `lib/` is pure C++ with time passed in, so it builds and is tested
 
 The firmware is generic: nothing about a build's hardware is compiled in. At boot it loads the controller config from NVS (`config_store.cpp`; spec §6.6), decodes and validates it (`lib/volco_config`), and runs from the resulting `RuntimeConfig`:
 
-- **Hardware:** the sliders (one ADC pin each), the buttons (an input pin, plus an indicator: none, one LED, an LED pair, or an SSD1306 screen on I2C bus 0/1 at 0x3C/0x3D), and the I2C buses' pins and clock. **A list's order is the input number Volco sees.** Button pins use `INPUT_PULLUP` (pressed = connected to GND); LED polarity is `active_low`.
+- **Hardware:** the sliders (one ADC pin each), the buttons (an input pin, plus an indicator: none, one LED, an LED pair, or an SSD1306 screen on I2C bus 0-3 at 0x3C/0x3D), and the I2C buses' pins and clock. Buses 0 and 1 are the ESP32's I2C controllers; 2 and 3 are software I2C, for fixed-address screens that each need a bus of their own. **A list's order is the input number Volco sees.** Button pins use `INPUT_PULLUP` (pressed = connected to GND); LED polarity is `active_low`.
 - **Wi-Fi/UDP:** off unless enabled; SSID, password, the PC's IP and port, and the local port. USB serial is always on.
 - **Screens and input:** brightness, slide and scroll timing, dim/off/pixel-shift, debounce, slider sampling, smoothing and deadband.
 
