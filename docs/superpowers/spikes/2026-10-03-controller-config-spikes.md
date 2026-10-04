@@ -68,4 +68,19 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 
 ## Decisions and spec amendments
 
-(filled in Task 7)
+Each line is a finding and the spec change it implies. They are proposals until the user approves them.
+
+**Confirmed, no spec change:**
+- **The core flashing design works with EspDotNet 5.0.2 as-is:** MD5, deflated writes, NVS preserved, no header patching, NVS wipe. The flasher stays in `Volco.Windows` (§8.6).
+- **NVS:** writing the parts never touches it (esptool and EspDotNet). The core erases and re-initialises a garbage NVS and the firmware runs (§6.6, §8.6).
+- **Codecs:** the maximal blob is 663 bytes on both sides; C# encoding is deterministic; unknown fields move to the end, confirming the §8.4 baseline rule. C# rejects invalid UTF-8 itself; nanopb needs `PB_VALIDATE_UTF8`. C# doesn't enforce limits or NULs, and nanopb truncates at a NUL, so the §6.1 extra checks are needed exactly as written.
+- **nanopb fills absent submessages with the proto2 defaults** (§6.3): `toRuntime` reads values directly.
+
+**Proposed amendments:**
+1. **§7 platform pin is now exact:** `https://github.com/pioarduino/platform-espressif32/releases/download/55.03.38/platform-espressif32.zip` (Arduino 3.3.8, ESP-IDF 5.5.4, esptool 5.2.0), plus U8g2 2.36.18 and WebSockets 2.7.3. **CI's PlatformIO goes to 6.1.19** (the platform requires it). Already applied on this branch.
+2. **§7 nanopb:** the PlatformIO dependency is `nanopb/Nanopb@0.4.92` (the registry's name for 0.4.9.2). The keys are `custom_nanopb_protos = +<../proto/volco_config.proto>` and `custom_nanopb_options = --error-on-unmatched`; the `.options` file next to the proto is picked up automatically. Plus `build_flags = -DPB_VALIDATE_UTF8`.
+3. **§8.6 install speed:** EspDotNet at 115200 takes about 67 s for an install. The flasher must switch to **460800 baud** once the stub is running (`ChangeBaudRateTool`), falling back to 115200 if the switch fails. Stage 6 verifies the speed-up (target under 20 s).
+4. **§8.6 flash-size check: drop it.** The MD5 proxy can't prove ≥ 4 MB (reads may wrap), and EspDotNet has no flash-ID command. ESP32 dev modules are 4 MB or more, and an undersized chip would fail the write or verify anyway. Removes one step and one error message.
+5. **§8.1 `SerialConnection`: drop the "ignore Frame/RXParity errors" rule.** Windows raises no `ErrorReceived` when the board resets with the port open, and the ROM banner is clean at 115200. Keeping today's behaviour is simpler. The reconnect rule (Detach and re-Attach doesn't fail a save) stays.
+6. **§9.4 note:** after a `pio run -t upload`, the bootloader region differs from `bootloader.bin`, because PlatformIO patches the header. That's harmless, because the probe compares the app only. One sentence.
+7. **CLAUDE.md, stage 3 docs:** the native tests need a host C/C++ compiler (`g++`). CI has one; a fresh dev container may not.
