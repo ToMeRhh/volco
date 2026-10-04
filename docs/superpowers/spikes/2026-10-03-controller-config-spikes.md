@@ -52,11 +52,11 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 
 | Question | Answer | Evidence |
 |---|---|---|
-| Chip, flash size, MAC (esptool `flash_id`) | | |
-| Writing the 4 parts leaves NVS (0x9000–0xDFFF) unchanged (esptool) | | |
-| Firmware boots over a garbage NVS and recovers (NVS rewritten, frames sent) | | |
-| Boot ROM log readable at 115200 | | |
-| esptool `verify_flash` (MD5) passes for all 4 parts | | |
+| Chip, flash size, MAC (esptool `flash_id`) | **ESP32-D0WD-V3 (rev v3.1)**, 40 MHz crystal, flash manufacturer 0x85 device 0x2016, **4 MB**, MAC 5c:01:3b:6a:19:94 | `spikes/flash_facts.py` on /dev/ttyUSB1 (CH340 1a86:7523), 2026-10-04 |
+| Writing the 4 parts leaves NVS (0x9000–0xDFFF) unchanged (esptool) | **Yes.** NVS was filled with an 0xA5 marker (MD5 0f6b7d73…), then the four parts were written in one `write_flash`; NVS MD5 afterwards was identical. esptool erased only each part's own range. | same, step 3 |
+| Firmware boots over a garbage NVS and recovers (NVS rewritten, frames sent) | **Yes.** After a hard reset over the 0xA5 NVS, the firmware ran (`[DBG] Setup complete`; 7314 bytes and 1029 × 0xAA frame markers in 4 s), and NVS was rewritten (new MD5 b4823d44…, starting with erased pages). | same, steps 5–6 |
+| Boot ROM log readable at 115200 | **Not observed.** The port was opened after the reset, so the ROM banner was missed. The firmware's own log and frames at 115200 were read correctly, and the app's parser resyncs on 0xAA regardless. **Side finding:** today's serial transport logs `[E][STA.cpp:530] disconnect(): STA disconnect failed! ESP_ERR_WIFI_NOT_INIT` at boot (`WiFi.disconnect()` before Wi-Fi init). It's harmless and goes away with the stage 3 transport rewrite (spec §7: `WiFi.mode(WIFI_OFF)` only). | same, step 5 |
+| esptool `verify_flash` (MD5) passes for all 4 parts | **Yes**, `Verification successful (digest matched)` ×4. Written without `--flash-mode/--flash-size`, the bootloader is not patched and matches `bootloader.bin` byte for byte. Note: esptool 5.2 accepts the old underscore spellings (`write_flash`, `no_reset`) with a deprecation warning; new code should use `write-flash`, `no-reset`. | same, step 4 |
 | EspDotNet: bootloader entry and chip detect via DTR/RTS on this board | | |
 | EspDotNet: `SpiFlashMd5Async` works (stub) and matches local MD5 | | |
 | EspDotNet: writing 4 parts leaves NVS MD5 unchanged | | |
