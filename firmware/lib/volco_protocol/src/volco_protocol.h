@@ -120,4 +120,26 @@ class Link {
   uint32_t lastTx_ = 0;
 };
 
+// Which transport the controller answers on (spec §5.5). Transport ids are bit positions in the
+// masks: 0 = USB serial, 1 = UDP. Unlatched (boot, host timeout) every frame goes to every
+// transport that is up; the first valid frame from the PC latches its transport.
+class ActiveTransport {
+ public:
+  void onValidFrame(uint8_t id) {  // call BEFORE Link::onPayload, so the reply follows the latch
+    latched_ = true;
+    active_ = id;
+  }
+  void onHostLost() { latched_ = false; }
+  uint8_t targets(uint8_t upMask) const { return latched_ ? (uint8_t)(upMask & (1u << active_)) : upMask; }
+  bool latched() const { return latched_; }
+  uint8_t active() const { return active_; }
+
+ private:
+  bool latched_ = false;
+  uint8_t active_ = 0;
+};
+
+// UDP is accepted only from the configured PC (spec §5.5, D7): no PC configured, nothing accepted.
+inline bool acceptUdpSource(uint32_t srcIp, uint32_t configuredIp) { return configuredIp != 0 && srcIp == configuredIp; }
+
 }  // namespace volco

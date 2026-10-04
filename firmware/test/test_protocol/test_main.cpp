@@ -224,6 +224,61 @@ void test_host_timeout_then_hello_on_next_frame() {
   TEST_ASSERT_EQUAL_HEX8(0x01, sink.sent.back()[2]);     // Hello
 }
 
+// ── Active transport (spec §5.5) ─────────────────────────────────────────────
+void test_unlatched_sends_on_every_transport_that_is_up() {
+  ActiveTransport a;
+  TEST_ASSERT_FALSE(a.latched());
+  TEST_ASSERT_EQUAL_UINT8(0b01, a.targets(0b01));  // only serial up
+  TEST_ASSERT_EQUAL_UINT8(0b11, a.targets(0b11));  // both up
+}
+
+void test_first_frame_latches_its_transport() {
+  ActiveTransport a;
+  a.onValidFrame(1);
+  TEST_ASSERT_TRUE(a.latched());
+  TEST_ASSERT_EQUAL_UINT8(0b10, a.targets(0b11));
+  TEST_ASSERT_EQUAL_UINT8(0b00, a.targets(0b01));  // latched transport down: nothing until host timeout
+}
+
+void test_frame_on_other_transport_moves_the_latch() {
+  ActiveTransport a;
+  a.onValidFrame(1);
+  a.onValidFrame(0);
+  TEST_ASSERT_EQUAL_UINT8(0b01, a.targets(0b11));
+}
+
+void test_host_lost_unlatches() {
+  ActiveTransport a;
+  a.onValidFrame(0);
+  a.onHostLost();
+  TEST_ASSERT_FALSE(a.latched());
+  TEST_ASSERT_EQUAL_UINT8(0b11, a.targets(0b11));
+}
+
+void test_latch_set_before_reply_routes_to_new_transport() {
+  // A HelloRequest arriving on UDP: latching first means the Hello it triggers goes to UDP only.
+  ActiveTransport a;
+  struct RoutingSink : FakeSink {
+    ActiveTransport* active = nullptr;
+    uint8_t lastTargets = 0;
+    void send(const uint8_t* f, size_t n) override { lastTargets = active->targets(0b11); FakeSink::send(f, n); }
+  } sink;
+  sink.active = &a;
+  Link link(config(), sink);
+  link.begin(0);
+  TEST_ASSERT_EQUAL_UINT8(0b11, sink.lastTargets);  // boot Hello: unlatched
+  a.onValidFrame(1);
+  deliver(link, golden("hello_request"), 10);
+  TEST_ASSERT_EQUAL_UINT8(0b10, sink.lastTargets);
+}
+
+void test_accept_udp_source() {
+  const uint32_t pc = (192u << 24) | (168u << 16) | (1u << 8) | 10u;
+  TEST_ASSERT_TRUE(acceptUdpSource(pc, pc));
+  TEST_ASSERT_FALSE(acceptUdpSource(pc + 1, pc));
+  TEST_ASSERT_FALSE(acceptUdpSource(0, 0));  // no configured PC: accept nothing
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_parser_resyncs_after_garbage_and_bad_checksum);
@@ -240,5 +295,11 @@ int main(int, char**) {
   RUN_TEST(test_commit_without_begin_and_empty_commit_are_noops);
   RUN_TEST(test_alive_when_idle_for_a_second);
   RUN_TEST(test_host_timeout_then_hello_on_next_frame);
+  RUN_TEST(test_unlatched_sends_on_every_transport_that_is_up);
+  RUN_TEST(test_first_frame_latches_its_transport);
+  RUN_TEST(test_frame_on_other_transport_moves_the_latch);
+  RUN_TEST(test_host_lost_unlatches);
+  RUN_TEST(test_latch_set_before_reply_routes_to_new_transport);
+  RUN_TEST(test_accept_udp_source);
   return UNITY_END();
 }
