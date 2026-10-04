@@ -7,6 +7,8 @@ namespace Volco.Core.Controller;
 
 public enum ConfigOperation { Idle, Reading, Writing }
 
+/// <summary>Failed covers no complete reply after 3 attempts, and (with adopt) bytes this app
+/// can't decode (spec §8.3: "Couldn't read the controller's setup").</summary>
 public enum ReadStatus { Ok, Failed, Cancelled, Busy }
 
 /// <param name="Blob">The controller's stored bytes (empty when it has none); null unless Ok.</param>
@@ -34,7 +36,7 @@ public sealed record ConfigSaveResult(SaveStatus Status, ConfigResultCode? Code 
 
 public enum SavePhase { Sending, WaitingForImpliedOk, Confirming }
 
-/// <param name="Attempt">1..3 while sending.</param>
+/// <param name="Attempt">The attempt (1..3): the one being sent, or the one that got the OK.</param>
 public sealed record SaveProgress(SavePhase Phase, int Attempt);
 
 /// <summary>
@@ -66,6 +68,7 @@ public sealed class ControllerConfigService : IDisposable
     private sealed record ReplacedEvent : Event;
 
     private readonly object _gate = new();
+    private readonly object _bannerGate = new();   // serialises UpdateBanner (never taken inside _gate)
     private readonly ConfigManager _config;
     private readonly IConfigSessionLink _link;
     private readonly TimeProvider _time;
@@ -186,8 +189,17 @@ public sealed class ControllerConfigService : IDisposable
             AppLog.Error($"Config read failed: {ex}");
             result = new(ReadStatus.Failed);
         }
-        if (result.Status == ReadStatus.Ok && adopt && result.Blob is { Length: > 0 } blob) SetMirror(blob);
-        End(readFailed: result.Status == ReadStatus.Failed, startHello, wasRead: true);
+        if (result.Status == ReadStatus.Ok && adopt && result.Blob is { Length: > 0 } blob)
+        {
+            // Bytes this app can't decode (e.g. written by a newer app) never replace the mirror.
+            if (ControllerBannerLogic.Decodes(blob)) SetMirror(blob);
+            else
+            {
+                AppLog.Error($"Config read: {blob.Length} bytes this app can't decode; not adopted");
+                result = new(ReadStatus.Failed);
+            }
+        }
+        End(startHello, readStatus: result.Status);
         return result;
     }
 
@@ -239,13 +251,14 @@ public sealed class ControllerConfigService : IDisposable
     public async Task<ConfigSaveResult> SaveAsync(byte[] blob, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(blob);
+        if (blob.Length is 0 or > ControllerConfigCodec.MaxBlob)
+            throw new ArgumentException($"A config blob is 1..{ControllerConfigCodec.MaxBlob} bytes, not {blob.Length}.", nameof(blob));
+        if (ct.IsCancellationRequested) return new(SaveStatus.Cancelled);
         if (!TryBegin(ConfigOperation.Writing, out var events, out var startHello)) return new(SaveStatus.Busy);
         ConfigSaveResult result;
         try
         {
-            result = ct.IsCancellationRequested
-                ? new(SaveStatus.Cancelled)
-                : await RunSaveAsync(events, blob).ConfigureAwait(false);
+            result = await RunSaveAsync(events, blob).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -253,7 +266,7 @@ public sealed class ControllerConfigService : IDisposable
             result = new(SaveStatus.NoAnswer);
         }
         if (result.Status == SaveStatus.Confirmed) SetMirror(blob);
-        End(readFailed: false, startHello, wasRead: false);
+        End(startHello, readStatus: null);
         AppLog.Info($"Config save: {result.Status}{(result.Code is { } c ? $" {c} item {result.Item} field {result.Field}" : "")}");
         return result;
     }
@@ -265,7 +278,8 @@ public sealed class ControllerConfigService : IDisposable
             h.Version == ProtocolVersion.Current && h.ConfigState == ControllerConfigState.Stored && h.ConfigCrc == crc;
 
         bool ok = false;
-        for (int attempt = 1; attempt <= Timeouts.WriteAttempts && !ok; attempt++)
+        int attempt;
+        for (attempt = 1; attempt <= Timeouts.WriteAttempts; attempt++)
         {
             SetProgress(new(SavePhase.Sending, attempt));
             var seq = NextSeq();
@@ -288,11 +302,12 @@ public sealed class ControllerConfigService : IDisposable
                 if (r.Code is ConfigResultCode.BadSequence or ConfigResultCode.BadCrc) break;
                 return new(SaveStatus.Rejected, r.Code, r.Item, r.Field);
             }
+            if (ok) break;
         }
 
         var confirmTimeout = _link.ConnectionType == ConnectionType.Udp ? Timeouts.ConfirmUdp : Timeouts.Confirm;
         var confirmDeadline = _time.GetUtcNow() + confirmTimeout;
-        SetProgress(new(ok ? SavePhase.Confirming : SavePhase.WaitingForImpliedOk, Timeouts.WriteAttempts));
+        SetProgress(new(ok ? SavePhase.Confirming : SavePhase.WaitingForImpliedOk, Math.Min(attempt, Timeouts.WriteAttempts)));
         while (true)
         {
             var ev = await NextAsync(events, confirmDeadline, CancellationToken.None).ConfigureAwait(false);
@@ -327,7 +342,8 @@ public sealed class ControllerConfigService : IDisposable
         return true;
     }
 
-    private void End(bool readFailed, HelloMessage? startHello, bool wasRead)
+    /// <param name="readStatus">A read's outcome; null for a save.</param>
+    private void End(HelloMessage? startHello, ReadStatus? readStatus)
     {
         lock (_gate)
         {
@@ -335,10 +351,11 @@ public sealed class ControllerConfigService : IDisposable
             _progress = null;
             _events = null;
             // A failed read marks the Hello it ran under, unless a different Hello arrived since.
-            if (readFailed && _lastHello is not null && (startHello is null || Key(_lastHello) == Key(startHello)))
+            if (readStatus == ReadStatus.Failed && _lastHello is not null
+                && (startHello is null || Key(_lastHello) == Key(startHello)))
                 _readFailed = true;
-            else if (wasRead && !readFailed)
-                _readFailed = false;
+            else if (readStatus == ReadStatus.Ok)
+                _readFailed = false;   // a cancelled read keeps the failed state and its Retry
         }
         RaiseOperationChanged();
         UpdateBanner();
@@ -402,6 +419,13 @@ public sealed class ControllerConfigService : IDisposable
         try
         {
             var r = await ReadAsync(adopt: true).ConfigureAwait(false);
+            if (r.Status == ReadStatus.Busy)
+            {
+                // A user operation started first: its End() re-runs MaybeAutoRead for this Hello.
+                lock (_gate) _autoReadKey = null;
+                MaybeAutoRead();
+                return;
+            }
             AppLog.Info($"Automatic config read: {r.Status}{(r.Blob is { } b ? $", {b.Length} bytes" : "")}");
         }
         catch (Exception ex)
@@ -410,19 +434,25 @@ public sealed class ControllerConfigService : IDisposable
         }
     }
 
+    /// <summary>Recomputes the banner. Serialised, and every input is read inside the same
+    /// critical section, so a slower computation from older inputs can't be stored last.</summary>
     private void UpdateBanner()
     {
-        var inputs = new BannerInputs(null, Mirror, ConfigOperation.Idle, false, _link.ConnectionType, _bundledFirmware());
         bool changed;
-        lock (_gate)
+        lock (_bannerGate)
         {
-            if (_disposed) return;
-            var banner = ControllerBannerLogic.Compute(inputs with
+            var inputs = new BannerInputs(null, Mirror, ConfigOperation.Idle, false, _link.ConnectionType, _bundledFirmware());
+            lock (_gate)
             {
-                Hello = _lastHello, Operation = _operation, ReadFailed = _readFailed,
-            });
-            changed = banner != _banner;
-            _banner = banner;
+                if (_disposed) return;
+                inputs = inputs with { Hello = _lastHello, Operation = _operation, ReadFailed = _readFailed };
+            }
+            var banner = ControllerBannerLogic.Compute(inputs);
+            lock (_gate)
+            {
+                changed = banner != _banner;
+                _banner = banner;
+            }
         }
         if (changed) BannerChanged?.Invoke(this, EventArgs.Empty);
     }

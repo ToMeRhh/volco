@@ -204,8 +204,7 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
         await _k.Step(() => _k.Time.Advance(TimeSpan.FromSeconds(2)));
         await _k.Step(() => _k.Time.Advance(TimeSpan.FromSeconds(2)));
         _k.Time.Advance(TimeSpan.FromSeconds(2));
-        await Until(() => _k.Service.Operation == ConfigOperation.Idle);
-        Assert.Equal(BannerKind.ReadFailed, _k.Service.Banner.Kind);
+        await Until(() => _k.Service.Banner.Kind == BannerKind.ReadFailed);
         Assert.Equal(BannerActions.Retry | BannerActions.SetUpFromScratch, _k.Service.Banner.Actions);
 
         _k.Service.OnMessage(Hello(ControllerConfigState.Stored, 0x1234));
@@ -214,6 +213,51 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
 
         _k.Service.OnMessage(Hello(ControllerConfigState.Stored, 0x5678));
         await Until(() => _k.Link.Bursts.Count == 4);
+    }
+
+    private static readonly byte[] Undecodable = { 0xFF, 0xFF, 0xFF };
+
+    [Fact]
+    public async Task AnUndecodableRead_IsAFailure_AndNeverReplacesTheMirror()
+    {
+        _k.SetMirror(Small);
+        var before = _k.Config.Config.ControllerConfigBlob;
+        _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(Undecodable)));
+        Assert.Equal(BannerKind.DifferentSetup, _k.Service.Banner.Kind);
+
+        var read = _k.Service.ReadAsync(adopt: true);   // "Use the controller's"
+        _k.Deliver(Chunks(_k.LastSeq, Undecodable));
+        Assert.Equal(ReadStatus.Failed, (await read).Status);
+        Assert.Equal(before, _k.Config.Config.ControllerConfigBlob);
+        await Until(() => _k.Service.Banner.Kind == BannerKind.ReadFailed);
+        Assert.True(_k.Service.Banner.Actions.HasFlag(BannerActions.Retry));
+    }
+
+    [Fact]
+    public async Task AnUndecodableAutomaticRead_ShowsReadFailed_WithRetry()
+    {
+        _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(Undecodable)));
+        await Until(() => _k.Link.Bursts.Count == 1);
+        _k.Deliver(Chunks(_k.LastSeq, Undecodable));
+        await Until(() => _k.Service.Banner.Kind == BannerKind.ReadFailed);
+        Assert.Equal(BannerActions.Retry | BannerActions.SetUpFromScratch, _k.Service.Banner.Actions);
+        Assert.Null(_k.Config.Config.ControllerConfigBlob);
+    }
+
+    [Fact]
+    public async Task ACancelledRetry_KeepsTheFailedState()
+    {
+        _k.Service.OnMessage(Hello(ControllerConfigState.Stored, 0x1234));
+        await Until(() => _k.Link.Bursts.Count == 1);
+        _k.Deliver(Chunks(_k.LastSeq, Undecodable));
+        await Until(() => _k.Service.Banner.Kind == BannerKind.ReadFailed);
+
+        using var cts = new CancellationTokenSource();
+        var retry = _k.Service.ReadAsync(adopt: true, cts.Token);
+        cts.Cancel();
+        Assert.Equal(ReadStatus.Cancelled, (await retry).Status);
+        await Until(() => _k.Service.Operation == ConfigOperation.Idle);
+        await Until(() => _k.Service.Banner.Kind == BannerKind.ReadFailed);
     }
 
     [Fact]

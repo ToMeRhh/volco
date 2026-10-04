@@ -873,7 +873,8 @@ public sealed class VolcoRuntimeTests : IDisposable
     [Fact]
     public async Task ConfigMessages_FromARetiredConnection_AreDropped()
     {
-        var runtime = StartRuntime();
+        // Fake time: the 3 s result wait can't expire on a slow runner and change the seq.
+        var runtime = StartRuntime(options: Quiet with { Time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider() });
         var old = Connection(0);
         ConnectAndGreet(old);
         runtime.Reconnect();

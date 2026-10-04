@@ -192,13 +192,38 @@ public sealed class ControllerConfigServiceSaveTests : IDisposable
         Assert.Equal(SaveStatus.Confirmed, (await save).Status);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1025)]
+    public async Task ABlobOutsideTheLimits_Throws_BeforeAnythingStarts(int size)
+    {
+        var changes = 0;
+        _k.Service.OperationChanged += (_, _) => changes++;
+        await Assert.ThrowsAsync<ArgumentException>(() => _k.Service.SaveAsync(new byte[size]));
+        Assert.Equal(0, changes);
+        Assert.Equal(0, _k.Link.Calls);
+    }
+
+    [Fact]
+    public async Task TheConfirmingPhase_ReportsTheAttemptThatGotTheOk()
+    {
+        var save = _k.Service.SaveAsync(Small);
+        await _k.Step(() => _k.Service.OnMessage(Result(_k.LastSeq, ConfigResultCode.Ok)));
+        Assert.Equal(new SaveProgress(SavePhase.Confirming, 1), _k.Service.Progress);
+        _k.Service.OnMessage(Confirming);
+        await save;
+    }
+
     [Fact]
     public async Task CancelledBeforeTheBurst_SendsNothing()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
+        var changes = 0;
+        _k.Service.OperationChanged += (_, _) => changes++;
         Assert.Equal(SaveStatus.Cancelled, (await _k.Service.SaveAsync(Small, cts.Token)).Status);
         Assert.Equal(0, _k.Link.Calls);
+        Assert.Equal(0, changes);   // no Saving flicker
         Assert.Equal(ConfigOperation.Idle, _k.Service.Operation);
     }
 
