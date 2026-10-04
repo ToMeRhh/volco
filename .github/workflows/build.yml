@@ -52,7 +52,7 @@ jobs:
       run: pip install platformio==6.1.19
 
     - name: Firmware build id
-      run: python firmware/scripts/check_firmware_id_paths.py
+      run: python firmware/tools/check_firmware_id_paths.py
 
     - name: Config vectors are up to date
       run: |

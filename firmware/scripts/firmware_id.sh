@@ -3,7 +3,7 @@
 # a release whose firmware didn't change gets the same id and Volco offers no update.
 # Usage: firmware_id.sh          prints 12 hex digits
 #        firmware_id.sh --list   prints the hashed paths
-# check_firmware_id_paths.py (run in CI) fails if platformio.ini builds from a path not listed here.
+# firmware/tools/check_firmware_id_paths.py (run in CI; kept out of this hashed folder) fails if platformio.ini builds from a path not listed here.
 set -euo pipefail
 PATHS=(
   firmware/src

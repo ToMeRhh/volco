@@ -8,9 +8,9 @@ import re
 import subprocess
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))  # firmware/tools: deliberately outside the hashed firmware/scripts
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-SCRIPT = os.path.join(HERE, "firmware_id.sh")
+SCRIPT = os.path.join(ROOT, "firmware", "scripts", "firmware_id.sh")
 
 
 def run(*args):

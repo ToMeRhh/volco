@@ -77,7 +77,7 @@ New and changed pieces:
 | Firmware | `lib/volco_protocol` (new Hello, config frames, active-transport logic) | changed |
 | Firmware | `src/` (runtime-sized tables, NVS store, dual transport, reboot after save) | changed |
 | Firmware | `config.h` (only fixed constants remain) | reduced |
-| App, Core | `Volco.Core/ControllerConfig/` (codec, validator, presets, service, banner logic) | new |
+| App, Core | `Volco.Core/Controller/` (codec, validator, presets, service, banner logic) | new |
 | App, Core | `Volco.Core/Firmware/` (`IFirmwareFlasher` seam, catalog, manifest, `FirmwareService`) | new |
 | App, Core | `Communication/` (Hello parsing, config frames encode/parse) | changed |
 | App, Core | `Runtime/VolcoRuntime` (test mode, connection suspend, routing), `ControllerLink` (`SendRaw`) | changed |
@@ -206,7 +206,7 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
    - `total` = 0 or > 1024 → reply TOO_LARGE and close. A saved blob is never empty: `ControllerConfigCodec.Encode` always sets `preset` (`"blank"` for a config not based on a preset). There is **no factory-reset frame**: Install already wipes NVS (§8.6), and saving a Blank config covers "start fresh".
 2. **Chunks and End from a different transport** than the open transfer's are ignored.
 3. **A chunk or End with no open transfer is ignored silently.** After a transfer closes, by success or by error, nothing more is sent for it. This guarantees **at most one ConfigResult per Begin**.
-4. **Within an open transfer**, a chunk with the wrong `seq` or offset, or overrunning `total` → reply BAD_SEQUENCE and close. An End with the wrong `seq`, or received ≠ `total` → reply BAD_SEQUENCE and close.
+4. **Within an open transfer**, a chunk with the wrong `seq` or offset, with 0 or more than 240 data bytes, or overrunning `total` → reply BAD_SEQUENCE and close. An End with the wrong `seq`, or received ≠ `total` → reply BAD_SEQUENCE and close.
 5. **End with all bytes:**
    - check the CRC → BAD_CRC
    - decode → DECODE_FAILED
@@ -214,7 +214,7 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
    - store → STORAGE_FAILED
 
    The first failure replies with its code and closes. If all pass → reply OK, close, then reboot (§6.7). The ConfigResult always goes out on the transport the Begin arrived on.
-6. **Timeout:** an open transfer with no accepted config frame for **2000 ms** closes silently.
+6. **Timeout:** an open transfer with no accepted config frame for **2000 ms** closes silently. The check also runs on every incoming chunk and End, so a frame arriving late after a long pause finds the transfer already closed even if the loop hasn't ticked.
 7. **Nothing else stops:** inputs are still reported during a transfer, and Led, Screen, Begin and Commit still apply.
 
 **App write rules** (`ControllerConfigService.SaveAsync`):
@@ -263,7 +263,7 @@ Why this works:
 ```proto
 syntax = "proto2";
 package volco.config;
-option csharp_namespace = "Volco.Core.ControllerConfig.Proto";
+option csharp_namespace = "Volco.Core.Controller.Proto";
 
 // The whole controller configuration. One blob in NVS key "volco"/"cfg".
 // Field numbers are never reused. An absent field takes its default.
@@ -465,7 +465,7 @@ Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHEC
 
 **Steps:**
 
-1. **Counts:** sliders ≤ 16 and buttons ≤ 32. A decoded config already guarantees this, because the decoder enforces `max_count`; the step stays for the C# path.
+1. **Counts:** sliders ≤ 16 and buttons ≤ 32. A decoded config already guarantees this, because the decoder enforces `max_count`; the step stays for the C# path. The violations are reported as (INVALID, 0xFF, 1) for sliders and (INVALID, 0xFF, 2) for buttons.
 2. **Sliders:**
    - `pin` absent, not usable, or not ADC-capable → field 1.
    - If `udp.enabled` and `pin` ∈ ADC2 → field 1. ADC2 cannot be read while Wi-Fi is on.
@@ -611,9 +611,9 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 - **`ControllerInfoConfig`** gains `Chip` and `FirmwareVersion`, and `SameAs` compares them too.
 - **`SerialConnection`:** uses the fixed 115200 baud rate. Its error handling is otherwise unchanged. Stage 1 found that Windows raises no `ErrorReceived` when the board resets with the port open, and the ROM banner is clean at 115200.
 
-### 8.2 Core: `ControllerConfig/`
+### 8.2 Core: `Controller/`
 
-- **`ControllerConfigCodec`:** wraps the generated `Volco.Core.ControllerConfig.Proto.ControllerConfig`. It provides `Encode(model) → byte[]`, `Decode(byte[]) → model` (parse, then the §6.1 limit and NUL checks; throws `ControllerConfigFormatException`), and `Crc32(byte[])`.
+- **`ControllerConfigCodec`:** wraps the generated `Volco.Core.Controller.Proto.ControllerConfig` (namespace `Volco.Core.Controller`, not `ControllerConfig`: under that name the message type would be shadowed by the namespace). It provides `Encode(model) → byte[]`, `Decode(byte[]) → model` (parse, then the §6.1 limit and NUL checks; throws `ControllerConfigFormatException`), and `Crc32(byte[])`.
 - **`ControllerConfigValidator`:** the §6.4 steps and the ESP32 table, returning the same `(code, item, field)` triple.
 - **`ControllerPresets`:** the embedded DIY reference, plus the hard-coded placeholder entry.
 - **`ControllerConfigService`:** constructed and owned by `VolcoRuntime`.

@@ -26,11 +26,17 @@ public static class ControllerConfigCodec
 
     /// <summary>The blob for <paramref name="config"/>. Never empty: a config without a preset is
     /// sent as preset "blank" (an empty write is TOO_LARGE on the controller).</summary>
+    /// <exception cref="ControllerConfigFormatException">The config breaks a limit the firmware's
+    /// decoder enforces (validation skips UDP fields while UDP is off; the decoder doesn't).</exception>
     public static byte[] Encode(ControllerConfig config)
     {
         var copy = config.Clone();
         if (string.IsNullOrEmpty(copy.Preset)) copy.Preset = BlankPresetId;
-        return copy.ToByteArray();
+        CheckLimits(copy);
+        var blob = copy.ToByteArray();
+        if (blob.Length > MaxBlob)
+            throw new ControllerConfigFormatException($"The config is {blob.Length} bytes; the maximum is {MaxBlob}.");
+        return blob;
     }
 
     /// <exception cref="ControllerConfigFormatException">Malformed, over a limit, invalid UTF-8, or a NUL in a string.</exception>
@@ -47,6 +53,13 @@ public static class ControllerConfigCodec
         {
             throw new ControllerConfigFormatException("Not a valid controller config: " + e.Message, e);
         }
+        CheckLimits(config);
+        return config;
+    }
+
+    /// <summary>The nanopb limits (spec §6.1): counts, string byte lengths, no NUL in a string.</summary>
+    private static void CheckLimits(ControllerConfig config)
+    {
         if (config.Sliders.Count > MaxSliders)
             throw new ControllerConfigFormatException($"{config.Sliders.Count} sliders; the maximum is {MaxSliders}.");
         if (config.Buttons.Count > MaxButtons)
@@ -57,7 +70,6 @@ public static class ControllerConfigCodec
             CheckString(udp.Ssid, "udp.ssid", MaxSsidBytes);
             CheckString(udp.Password, "udp.password", MaxPasswordBytes);
         }
-        return config;
     }
 
     /// <summary>zlib CRC-32 (spec §6.5).</summary>
