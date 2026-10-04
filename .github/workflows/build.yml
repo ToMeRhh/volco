@@ -68,6 +68,32 @@ jobs:
       working-directory: firmware
       run: pio run -e esp32
 
+  simulator-test:
+    name: Simulator Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install
+      working-directory: tools/simulator/test
+      run: npm ci
+
+    - name: Check the protobuf descriptor is current
+      working-directory: tools/simulator/test
+      run: |
+        node gen_descriptor.mjs
+        git diff --exit-code ../volco_config_descriptor.js
+
+    - name: Config session tests
+      working-directory: tools/simulator/test
+      run: node --test
+
   build:
     name: Build and Publish
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_build == true)
