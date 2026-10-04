@@ -541,9 +541,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The Advanced section is open (collapsed by default, spec §8.7).</summary>
     [ObservableProperty] private bool _isAdvancedOpen;
 
-    /// <summary>The Advanced section is open (collapsed by default, spec §8.7).</summary>
-    [ObservableProperty] private bool _isAdvancedOpen;
-
     [ObservableProperty] private bool _showPassword;
     public char PasswordChar => ShowPassword ? '\0' : '•';
     partial void OnShowPasswordChanged(bool value) => OnPropertyChanged(nameof(PasswordChar));
