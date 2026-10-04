@@ -250,6 +250,15 @@ void test_hello_request_after_host_timeout_sends_one_hello() {
   assertHelloWithSliders(sink, before);
 }
 
+void test_largest_hello_fits_kMaxHelloFrame() {
+  uint8_t out[300];
+  uint8_t kinds[kMaxButtons];
+  memset(kinds, KIND_SCREEN, sizeof kinds);
+  const char* fw = "0123456789abcdef0123456789abcdef";  // 32 bytes: the longest id
+  size_t n = encodeHello(HelloInfo{1, fw, 1, 0xFFFFFFFF, 16, kMaxButtons, kinds}, out);
+  TEST_ASSERT_EQUAL(kMaxHelloFrame, n);
+}
+
 // ── Config frames (spec §5.3, §5.4) ──────────────────────────────────────────
 struct RecordingConfigSink : ConfigSink {
   std::vector<std::string> calls;
@@ -410,6 +419,7 @@ int main(int, char**) {
   RUN_TEST(test_alive_when_idle_for_a_second);
   RUN_TEST(test_host_timeout_then_hello_on_next_frame);
   RUN_TEST(test_hello_request_after_host_timeout_sends_one_hello);
+  RUN_TEST(test_largest_hello_fits_kMaxHelloFrame);
   RUN_TEST(test_config_frames_encode_to_golden_bytes);
   RUN_TEST(test_link_routes_config_frames_with_transport);
   RUN_TEST(test_config_frames_are_proof_of_life);

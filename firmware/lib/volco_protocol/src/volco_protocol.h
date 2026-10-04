@@ -71,7 +71,7 @@ struct HelloInfo {
   const uint8_t* kinds;    // one Kind per button
 };
 constexpr uint8_t kMaxFirmwareId = 32;
-constexpr size_t kMaxHelloFrame = 3 + 10 + kMaxFirmwareId + kMaxButtons;  // marker, length, body, checksum
+constexpr size_t kMaxHelloFrame = 3 + 1 + 10 + kMaxFirmwareId + kMaxButtons;  // marker, length, checksum; type; body
 
 size_t encodeHello(const HelloInfo& hello, uint8_t* out);
 size_t encodeAlive(uint8_t* out);

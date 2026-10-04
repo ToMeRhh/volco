@@ -137,7 +137,7 @@ Text is UTF-8 in logical order, at most 60 bytes per slot; the app strips Hebrew
 The config is the protobuf blob of `proto/volco_config.proto`, at most 1024 bytes. Each request carries a `seq` that its replies echo, and replies go back on the transport the request came in on.
 
 - **Read:** `ConfigRead` → the stored bytes as `ConfigData` frames, 240 bytes each (one empty frame when nothing is stored), all in one transport send. Each frame carries the CRC of the whole blob.
-- **Write:** the PC sends `ConfigWriteBegin`, the chunks in order, then `ConfigWriteEnd`, all in one send. The controller answers once with `ConfigResult`. A transfer that stalls for 2 s is dropped without an answer, and frames for another `seq` or from the other transport are ignored while one is open.
+- **Write:** the PC sends `ConfigWriteBegin`, the chunks in order, then `ConfigWriteEnd`, all in one send. The controller answers once with `ConfigResult`. A transfer that stalls for 2 s is dropped without an answer. While one is open, chunks and End from the other transport are ignored, a wrong `seq` or offset answers BAD_SEQUENCE and ends the transfer, and a new Begin from either transport starts over.
 - **After OK** the controller has stored the config; it flushes, waits 200 ms and reboots into it, so the next Hello reports state 1 and the new CRC. Any other answer leaves the old config in place.
 
 | Code | Name | `item` / `field` |

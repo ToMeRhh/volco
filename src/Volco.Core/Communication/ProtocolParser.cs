@@ -88,7 +88,7 @@ public class ProtocolParser
     private static HelloMessage? ParseHello(ReadOnlySpan<byte> p)
     {
         byte version = p[1];
-        if (version != ProtocolVersion.Current) return new HelloMessage(version, 0, Array.Empty<IndicatorKind>());
+        if (version != ProtocolVersion.Current) return HelloMessage.VersionOnly(version);
         if (p.Length < 4) return null;
         var chip = (ChipFamily)p[2];
         int fwLen = p[3];

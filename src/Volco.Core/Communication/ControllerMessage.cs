@@ -112,7 +112,11 @@ public sealed class HelloMessage : ControllerMessage
         Buttons = buttons;
     }
 
-    /// <summary>Tests and version-only Hellos (a version this app doesn't speak: spec §5.2).</summary>
+    /// <summary>A Hello of a version this app doesn't speak (spec §5.2): only the version is known.</summary>
+    public static HelloMessage VersionOnly(byte version)
+        => new(version, ChipFamily.Unknown, "", ControllerConfigState.None, 0, 0, Array.Empty<IndicatorKind>());
+
+    /// <summary>Tests: a version-1 ESP32 with a stored config.</summary>
     public HelloMessage(byte version, int sliderCount, IReadOnlyList<IndicatorKind> buttons)
         : this(version, ChipFamily.Esp32, "", ControllerConfigState.Stored, 0, sliderCount, buttons) { }
 }

@@ -202,19 +202,22 @@ def cmd_hello(r, serial):
 def do_read(r, pb2):
     seq = random.randrange(256)
     r.send(frame(bytes([0x87, seq])), f"ConfigRead seq {seq}")
-    chunks, total, crc = {}, None, None
+    blob, total, crc = b"", None, None
     end = time.time() + 3
     while time.time() < end:
         p = r.wait(lambda p: p[0] == 0x05 and len(p) >= 10 and p[1] == seq, max(0.0, end - time.time()))
         if p is None:
             break
-        total, off, crc = int.from_bytes(p[2:4], "big"), int.from_bytes(p[4:6], "big"), int.from_bytes(p[6:10], "big")
-        chunks[off] = bytes(p[10:])
-        if sum(len(c) for c in chunks.values()) >= total:
+        t, off, c = int.from_bytes(p[2:4], "big"), int.from_bytes(p[4:6], "big"), int.from_bytes(p[6:10], "big")
+        if total is None:
+            total, crc = t, c
+        if (t, c) != (total, crc) or off != len(blob):
+            sys.exit(f"READ BAD: chunk at {off} (total {t}, crc {c:08X}) after {len(blob)} bytes of {total}, crc {crc:08X}")
+        blob += bytes(p[10:])
+        if len(blob) >= total:
             break
     if total is None:
         sys.exit("no ConfigData")
-    blob = b"".join(chunks[o] for o in sorted(chunks))
     if len(blob) != total or zlib.crc32(blob) != crc:
         sys.exit(f"READ BAD: {len(blob)}/{total} bytes, crc {zlib.crc32(blob):08X} vs {crc:08X}")
     print(f"READ OK: {total} bytes, crc {crc:08X}")

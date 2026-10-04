@@ -696,6 +696,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     {
         // Raised on the receive path before the Slider frames that follow the Hello are routed.
         _sliderProcessor?.BeginSync();
+        if (hello.Version != ProtocolVersion.Current) return;  // version-only: keep the last good summary
 
         var info = new ControllerInfoConfig
         {
