@@ -12,3 +12,5 @@
 #define KEEPALIVE_MS 1000        // send Alive when nothing else was sent for this long
 #define COMMIT_FALLBACK_MS 500   // apply held updates if a Begin's Commit never arrives
 #define WIFI_RETRY_MS 10000      // at most this often, re-join a Wi-Fi that failed or dropped
+
+#define SLIDER_SEED_READS 8      // reads averaged for each slider's starting value at boot

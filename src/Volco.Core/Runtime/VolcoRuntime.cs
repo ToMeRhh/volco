@@ -691,9 +691,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     }
 
     /// <summary>Stores the controller's hardware before the link pushes (spec §3.4); saves only
-    /// when it changed.</summary>
+    /// when it changed. Also arms the slider sync: every slider's position follows the Hello.</summary>
     private void OnHello(object? sender, HelloMessage hello)
     {
+        // Raised on the receive path before the Slider frames that follow the Hello are routed.
+        _sliderProcessor?.BeginSync();
+
         var info = new ControllerInfoConfig
         {
             ProtocolVersion = hello.Version, Sliders = hello.SliderCount, Buttons = hello.Buttons.ToList(),

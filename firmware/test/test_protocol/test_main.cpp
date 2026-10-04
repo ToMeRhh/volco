@@ -12,12 +12,14 @@ struct FakeSink : LinkSink {
   std::vector<std::vector<uint8_t>> sent;
   std::vector<Call> calls;
   int lost = 0;
+  uint16_t sliders[5] = {100, 1000, 2000, 3000, 4095};
   void send(const uint8_t* f, size_t n) override { sent.emplace_back(f, f + n); }
   void applyLed(uint8_t b, uint8_t v) override { calls.push_back({'L', b, v, 0, {}, 0}); }
   void applyScreen(uint8_t b, uint8_t t, const ScreenContent& c, uint32_t now) override {
     calls.push_back({'S', b, 0, t, c, now});
   }
   void hostLost() override { lost++; }
+  uint16_t sliderValue(uint8_t i) override { return sliders[i]; }
 };
 
 static const uint8_t KINDS[] = {KIND_LED, KIND_LED_PAIR, KIND_SCREEN, KIND_SCREEN};
@@ -119,19 +121,30 @@ void test_decode_screen_rejects_overrunning_lengths() {
 }
 
 // ── Session ─────────────────────────────────────────────────────────────────
-void test_begin_sends_hello() {
-  FakeSink sink; Link link(config(), sink);
-  link.begin(0);
-  TEST_ASSERT_EQUAL(1, sink.sent.size());
-  TEST_ASSERT_EQUAL_HEX8(0x01, sink.sent[0][2]);
+// Hello and the five slider frames that follow it start at sent[from].
+static void assertHelloWithSliders(const FakeSink& sink, size_t from) {
+  TEST_ASSERT_EQUAL(from + 6, sink.sent.size());
+  TEST_ASSERT_EQUAL_HEX8(0x01, sink.sent[from][2]);
+  for (uint8_t i = 0; i < 5; i++) {
+    uint8_t expected[8];
+    size_t n = encodeSlider(i, sink.sliders[i], expected);
+    TEST_ASSERT_EQUAL(n, sink.sent[from + 1 + i].size());
+    TEST_ASSERT_EQUAL_MEMORY(expected, sink.sent[from + 1 + i].data(), n);
+  }
 }
 
-void test_hello_request_is_answered() {
+void test_begin_sends_hello_then_every_slider() {
   FakeSink sink; Link link(config(), sink);
   link.begin(0);
+  assertHelloWithSliders(sink, 0);
+}
+
+void test_hello_request_is_answered_with_hello_then_every_slider() {
+  FakeSink sink; Link link(config(), sink);
+  link.begin(0);
+  sink.sliders[3] = 1234;              // the reply carries the value at the time of the reply
   deliver(link, golden("hello_request"), 10);
-  TEST_ASSERT_EQUAL(2, sink.sent.size());
-  TEST_ASSERT_EQUAL_HEX8(0x01, sink.sent[1][2]);
+  assertHelloWithSliders(sink, 6);
 }
 
 void test_led_and_screen_apply_only_to_matching_kinds() {
@@ -196,15 +209,15 @@ void test_commit_without_begin_and_empty_commit_are_noops() {
 
 void test_alive_when_idle_for_a_second() {
   FakeSink sink; Link link(config(), sink);
-  link.begin(0);                       // Hello at t=0
+  link.begin(0);                       // Hello and sliders at t=0
   link.tick(999);
-  TEST_ASSERT_EQUAL(1, sink.sent.size());
+  TEST_ASSERT_EQUAL(6, sink.sent.size());
   link.tick(1000);
-  TEST_ASSERT_EQUAL(2, sink.sent.size());
-  TEST_ASSERT_EQUAL_HEX8(0x02, sink.sent[1][2]);
+  TEST_ASSERT_EQUAL(7, sink.sent.size());
+  TEST_ASSERT_EQUAL_HEX8(0x02, sink.sent[6][2]);
   link.sendSlider(0, 100, 1500);       // traffic resets the idle clock
   link.tick(2400);
-  TEST_ASSERT_EQUAL(3, sink.sent.size());
+  TEST_ASSERT_EQUAL(8, sink.sent.size());
 }
 
 void test_host_timeout_then_hello_on_next_frame() {
@@ -220,8 +233,17 @@ void test_host_timeout_then_hello_on_next_frame() {
   size_t before = sink.sent.size();
   deliver(link, golden("heartbeat"), 5000);
   TEST_ASSERT_TRUE(link.hostAlive());
-  TEST_ASSERT_EQUAL(before + 1, sink.sent.size());
-  TEST_ASSERT_EQUAL_HEX8(0x01, sink.sent.back()[2]);     // Hello
+  assertHelloWithSliders(sink, before);
+}
+
+void test_hello_request_after_host_timeout_sends_one_hello() {
+  FakeSink sink; Link link(config(), sink);
+  link.begin(0);
+  deliver(link, golden("heartbeat"), 100);
+  link.tick(3100);                     // host lost (sends an Alive too)
+  size_t before = sink.sent.size();
+  deliver(link, golden("hello_request"), 5000);
+  assertHelloWithSliders(sink, before);
 }
 
 // ── Active transport (spec §5.5) ─────────────────────────────────────────────
@@ -286,8 +308,8 @@ int main(int, char**) {
   RUN_TEST(test_encodes_controller_messages_to_golden_bytes);
   RUN_TEST(test_decodes_golden_screens);
   RUN_TEST(test_decode_screen_rejects_overrunning_lengths);
-  RUN_TEST(test_begin_sends_hello);
-  RUN_TEST(test_hello_request_is_answered);
+  RUN_TEST(test_begin_sends_hello_then_every_slider);
+  RUN_TEST(test_hello_request_is_answered_with_hello_then_every_slider);
   RUN_TEST(test_led_and_screen_apply_only_to_matching_kinds);
   RUN_TEST(test_begin_commit_holds_then_applies_together);
   RUN_TEST(test_held_replacement_keeps_the_held_transition);
@@ -295,6 +317,7 @@ int main(int, char**) {
   RUN_TEST(test_commit_without_begin_and_empty_commit_are_noops);
   RUN_TEST(test_alive_when_idle_for_a_second);
   RUN_TEST(test_host_timeout_then_hello_on_next_frame);
+  RUN_TEST(test_hello_request_after_host_timeout_sends_one_hello);
   RUN_TEST(test_unlatched_sends_on_every_transport_that_is_up);
   RUN_TEST(test_first_frame_latches_its_transport);
   RUN_TEST(test_frame_on_other_transport_moves_the_latch);

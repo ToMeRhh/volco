@@ -72,6 +72,7 @@ struct LinkSink {
   virtual void applyLed(uint8_t button, uint8_t value) = 0;
   virtual void applyScreen(uint8_t button, uint8_t transition, const ScreenContent& content, uint32_t now) = 0;
   virtual void hostLost() = 0;  // LEDs off, local "not connected" screen
+  virtual uint16_t sliderValue(uint8_t index) = 0;  // current filtered position, sent after every Hello
   virtual ~LinkSink() = default;
 };
 

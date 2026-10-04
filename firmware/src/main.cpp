@@ -49,15 +49,23 @@ class HardwareSink : public volco::LinkSink {
     for (uint8_t i = 0; i < rc.buttonCount; i++) showIndicator(rc.buttons[i], 0);
     screens_host_lost(millis());
   }
+  // Sent after every Hello (PR #68). The deadband then measures from the value just sent.
+  uint16_t sliderValue(uint8_t i) override {
+    lastSliderValues[i] = (uint16_t)smoothedValues[i];
+    return lastSliderValues[i];
+  }
 };
 
 static HardwareSink sink;
 static volco::Link* pcLink = nullptr;
 
-// Spec §5.5 exception: whenever Wi-Fi connects, Hello goes out on UDP even if serial is latched.
+// Spec §5.5 exception: whenever Wi-Fi connects, Hello goes out on UDP even if serial is latched,
+// followed by every slider's position like any Hello.
 static void sendHelloOnUdp() {
   uint8_t f[4 + volco::kMaxButtons + 3];
   transport_send(TRANSPORT_UDP, f, volco::encodeHello(rc.sliderCount, kinds, rc.buttonCount, f));
+  for (uint8_t i = 0; i < rc.sliderCount; i++)
+    transport_send(TRANSPORT_UDP, f, volco::encodeSlider(i, sink.sliderValue(i), f));
 }
 
 // ============================================================
@@ -79,9 +87,12 @@ void setup() {
     kinds[i] = rc.buttons[i].kind;  // Kind values are the wire values
   }
 
+  // Seed from an average, not one noisy read: Hello reports these positions right away.
   analogReadResolution(12);
   for (uint8_t i = 0; i < rc.sliderCount; i++) {
-    lastSliderValues[i] = analogRead(rc.sliderPins[i]);
+    uint32_t sum = 0;
+    for (uint8_t r = 0; r < SLIDER_SEED_READS; r++) sum += analogRead(rc.sliderPins[i]);
+    lastSliderValues[i] = sum / SLIDER_SEED_READS;
     smoothedValues[i] = lastSliderValues[i];
   }
 

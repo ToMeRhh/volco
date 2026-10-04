@@ -247,6 +247,104 @@ public class SliderProcessorTests
         Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
     }
 
+    // ── Sync: the firmware reports every slider after each Hello ──────────────────────────
+
+    private static ConfigManager PresentDeviceSliderConfig(double smoothing = 0)
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "present-dev", FriendlyName = "Headphones" },
+            SmoothingFactor = smoothing,
+        });
+        return configManager;
+    }
+
+    [Fact]
+    public async Task SyncValue_SetsVolumeAndLevel_WithoutOsd()
+    {
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, PresentDeviceSliderConfig());
+
+        var levelTcs = new TaskCompletionSource<SliderLevelEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.SliderLevelChanged += (_, e) => levelTcs.TrySetResult(e);
+        int volumeChangedFired = 0;
+        processor.VolumeChanged += (_, _) => Interlocked.Exchange(ref volumeChangedFired, 1);
+
+        processor.BeginSync();
+        processor.HandleSliderEvent(0, 4095);
+
+        var completed = await Task.WhenAny(levelTcs.Task, Task.Delay(500));
+        Assert.True(completed == levelTcs.Task, "SliderLevelChanged did not fire for a sync value");
+        var (_, level) = Assert.Single(audio.Snapshot(audio.DeviceVolumeCalls));
+        Assert.Equal(1f, level, 2);
+        Assert.Equal(1f, processor.GetLastLevel(0)!.Value, 2);
+
+        await Task.Delay(100);
+        Assert.Equal(0, Volatile.Read(ref volumeChangedFired));
+    }
+
+    [Fact]
+    public async Task SyncValue_IgnoresSmoothing()
+    {
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, PresentDeviceSliderConfig(smoothing: 0.9));
+
+        processor.HandleSliderEvent(0, 0);
+        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 1);
+
+        // A reconnect: one frame only, so a smoothed step would never reach the slider's position.
+        processor.BeginSync();
+        processor.HandleSliderEvent(0, 4095);
+        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 2);
+
+        Assert.Equal(1f, audio.Snapshot(audio.DeviceVolumeCalls)[1].Level, 2);
+    }
+
+    [Fact]
+    public async Task ValueAfterTheSyncValue_ShowsOsd()
+    {
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, PresentDeviceSliderConfig());
+
+        var volumeTcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.VolumeChanged += (_, e) => volumeTcs.TrySetResult(e);
+
+        processor.BeginSync();
+        processor.HandleSliderEvent(0, 1000);
+        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 1);
+        Assert.False(volumeTcs.Task.IsCompleted);
+
+        processor.HandleSliderEvent(0, 2000);
+        var completed = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
+        Assert.True(completed == volumeTcs.Task, "VolumeChanged did not fire for a movement after the sync value");
+    }
+
+    [Fact]
+    public async Task SyncExpires_FirstValueAfterTheWindowShowsOsd()
+    {
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, PresentDeviceSliderConfig(), syncWindow: TimeSpan.FromMilliseconds(50));
+
+        var volumeTcs = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.VolumeChanged += (_, e) => volumeTcs.TrySetResult(e);
+
+        // The sync frame was lost (UDP): a real movement later must not be silenced.
+        processor.BeginSync();
+        await Task.Delay(150);
+        processor.HandleSliderEvent(0, 2048);
+
+        var completed = await Task.WhenAny(volumeTcs.Task, Task.Delay(500));
+        Assert.True(completed == volumeTcs.Task, "VolumeChanged did not fire after the sync window expired");
+    }
+
     // ── Issue #48: the slider OSD carries the governing device's mute flag ─────────────────
 
     [Fact]

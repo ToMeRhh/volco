@@ -6,7 +6,7 @@ ESP32 firmware for the Volco hardware controller. This document explains how the
 
 The controller is a plain input and display surface:
 
-- It reports **raw input**: every slider's position and every button's press and release. At boot, on request, and after a silence from the PC it also reports its **hardware** (Hello): how many sliders and buttons it has, and what each button shows.
+- It reports **raw input**: every slider's position and every button's press and release. At boot, on request, and after a silence from the PC it also reports its **hardware** (Hello): how many sliders and buttons it has, and what each button shows. Every Hello is followed by every slider's current position, so the PC knows where the sliders are without waiting for them to move.
 - It shows **LED values the PC sends it**, one per button, rendered on that button's light.
 - It **draws screens** from descriptions the PC sends (an icon, a top line, a name) on SSD1306 OLED modules.
 - It runs **scrolling, slides and burn-in protection locally** (dimming, switching off, pixel shift), so the PC never streams frames.
@@ -59,8 +59,9 @@ cd firmware && pio run -e esp32 -t upload
 
 ## Wiring screens and choosing pins
 
-- The ESP32 has **two hardware I2C buses**, and an SSD1306 answers on `0x3C` or `0x3D`, so there are at most **4 screens**. Two modules on the same bus need different addresses: move the address resistor on at least one module per bus to `0x3D`.
-- Free, safe GPIOs on the current board: **13, 16, 17, 22, 23, 25, 26, 27**. The defaults use 25/26 for bus 0 and 27/13 for bus 1.
+- The ESP32 has **two hardware I2C buses** (0 and 1); the firmware adds **two software buses** (2 and 3). An SSD1306 answers on `0x3C` or `0x3D`, and a bus takes at most two screens. Two modules on the same bus need different addresses: move the address resistor on one of them to `0x3D`. Modules whose address is fixed need a bus each, so up to 4 of them.
+- The software buses drive SCL push-pull and SDA open-drain, without clock stretching, which suits SSD1306 modules (they never hold SCL). A full frame on them takes about as long as on a hardware bus at 400 kHz, but the CPU is busy for all of it.
+- Free, safe GPIOs on the current board: **13, 16, 17, 22, 23, 25, 26, 27**. The defaults use 25/26 for bus 0, 27/13 for bus 1, 16/17 for bus 2 and 22/23 for bus 3.
 - Avoid GPIO 21 while it drives an LED (it is Arduino's default SDA), and avoid the strapping pins 0, 2 and 15.
 - If slides look rough, raise the bus's `clock_hz` to 1000000. A full frame takes about 25-30 ms per panel at 400 kHz, and panels are updated one after another.
 
@@ -84,7 +85,7 @@ The high bit of `type` is the direction: `0x0_` comes from the controller, `0x8_
 |---|---|---|---|
 | `0x01` | Hello | `version` (1), `sliders`, `buttons`, then one `kind` per button: 0 none, 1 LED, 2 LED pair, 3 screen | The controller's hardware. |
 | `0x02` | Alive | none | Keepalive from the controller. |
-| `0x03` | Slider | `index`, value u16 (0-4095) | A slider moved. |
+| `0x03` | Slider | `index`, value u16 (0-4095) | A slider moved, or its position after a Hello. |
 | `0x04` | Button | `index`, `pressed` (1 or 0) | A button changed. |
 | `0x81` | HelloRequest | none | The PC asks for Hello. |
 | `0x82` | Heartbeat | none | Keepalive from the PC. |
@@ -112,7 +113,7 @@ Text is UTF-8 in logical order, at most 60 bytes per slot; the app strips Hebrew
 
 ### Behaviour rules
 
-- **Hello** is sent at boot (which also covers the ESP32 resetting when the serial port is opened), in reply to every HelloRequest, and on the first valid frame from the PC while the PC is not considered alive (the first frame ever, or the first after a host timeout), unless that frame is itself a HelloRequest, whose reply covers it. The PC sends no Led or Screen on a connection until it has seen a Hello, then pushes every button's state.
+- **Hello** is sent at boot (which also covers the ESP32 resetting when the serial port is opened), in reply to every HelloRequest, and on the first valid frame from the PC while the PC is not considered alive (the first frame ever, or the first after a host timeout), unless that frame is itself a HelloRequest, whose reply covers it. Hello is always followed by one Slider frame per slider carrying its current smoothed value; the app sets the volumes from these without showing the volume OSD. The PC sends no Led or Screen on a connection until it has seen a Hello, then pushes every button's state.
 - **Keepalive.** The controller sends Alive whenever it has sent nothing for 1 s. The PC sends Heartbeat the same way, but only once its session is Ready. Any valid frame from the PC counts as proof of life; after `HOST_TIMEOUT_MS` without one the LEDs go off and the screens show "not connected".
 - **Begin / Commit.** After Begin the firmware holds every Led and Screen instead of applying it; on Commit it applies them all in the same pass, so every screen starts its slide at the same moment. A newer message for the same button replaces the held one, a second Begin restarts the timer, Commit with nothing held does nothing, and Commit without a Begin is ignored. If no Commit arrives within `COMMIT_FALLBACK_MS` of the Begin, the firmware applies what it holds.
 - **Kind mismatches are ignored.** A Led for a button that is not an LED or LED pair, a Screen for a button that is not a screen, and any out-of-range index are dropped.
