@@ -26,6 +26,7 @@ ReceiverEvent BlobReceiver::onBegin(uint8_t transport, uint8_t seq, uint16_t tot
 
 ReceiverEvent BlobReceiver::onChunk(uint8_t transport, uint8_t seq, uint16_t offset, const uint8_t* data, size_t len,
                                     uint32_t now) {
+  tick(now);  // rule 6 holds even if the caller hasn't ticked since a long pause
   if (!open_ || transport != transport_) return {ReceiverEvent::NONE, transport, seq, CFG_OK};  // rules 2-3
   if (seq != seq_ || offset != received_ || len == 0 || len > kMaxChunk || received_ + len > total_)
     return reply(CFG_BAD_SEQUENCE);  // rule 4
@@ -36,7 +37,7 @@ ReceiverEvent BlobReceiver::onChunk(uint8_t transport, uint8_t seq, uint16_t off
 }
 
 ReceiverEvent BlobReceiver::onEnd(uint8_t transport, uint8_t seq, uint32_t now) {
-  (void)now;
+  tick(now);
   if (!open_ || transport != transport_) return {ReceiverEvent::NONE, transport, seq, CFG_OK};
   if (seq != seq_ || received_ != total_) return reply(CFG_BAD_SEQUENCE);
   if (crc32(buf_, total_) != crc_) return reply(CFG_BAD_CRC);

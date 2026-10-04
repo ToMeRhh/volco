@@ -151,6 +151,20 @@ void test_timeout_closes_silently() {
   TEST_ASSERT_EQUAL(K::NONE, r.onChunk(0, 1, 0, b.data(), 10, 2101).kind);
 }
 
+void test_late_frames_expire_without_tick() {
+  // The caller may process frames before calling tick() (e.g. after a long redraw): a chunk or End
+  // arriving 2000 ms after the last accepted frame must already find the transfer closed.
+  BlobReceiver r;
+  auto b = blobOf(10);
+  r.onBegin(0, 1, 10, crc32(b.data(), 10), 0);
+  TEST_ASSERT_EQUAL(K::NONE, r.onChunk(0, 1, 0, b.data(), 10, 2000).kind);
+  TEST_ASSERT_FALSE(r.isOpen());
+  r.onBegin(0, 2, 10, crc32(b.data(), 10), 0);
+  r.onChunk(0, 2, 0, b.data(), 10, 100);
+  TEST_ASSERT_EQUAL(K::NONE, r.onEnd(0, 2, 2100).kind);
+  TEST_ASSERT_FALSE(r.isOpen());
+}
+
 void test_at_most_one_result_per_begin() {
   BlobReceiver r;
   auto b = blobOf(300);
@@ -185,6 +199,7 @@ int main(int, char**) {
   RUN_TEST(test_other_transport_ignored_and_does_not_refresh);
   RUN_TEST(test_begin_mid_transfer_restarts);
   RUN_TEST(test_timeout_closes_silently);
+  RUN_TEST(test_late_frames_expire_without_tick);
   RUN_TEST(test_at_most_one_result_per_begin);
   return UNITY_END();
 }
