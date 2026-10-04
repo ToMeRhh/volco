@@ -16,6 +16,12 @@ public enum MessageType : byte
     Screen = 0x84,
     Begin = 0x85,
     Commit = 0x86,
+    ConfigData = 0x05,
+    ConfigResult = 0x06,
+    ConfigRead = 0x87,
+    ConfigWriteBegin = 0x88,
+    ConfigWriteChunk = 0x89,
+    ConfigWriteEnd = 0x8A,
 }
 
 /// <summary>The protocol version this app speaks; Hello carries the firmware's.</summary>
@@ -109,6 +115,32 @@ public sealed class HelloMessage : ControllerMessage
     /// <summary>Tests and version-only Hellos (a version this app doesn't speak: spec §5.2).</summary>
     public HelloMessage(byte version, int sliderCount, IReadOnlyList<IndicatorKind> buttons)
         : this(version, ChipFamily.Esp32, "", ControllerConfigState.Stored, 0, sliderCount, buttons) { }
+}
+
+/// <summary>One chunk of the controller's reply to a ConfigRead (spec §5.3): the stored bytes from
+/// <see cref="Offset"/>, out of <see cref="Total"/>; <see cref="Crc32"/> is the whole blob's.</summary>
+public sealed class ConfigDataMessage : ControllerMessage
+{
+    public byte Seq { get; }
+    public ushort Total { get; }
+    public ushort Offset { get; }
+    public uint Crc32 { get; }
+    public byte[] Data { get; }
+
+    public ConfigDataMessage(byte seq, ushort total, ushort offset, uint crc32, byte[] data) : base(MessageType.ConfigData)
+        => (Seq, Total, Offset, Crc32, Data) = (seq, total, offset, crc32, data);
+}
+
+/// <summary>The controller's answer to a config write (spec §5.4).</summary>
+public sealed class ConfigResultMessage : ControllerMessage
+{
+    public byte Seq { get; }
+    public Volco.Core.Controller.ConfigResultCode Code { get; }
+    public byte Item { get; }
+    public byte Field { get; }
+
+    public ConfigResultMessage(byte seq, Volco.Core.Controller.ConfigResultCode code, byte item, byte field)
+        : base(MessageType.ConfigResult) => (Seq, Code, Item, Field) = (seq, code, item, field);
 }
 
 /// <summary>The controller's keepalive: sent when it has sent nothing else for a second.</summary>

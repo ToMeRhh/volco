@@ -17,3 +17,11 @@ screen_muted_mic AA 18 84 01 00 01 01 05 4D 55 54 45 44 07 01 0A 4D 69 63 72 6F 
 screen_preset_dots_slide_left AA 10 84 00 01 01 02 01 03 0A 00 06 47 61 6D 69 6E 67 A3
 screen_blank_slide_right AA 08 84 02 02 01 00 FF 00 00 7A
 screen_hebrew_main AA 25 84 03 00 01 01 0E 4E 45 58 54 3A 20 53 70 65 61 6B 65 72 73 01 00 0E D7 A8 D7 9E D7 A7 D7 95 D7 9C D7 99 D7 9D F8
+config_read_seq7 AA 02 87 07 80
+config_data_empty_seq7 AA 0A 05 07 00 00 00 00 00 00 00 00 02
+config_data_seq7 AA 0D 05 07 00 03 00 00 11 22 33 44 32 02 08 7D
+config_result_ok_seq9 AA 05 06 09 00 FF FF 0F
+config_result_invalid_seq9 AA 05 06 09 05 02 07 0F
+config_write_begin_seq9 AA 08 88 09 00 04 FA E4 14 11 9E
+config_write_chunk_seq9 AA 08 89 09 00 00 32 02 08 64 DC
+config_write_end_seq9 AA 02 8A 09 83

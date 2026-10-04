@@ -250,6 +250,94 @@ void test_hello_request_after_host_timeout_sends_one_hello() {
   assertHelloWithSliders(sink, before);
 }
 
+// ── Config frames (spec §5.3, §5.4) ──────────────────────────────────────────
+struct RecordingConfigSink : ConfigSink {
+  std::vector<std::string> calls;
+  std::vector<uint8_t> chunk;
+  void configRead(uint8_t t, uint8_t seq, uint32_t) override { calls.push_back("read " + std::to_string(t) + " " + std::to_string(seq)); }
+  void configBegin(uint8_t t, uint8_t seq, uint16_t total, uint32_t crc, uint32_t) override {
+    char b[64];
+    snprintf(b, sizeof b, "begin %u %u %u %08x", t, seq, total, (unsigned)crc);
+    calls.push_back(b);
+  }
+  void configChunk(uint8_t t, uint8_t seq, uint16_t offset, const uint8_t* d, size_t n, uint32_t) override {
+    calls.push_back("chunk " + std::to_string(t) + " " + std::to_string(seq) + " " + std::to_string(offset));
+    chunk.assign(d, d + n);
+  }
+  void configEnd(uint8_t t, uint8_t seq, uint32_t) override { calls.push_back("end " + std::to_string(t) + " " + std::to_string(seq)); }
+};
+
+static void deliverOn(Link& link, const std::vector<uint8_t>& frame, uint32_t now, uint8_t transport) {
+  FrameParser p;
+  for (uint8_t b : frame)
+    if (p.feed(b)) link.onPayload(p.payload(), p.length(), now, transport);
+}
+
+void test_config_frames_encode_to_golden_bytes() {
+  uint8_t out[300];
+  const uint8_t data[] = {0x32, 0x02, 0x08};
+  size_t n = encodeConfigData(7, 3, 0, 0x11223344, data, 3, out);
+  auto g = golden("config_data_seq7");
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  n = encodeConfigData(7, 0, 0, 0, nullptr, 0, out);
+  g = golden("config_data_empty_seq7");
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  n = encodeConfigResult(9, 0, 0xFF, 0xFF, out);
+  g = golden("config_result_ok_seq9");
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  n = encodeConfigResult(9, 5, 2, 7, out);
+  g = golden("config_result_invalid_seq9");
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+}
+
+void test_link_routes_config_frames_with_transport() {
+  FakeSink sink;
+  RecordingConfigSink cfg;
+  Link link(config(), sink);
+  link.setConfigSink(&cfg);
+  link.begin(0);
+  deliverOn(link, golden("config_read_seq7"), 10, 1);
+  deliverOn(link, golden("config_write_begin_seq9"), 20, 1);
+  deliverOn(link, golden("config_write_chunk_seq9"), 30, 1);
+  deliverOn(link, golden("config_write_end_seq9"), 40, 1);
+  TEST_ASSERT_EQUAL(4, cfg.calls.size());
+  TEST_ASSERT_EQUAL_STRING("read 1 7", cfg.calls[0].c_str());
+  TEST_ASSERT_EQUAL_STRING("begin 1 9 4 fae41411", cfg.calls[1].c_str());
+  TEST_ASSERT_EQUAL_STRING("chunk 1 9 0", cfg.calls[2].c_str());
+  TEST_ASSERT_EQUAL_STRING("end 1 9", cfg.calls[3].c_str());
+  const uint8_t want[] = {0x32, 0x02, 0x08, 0x64};
+  TEST_ASSERT_EQUAL(4, cfg.chunk.size());
+  TEST_ASSERT_EQUAL_MEMORY(want, cfg.chunk.data(), 4);
+}
+
+void test_config_frames_are_proof_of_life() {
+  FakeSink sink;
+  RecordingConfigSink cfg;
+  Link link(config(), sink);
+  link.setConfigSink(&cfg);
+  link.begin(0);
+  deliver(link, golden("heartbeat"), 100);
+  for (uint32_t t = 1000; t <= 3500; t += 500) {
+    deliver(link, golden("config_read_seq7"), t);
+    link.tick(t);
+  }
+  TEST_ASSERT_EQUAL(0, sink.lost);
+}
+
+void test_short_config_frames_dropped() {
+  FakeSink sink;
+  RecordingConfigSink cfg;
+  Link link(config(), sink);
+  link.setConfigSink(&cfg);
+  link.begin(0);
+  deliver(link, frameOf({0x88, 0x09, 0x00, 0x04}), 10);  // Begin without its CRC
+  deliver(link, frameOf({0x87}), 20);                    // Read without seq
+  deliver(link, frameOf({0x89, 0x09, 0x00}), 30);        // Chunk without a whole offset
+  TEST_ASSERT_EQUAL(0, cfg.calls.size());
+}
+
 // ── Active transport (spec §5.5) ─────────────────────────────────────────────
 void test_unlatched_sends_on_every_transport_that_is_up() {
   ActiveTransport a;
@@ -322,6 +410,10 @@ int main(int, char**) {
   RUN_TEST(test_alive_when_idle_for_a_second);
   RUN_TEST(test_host_timeout_then_hello_on_next_frame);
   RUN_TEST(test_hello_request_after_host_timeout_sends_one_hello);
+  RUN_TEST(test_config_frames_encode_to_golden_bytes);
+  RUN_TEST(test_link_routes_config_frames_with_transport);
+  RUN_TEST(test_config_frames_are_proof_of_life);
+  RUN_TEST(test_short_config_frames_dropped);
   RUN_TEST(test_unlatched_sends_on_every_transport_that_is_up);
   RUN_TEST(test_first_frame_latches_its_transport);
   RUN_TEST(test_frame_on_other_transport_moves_the_latch);

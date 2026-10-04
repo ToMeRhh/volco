@@ -94,6 +94,32 @@ public class ProtocolGoldenTests
     }
 
     [Fact]
+    public void ConfigFrames_EncodeToTheGoldenBytes()
+    {
+        Assert.Equal(Golden["config_read_seq7"], ProtocolEncoder.EncodeConfigRead(7));
+        var burst = Golden["config_write_begin_seq9"].Concat(Golden["config_write_chunk_seq9"])
+                                                      .Concat(Golden["config_write_end_seq9"]).ToArray();
+        Assert.Equal(burst, ProtocolEncoder.EncodeConfigWrite(9, new byte[] { 0x32, 0x02, 0x08, 0x64 }));
+    }
+
+    [Fact]
+    public void ConfigFrames_ParseFromTheGoldenBytes()
+    {
+        var data = Assert.IsType<ConfigDataMessage>(Assert.Single(Parse(Golden["config_data_seq7"])));
+        Assert.Equal((7, 3, 0, 0x11223344u), (data.Seq, (int)data.Total, (int)data.Offset, data.Crc32));
+        Assert.Equal(new byte[] { 0x32, 0x02, 0x08 }, data.Data);
+
+        var empty = Assert.IsType<ConfigDataMessage>(Assert.Single(Parse(Golden["config_data_empty_seq7"])));
+        Assert.Equal((0, 0u), ((int)empty.Total, empty.Crc32));
+        Assert.Empty(empty.Data);
+
+        var ok = Assert.IsType<ConfigResultMessage>(Assert.Single(Parse(Golden["config_result_ok_seq9"])));
+        Assert.Equal((9, Volco.Core.Controller.ConfigResultCode.Ok, 0xFF, 0xFF), (ok.Seq, ok.Code, (int)ok.Item, (int)ok.Field));
+        var invalid = Assert.IsType<ConfigResultMessage>(Assert.Single(Parse(Golden["config_result_invalid_seq9"])));
+        Assert.Equal((9, Volco.Core.Controller.ConfigResultCode.Invalid, 2, 7), (invalid.Seq, invalid.Code, (int)invalid.Item, (int)invalid.Field));
+    }
+
+    [Fact]
     public void PcOnlyMessages_AreNotParsedAsControllerMessages()
     {
         Assert.Empty(Parse(Golden["heartbeat"]));

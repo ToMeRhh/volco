@@ -19,6 +19,41 @@ public static class ProtocolEncoder
     public static byte[] EncodeBegin() => BuildFrame(new[] { (byte)MessageType.Begin });
     public static byte[] EncodeCommit() => BuildFrame(new[] { (byte)MessageType.Commit });
 
+    /// <summary>Asks for the controller's stored config (spec §5.3); <paramref name="seq"/> is echoed.</summary>
+    public static byte[] EncodeConfigRead(byte seq) => BuildFrame(new[] { (byte)MessageType.ConfigRead, seq });
+
+    /// <summary>The largest chunk of a config write or read reply (spec §5.3, §5.4).</summary>
+    public const int ConfigChunkSize = 240;
+
+    /// <summary>A whole config write (spec §5.4) as one burst - Begin, the 240-byte chunks, End - so it
+    /// is one Send: one serial write, one WebSocket message, one UDP datagram.</summary>
+    /// <exception cref="ArgumentException">The blob is empty or over 1024 bytes.</exception>
+    public static byte[] EncodeConfigWrite(byte seq, byte[] blob)
+    {
+        if (blob.Length is 0 or > Volco.Core.Controller.ControllerConfigCodec.MaxBlob)
+            throw new ArgumentException($"A config blob is 1..{Volco.Core.Controller.ControllerConfigCodec.MaxBlob} bytes, not {blob.Length}.", nameof(blob));
+        var crc = Volco.Core.Controller.ControllerConfigCodec.Crc32(blob);
+        var burst = new List<byte>();
+        burst.AddRange(BuildFrame(new[]
+        {
+            (byte)MessageType.ConfigWriteBegin, seq, (byte)(blob.Length >> 8), (byte)blob.Length,
+            (byte)(crc >> 24), (byte)(crc >> 16), (byte)(crc >> 8), (byte)crc,
+        }));
+        for (int offset = 0; offset < blob.Length; offset += ConfigChunkSize)
+        {
+            int n = Math.Min(ConfigChunkSize, blob.Length - offset);
+            var payload = new byte[4 + n];
+            payload[0] = (byte)MessageType.ConfigWriteChunk;
+            payload[1] = seq;
+            payload[2] = (byte)(offset >> 8);
+            payload[3] = (byte)offset;
+            Array.Copy(blob, offset, payload, 4, n);
+            burst.AddRange(BuildFrame(payload));
+        }
+        burst.AddRange(BuildFrame(new[] { (byte)MessageType.ConfigWriteEnd, seq }));
+        return burst.ToArray();
+    }
+
     /// <summary>LED: lit when value ≠ 0. LED pair: 1 lights A, 2 lights B, anything else neither.</summary>
     public static byte[] EncodeLed(int button, byte value)
         => BuildFrame(new[] { (byte)MessageType.Led, (byte)button, value });

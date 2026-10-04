@@ -139,6 +139,29 @@ bool decodeScreen(const uint8_t* p, uint8_t len, uint8_t& button, uint8_t& trans
   return true;
 }
 
+size_t encodeConfigData(uint8_t seq, uint16_t total, uint16_t offset, uint32_t crc, const uint8_t* data, uint8_t n,
+                        uint8_t* out) {
+  uint8_t p[kMaxPayload];
+  p[0] = MSG_CONFIG_DATA;
+  p[1] = seq;
+  p[2] = (uint8_t)(total >> 8);
+  p[3] = (uint8_t)total;
+  p[4] = (uint8_t)(offset >> 8);
+  p[5] = (uint8_t)offset;
+  p[6] = (uint8_t)(crc >> 24);
+  p[7] = (uint8_t)(crc >> 16);
+  p[8] = (uint8_t)(crc >> 8);
+  p[9] = (uint8_t)crc;
+  if (n > kMaxPayload - 10) n = (uint8_t)(kMaxPayload - 10);
+  if (n) memcpy(p + 10, data, n);
+  return encodeFrame(p, (uint8_t)(10 + n), out);
+}
+
+size_t encodeConfigResult(uint8_t seq, uint8_t code, uint8_t item, uint8_t field, uint8_t* out) {
+  const uint8_t p[] = {MSG_CONFIG_RESULT, seq, code, item, field};
+  return encodeFrame(p, sizeof p, out);
+}
+
 Link::Link(const LinkConfig& config, LinkSink& sink) : config_(config), sink_(sink) {
   if (config_.buttons > kMaxButtons) config_.buttons = kMaxButtons;
 }
@@ -154,7 +177,7 @@ bool Link::isLedButton(uint8_t b) const {
 
 bool Link::isScreenButton(uint8_t b) const { return b < config_.buttons && config_.kinds[b] == KIND_SCREEN; }
 
-void Link::onPayload(const uint8_t* p, uint8_t len, uint32_t now) {
+void Link::onPayload(const uint8_t* p, uint8_t len, uint32_t now, uint8_t transport) {
   if (len < 1) return;
   lastRx_ = now;
   const uint8_t type = p[0];
@@ -199,6 +222,22 @@ void Link::onPayload(const uint8_t* p, uint8_t len, uint32_t now) {
       break;
     case MSG_COMMIT:
       if (holding_) applyHeld(now);
+      break;
+    case MSG_CONFIG_READ:
+      if (configSink_ && len >= 2) configSink_->configRead(transport, p[1], now);
+      break;
+    case MSG_CONFIG_BEGIN:
+      if (configSink_ && len >= 8) {
+        uint16_t total = (uint16_t)(p[2] << 8 | p[3]);
+        uint32_t crc = (uint32_t)p[4] << 24 | (uint32_t)p[5] << 16 | (uint32_t)p[6] << 8 | p[7];
+        configSink_->configBegin(transport, p[1], total, crc, now);
+      }
+      break;
+    case MSG_CONFIG_CHUNK:  // empty data is passed on: the receiver answers BAD_SEQUENCE
+      if (configSink_ && len >= 4) configSink_->configChunk(transport, p[1], (uint16_t)(p[2] << 8 | p[3]), p + 4, len - 4u, now);
+      break;
+    case MSG_CONFIG_END:
+      if (configSink_ && len >= 2) configSink_->configEnd(transport, p[1], now);
       break;
     default:
       break;  // Heartbeat (its arrival is the point) and unknown types

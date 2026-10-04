@@ -122,6 +122,13 @@ public class ProtocolParser
                 return new SliderMessage(payload[1], (ushort)((payload[2] << 8) | payload[3]));
             case MessageType.Button when payload.Length >= 3:
                 return new ButtonMessage(payload[1], (ButtonState)payload[2]);
+            case MessageType.ConfigData when payload.Length >= 10:
+                return new ConfigDataMessage(payload[1], (ushort)(payload[2] << 8 | payload[3]),
+                    (ushort)(payload[4] << 8 | payload[5]),
+                    (uint)(payload[6] << 24 | payload[7] << 16 | payload[8] << 8 | payload[9]),
+                    payload[10..].ToArray());
+            case MessageType.ConfigResult when payload.Length >= 5:
+                return new ConfigResultMessage(payload[1], (Volco.Core.Controller.ConfigResultCode)payload[2], payload[3], payload[4]);
             default:
                 return null;   // PC to controller types, unknown types, or a body too short for its type
         }

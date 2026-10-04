@@ -17,6 +17,8 @@ enum MsgType : uint8_t {
   MSG_HELLO = 0x01, MSG_ALIVE = 0x02, MSG_SLIDER = 0x03, MSG_BUTTON = 0x04,
   MSG_HELLO_REQUEST = 0x81, MSG_HEARTBEAT = 0x82, MSG_LED = 0x83, MSG_SCREEN = 0x84,
   MSG_BEGIN = 0x85, MSG_COMMIT = 0x86,
+  MSG_CONFIG_DATA = 0x05, MSG_CONFIG_RESULT = 0x06,                     // controller → PC (spec §5.3, §5.4)
+  MSG_CONFIG_READ = 0x87, MSG_CONFIG_BEGIN = 0x88, MSG_CONFIG_CHUNK = 0x89, MSG_CONFIG_END = 0x8A,
 };
 enum Kind : uint8_t { KIND_NONE = 0, KIND_LED = 1, KIND_LED_PAIR = 2, KIND_SCREEN = 3 };
 enum Transition : uint8_t { TRANSITION_NONE = 0, TRANSITION_SLIDE_LEFT = 1, TRANSITION_SLIDE_RIGHT = 2 };
@@ -75,6 +77,11 @@ size_t encodeHello(const HelloInfo& hello, uint8_t* out);
 size_t encodeAlive(uint8_t* out);
 size_t encodeSlider(uint8_t index, uint16_t value, uint8_t* out);
 size_t encodeButton(uint8_t index, bool pressed, uint8_t* out);
+// One chunk of a config read reply (spec §5.3): seq, total, offset, CRC of the whole blob, data.
+size_t encodeConfigData(uint8_t seq, uint16_t total, uint16_t offset, uint32_t crc, const uint8_t* data, uint8_t n,
+                        uint8_t* out);
+// The answer to a config write (spec §5.4): seq, result code, item, field.
+size_t encodeConfigResult(uint8_t seq, uint8_t code, uint8_t item, uint8_t field, uint8_t* out);
 
 // Decodes a Screen payload. False when a length overruns the payload (the message is dropped).
 bool decodeScreen(const uint8_t* payload, uint8_t len, uint8_t& button, uint8_t& transition, ScreenContent& out);
@@ -87,6 +94,16 @@ struct LinkSink {
   virtual void hostLost() = 0;  // LEDs off, local "not connected" screen
   virtual uint16_t sliderValue(uint8_t index) = 0;  // current filtered position, sent after every Hello
   virtual ~LinkSink() = default;
+};
+
+// Where Link sends the config frames (spec §5.3, §5.4), each with the transport it arrived on.
+struct ConfigSink {
+  virtual void configRead(uint8_t transport, uint8_t seq, uint32_t now) = 0;
+  virtual void configBegin(uint8_t transport, uint8_t seq, uint16_t total, uint32_t crc, uint32_t now) = 0;
+  virtual void configChunk(uint8_t transport, uint8_t seq, uint16_t offset, const uint8_t* data, size_t len,
+                           uint32_t now) = 0;
+  virtual void configEnd(uint8_t transport, uint8_t seq, uint32_t now) = 0;
+  virtual ~ConfigSink() = default;
 };
 
 struct LinkConfig {
@@ -107,7 +124,9 @@ class Link {
  public:
   Link(const LinkConfig& config, LinkSink& sink);
   void begin(uint32_t now);                                       // boot: sends Hello
-  void onPayload(const uint8_t* payload, uint8_t len, uint32_t now);
+  void setConfigSink(ConfigSink* sink) { configSink_ = sink; }
+  // transport: the id the frame arrived on (passed on to the ConfigSink; 0 = USB serial).
+  void onPayload(const uint8_t* payload, uint8_t len, uint32_t now, uint8_t transport = 0);
   void tick(uint32_t now);                                        // every loop pass
   void sendSlider(uint8_t index, uint16_t value, uint32_t now);
   void sendButton(uint8_t index, bool pressed, uint32_t now);
@@ -130,6 +149,7 @@ class Link {
 
   LinkConfig config_;
   LinkSink& sink_;
+  ConfigSink* configSink_ = nullptr;
   Held held_[kMaxButtons];
   bool holding_ = false;
   uint32_t holdStart_ = 0;
