@@ -262,3 +262,51 @@ Each step ends with a branch that builds and passes CI; steps 3–6 are tried on
 5. **`TapManager` + `libvolcotap`** (§4.4), including the latency documentation (§4.6).
 6. **Updater** (§7).
 7. **Release wiring and README** (§6).
+
+## 11. Alternatives rejected
+
+Recorded so they are not reopened without new information.
+
+| Alternative | Why rejected |
+|---|---|
+| **Virtual audio driver** (BackgroundMusic-style HAL plugin) for per-app volume | Needs an installer with admin rights and a signed driver; heavier to ship and maintain. Process taps (macOS 14.2+) give the same result with public API and no install step. |
+| **Device-only on macOS**, per-app sliders hidden | Breaks the goal of feature parity (§0). Process taps make parity possible. |
+| **Swift engine with a thin C# shim** | Moves the engine logic out of the .NET tests, puts shared state across two languages, and makes the native surface large. Only the real-time path needs to be native (D4). |
+| **Pure C#, gain IO proc as an `[UnmanagedCallersOnly]` managed callback** | A garbage-collection suspension on the real-time audio thread would glitch every tapped app. |
+| **.NET macOS workload (`net8.0-macos`, Xamarin.Mac bindings)** | Does not fit Avalonia's plain-`net8.0` host; adds nothing P/Invoke and `objc_msgSend` cannot do for the handful of AppKit calls needed. |
+| **Developer ID signing + notarization** | The user will not join the Apple Developer Program. A self-signed certificate keeps privacy permissions stable across updates (D2); the cost is a one-time "Open Anyway" on first install. |
+| **Plain ad-hoc signing** | The signing identity changes every build, so macOS would re-ask for the System Audio Recording permission after every update. |
+| **Hardened runtime** | Only required for notarization, and would need JIT entitlements for .NET. |
+| **Intel or universal builds** | The code is architecture-neutral, so adding Intel later is a CI-only change: a second publish, `clang -arch x86_64`, and either a second zip (updater picks by `RuntimeInformation.ProcessArchitecture`) or a `lipo`-merged universal bundle (about twice the size). Rejected for now because there is no Intel Mac to test on, GitHub's Intel macOS runners are being phased out, and macOS 26 is the last release for Intel Macs. Revisit if an Intel user asks. |
+| **Volco saving per-app levels and reapplying them at launch** | Made unnecessary by the Hello slider sync (PR #68), which restores levels as soon as the controller connects (§4.4). |
+| **DMG installer** | A zip serves both first install and the updater. |
+| **Mac-native UI redesign** (menu-bar popover, SF typography) | Out of scope by D3; a separate UX effort if ever wanted. |
+
+## 12. References
+
+- **Apple:** [Capturing system audio with Core Audio taps](https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps) (sample code and the `CATapDescription` / `AudioHardwareCreateProcessTap` API).
+- **Open-source per-app mixers built on process taps** (the best guide for `libvolcotap`: tap creation, private aggregate devices, IO procs, permission handling):
+  - [insidegui/AudioCap](https://github.com/insidegui/AudioCap): minimal process-tap capture sample.
+  - [ericchiu-ca/AppVolume](https://github.com/ericchiu-ca/AppVolume)
+  - [erdmncdr/Mikser](https://github.com/erdmncdr/Mikser)
+  - [clement880101/audio-adjuster-mac](https://github.com/clement880101/audio-adjuster-mac): private tap + private aggregate on the current output + gain IO proc, the same shape as §4.4.
+  - [minhdra/MacVolumeMixer](https://github.com/minhdra/MacVolumeMixer)
+  - [Lokasta/fader](https://github.com/Lokasta/fader), [altuzar/sonicflow](https://github.com/altuzar/sonicflow), [tgkd/buried-anchor](https://github.com/tgkd/buried-anchor)
+- **Avalonia on macOS:** [TrayIcon](https://docs.avaloniaui.net/docs/reference/controls/tray-icon), [hiding the Dock icon (`ShowInDock` / `LSUIElement`)](https://github.com/AvaloniaUI/Avalonia/discussions/13568), [v12 macOS tray icon adjustments (#19655)](https://github.com/avaloniaui/avalonia/issues/19655).
+
+## 13. Open risks, and what the spike can change
+
+Steps 4 and 5 of §10 are planned in detail only after the spike (§4.5) has run and its findings are written into this spec. Each risk names the section it can change.
+
+| # | Risk | Settled by | If it goes the wrong way |
+|---|---|---|---|
+| R1 | A tap's replay cannot be bound to the device each app plays to | Spike item 1 | §4.4: one tap per (target, output device), grouped by `kAudioProcessPropertyDevices`. More taps, same native interface. |
+| R2 | The System Audio Recording permission does not survive re-signing with the same self-signed identity | Spike item 2 | §7, §6: accept a re-prompt after each update and document it in the README; the banner (§3.5) already handles the denied state. |
+| R3 | Latency higher than the 10–20 ms estimate | Spike item 3 | §4.6: smaller aggregate IO buffer; the measured figure goes in the docs regardless. |
+| R4 | `mutedWhenTapped` affects processes other than the tapped ones | Spike item 4 | §4.4: rethink the Unmapped target (a global tap is the most exposed case). |
+| R5 | Tap and output device run at different sample rates or drift apart, causing clicks over long sessions | Spike, extended run (about 30 min) | §4.4: enable drift compensation on the tap's sub-tap entry in the aggregate description, or resample in the IO proc. |
+| R6 | Avalonia's macOS `TrayIcon` misbehaves (known reports of icons not rendering) | Step 3, on hardware | §5: own `NSStatusItem` through a small interop shim in `Volco.Mac`. |
+| R7 | `responsibility_get_pid_responsible_for_pid` (undocumented libsystem function) is missing or changes | Step 4 | §4.3: the `proc_pidpath` → outermost `.app` fallback becomes the only path; WebKit GPU processes of Safari may then need a special case. |
+| R8 | UDP/WebSocket listening triggers a Local Network or firewall prompt that blocks the connection | Step 3, on hardware | §3.5: a stronger hint on the Connection page, and the README. |
+| R9 | Gatekeeper refuses a self-signed, non-notarized app more strictly than expected on the user's macOS version | Step 3, first install | §6: document `xattr -dr com.apple.quarantine /Applications/Volco.app` as the fallback. |
+| R10 | The macOS CI runner cannot import the signing identity non-interactively | Step 3, CI | §6: `security set-key-partition-list` on the temporary keychain (standard fix). |
