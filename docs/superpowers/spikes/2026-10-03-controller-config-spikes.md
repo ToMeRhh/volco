@@ -57,14 +57,14 @@ Spec: `docs/superpowers/specs/2026-10-03-controller-config-design.md` §12.6. Pl
 | Firmware boots over a garbage NVS and recovers (NVS rewritten, frames sent) | **Yes.** After a hard reset over the 0xA5 NVS, the firmware ran (`[DBG] Setup complete`; 7314 bytes and 1029 × 0xAA frame markers in 4 s), and NVS was rewritten (new MD5 b4823d44…, starting with erased pages). | same, steps 5–6 |
 | Boot ROM log readable at 115200 | **Not observed.** The port was opened after the reset, so the ROM banner was missed. The firmware's own log and frames at 115200 were read correctly, and the app's parser resyncs on 0xAA regardless. **Side finding:** today's serial transport logs `[E][STA.cpp:530] disconnect(): STA disconnect failed! ESP_ERR_WIFI_NOT_INIT` at boot (`WiFi.disconnect()` before Wi-Fi init). It's harmless and goes away with the stage 3 transport rewrite (spec §7: `WiFi.mode(WIFI_OFF)` only). | same, step 5 |
 | esptool `verify_flash` (MD5) passes for all 4 parts | **Yes**, `Verification successful (digest matched)` ×4. Written without `--flash-mode/--flash-size`, the bootloader is not patched and matches `bootloader.bin` byte for byte. Note: esptool 5.2 accepts the old underscore spellings (`write_flash`, `no_reset`) with a deprecation warning; new code should use `write-flash`, `no-reset`. | same, step 4 |
-| EspDotNet: bootloader entry and chip detect via DTR/RTS on this board | | |
-| EspDotNet: `SpiFlashMd5Async` works (stub) and matches local MD5 | | |
-| EspDotNet: writing 4 parts leaves NVS MD5 unchanged | | |
-| EspDotNet: bootloader region MD5 equals `bootloader.bin` MD5 (no header patching) | | |
-| EspDotNet: 0xFF over NVS works | | |
-| EspDotNet: flash ≥ 4 MB proxy (MD5 of 0x3FF000+0x1000 succeeds) | | |
-| EspDotNet: timings (probe, install) | | |
-| Windows `ErrorReceived` events when the board resets with the port open | | |
+| EspDotNet: bootloader entry and chip detect via DTR/RTS on this board | **Yes.** Bootloader and chip `ESP32` in about 1.2–1.3 s, stub running at about 1.7 s, using the library's default DTR/RTS sequences. | Windows, COM3, `EspDotNetSpike probe/flash/wipe-nvs` (2026-10-04) |
+| EspDotNet: `SpiFlashMd5Async` works (stub) and matches local MD5 | **Yes.** 16-byte digests. The first probe showed mismatches for bootloader and app, as expected: the board held a different build (and a PlatformIO-patched bootloader); partitions and boot_app0 matched. MD5 of the 950 KB app takes about 1.3 s. | probe |
+| EspDotNet: writing 4 parts leaves NVS MD5 unchanged | **Yes.** NVS MD5 cb5eabef… before and after. | flash |
+| EspDotNet: bootloader region MD5 equals `bootloader.bin` MD5 (no header patching) | **Yes.** After `flash`, all four parts `MATCH`, including bootloader.bin. (The planned second probe wasn't run; flash's own verify covers it.) | flash |
+| EspDotNet: 0xFF over NVS works | **Yes**, in about 0.3 s. The MD5 equals the all-0xFF MD5. | wipe-nvs |
+| EspDotNet: flash ≥ 4 MB proxy (MD5 of 0x3FF000+0x1000 succeeds) | It succeeds on this 4 MB board, but **it proves nothing.** On a smaller chip a read past the end can wrap around instead of failing. EspDotNet has no flash-ID command. | probe |
+| EspDotNet: timings (probe, install) | Probe about **3.6 s** end to end. Install (4 parts, about 1 MB, deflated) about **67 s**, because EspDotNet stays at **115200 baud**; esptool used 460800 in the PlatformIO upload. | probe, flash |
+| Windows `ErrorReceived` events when the board resets with the port open | **None.** 449 bytes received; the ROM banner (`ets Jul 29 2019 … rst:0x1 (POWERON_RESET) …`) **is readable at 115200**; then the firmware log and 6 × 0xAA frames. (The reset was via EN/RTS, which gives the same ROM output as `ESP.restart()`.) | serial-errors |
 
 ## Decisions and spec amendments
 
