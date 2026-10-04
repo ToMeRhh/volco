@@ -218,6 +218,24 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void SlidersAfterHello_SetVolumeWithoutOsd()
+    {
+        var runtime = StartRuntime(); // slider 0 defaults to Device / current default output
+        var levels = new Recorder<SliderLevelEventArgs>();
+        var volumes = new Recorder<VolumeChangeNotification>();
+        runtime.SliderLevelChanged += levels.Handler;
+        runtime.VolumeChanged += volumes.Handler;
+
+        // The firmware follows every Hello with each slider's position.
+        ConnectAndGreet(Connection(0));
+        Connection(0).RaiseMessage(new SliderMessage(0, 4095));
+
+        Assert.True(WaitUntil(() => levels.Count > 0), "sync value did not reach the slider processor");
+        Assert.Equal(1.0, (double)Snapshot(_engine.DeviceVolumeCalls)[0].Level, 3);
+        Assert.True(StaysUnchanged(() => volumes.Count), "a sync value raised the volume OSD");
+    }
+
+    [Fact]
     public void ButtonPress_MuteCurrentOutput_TogglesDefaultOutput()
     {
         StartRuntime();

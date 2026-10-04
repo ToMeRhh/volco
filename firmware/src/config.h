@@ -112,3 +112,4 @@ static constexpr ButtonDef BUTTONS[] = {
 #define SLIDER_READ_INTERVAL_MS 10  // how often sliders are sampled
 #define FILTER_WEIGHT 0.2           // slider smoothing (0-1); lower is smoother but slower
 #define SLIDER_DEADBAND 25          // a smoothed slider must move more than this (ADC units) to be reported
+#define SLIDER_SEED_READS 8         // reads averaged for each slider's starting value at boot

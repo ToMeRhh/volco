@@ -43,11 +43,20 @@ public class SliderProcessor : IDisposable
     public event EventHandler<SliderLevelEventArgs>? SliderLevelChanged;
 
     public SliderProcessor(IAudioEngine audio, ConfigManager configManager)
+        : this(audio, configManager, TimeSpan.FromSeconds(1))
+    {
+    }
+
+    internal SliderProcessor(IAudioEngine audio, ConfigManager configManager, TimeSpan syncWindow)
     {
         _audio = audio;
         _configManager = configManager;
         _audio.SessionsChanged += OnSessionsChanged;
         _coalesceTimer = new Timer(_ => ProcessPending(), null, 20, 20);
+    }
+
+    public void BeginSync()
+    {
     }
 
     public static float MapAdcToVolume(ushort adcValue, bool invert)

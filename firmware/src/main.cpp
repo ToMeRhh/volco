@@ -45,6 +45,11 @@ class HardwareSink : public volco::LinkSink {
     for (uint8_t i = 0; i < NUM_BUTTONS; i++) showIndicator(BUTTONS[i].indicator, 0);
     screens_host_lost(millis());
   }
+  // The deadband then measures from the value just sent.
+  uint16_t sliderValue(uint8_t i) override {
+    lastSliderValues[i] = (uint16_t)smoothedValues[i];
+    return lastSliderValues[i];
+  }
 };
 
 static HardwareSink sink;
@@ -66,9 +71,12 @@ void setup() {
     kinds[i] = (uint8_t)BUTTONS[i].indicator.kind;  // IndicatorKind values are the wire values
   }
 
+  // Seed from an average, not one noisy read: Hello reports these positions right away.
   analogReadResolution(12);
   for (uint8_t i = 0; i < NUM_SLIDERS; i++) {
-    lastSliderValues[i] = analogRead(SLIDER_PINS[i]);
+    uint32_t sum = 0;
+    for (uint8_t r = 0; r < SLIDER_SEED_READS; r++) sum += analogRead(SLIDER_PINS[i]);
+    lastSliderValues[i] = sum / SLIDER_SEED_READS;
     smoothedValues[i] = lastSliderValues[i];
   }
 
