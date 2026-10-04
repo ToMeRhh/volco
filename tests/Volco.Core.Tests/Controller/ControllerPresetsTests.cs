@@ -47,6 +47,7 @@ public class ControllerPresetsTests
             Screens = new ScreenBehaviour { Brightness = 10 },
             Input = new InputTuning { DebounceMs = 50 },
             Udp = new Udp { Enabled = true, Ssid = "net" },
+            I2C2 = new I2cBus { Sda = 16, Scl = 17 },  // hardware: replaced (the DIY preset has no bus 2)
         };
         draft.Sliders.Add(new Slider { Pin = 39 });
 
@@ -58,6 +59,7 @@ public class ControllerPresetsTests
         Assert.Equal(10u, result.Screens.Brightness);
         Assert.Equal(50u, result.Input.DebounceMs);
         Assert.Equal("net", result.Udp.Ssid);
+        Assert.Null(result.I2C2);
         Assert.Single(draft.Sliders);  // the draft itself is untouched
     }
 
