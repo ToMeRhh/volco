@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-03
 **Status:** Draft, awaiting review
-**Builds on:** `2026-09-29-volco-avalonia-technical-design.md` (the `IAudioEngine` / `IWindowEffects` seams) and `2026-10-02-oled-screens-design.md` (current feature set). This spec supersedes the claim in `2026-09-26-volco-audio-core-design.md` §non-goals and `2026-09-26-volco-option-a-avalonia-design.md` that macOS per-app volume needs a virtual audio driver: since macOS 14.2, Core Audio process taps provide it with public API.
+**Builds on:** PR #68 (slider positions after Hello), `2026-09-29-volco-avalonia-technical-design.md` (the `IAudioEngine` / `IWindowEffects` seams) and `2026-10-02-oled-screens-design.md` (current feature set). This spec supersedes the claim in `2026-09-26-volco-audio-core-design.md` §non-goals and `2026-09-26-volco-option-a-avalonia-design.md` that macOS per-app volume needs a virtual audio driver: since macOS 14.2, Core Audio process taps provide it with public API.
 
 ## 0. Scope
 
@@ -170,6 +170,7 @@ Core Audio notifications carry no context, so `IsOwnChange` cannot come from the
   - Level < 0.999 and no tap → create.
   - The target's process set changes (an app starts/stops playing, a Processes list is edited), or the output device the apps play to changes → rebuild, debounced 250 ms.
   - Engine `Dispose` destroys all taps. When Volco quits, apps return to 100% (Windows keeps per-app levels in its mixer; accepted difference).
+  - **Restoring levels after a restart.** Since PR #68 the firmware follows every Hello with each slider's position, and `SliderProcessor.BeginSync` applies those values quietly (no smoothing, no OSD). On macOS that sync is what recreates the taps, so per-app levels come back as soon as the controller connects. The remaining gap is only while Volco is not running or the controller is not connected. Volco does not save per-app levels itself (not needed given the sync).
 - **Native interface** (`volcotap.h`, C ABI; all decisions stay in C#):
 
   ```c
@@ -180,7 +181,7 @@ Core Audio notifications carry no context, so `IsOwnChange` cannot come from the
   void       volcotap_destroy(volcotap_t tap);
   ```
 
-- **Permission:** the first tap triggers the "System Audio Recording" prompt. A creation failure caused by a denied permission sets `PerAppStatus = NeedsPermission`; the engine retries tap creation when a per-app slider next moves, so granting the permission takes effect without a restart. macOS earlier than 14.2 never reaches here (`LSMinimumSystemVersion`), but the engine reports `Unsupported` if the tap API is missing.
+- **Permission:** the first tap triggers the "System Audio Recording" prompt. Because of the Hello sync, that first tap is usually created right when the controller connects (any per-app slider below 100%), not when the user first moves a slider; the prompt and the Sliders-page banner must make sense at that moment. A creation failure caused by a denied permission sets `PerAppStatus = NeedsPermission`; the engine retries tap creation when a per-app slider next moves, so granting the permission takes effect without a restart. macOS earlier than 14.2 never reaches here (`LSMinimumSystemVersion`), but the engine reports `Unsupported` if the tap API is missing.
 - **Accepted differences:** tapped audio gains extra latency (§4.6); per-app levels are not persisted by the OS.
 
 ### 4.5 Spike (first task; throwaway)
