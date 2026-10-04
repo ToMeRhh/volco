@@ -26,8 +26,8 @@ CI runs tests on Ubuntu (net8.0) and builds/publishes on Windows (net8.0-windows
 
 **Firmware** (ESP32, in `firmware/`; needs PlatformIO Core >= 6.1.19 for the pinned pioarduino 55.03.38 platform, and a host `g++` for the native tests):
 ```bash
-cd firmware && pio run              # build
-cd firmware && pio run -t upload    # flash
+cd firmware && pio run -e esp32              # build
+cd firmware && pio run -e esp32 -t upload    # flash (config in NVS survives)
 cd firmware && pio device monitor   # serial monitor
 cd firmware && pio test -e native   # host-side tests of firmware/lib (no hardware)
 ~/.platformio/penv/bin/python firmware/tools/gen_config_vectors.py  # regenerate firmware/test/golden/config.txt after a proto change
@@ -35,7 +35,7 @@ bash firmware/scripts/firmware_id.sh  # the firmware build id (hash of the firmw
 python3 firmware/tools/gen_assets.py  # regenerate icons and fonts (needs Pillow >= 10)
 ```
 
-The `firmware-test` CI job runs `pio test -e native` and builds all four ESP32 environments (`denky32` plus the build-only `denky32_screens_check`, `denky32_udp_check` and `denky32_websocket_check` checks). `gen_assets.py` regenerates the firmware icons and fonts, the C# `ScreenIcon` enum and the simulator's `icons.js` from `firmware/assets`; its outputs are committed.
+The `firmware-test` CI job runs `pio test -e native`, checks the firmware id and the config vectors, and builds the `esp32` environment. `gen_assets.py` regenerates the firmware icons and fonts, the C# `ScreenIcon` enum and the simulator's `icons.js` from `firmware/assets`; its outputs are committed.
 
 ## Architecture
 
@@ -70,11 +70,11 @@ The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (s
 
 ### ESP32 Firmware (`firmware/`)
 
-PlatformIO / Arduino framework / C++17. `src/` (`main.cpp`, `config.h`, `hardware.h`, `transport.*`, `indicators.*`, `screens.*`) plus pure-C++ libraries in `lib/` (`volco_protocol`, `volco_bidi`, `volco_screen_state`, `volco_render`) that are tested on the host with `pio test -e native`; `firmware/README.md` explains the code structure. Rendering uses Volco's own 1-bit canvas, with U8g2 only as the SSD1306 driver.
+PlatformIO / Arduino framework / C++17. `src/` (`main.cpp`, `config.h` (fixed constants), `config_store.*`, `seed_config.h`, `transport.*`, `indicators.*`, `screens.*`) plus pure-C++ libraries in `lib/` (`volco_protocol`, `volco_config`, `volco_bidi`, `volco_screen_state`, `volco_render`) that are tested on the host with `pio test -e native`; `firmware/README.md` explains the code structure. Rendering uses Volco's own 1-bit canvas, with U8g2 only as the SSD1306 driver.
 
-The controller config schema is `proto/volco_config.proto` (proto2; limits in `proto/volco_config.options`; presets in `proto/presets/`). It generates nanopb code for `firmware/lib/volco_config` (decode, validation, chip table, CRC, chunked receiver) and C# for `Volco.Core/Controller` (codec, validator, presets). Both are checked against the same generated vectors, `firmware/test/golden/config.txt`. Nothing uses them yet: the firmware still reads `config.h` until stage 3 of `docs/superpowers/specs/2026-10-03-controller-config-design.md` §15.
+The controller config schema is `proto/volco_config.proto` (proto2; limits in `proto/volco_config.options`; presets in `proto/presets/`). It generates nanopb code for `firmware/lib/volco_config` (decode, validation, chip table, CRC, chunked receiver) and C# for `Volco.Core/Controller` (codec, validator, presets). Both are checked against the same generated vectors, `firmware/test/golden/config.txt`. The app side isn't wired in yet (stage 4 of `docs/superpowers/specs/2026-10-03-controller-config-design.md` §15).
 
-Transport is selected at compile time via `#define TRANSPORT_SERIAL|WEBSOCKET|UDP` in `config.h`. The hardware is described by two tables in `config.h`: `SLIDER_PINS` and `BUTTONS` (`{ pin, indicator }`, indicator = `IND_NONE` / `IND_LED` / `IND_LED_PAIR` / `IND_SCREEN(bus, address)`). A table's order is the input number the app sees. The firmware has no notion of mute or devices; it reports raw input and its hardware (Hello), and renders the LED values and screen descriptions the PC sends.
+The firmware reads its hardware layout (sliders, buttons and their indicators, I2C buses), the optional Wi-Fi/UDP link and the screen and input settings from the controller config stored in NVS (`config_store`, spec §6.6), never from `config.h`; `toRuntime()` turns it into the flat `RuntimeConfig` that `src/` uses. A table's order is the input number the app sees. Until stage 4 lets Volco send a config, an empty NVS is seeded from `src/seed_config.h`, which `firmware/tools/gen_seed_config.py` generates from `proto/presets/diy-reference.json` (or another preset JSON for testing; erase NVS with `esptool erase-region 0x9000 0x5000` first). USB serial is always on; UDP runs alongside when the config enables it, and the controller answers on whichever transport last sent it a valid frame (spec §5.5). `firmware/tools/hello_check.py --port /dev/ttyUSB1 --sliders N --kinds …` resets the board and checks its boot Hello (it refuses any USB device but the DIY board's CH340). The firmware has no notion of mute or devices; it reports raw input and its hardware (Hello), and renders the LED values and screen descriptions the PC sends.
 
 ### Wire Protocol
 

@@ -17,137 +17,56 @@ It still knows nothing about what a button *means*. Single, double and long pres
 
 | Path | Contents |
 |---|---|
-| `src/config.h` | Everything specific to one build: the transport, Wi-Fi settings, the hardware tables (sliders, buttons, indicators), screen settings and tuning constants. This is the file you edit. |
-| `src/hardware.h` | The types the hardware tables are written in (`ButtonDef`, `Indicator`) and the `IND_*` / `ACTIVE_*` helpers. |
+| `src/config.h` | Fixed constants: serial baud, buffer sizes, protocol timing. |
+| `src/config_store.*` | Loads the controller config from NVS (and, in stage 3, stores the seed). |
+| `src/seed_config.h` | Generated stage 3 seed (DIY reference). |
 | `src/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
-| `src/transport.*` | The four `TRANSPORT_*` implementations behind one small interface. |
+| `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
 | `src/indicators.*` | LED rendering. |
 | `src/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
 | `src/debug_log.h` | The `DEBUG_LOG` macro. |
-| `lib/volco_protocol/` | Frame parser and encoder, message decoding, Hello, Begin/Commit holding, keepalive and host timeout. |
+| `lib/volco_protocol/` | Frame parser and encoder, message decoding, Hello, Begin/Commit holding, keepalive and host timeout, the active-transport rule. |
+| `lib/volco_config/` | The controller config: decode, validation, chip table, CRC, chunked receiver, `RuntimeConfig`. |
 | `lib/volco_bidi/` | Logical to visual reordering of UTF-8 text, for Hebrew. |
 | `lib/volco_screen_state/` | The state machine of each screen: current, previous and pending content, slide progress, dim, off, pixel shift, wake handling. |
 | `lib/volco_render/` | Volco's own 1-bit canvas and layout 1 renderer, with the generated fonts and icons. U8g2 is only the SSD1306 driver underneath. |
 | `assets/` | Icon sources (`icons/manifest.txt` and a PNG per icon) and fonts (`fonts/`: Arimo, SIL Open Font License 1.1). |
-| `tools/` | `draw_icons.py` (draws the icon PNGs) and `gen_assets.py` (generates fonts, icons, the C# icon enum and the simulator's icon data from `assets/`). |
-| `test/` | Native tests of everything in `lib/`, and the shared `golden/frames.txt` that the C# tests read too. |
+| `tools/` | `draw_icons.py` and `gen_assets.py` (icons and fonts), `gen_config_vectors.py` (shared config test vectors), `gen_seed_config.py` (stage 3 seed), `hello_check.py` (checks a board's boot Hello), `check_firmware_id_paths.py` (CI). |
+| `scripts/` | `firmware_id.sh`: the firmware build id, a hash of the firmware's sources. |
+| `test/` | Native tests of everything in `lib/`, and the shared `golden/frames.txt` and `golden/config.txt` that the C# tests read too. |
 
 Everything in `lib/` is pure C++ with time passed in, so it builds and is tested on a PC with `pio test -e native`. Nothing in `lib/` touches Arduino.
 
-## `config.h`
+## Configuration
 
-### Transport
+The firmware is generic: nothing about a build's hardware is compiled in. At boot it loads the controller config from NVS (`config_store.cpp`; spec §6.6), decodes and validates it (`lib/volco_config`), and runs from the resulting `RuntimeConfig`:
 
-Serial is the default. To switch, uncomment one of the other three `#define`s at the top of the transport section; the `TRANSPORT_SERIAL` line below them is guarded so it turns itself off when another is defined (the same guard lets CI build the others with `-DTRANSPORT_UDP` and so on). If more or fewer than one ends up defined, the build stops with `Define exactly one TRANSPORT_*`.
+- **Hardware:** the sliders (one ADC pin each), the buttons (an input pin, plus an indicator: none, one LED, an LED pair, or an SSD1306 screen on I2C bus 0/1 at 0x3C/0x3D), and the I2C buses' pins and clock. **A list's order is the input number Volco sees.** Button pins use `INPUT_PULLUP` (pressed = connected to GND); LED polarity is `active_low`.
+- **Wi-Fi/UDP:** off unless enabled; SSID, password, the PC's IP and port, and the local port. USB serial is always on.
+- **Screens and input:** brightness, slide and scroll timing, dim/off/pixel-shift, debounce, slider sampling, smoothing and deadband.
 
-| Define | Link |
-|---|---|
-| `TRANSPORT_SERIAL` | USB serial. Wi-Fi is switched off. |
-| `TRANSPORT_WEBSOCKET` | Wi-Fi, as a WebSocket client of the app (`SERVER_IP`:`SERVER_PORT`). |
-| `TRANSPORT_UDP` | Wi-Fi, sending UDP to the app and listening on `UDP_LOCAL_PORT`. |
-| `TRANSPORT_LOCAL_DEBUG` | No PC. Outgoing frames are dropped and input is logged to serial. |
+The schema, with every default and range, is `proto/volco_config.proto`. A config that is missing, oversized, or fails decoding or validation leaves the firmware on built-in defaults (no inputs, serial only), still answering Hello.
 
-### Wi-Fi (only used by the WebSocket and UDP transports)
+**Until Volco can send a config (stage 4),** an empty NVS is seeded from `src/seed_config.h`. To try another layout, write a preset JSON (the protobuf JSON mapping of `ControllerConfig`, like `proto/presets/diy-reference.json`), then:
 
-| Setting | Meaning |
-|---|---|
-| `WIFI_SSID` | Network name. |
-| `WIFI_PASSWORD` | Network password. |
-| `SERVER_IP` | The PC running Volco. |
-| `SERVER_PORT` | WebSocket port or UDP port on the PC. |
-| `UDP_LOCAL_PORT` | Port this controller listens on for UDP from the PC. |
-
-### Serial
-
-| Setting | Meaning |
-|---|---|
-| `SERIAL_BAUD` | Must match the baud rate on Volco's Connection page. Used by every transport: for the protocol on USB, for the debug log on the others. |
-
-### Hardware layout
-
-**Position in a table is the input number.** The first entry in `SLIDER_PINS` is slider 0, the first entry in `BUTTONS` is button 0, and so on. The app identifies controls only by these numbers, and its settings window lists them in the same order.
-
-```cpp
-// Analog sliders: one ADC pin per slider.
-static constexpr uint8_t SLIDER_PINS[] = {33, 35, 32, 36, 34};
-
-// Buttons: { input pin, indicator }.
-static constexpr ButtonDef BUTTONS[] = {
-    {4, IND_LED(12, ACTIVE_LOW)},
-    {14, IND_LED(21, ACTIVE_LOW)},
-    {5, IND_LED_PAIR(18, 19, ACTIVE_HIGH)},
-};
+```
+~/.platformio/penv/bin/python firmware/tools/gen_seed_config.py my-layout.json
+esptool --port <port> erase-region 0x9000 0x5000
+cd firmware && pio run -e esp32 -t upload
 ```
 
-- **Slider pins** are read with 12-bit `analogRead` (0-4095).
-- **Button pins** use `INPUT_PULLUP`: a button connects its pin to GND when pressed.
-- **Indicators** say what a button has to show its state with. The firmware reports the kind in Hello, and the app decides what to send.
-
-| Indicator | Hardware | What the PC sends |
-|---|---|---|
-| `IND_NONE` | nothing | nothing |
-| `IND_LED(pin, polarity)` | one LED | a value: 0 is off, anything else on |
-| `IND_LED_PAIR(pinA, pinB, polarity)` | two LEDs | a value: 0 both off, 1 lights A, 2 lights B |
-| `IND_SCREEN(bus, address)` | an SSD1306 128x64 screen | a screen description (icon, top, name) |
-
-`polarity` is `ACTIVE_HIGH` when driving the pin HIGH lights the LED, or `ACTIVE_LOW` when driving it LOW does. `bus` is 0 or 1, `address` is `0x3C` or `0x3D`. A button has a screen or LEDs, never both. Every indicator starts dark at boot.
-
-To describe different hardware, edit these two tables. The sizes of every array in `main.cpp` are derived from them, so there is nothing else to keep in sync.
-
-### Screens (only used when a button is `IND_SCREEN`)
-
-| Setting | Meaning |
-|---|---|
-| `I2C0_SDA`, `I2C0_SCL` | Bus 0 data and clock pins. |
-| `I2C1_SDA`, `I2C1_SCL` | Bus 1 data and clock pins. A bus is only started when a screen uses it. |
-| `I2C_CLOCK_HZ` | Bus speed. 400000 by default; SSD1306 modules usually tolerate 1000000. |
-| `SCREEN_BRIGHTNESS` | Normal brightness (contrast), 0-255. |
-| `SCREEN_TRANSITION_MS` | How long a slide between two screens takes. |
-| `SCREEN_SCROLL_HOLD_MS` | Long text waits this long before it scrolls. |
-| `SCREEN_SCROLL_SPEED_PX_S` | How fast long text scrolls. |
-| `SCREEN_SCROLL_END_HOLD_MS` | Pause at the end of the text before it jumps back. |
-
-Burn-in protection. Any button press or slider move counts as activity.
-
-| Setting | Meaning |
-|---|---|
-| `SCREEN_DIM_ENABLED` | Dim the screens when idle. |
-| `SCREEN_DIM_AFTER_MS` | ...after this long without activity (2 minutes). |
-| `SCREEN_DIM_BRIGHTNESS` | ...to this brightness, 0-255. |
-| `SCREEN_OFF_ENABLED` | Turn the screens off when idle. |
-| `SCREEN_OFF_AFTER_MS` | ...after this long without activity (30 minutes). |
-| `SCREEN_PIXEL_SHIFT_ENABLED` | Nudge the content by 1 px now and then. |
-| `SCREEN_PIXEL_SHIFT_EVERY_MS` | ...this often (3 minutes). |
-| `SCREEN_WAKE_SWALLOWS_PRESS` | A press that wakes dark screens is not sent to the PC. |
-
-### Connection to the PC
-
-| Setting | Meaning |
-|---|---|
-| `HOST_TIMEOUT_MS` | No frame from the PC for this long: LEDs off, screens show "not connected". |
-| `KEEPALIVE_MS` | Send Alive when nothing else was sent for this long. |
-| `COMMIT_FALLBACK_MS` | Apply held updates if a Begin's Commit never arrives. |
-| `RECONNECT_INTERVAL_MS` | How often the link is checked and, if needed, restarted. |
-
-### Input tuning
-
-| Setting | Meaning |
-|---|---|
-| `DEBOUNCE_MS` | A button's raw reading must be stable this long before a change is reported. |
-| `SLIDER_READ_INTERVAL_MS` | How often sliders are sampled. |
-| `FILTER_WEIGHT` | Exponential moving average weight for slider readings (0-1). Lower is smoother but slower. |
-| `SLIDER_DEADBAND` | A smoothed slider reading must move more than this many ADC units before it is reported. |
+`firmware/tools/hello_check.py --port <port> --sliders N --kinds 1,1,2` resets the board and confirms the Hello matches the layout. Fixed constants (serial baud, buffer sizes, protocol timing) stay in `src/config.h`.
 
 ## Wiring screens and choosing pins
 
 - The ESP32 has **two hardware I2C buses**, and an SSD1306 answers on `0x3C` or `0x3D`, so there are at most **4 screens**. Two modules on the same bus need different addresses: move the address resistor on at least one module per bus to `0x3D`.
 - Free, safe GPIOs on the current board: **13, 16, 17, 22, 23, 25, 26, 27**. The defaults use 25/26 for bus 0 and 27/13 for bus 1.
 - Avoid GPIO 21 while it drives an LED (it is Arduino's default SDA), and avoid the strapping pins 0, 2 and 15.
-- If slides look rough, try `I2C_CLOCK_HZ 1000000`. A full frame takes about 25-30 ms per panel at 400 kHz, and panels are updated one after another.
+- If slides look rough, raise the bus's `clock_hz` to 1000000. A full frame takes about 25-30 ms per panel at 400 kHz, and panels are updated one after another.
 
 ### Migrating a button from LED to screen
 
-Change its entry in `BUTTONS` from `IND_LED(...)` to `IND_SCREEN(0, 0x3C)` (pick the bus and address), set the bus pins, and reflash. The app picks the change up from Hello. There is nothing to change in Volco.
+Change the button's indicator in its config from `led` to `screen` (bus and address), and make sure that bus has `sda`/`scl`. In stage 3 that is a seed change (see Configuration); from stage 4, Volco's Controller page. The app picks the change up from Hello; there is nothing to change in Volco's actions.
 
 ## Wire protocol
 
@@ -210,7 +129,7 @@ Layout 1, in pixels on the 128x64 panel:
 | Icon | 28x28 at x 50, y 18 | An icon; the muted flag draws a diagonal slash. |
 | Main | x 2-125, baseline row 60 | Text (14 px Bold), centred when it fits. |
 
-Text wider than its area is left-aligned (right-aligned for Hebrew), holds for `SCREEN_SCROLL_HOLD_MS`, scrolls at `SCREEN_SCROLL_SPEED_PX_S`, holds at the end, then jumps back. Hebrew is reordered into visual order by `volco_bidi` before drawing.
+Text wider than its area is left-aligned (right-aligned for Hebrew), holds for `scroll_hold_ms`, scrolls at `scroll_speed_px_s`, holds at the end, then jumps back. Hebrew is reordered into visual order by `volco_bidi` before drawing.
 
 ### Fonts and icons
 
@@ -227,31 +146,23 @@ It needs Python 3 and Pillow 10 or newer. It renders Arimo (10 px Regular and 14
 
 ## `main.cpp`
 
-### Transport abstraction
+### Transports
 
-Each transport in `transport.cpp` is a block guarded by its `TRANSPORT_*` define. Every block implements the same five functions, and nothing outside them knows which link is in use:
+`transport.cpp` runs USB serial always, and UDP over Wi-Fi when the config enables it (spec §5.5, §7). Each transport has its own frame parser. Until the PC is heard, every outgoing frame goes to every transport that is up; the first valid frame latches its transport (before the link replies), a frame on the other transport moves the latch, and a host timeout clears it. UDP is accepted only from the configured PC IP. `transport_maintain()` runs every pass: it re-joins a failed Wi-Fi at most every `WIFI_RETRY_MS`, and each time Wi-Fi connects the firmware sends a Hello on UDP.
 
-| Function | Purpose |
-|---|---|
-| `transport_init()` | Bring the link up (and the serial port for logging). |
-| `transport_connected()` | Whether the link is currently usable. |
-| `transport_send(data, len)` | Send bytes to the app. |
-| `transport_receive(buf, maxLen)` | Non-blocking read of whatever bytes have arrived. Returns the count. |
-| `transport_reconnect()` | Try to restore a lost link (a no-op where the link manages itself). |
-
-Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to `Serial`. On `TRANSPORT_SERIAL` these share the port with protocol frames. That is safe because the app's parser only acts on bytes that form a valid `0xAA` frame.
+Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to USB serial only. They share the port with protocol frames; that is safe because the app's parser only acts on bytes that form a valid `0xAA` frame.
 
 ### Main loop
 
 `loop()` never blocks for long and runs these steps on every pass, in this order:
 
-1. **Sliders** (every `SLIDER_READ_INTERVAL_MS`): read each pin, smooth it with the moving average, and send a slider message when the smoothed value has moved more than `SLIDER_DEADBAND` since the last one sent.
+1. **Sliders** (every `slider_interval_ms`): read each pin, smooth it with the moving average, and send a slider message when the smoothed value has moved more than `slider_deadband` since the last one sent.
 2. **Buttons**: debounce each pin and send a button message on every confirmed press or release. The debounce is timestamp-based, so a press is still seen when a screen redraw delayed the pass.
-3. **Receive**: drain everything the transport has, feeding each byte to the frame parser and each valid frame to the link.
+3. **Receive**: drain each transport, feeding each byte to its parser; each valid frame latches its transport, then goes to the link.
 4. **Link tick**: keepalive, host timeout and the Commit fallback.
 5. **Screens tick**: power state (dim, off, pixel shift), then at most **one panel redraw** per pass, so a redraw never starves input for long.
-6. **Connection** (every `RECONNECT_INTERVAL_MS`): if `transport_connected()` is false, call `transport_reconnect()`.
+6. **Wi-Fi**: `transport_maintain()`; on a connect, a Hello on UDP.
 
 ## Tests
 
-`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, and also builds the `denky32` environment plus the build-only `denky32_screens_check`, `denky32_udp_check` and `denky32_websocket_check` environments. The golden frames in `test/golden/frames.txt` are shared with the C# tests, so both ends agree on the bytes.
+`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
