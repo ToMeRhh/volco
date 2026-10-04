@@ -51,6 +51,15 @@ jobs:
     - name: Install PlatformIO
       run: pip install platformio==6.1.19
 
+    - name: Firmware build id
+      run: python firmware/scripts/check_firmware_id_paths.py
+
+    - name: Config vectors are up to date
+      run: |
+        pip install protobuf==7.36.2 grpcio-tools==1.84.0
+        python firmware/tools/gen_config_vectors.py
+        git diff --exit-code firmware/test/golden/config.txt
+
     - name: Native tests
       working-directory: firmware
       run: pio test -e native
