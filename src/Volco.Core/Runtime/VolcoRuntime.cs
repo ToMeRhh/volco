@@ -699,7 +699,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
 
         var info = new ControllerInfoConfig
         {
-            ProtocolVersion = hello.Version, Sliders = hello.SliderCount, Buttons = hello.Buttons.ToList(),
+            ProtocolVersion = hello.Version, Chip = hello.Chip, FirmwareVersion = hello.FirmwareVersion,
+            Sliders = hello.SliderCount, Buttons = hello.Buttons.ToList(),
         };
         if (info.SameAs(Config.Config.Controller)) return;
         Config.Config.Controller = info;

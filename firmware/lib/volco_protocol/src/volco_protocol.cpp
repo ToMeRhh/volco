@@ -63,14 +63,27 @@ size_t encodeFrame(const uint8_t* payload, uint8_t len, uint8_t* out) {
   return (size_t)len + 3;
 }
 
-size_t encodeHello(uint8_t sliders, const uint8_t* kinds, uint8_t buttons, uint8_t* out) {
-  uint8_t p[4 + kMaxButtons];
-  p[0] = MSG_HELLO;
-  p[1] = kProtocolVersion;
-  p[2] = sliders;
-  p[3] = buttons;
-  for (uint8_t i = 0; i < buttons && i < kMaxButtons; i++) p[4 + i] = kinds[i];
-  return encodeFrame(p, (uint8_t)(4 + buttons), out);
+size_t encodeHello(const HelloInfo& h, uint8_t* out) {
+  uint8_t p[kMaxPayload];
+  uint16_t i = 0;
+  p[i++] = MSG_HELLO;
+  p[i++] = kProtocolVersion;
+  p[i++] = h.chip;
+  size_t fwLen = h.firmware ? strlen(h.firmware) : 0;
+  if (fwLen > kMaxFirmwareId) fwLen = kMaxFirmwareId;
+  p[i++] = (uint8_t)fwLen;
+  memcpy(p + i, h.firmware, fwLen);
+  i = (uint16_t)(i + fwLen);
+  p[i++] = h.configState;
+  p[i++] = (uint8_t)(h.configCrc >> 24);
+  p[i++] = (uint8_t)(h.configCrc >> 16);
+  p[i++] = (uint8_t)(h.configCrc >> 8);
+  p[i++] = (uint8_t)h.configCrc;
+  p[i++] = h.sliders;
+  uint8_t buttons = h.buttons > kMaxButtons ? kMaxButtons : h.buttons;
+  p[i++] = buttons;
+  for (uint8_t b = 0; b < buttons; b++) p[i++] = h.kinds[b];
+  return encodeFrame(p, (uint8_t)i, out);
 }
 
 size_t encodeAlive(uint8_t* out) {
@@ -226,8 +239,10 @@ void Link::sendFrame(const uint8_t* payload, uint8_t len, uint32_t now) {
 // Hello, then every slider's current position: the PC may have just started, so it knows
 // nothing until a slider moves otherwise.
 void Link::sendHello(uint32_t now) {
-  uint8_t f[4 + kMaxButtons + 3];
-  sink_.send(f, encodeHello(config_.sliders, config_.kinds, config_.buttons, f));
+  uint8_t f[kMaxHelloFrame];
+  const HelloInfo h{config_.chip, config_.firmware, config_.configState, config_.configCrc,
+                    config_.sliders, config_.buttons, config_.kinds};
+  sink_.send(f, encodeHello(h, f));
   for (uint8_t i = 0; i < config_.sliders; i++) sink_.send(f, encodeSlider(i, sink_.sliderValue(i), f));
   lastTx_ = now;
 }

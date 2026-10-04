@@ -58,7 +58,20 @@ class FrameParser {
 
 // Writes a whole frame for `payload` (type + body) into `out` (len + 3 bytes). Returns its size.
 size_t encodeFrame(const uint8_t* payload, uint8_t len, uint8_t* out);
-size_t encodeHello(uint8_t sliders, const uint8_t* kinds, uint8_t buttons, uint8_t* out);
+// What Hello reports (spec §5.2). firmware: the build id, at most 32 bytes (longer is cut).
+struct HelloInfo {
+  uint8_t chip;            // 1 = ESP32
+  const char* firmware;
+  uint8_t configState;     // 0 none, 1 stored, 2 damaged
+  uint32_t configCrc;
+  uint8_t sliders;
+  uint8_t buttons;
+  const uint8_t* kinds;    // one Kind per button
+};
+constexpr uint8_t kMaxFirmwareId = 32;
+constexpr size_t kMaxHelloFrame = 3 + 10 + kMaxFirmwareId + kMaxButtons;  // marker, length, body, checksum
+
+size_t encodeHello(const HelloInfo& hello, uint8_t* out);
 size_t encodeAlive(uint8_t* out);
 size_t encodeSlider(uint8_t index, uint16_t value, uint8_t* out);
 size_t encodeButton(uint8_t index, bool pressed, uint8_t* out);
@@ -83,6 +96,10 @@ struct LinkConfig {
   uint32_t hostTimeoutMs;
   uint32_t keepaliveMs;
   uint32_t commitFallbackMs;
+  uint8_t chip = 1;            // what Hello reports (spec §5.2)
+  const char* firmware = "dev";
+  uint8_t configState = 0;
+  uint32_t configCrc = 0;
 };
 
 // The controller side of a session (spec §3.4): Hello, keepalive, host timeout, Begin/Commit.

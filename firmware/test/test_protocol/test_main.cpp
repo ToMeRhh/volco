@@ -69,9 +69,13 @@ void test_parser_accepts_a_255_byte_payload() {
 void test_encodes_controller_messages_to_golden_bytes() {
   uint8_t out[300];
   const uint8_t kinds[] = {KIND_LED, KIND_LED, KIND_LED_PAIR};
-  size_t n = encodeHello(5, kinds, 3, out);
+  size_t n = encodeHello(HelloInfo{1, "dev", 1, 0x12345678, 5, 3, kinds}, out);
   auto g = golden("hello_led_hardware");
   TEST_ASSERT_FALSE_MESSAGE(g.empty(), "golden/frames.txt not found");
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  n = encodeHello(HelloInfo{1, "dev", 2, 0xCAFEF00D, 0, 0, nullptr}, out);
+  g = golden("hello_damaged");
   TEST_ASSERT_EQUAL(g.size(), n);
   TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
   n = encodeAlive(out);            g = golden("alive");            TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);

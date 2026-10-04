@@ -34,12 +34,19 @@ public class DeviceSettingsConfig
 public class ControllerInfoConfig
 {
     public int ProtocolVersion { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ChipFamily Chip { get; set; }
+
+    /// <summary>The firmware build id the controller reported (spec §9.2).</summary>
+    public string FirmwareVersion { get; set; } = "";
     public int Sliders { get; set; }
 
     /// <summary>Indicator kind per button, by hardware input number.</summary>
     public List<IndicatorKind> Buttons { get; set; } = new();
 
     public bool SameAs(ControllerInfoConfig? other)
-        => other is not null && ProtocolVersion == other.ProtocolVersion && Sliders == other.Sliders
+        => other is not null && ProtocolVersion == other.ProtocolVersion && Chip == other.Chip
+           && FirmwareVersion == other.FirmwareVersion && Sliders == other.Sliders
            && Buttons.SequenceEqual(other.Buttons);
 }

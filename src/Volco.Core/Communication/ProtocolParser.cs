@@ -80,6 +80,33 @@ public class ProtocolParser
         }
     }
 
+    private const int MaxFirmwareId = 32;
+
+    /// <summary>Spec §5.2. A version other than this app's is reported version-only, so the link can
+    /// say "incompatible"; a version-1 body that doesn't add up (too short, extra bytes, an over-long
+    /// firmware id) is dropped, which is also what happens to a pre-stage-4 Hello.</summary>
+    private static HelloMessage? ParseHello(ReadOnlySpan<byte> p)
+    {
+        byte version = p[1];
+        if (version != ProtocolVersion.Current) return new HelloMessage(version, 0, Array.Empty<IndicatorKind>());
+        if (p.Length < 4) return null;
+        var chip = (ChipFamily)p[2];
+        int fwLen = p[3];
+        int i = 4;
+        if (fwLen > MaxFirmwareId || p.Length < i + fwLen + 1 + 4 + 2) return null;
+        var firmware = System.Text.Encoding.ASCII.GetString(p.Slice(i, fwLen));
+        i += fwLen;
+        var state = (ControllerConfigState)p[i++];
+        uint crc = (uint)(p[i] << 24 | p[i + 1] << 16 | p[i + 2] << 8 | p[i + 3]);
+        i += 4;
+        int sliders = p[i++];
+        int buttons = p[i++];
+        if (p.Length != i + buttons) return null;
+        var kinds = new IndicatorKind[buttons];
+        for (int b = 0; b < buttons; b++) kinds[b] = (IndicatorKind)p[i + b];
+        return new HelloMessage(version, chip, firmware, state, crc, sliders, kinds);
+    }
+
     private static ControllerMessage? ParsePayload(ReadOnlySpan<byte> payload)
     {
         if (payload.Length < 1)
@@ -87,14 +114,8 @@ public class ProtocolParser
 
         switch ((MessageType)payload[0])
         {
-            case MessageType.Hello when payload.Length >= 4:
-            {
-                int buttons = payload[3];
-                if (payload.Length < 4 + buttons) return null;
-                var kinds = new IndicatorKind[buttons];
-                for (int i = 0; i < buttons; i++) kinds[i] = (IndicatorKind)payload[4 + i];
-                return new HelloMessage(payload[1], payload[2], kinds);
-            }
+            case MessageType.Hello when payload.Length >= 2:
+                return ParseHello(payload);
             case MessageType.Alive:
                 return new AliveMessage();
             case MessageType.Slider when payload.Length >= 4:

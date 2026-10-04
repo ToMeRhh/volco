@@ -9,6 +9,12 @@
 #include "volco_protocol.h"
 #include "volco_runtime.h"
 
+// The firmware build id Hello reports (spec §9.2); CI sets it, local builds are "dev".
+#ifndef VOLCO_FW_VERSION
+#define VOLCO_FW_VERSION "dev"
+#endif
+static_assert(sizeof(VOLCO_FW_VERSION) - 1 <= volco::kMaxFirmwareId, "VOLCO_FW_VERSION is longer than 32 bytes");
+
 // ============================================================
 // State. Everything about the hardware comes from the stored config (config_store).
 // ============================================================
@@ -62,8 +68,9 @@ static volco::Link* pcLink = nullptr;
 // Spec §5.5 exception: whenever Wi-Fi connects, Hello goes out on UDP even if serial is latched,
 // followed by every slider's position like any Hello.
 static void sendHelloOnUdp() {
-  uint8_t f[4 + volco::kMaxButtons + 3];
-  transport_send(TRANSPORT_UDP, f, volco::encodeHello(rc.sliderCount, kinds, rc.buttonCount, f));
+  uint8_t f[volco::kMaxHelloFrame];
+  const volco::HelloInfo h{1, VOLCO_FW_VERSION, (uint8_t)loaded.state, loaded.crc, rc.sliderCount, rc.buttonCount, kinds};
+  transport_send(TRANSPORT_UDP, f, volco::encodeHello(h, f));
   for (uint8_t i = 0; i < rc.sliderCount; i++)
     transport_send(TRANSPORT_UDP, f, volco::encodeSlider(i, sink.sliderValue(i), f));
 }
@@ -98,7 +105,8 @@ void setup() {
 
   transport_begin_udp(rc.udp);
   screens_init(rc, millis());
-  static volco::Link link({rc.sliderCount, rc.buttonCount, kinds, HOST_TIMEOUT_MS, KEEPALIVE_MS, COMMIT_FALLBACK_MS},
+  static volco::Link link({rc.sliderCount, rc.buttonCount, kinds, HOST_TIMEOUT_MS, KEEPALIVE_MS, COMMIT_FALLBACK_MS,
+                           1, VOLCO_FW_VERSION, (uint8_t)loaded.state, loaded.crc},
                           sink);
   pcLink = &link;
   pcLink->begin(millis());  // Hello: the ESP32 may have just reset because the PC opened the port

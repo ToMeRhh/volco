@@ -52,7 +52,8 @@ public class ProtocolGoldenTests
     [Fact]
     public void ControllerMessages_EncodeToTheGoldenBytes()
     {
-        Assert.Equal(Golden["hello_led_hardware"], ProtocolEncoder.EncodeHello(1, 5,
+        Assert.Equal(Golden["hello_led_hardware"], ProtocolEncoder.EncodeHello(1, ChipFamily.Esp32, "dev",
+            ControllerConfigState.Stored, 0x12345678, 5,
             new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
         Assert.Equal(Golden["alive"], ProtocolEncoder.EncodeAlive());
         Assert.Equal(Golden["slider_2_512"], ProtocolEncoder.EncodeSlider(2, 512));
@@ -64,11 +65,24 @@ public class ProtocolGoldenTests
     {
         var hello = Assert.IsType<HelloMessage>(Assert.Single(Parse(Golden["hello_led_hardware"])));
         Assert.Equal(1, hello.Version);
+        Assert.Equal(ChipFamily.Esp32, hello.Chip);
+        Assert.Equal("dev", hello.FirmwareVersion);
+        Assert.Equal(ControllerConfigState.Stored, hello.ConfigState);
+        Assert.Equal(0x12345678u, hello.ConfigCrc);
         Assert.Equal(5, hello.SliderCount);
         Assert.Equal(new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }, hello.Buttons);
 
         var screens = Assert.IsType<HelloMessage>(Assert.Single(Parse(Golden["hello_screen_controller"])));
         Assert.Equal(Enumerable.Repeat(IndicatorKind.Screen, 4), screens.Buttons);
+        Assert.Equal((ControllerConfigState.None, 0u), (screens.ConfigState, screens.ConfigCrc));
+
+        var damaged = Assert.IsType<HelloMessage>(Assert.Single(Parse(Golden["hello_damaged"])));
+        Assert.Equal((ControllerConfigState.Damaged, 0xCAFEF00Du, 0), (damaged.ConfigState, damaged.ConfigCrc, damaged.Buttons.Count));
+
+        var future = Assert.IsType<HelloMessage>(Assert.Single(Parse(Golden["hello_version_2"])));
+        Assert.Equal(2, future.Version);  // version-only: the link reports a version mismatch
+
+        Assert.Empty(Parse(Golden["hello_old_format"]));  // pre-stage-4 firmware: dropped, not misread
 
         Assert.IsType<AliveMessage>(Assert.Single(Parse(Golden["alive"])));
 
@@ -89,8 +103,8 @@ public class ProtocolGoldenTests
     [Fact]
     public void HelloWithTooFewKindBytes_IsDropped()
     {
-        // Claims 3 buttons but carries 2 kinds: AA 06 01 01 05 03 01 01 cs
-        byte[] body = { 0x01, 0x01, 0x05, 0x03, 0x01, 0x01 };
+        // A new-format Hello claiming 3 buttons but carrying 2 kinds.
+        byte[] body = { 0x01, 0x01, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0x05, 0x03, 0x01, 0x01 };
         byte cs = 0; foreach (var b in body) cs ^= b;
         Assert.Empty(Parse(new byte[] { 0xAA, (byte)body.Length }.Concat(body).Append(cs).ToArray()));
     }

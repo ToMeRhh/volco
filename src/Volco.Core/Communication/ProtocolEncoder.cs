@@ -48,9 +48,16 @@ public static class ProtocolEncoder
 
     // ── Controller → PC (tests, golden frames) ─────────────────────────────
 
-    public static byte[] EncodeHello(byte version, int sliders, IReadOnlyList<IndicatorKind> buttons)
+    public static byte[] EncodeHello(byte version, ChipFamily chip, string firmware, ControllerConfigState state,
+                                     uint crc, int sliders, IReadOnlyList<IndicatorKind> buttons)
     {
-        var body = new List<byte> { (byte)MessageType.Hello, version, (byte)sliders, (byte)buttons.Count };
+        var fw = System.Text.Encoding.ASCII.GetBytes(firmware);
+        var body = new List<byte> { (byte)MessageType.Hello, version, (byte)chip, (byte)fw.Length };
+        body.AddRange(fw);
+        body.Add((byte)state);
+        body.AddRange(new[] { (byte)(crc >> 24), (byte)(crc >> 16), (byte)(crc >> 8), (byte)crc });
+        body.Add((byte)sliders);
+        body.Add((byte)buttons.Count);
         body.AddRange(buttons.Select(k => (byte)k));
         return BuildFrame(body.ToArray());
     }

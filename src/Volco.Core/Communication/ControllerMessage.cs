@@ -24,6 +24,22 @@ public static class ProtocolVersion
     public const byte Current = 1;
 }
 
+/// <summary>The controller's chip family, from Hello (spec §5.2).</summary>
+public enum ChipFamily : byte
+{
+    Unknown = 0,
+    Esp32 = 1,
+}
+
+/// <summary>What the controller runs, from Hello (spec §5.2): its stored config, or the built-in
+/// defaults because none is stored or the stored one couldn't be used.</summary>
+public enum ControllerConfigState : byte
+{
+    None = 0,
+    Stored = 1,
+    Damaged = 2,
+}
+
 public enum ButtonState : byte
 {
     Released = 0x00,
@@ -65,17 +81,34 @@ public class ButtonMessage : ControllerMessage
 public sealed class HelloMessage : ControllerMessage
 {
     public byte Version { get; }
+    public ChipFamily Chip { get; }
+
+    /// <summary>The firmware build id (spec §9.2), e.g. a 12-hex-digit source hash, or "dev".</summary>
+    public string FirmwareVersion { get; }
+    public ControllerConfigState ConfigState { get; }
+
+    /// <summary>CRC-32 of the controller's stored config bytes (spec §6.5); 0 when none.</summary>
+    public uint ConfigCrc { get; }
     public int SliderCount { get; }
 
     /// <summary>One indicator kind per button, by hardware input number.</summary>
     public IReadOnlyList<IndicatorKind> Buttons { get; }
 
-    public HelloMessage(byte version, int sliderCount, IReadOnlyList<IndicatorKind> buttons) : base(MessageType.Hello)
+    public HelloMessage(byte version, ChipFamily chip, string firmwareVersion, ControllerConfigState configState,
+                        uint configCrc, int sliderCount, IReadOnlyList<IndicatorKind> buttons) : base(MessageType.Hello)
     {
         Version = version;
+        Chip = chip;
+        FirmwareVersion = firmwareVersion;
+        ConfigState = configState;
+        ConfigCrc = configCrc;
         SliderCount = sliderCount;
         Buttons = buttons;
     }
+
+    /// <summary>Tests and version-only Hellos (a version this app doesn't speak: spec §5.2).</summary>
+    public HelloMessage(byte version, int sliderCount, IReadOnlyList<IndicatorKind> buttons)
+        : this(version, ChipFamily.Esp32, "", ControllerConfigState.Stored, 0, sliderCount, buttons) { }
 }
 
 /// <summary>The controller's keepalive: sent when it has sent nothing else for a second.</summary>
