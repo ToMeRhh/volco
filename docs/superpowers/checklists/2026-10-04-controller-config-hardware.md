@@ -35,7 +35,7 @@ From spec §12.7 (`docs/superpowers/specs/2026-10-03-controller-config-design.md
 
 ## Before merging the branch
 
-- [ ] Go over the warnings in the latest CI runs of the branch (all jobs: compiler, analyzer, actions and tooling warnings) and address them. Asked by the user on 2026-10-05.
+- [x] Go over the warnings in the latest CI runs of the branch (all jobs: compiler, analyzer, actions and tooling warnings) and address them. Asked by the user on 2026-10-05. Done 2026-10-05 (run 37379701225: 0 warnings; the only remaining line is the default-branch hint printed by actions/checkout).
 - [ ] The firmware notices and the LGPL (spec §14, point 3): the user's decision before a release ships firmware.
 
 ## Already proven
