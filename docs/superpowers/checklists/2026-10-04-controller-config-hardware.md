@@ -6,21 +6,21 @@ From spec §12.7 (`docs/superpowers/specs/2026-10-03-controller-config-design.md
 
 ## Stage 5 (Controller page)
 
-- [ ] **2. Apply the DIY reference.** On the Controller page: Set up (or Set up from scratch) → Start from: DIY reference → Save to controller. Expect:
+- [x] **2. Apply the DIY reference.** On the Controller page: Set up (or Set up from scratch) → Start from: DIY reference → Save to controller. Expect:
   - "Sending… → Restarting… → Saved. The controller restarted with the new setup."
   - Start test: all 5 sliders move their bars, all 3 buttons light their lamps.
   - The LED choices light the LEDs (pair: A and B).
   - Volume and mute don't change while testing.
   - Stop test.
-- [ ] **3. Normal mode.** Volume and mute work, and the actions are unchanged.
-- [ ] **4. Change a pin.** Move a slider or button to a free pin (rewire it), then save. The old pin no longer reacts and the new one does.
-- [ ] **6. Wi-Fi.**
+- [x] **3. Normal mode.** Volume and mute work, and the actions are unchanged.
+- [x] **4. Change a pin.** Move a slider or button to a free pin (rewire it), then save. The old pin no longer reacts and the new one does.
+- [x] **6. Wi-Fi.**
   - Advanced → Use Wi-Fi with a wrong password → save. It still works over USB.
   - Fix the password → save → set Volco's connection to Wi-Fi (UDP). It connects.
   - Change a behaviour setting and save over UDP. The save is confirmed after the reboot.
-- [ ] **8. Unplug during a save.** Unplug right after Save. After reconnecting, the banner reports correctly whether the old or the new setup is on the controller.
-- [ ] **12. Screens.** On the screen board: a layout with screens, made on the page (bus, address, SDA/SCL). The screens render. A behaviour change (brightness) takes effect after the save.
-- [ ] **13. Reboot with the COM port open.** A save over USB: no "Connection lost", and the save is confirmed.
+- [x] **8. Unplug during a save.** Unplug right after Save. After reconnecting, the banner reports correctly whether the old or the new setup is on the controller.
+- [x] **12. Screens.** On the screen board: a layout with screens, made on the page (bus, address, SDA/SCL). The screens render. A behaviour change (brightness) takes effect after the save.
+- [x] **13. Reboot with the COM port open.** A save over USB: no "Connection lost", and the save is confirmed.
 
 ## Stage 6 (install and CI)
 
@@ -34,6 +34,8 @@ From spec §12.7 (`docs/superpowers/specs/2026-10-03-controller-config-design.md
 - [ ] 11. Install over a configured board (NVS wiped) → "This controller isn't set up" (mirror kept) → Apply my saved setup.
 
 ## Already proven
+
+- Stage 5: items 2, 3, 4, 6, 8, 12 and 13 passed on Windows (user), CI build 37262206851 from controller-config-stage2, 2026-10-05.
 
 - Stage 3: items 3 and 12 on the stage 3 firmware (seeded config), 2026-10-04.
 - Stage 4a: a config write over serial with `config_tool.py` (write → reboot → new CRC; INVALID, BAD_CRC, TOO_LARGE and timeout keep the old config), on the screen board, 2026-10-04.
