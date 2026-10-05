@@ -14,10 +14,11 @@
   <Window.Resources>
     <conv:ConnectionStatusToBrushConverter x:Key="StatusToBrush"/>
     <!-- Avalonia draws the caption buttons itself. Fluent's decorations also draw the window
-         title (over our brand) and a fullscreen button (with no way back out), so hide both. -->
+         title (over our brand) and a fullscreen button (with no way back out), so hide both.
+         The title panel's IsVisible is template-bound, which beats a style, so hide its text. -->
     <ControlTheme x:Key="SettingsWindowDecorations" TargetType="WindowDrawnDecorations"
                   BasedOn="{StaticResource {x:Type WindowDrawnDecorations}}">
-      <Style Selector="^ /template/ Panel#PART_TitleTextPanel">
+      <Style Selector="^ /template/ Panel#PART_TitleTextPanel > TextBlock">
         <Setter Property="IsVisible" Value="False"/>
       </Style>
       <Style Selector="^ /template/ Button#PART_FullScreenButton">

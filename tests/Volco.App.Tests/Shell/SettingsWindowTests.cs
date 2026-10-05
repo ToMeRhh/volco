@@ -115,7 +115,7 @@ public class SettingsWindowTests
             .Where(s => s.Setters.OfType<Setter>().Any(x => x.Property == Visual.IsVisibleProperty && Equals(x.Value, false)))
             .Select(s => s.Selector!.ToString())
             .ToList();
-        Assert.Contains(hidden, s => s.EndsWith("Panel#PART_TitleTextPanel"));
+        Assert.Contains(hidden, s => s.Contains("Panel#PART_TitleTextPanel") && s.EndsWith("TextBlock"));
         Assert.Contains(hidden, s => s.EndsWith("Button#PART_FullScreenButton"));
     }
 
