@@ -33,6 +33,11 @@ From spec §12.7 (`docs/superpowers/specs/2026-10-03-controller-config-design.md
 - [ ] 10. Probe: a blank board, another Volco build, and no ESP32 on the port each give their message.
 - [ ] 11. Install over a configured board (NVS wiped) → "This controller isn't set up" (mirror kept) → Apply my saved setup.
 
+## Before merging the branch
+
+- [ ] Go over the warnings in the latest CI runs of the branch (all jobs: compiler, analyzer, actions and tooling warnings) and address them. Asked by the user on 2026-10-05.
+- [ ] The firmware notices and the LGPL (spec §14, point 3): the user's decision before a release ships firmware.
+
 ## Already proven
 
 - Stage 5: items 2, 3, 4, 6, 8, 12 and 13 passed on Windows (user), CI build 37262206851 from controller-config-stage2, 2026-10-05.
