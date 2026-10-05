@@ -9,13 +9,25 @@
         Width="860" Height="660" MinWidth="680" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
-        WindowDecorations="Full">
+        WindowDecorations="Full"
+        WindowDecorationsTheme="{DynamicResource SettingsWindowDecorations}">
   <Window.Resources>
     <conv:ConnectionStatusToBrushConverter x:Key="StatusToBrush"/>
+    <!-- Avalonia draws the caption buttons itself. Fluent's decorations also draw the window
+         title (over our brand) and a fullscreen button (with no way back out), so hide both. -->
+    <ControlTheme x:Key="SettingsWindowDecorations" TargetType="WindowDrawnDecorations"
+                  BasedOn="{StaticResource {x:Type WindowDrawnDecorations}}">
+      <Style Selector="^ /template/ Panel#PART_TitleTextPanel">
+        <Setter Property="IsVisible" Value="False"/>
+      </Style>
+      <Style Selector="^ /template/ Button#PART_FullScreenButton">
+        <Setter Property="IsVisible" Value="False"/>
+      </Style>
+    </ControlTheme>
   </Window.Resources>
 
-  <!-- The client area extends into the title bar: Windows still draws the caption buttons
-       over the top-right corner, and the top row of each pane is the drag region. -->
+  <!-- The client area extends into the title bar: the caption buttons are drawn over the
+       top-right corner, and the top row of each pane is the drag region. -->
   <Grid ColumnDefinitions="208,*" RowDefinitions="40,*">
     <!-- Sidebar, running up to the top edge, with the brand in the title bar row -->
     <Border Grid.Column="0" Grid.RowSpan="2" Classes="Sidebar"/>
