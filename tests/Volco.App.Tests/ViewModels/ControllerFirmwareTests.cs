@@ -101,7 +101,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
         Until(() => vm.FirmwareMessage is not null);
         Assert.Equal("Installed. The controller is running firmware 3f9c2a1b5d07.", vm.FirmwareMessage);
-        Assert.True(vm.OfferTest);
+        Assert.False(vm.OfferTest);   // Install erased the setup: "Set up" comes before a test
         Assert.Equal("flash COM3 Install", _flasher.Calls.Single());
         Assert.StartsWith("Firmware 3f9c2a1b5d07 (from Volco ", vm.FirmwareText);
     }
@@ -183,6 +183,21 @@ public sealed class ControllerFirmwareTests : IDisposable
     }
 
     [Fact]
+    public void Update_Succeeds_AndOffersATest()
+    {
+        var vm = Vm();
+        vm.UpdateFirmwareCommand.Execute(null);
+        Until(() => _flasher.Calls.Count == 1 && !_rig.Runtime.IsSuspended && _rig.Connection!.ConnectCount == 1
+                    && _rig.Connection.Status == ConnectionStatus.Disconnected);
+        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.Equal("Updated. The controller is running firmware 3f9c2a1b5d07.", vm.FirmwareMessage);
+        Assert.True(vm.OfferTest);   // the setup survived an Update
+        Assert.Equal("flash COM3 Update", _flasher.Calls.Single());
+    }
+
+    [Fact]
     public void TheResult_GoesWithTheConnection_ThePage_OrTheController()
     {
         var vm = Vm();
@@ -192,7 +207,7 @@ public sealed class ControllerFirmwareTests : IDisposable
                     && _rig.Connection.Status == ConnectionStatus.Disconnected);
         _rig.Connection!.SetStatus(ConnectionStatus.Connected);
         _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
-        Until(() => vm.OfferTest);
+        Until(() => vm.FirmwareMessage is not null);
 
         // The board is unplugged: the result no longer applies.
         _rig.Connection.SetStatus(ConnectionStatus.Disconnected);
