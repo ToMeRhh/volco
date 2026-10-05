@@ -11,7 +11,8 @@ size_t buildReadReply(uint8_t seq, const uint8_t* blob, uint16_t len, uint32_t c
   size_t used = 0;
   uint16_t offset = 0;
   do {
-    const uint16_t n = (uint16_t)(len - offset > kReadChunk ? kReadChunk : len - offset);
+    const size_t left = (size_t)(len - offset);
+    const uint16_t n = (uint16_t)(left > kReadChunk ? kReadChunk : left);
     const size_t size = encodeConfigData(seq, len, offset, crc, blob ? blob + offset : nullptr, (uint8_t)n, frame);
     if (used + size > cap) return 0;
     memcpy(out + used, frame, size);

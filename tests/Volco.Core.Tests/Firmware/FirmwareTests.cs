@@ -284,7 +284,7 @@ public sealed class FirmwareServiceTests : IDisposable
     }
 
     [Fact]
-    public void ARestartRacingASuspension_IsRetired_WithoutConnect()
+    public async Task ARestartRacingASuspension_IsRetired_WithoutConnect()
     {
         // A factory that blocks: StartConnection is past its first check when the suspension starts.
         using var entered = new ManualResetEventSlim();
@@ -308,7 +308,7 @@ public sealed class FirmwareServiceTests : IDisposable
         Assert.True(entered.Wait(5000));
         var suspension = runtime.SuspendConnection();
         release.Set();
-        Assert.True(restart.Wait(5000));
+        Assert.Same(restart, await Task.WhenAny(restart, Task.Delay(5000)));
 
         FakeControllerConnection raced;
         lock (connections) raced = connections[^1];

@@ -47,7 +47,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -104,13 +104,13 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Download firmware
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: firmware-esp32
         path: src/Volco.Windows/Firmware/esp32
 
     - name: Download firmware zip
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: firmware-zip
         path: .

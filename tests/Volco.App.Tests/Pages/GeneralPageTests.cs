@@ -103,6 +103,6 @@ public class GeneralPageTests
         page.FindControl<Expander>("NoticesExpander")!.IsExpanded = true;
         Assert.Contains("nanopb", box.Text);
         Assert.Contains("GNU LESSER GENERAL PUBLIC LICENSE", box.Text);
-        Assert.Contains("SIL OPEN FONT LICENSE", box.Text.ToUpperInvariant());
+        Assert.Contains("SIL OPEN FONT LICENSE", box.Text!.ToUpperInvariant());
     }
 }

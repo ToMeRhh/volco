@@ -149,7 +149,7 @@ public sealed class ControllerViewModelTests : IDisposable
         var changed = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
         changed.Sliders[0].Pin = 39;
         var blob1 = ControllerConfigCodec.Encode(changed);
-        var save1 = _rig.Runtime.ControllerConfig.SaveAsync(blob1);
+        var save1 = _rig.Runtime.ControllerConfig.SaveAsync(blob1, TestContext.Current.CancellationToken);
         ConfirmLastWrite(blob1);
         Until(() => save1.IsCompleted && vm.Sliders.Count == 5 && vm.Sliders[0].Pin == 39);
         Assert.False(vm.IsDirty);
@@ -158,7 +158,7 @@ public sealed class ControllerViewModelTests : IDisposable
         vm.Sliders[1].Pin = 34;   // dirty now
         changed.Sliders[0].Pin = 33;
         var blob2 = ControllerConfigCodec.Encode(changed);
-        var save2 = _rig.Runtime.ControllerConfig.SaveAsync(blob2);
+        var save2 = _rig.Runtime.ControllerConfig.SaveAsync(blob2, TestContext.Current.CancellationToken);
         ConfirmLastWrite(blob2);
         Until(() => save2.IsCompleted && vm.Notice is not null);
         Assert.Equal("The controller's setup changed. Revert to load it.", vm.Notice);
@@ -315,7 +315,7 @@ public sealed class ControllerViewModelTests : IDisposable
         vm.StopTestCommand.Execute(null);
         Assert.True(vm.CanSave);
 
-        var read = _rig.Runtime.ControllerConfig.ReadAsync(adopt: false);
+        var read = _rig.Runtime.ControllerConfig.ReadAsync(adopt: false, TestContext.Current.CancellationToken);
         _ui.RunAll();
         Assert.False(vm.CanSave);
         Assert.False(vm.CanStartTest);

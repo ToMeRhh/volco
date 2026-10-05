@@ -235,12 +235,9 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         var saved = _config.Config.Connection.Serial.ComPort;
-        if (saved == _comPort || string.IsNullOrEmpty(saved)) return;
+        if (saved == ComPort || string.IsNullOrEmpty(saved)) return;
         if (!ComPorts.Contains(saved)) ComPorts.Add(saved);
-        _comPort = saved;   // the field: OnComPortChanged would save it again
-        OnPropertyChanged(nameof(ComPort));
-        OnPropertyChanged(nameof(TransportDetails));
-        OnPropertyChanged(nameof(FooterText));
+        ComPort = saved;   // already the saved port: OnComPortChanged neither saves nor restarts
     });
 
     // ── COM-port refresh command ───────────────────────────────────────────────
