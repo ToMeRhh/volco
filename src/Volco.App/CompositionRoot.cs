@@ -2,6 +2,7 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using Volco.App.Osd;
 using Volco.App.ViewModels;
 using Volco.App.Views;
@@ -33,6 +34,9 @@ internal sealed class CompositionRoot : IDisposable
     private SettingsViewModel? _settingsViewModel;
     private VolumeOsdWindow? _osd;
     private TrayIcon? _trayIcon;
+    private NativeMenuItem? _trayConnectionItem;
+    private WindowIcon? _connectedIcon;
+    private WindowIcon? _disconnectedIcon;
     private EventHandler<VolumeChangeNotification>? _osdHandler;
     private bool _shutDown;
 
@@ -87,13 +91,10 @@ internal sealed class CompositionRoot : IDisposable
             var app = Application.Current;
             if (app is null) return;
 
-            using var iconStream = AssetLoader.Open(new Uri("avares://Volco.App/Assets/volco.ico"));
+            _connectedIcon = LoadIcon("volco.ico");
+            _disconnectedIcon = LoadIcon("volco-disconnected.ico");
             var tray = new TrayIcon
             {
-                Icon = new WindowIcon(iconStream),
-                ToolTipText = _runtime!.AudioEngineFailed
-                    ? "Volco — audio engine failed to start; see volco.log"
-                    : $"Volco {BuildInfo.DisplayVersion}",
                 Command = new ActionCommand(() =>
                 {
                     AppLog.Info("Tray icon left-clicked");
@@ -109,6 +110,16 @@ internal sealed class CompositionRoot : IDisposable
                 ShowSettings();
             };
             menu.Items.Add(open);
+
+            var connection = new NativeMenuItem("Disconnect");
+            connection.Click += (_, _) =>
+            {
+                AppLog.Info($"{connection.Header} menu item clicked");
+                if (_runtime!.IsUserDisconnected) _runtime.Connect();
+                else _runtime.Disconnect();
+            };
+            menu.Items.Add(connection);
+            _trayConnectionItem = connection;
 
             // The in-app updater only makes sense for official release builds.
             if (BuildInfo.IsRelease)
@@ -131,12 +142,34 @@ internal sealed class CompositionRoot : IDisposable
             tray.Menu = menu;
             TrayIcon.SetIcons(app, new TrayIcons { tray });
             _trayIcon = tray;
+
+            _runtime!.ConnectionStatusChanged += OnTrayConnectionChanged;
+            _runtime.UserDisconnectedChanged += OnTrayConnectionChanged;
+            UpdateTray();
             AppLog.Info("Tray icon created");
         }
         catch (Exception ex)
         {
             AppLog.Error($"Tray icon creation failed: {ex}");
         }
+    }
+
+    private static WindowIcon LoadIcon(string name)
+    {
+        using var stream = AssetLoader.Open(new Uri($"avares://Volco.App/Assets/{name}"));
+        return new WindowIcon(stream);
+    }
+
+    /// <summary>Runtime events come on any thread; the tray reads the runtime's current state.</summary>
+    private void OnTrayConnectionChanged<T>(object? sender, T e) => Dispatcher.UIThread.Post(UpdateTray);
+
+    private void UpdateTray()
+    {
+        if (_trayIcon is not { } tray || _runtime is not { } runtime) return;
+        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.ConnectionStatus, runtime.IsUserDisconnected);
+        tray.Icon = status.Disconnected ? _disconnectedIcon : _connectedIcon;
+        tray.ToolTipText = status.ToolTip;
+        if (_trayConnectionItem is not null) _trayConnectionItem.Header = status.ConnectionMenuText;
     }
 
     public void ShowSettings()
@@ -204,6 +237,12 @@ internal sealed class CompositionRoot : IDisposable
             w.AllowClose = true;
             w.Close();
             _settingsWindow = null;
+        }
+
+        if (_runtime is not null)
+        {
+            _runtime.ConnectionStatusChanged -= OnTrayConnectionChanged;
+            _runtime.UserDisconnectedChanged -= OnTrayConnectionChanged;
         }
 
         if (_trayIcon is { } tray)
