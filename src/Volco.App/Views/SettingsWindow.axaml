@@ -7,14 +7,34 @@
         x:DataType="vm:SettingsViewModel"
         Title="Volco Settings"
         Width="860" Height="660" MinWidth="680" MinHeight="520"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="Full">
   <Window.Resources>
     <conv:ConnectionStatusToBrushConverter x:Key="StatusToBrush"/>
   </Window.Resources>
 
-  <Grid ColumnDefinitions="200,*">
+  <!-- The client area extends into the title bar: Windows still draws the caption buttons
+       over the top-right corner, and the top row of each pane is the drag region. -->
+  <Grid ColumnDefinitions="208,*" RowDefinitions="40,*">
+    <!-- Sidebar, running up to the top edge, with the brand in the title bar row -->
+    <Border Grid.Column="0" Grid.RowSpan="2" Classes="Sidebar"/>
+    <Border Grid.Column="0" Name="SidebarTitleBar" Classes="TitleBarDrag"
+            WindowDecorationProperties.ElementRole="TitleBar">
+      <StackPanel Orientation="Horizontal" Spacing="10" Margin="18,0,0,0" VerticalAlignment="Center"
+                  IsHitTestVisible="False">
+        <Border Classes="BrandMark">
+          <PathIcon Data="{StaticResource Icon.Sliders}" Width="12" Height="12"
+                    Foreground="{DynamicResource OnAccentBrush}"/>
+        </Border>
+        <TextBlock Name="BrandText" Text="Volco" Classes="Brand" VerticalAlignment="Center"/>
+      </StackPanel>
+    </Border>
+    <Border Grid.Column="1" Name="PageTitleBar" Classes="TitleBarDrag"
+            WindowDecorationProperties.ElementRole="TitleBar"/>
+
     <!-- Navigation, with the connection state always visible at the bottom -->
-    <DockPanel Grid.Column="0" Margin="8,8,8,12">
+    <DockPanel Grid.Column="0" Grid.Row="1" Margin="10,4,10,12">
       <StackPanel Name="ConnectionFooter" DockPanel.Dock="Bottom" Orientation="Horizontal"
                   Spacing="8" Margin="12,8">
         <Ellipse Name="FooterDot" Width="8" Height="8" VerticalAlignment="Center"
@@ -38,7 +58,7 @@
     </DockPanel>
 
     <!-- The page, with the undo message floating over its bottom edge -->
-    <Panel Grid.Column="1">
+    <Panel Grid.Column="1" Grid.Row="1">
       <ContentControl Name="PageHost"/>
       <Border Name="Toast" IsVisible="{Binding Toast.IsOpen}"
               HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"

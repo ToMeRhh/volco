@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Headless.XUnit;
 using Volco.App.ViewModels;
 using Volco.App.Views;
@@ -81,6 +82,22 @@ public class SettingsWindowTests
         window.Show();
 
         Assert.Equal("Not connected", window.FindControl<TextBlock>("FooterText")!.Text);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_ExtendsIntoTheTitleBar_WithDragRegions()
+    {
+        var window = Create();
+        window.Show();
+
+        Assert.True(window.ExtendClientAreaToDecorationsHint);
+        Assert.Equal(WindowDecorations.Full, window.WindowDecorations);
+        foreach (var name in new[] { "SidebarTitleBar", "PageTitleBar" })
+        {
+            var region = window.FindControl<Border>(name)!;
+            Assert.Equal("TitleBar", region.GetValue(WindowDecorationProperties.ElementRoleProperty).ToString());
+        }
+        Assert.Equal("Volco", window.FindControl<TextBlock>("BrandText")!.Text);
     }
 
     [AvaloniaFact]
