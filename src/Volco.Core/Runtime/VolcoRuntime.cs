@@ -109,7 +109,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) => { if (!IsDisposed) ControllerStateChanged?.Invoke(this, state); };
         _link.HelloReceived += OnHello;
-        ControllerConfig = new ControllerConfigService(Config, this, _options.Time);
+        ControllerConfig = new ControllerConfigService(Config, this, _options.Time, () => _options.Firmware.BundledVersion);
     }
 
     public IAudioEngine Audio { get; }
@@ -240,6 +240,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
     /// <summary>Where the controller session stands (spec §5.5).</summary>
     public ControllerState ControllerState => _link.State;
+
+    /// <summary>Every Hello from the current connection, version-only ones included, after the
+    /// link and the config session have it (the firmware service waits on it). Any thread.</summary>
+    public event EventHandler<HelloMessage>? HelloReceived;
 
     /// <summary>The controller session's state changed. Any thread.</summary>
     public event EventHandler<ControllerState>? ControllerStateChanged;
@@ -426,28 +430,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// </summary>
     private void StartConnection()
     {
-        if (IsDisposed) return;
+        // Spec §8.6: while a firmware probe or flash holds the port, nothing reopens it.
+        if (IsDisposed || IsSuspended) return;
 
-        // Take ownership of the old transport (see _connection): if Dispose() got to it first,
-        // this returns null and Dispose() retires it instead.
-        var old = Interlocked.Exchange(ref _connection, null);
-        if (old != null)
-        {
-            // Detached before Dispose() (Review Focus #2): the old transport can still raise
-            // events from its background threads, and those must never be reported as the
-            // status of the connection that replaces it. The Disconnected a real transport
-            // raises from its own Dispose() therefore no longer reaches subscribers by itself,
-            // so report it here, once, if they were last told something else - otherwise a
-            // settings page would keep showing the old transport's "Connected" while e.g. a new
-            // WebSocket listener sits Disconnected and raises nothing.
-            var lastStatus = old.Status;
-            RetireTransport(old);
-            _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
-            ControllerConfig.OnConnectionReplaced();
-            ExitTestMode(-1);
-            if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
-                ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
-        }
+        RetireCurrentConnection();
 
         var config = Config.Config.Connection;
         AppLog.Info($"Starting connection: {config.Type}");
@@ -469,19 +455,14 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             ExitTestMode(-1);
         }
 
-        // Dispose() may have started after the IsDisposed check at the top. Both the publish
-        // above and Dispose()'s flag write are full fences, so if this read still sees 0, any
-        // Dispose() that starts later is guaranteed to find the transport in _connection and
-        // retire it itself. If it sees 1, exactly one of us gets it out of the field: retire
-        // it only if CompareExchange says it is still there, and never Connect() it.
-        // Closed at the source: a Dispose() landing between this check and Connect() below
-        // retires the transport, and Connect() then runs on (or concurrently with) its Dispose().
+        // Dispose() or SuspendConnection() may have started after the check at the top. Both the
+        // publish above and their flag writes are full fences, so if this read still sees neither,
+        // any that starts later is guaranteed to find the transport in _connection and retire it
+        // itself. If it sees one, exactly one of us gets it out of the field: retire it only if
+        // CompareExchange says it is still there, and never Connect() it.
         // Every transport (Serial, UDP, WebSocket) guards Connect() with its own disposed flag
-        // under its own lock, so a Connect() that loses that race is a no-op and binds nothing -
-        // no port or listener can outlive the Dispose(). No lock is needed here, and none is held
-        // across Connect()/Dispose(), both of which raise StatusChanged synchronously into
-        // subscribers (a deadlock risk for a UI that marshals synchronously).
-        if (IsDisposed)
+        // under its own lock, so a Connect() that loses a race with Dispose is a no-op.
+        if (IsDisposed || IsSuspended)
         {
             if (Interlocked.CompareExchange(ref _connection, null, connection) == connection)
                 RetireTransport(connection);
@@ -489,6 +470,68 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
 
         connection.Connect();
+    }
+
+    /// <summary>Takes ownership of the current transport and retires it, as a replacement does:
+    /// the link detaches, a config operation fails, test mode ends.</summary>
+    private void RetireCurrentConnection()
+    {
+        // Take ownership of the old transport (see _connection): if Dispose() got to it first,
+        // this returns null and Dispose() retires it instead.
+        var old = Interlocked.Exchange(ref _connection, null);
+        if (old != null)
+        {
+            // Detached before Dispose() (Review Focus #2): the old transport can still raise
+            // events from its background threads, and those must never be reported as the
+            // status of the connection that replaces it. The Disconnected a real transport
+            // raises from its own Dispose() therefore no longer reaches subscribers by itself,
+            // so report it here, once, if they were last told something else - otherwise a
+            // settings page would keep showing the old transport's "Connected" while e.g. a new
+            // WebSocket listener sits Disconnected and raises nothing.
+            var lastStatus = old.Status;
+            RetireTransport(old);
+            _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
+            ControllerConfig.OnConnectionReplaced();
+            ExitTestMode(-1);
+            if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
+                ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
+        }
+    }
+
+    // ── Suspension (spec §8.6) ───────────────────────────────────────────────────────────────
+
+    private int _suspensions;
+
+    /// <summary>A firmware probe or flash holds the port: no connection is open or opened.</summary>
+    public bool IsSuspended => Volatile.Read(ref _suspensions) > 0;
+
+    /// <summary>Releases the connection (and so the serial port) until the handle is disposed:
+    /// the link detaches, a config operation fails and test mode ends, as on a replacement, and
+    /// neither a connection config change nor <see cref="Reconnect"/> reopens it meanwhile.
+    /// Disposing the last handle restarts the connection from the current config.</summary>
+    public IDisposable SuspendConnection()
+    {
+        Interlocked.Increment(ref _suspensions);
+        AppLog.Info("Connection suspended");
+        RetireCurrentConnection();
+        return new Suspension(this);
+    }
+
+    private void Resume()
+    {
+        if (Interlocked.Decrement(ref _suspensions) != 0 || IsDisposed || !_started) return;
+        AppLog.Info("Connection resumed");
+        StartConnection();
+    }
+
+    private sealed class Suspension(VolcoRuntime runtime) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0) runtime.Resume();
+        }
     }
 
     /// <summary>Detaches and disposes a transport this thread has taken ownership of by removing
@@ -529,6 +572,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
                 if (!ReferenceEquals(sender, Volatile.Read(ref _connection))) break;
                 _link.OnMessage(msg);
                 ControllerConfig.OnMessage(msg);   // after the link: the controller info is stored
+                if (msg is HelloMessage hello) HelloReceived?.Invoke(this, hello);
                 break;
             case ConfigDataMessage or ConfigResultMessage:
                 // Same stale-sender filter as Hello (spec §8.2).

@@ -1,3 +1,5 @@
+using Volco.Core.Firmware;
+
 namespace Volco.Core.Runtime;
 
 /// <summary>Tunables for <see cref="VolcoRuntime"/>. Exists so tests can shorten delays; the app
@@ -17,6 +19,10 @@ public sealed record VolcoRuntimeOptions
 
     /// <summary>The clock the config session's timeouts use (spec §8.2); tests pass a fake.</summary>
     public TimeProvider Time { get; init; } = TimeProvider.System;
+
+    /// <summary>The firmware this build carries (spec §8.6): the banner's update notice compares
+    /// Hello's build id with it. Empty for tests and local builds.</summary>
+    public FirmwareCatalog Firmware { get; init; } = FirmwareCatalog.Empty;
 
     /// <summary>HelloRequest retry, heartbeat and tick intervals.</summary>
     public ControllerLinkOptions Link { get; init; } = ControllerLinkOptions.Default;
