@@ -15,11 +15,13 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="8.10.0" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\Volco.Core.Tests\Audio\FakeAudioEngine.cs" Link="Fakes\FakeAudioEngine.cs" />
     <Compile Include="..\Volco.Core.Tests\Runtime\FakeControllerConnection.cs" Link="Fakes\FakeControllerConnection.cs" />
+    <Compile Include="..\Volco.Core.Tests\Firmware\FirmwareFakes.cs" Link="Fakes\FirmwareFakes.cs" />
   </ItemGroup>
 
   <ItemGroup>
