@@ -41,14 +41,17 @@ public class ControllerPageTests
         => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void NotConnected_TheRowsAreReadOnly()
+    public void NotConnected_TheEditorIsHidden_WithAPlaceholder()
     {
         var (page, rig, vm) = Show(DiyBlob);
         using var _ = rig;
         using var __ = vm;
-        var pins = page.GetVisualDescendants().OfType<NumericUpDown>().Where(n => n.Name == "PinBox").ToList();
-        Assert.Equal(8, pins.Count);   // 5 sliders, 3 buttons
-        Assert.All(pins, p => Assert.False(p.IsEffectivelyEnabled));
+        Assert.False(page.FindControl<StackPanel>("EditorSections")!.IsVisible);
+        Assert.True(page.FindControl<TextBlock>("EditorPlaceholderText")!.IsVisible);
+
+        Greet(rig, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+        Assert.True(page.FindControl<StackPanel>("EditorSections")!.IsVisible);
+        Assert.False(page.FindControl<TextBlock>("EditorPlaceholderText")!.IsVisible);
     }
 
     [AvaloniaFact]

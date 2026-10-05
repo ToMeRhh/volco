@@ -62,8 +62,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public ControllerViewModel Controller =>
         _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware);
 
-    /// <summary>The dot on the Controller navigation entry (spec §8.3): a firmware update is
-    /// available. Read from the runtime's config session, so it is right before the page is opened.</summary>
+    /// <summary>The dot on the Controller navigation entry: a firmware update, a controller that
+    /// doesn't answer, or one that needs setting up. Read from the runtime's config session, so it
+    /// is right before the page is opened.</summary>
     [ObservableProperty]
     private bool _controllerNavDot;
 
@@ -83,7 +84,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
-        _controllerNavDot = _runtime.ControllerConfig.Banner.FirmwareUpdateAvailable;
+        _controllerNavDot = _runtime.ControllerConfig.Banner.NeedsAttention;
 
         // The controller only reports a slider when it moves, so levels reported before this VM
         // existed would never reach the bars. Seed them now; the subscription above (kept for the
@@ -145,7 +146,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private void OnBannerChanged(object? sender, EventArgs e)
         => _ui.Post(() =>
         {
-            if (!_disposed) ControllerNavDot = _runtime.ControllerConfig.Banner.FirmwareUpdateAvailable;
+            if (!_disposed) ControllerNavDot = _runtime.ControllerConfig.Banner.NeedsAttention;
         });
 
     /// <summary>A mute flipped (from a button, the Windows mixer, anywhere): light previews follow.</summary>

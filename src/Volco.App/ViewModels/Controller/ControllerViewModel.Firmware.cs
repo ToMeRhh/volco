@@ -13,26 +13,18 @@ namespace Volco.App.ViewModels;
 /// inline firmware panel, and the hint shown when the serial port gets no Hello.</summary>
 public sealed partial class ControllerViewModel
 {
-    public static readonly TimeSpan NoHelloHintAfter = TimeSpan.FromSeconds(5);
-
     private FirmwareService? _firmware;
-    private TimeProvider _time = TimeProvider.System;
-    private ITimer? _hintTimer;
-    private long? _awaitingSince;
     private CancellationTokenSource? _firmwareCts;
 
-    private void InitFirmware(FirmwareService? firmware, TimeProvider? time)
+    private void InitFirmware(FirmwareService? firmware)
     {
         _firmware = firmware;
-        _time = time ?? TimeProvider.System;
         if (_firmware is not null) _firmware.BusyChanged += OnFirmwareBusyChanged;
-        _hintTimer = _time.CreateTimer(_ => _ui.Post(CheckNoHello), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         RefreshPorts();
     }
 
     private void DisposeFirmware()
     {
-        _hintTimer?.Dispose();
         if (_firmware is not null) _firmware.BusyChanged -= OnFirmwareBusyChanged;
         _firmwareCts?.Cancel();
     }
@@ -67,10 +59,6 @@ public sealed partial class ControllerViewModel
     [ObservableProperty] private bool _offerTest;
     [ObservableProperty] private bool _canCancelFirmware;
 
-    /// <summary>The no-Hello hint, e.g. "No Volco controller answered on COM3. Check what's connected?"</summary>
-    [ObservableProperty] private string? _noHelloHint;
-    public bool HasNoHelloHint => NoHelloHint is not null;
-    partial void OnNoHelloHintChanged(string? value) => OnPropertyChanged(nameof(HasNoHelloHint));
     public bool HasFirmwareMessage => FirmwareMessage is not null;
     partial void OnFirmwareMessageChanged(string? value) => OnPropertyChanged(nameof(HasFirmwareMessage));
 
@@ -83,7 +71,8 @@ public sealed partial class ControllerViewModel
         FirmwarePorts.Clear();
         foreach (var n in names.Append(configured).Where(n => !string.IsNullOrEmpty(n)).Distinct().Order())
             FirmwarePorts.Add(n);
-        FirmwarePort ??= configured;
+        // Follows the configured port until the user picks another one here.
+        if (FirmwarePort is null || !FirmwarePorts.Contains(FirmwarePort)) FirmwarePort = configured;
     }
 
     [RelayCommand]
@@ -163,7 +152,6 @@ public sealed partial class ControllerViewModel
         OfferTest = false;
         FirmwareProgress = 0;
         FirmwareStage = "Connecting to the board…";
-        NoHelloHint = null;
         return true;
     }
 
@@ -206,25 +194,11 @@ public sealed partial class ControllerViewModel
         if (!_disposed) RefreshAll();
     });
 
-    /// <summary>Spec §8.6: the serial port has been open for 5 s with no Hello.</summary>
-    private void CheckNoHello()
-    {
-        if (_disposed) return;
-        var waiting = IsSerialConnection && _runtime.ControllerState == ControllerState.AwaitingHello && !IsFirmwareRunning;
-        if (!waiting)
-        {
-            _awaitingSince = null;
-            NoHelloHint = null;
-            return;
-        }
-        _awaitingSince ??= _time.GetTimestamp();
-        if (NoHelloHint is null && _time.GetElapsedTime(_awaitingSince.Value) >= NoHelloHintAfter)
-            NoHelloHint = $"No Volco controller answered on {_config.Config.Connection.Serial.ComPort}. Check what's connected?";
-    }
-
+    /// <summary>The NoAnswer banner's button: probe the configured port.</summary>
     [RelayCommand]
     private void CheckWhatsConnected()
     {
+        RefreshPorts();
         FirmwarePort = _config.Config.Connection.Serial.ComPort;
         CheckFirmware();
     }

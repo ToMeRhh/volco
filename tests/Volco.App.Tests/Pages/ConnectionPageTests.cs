@@ -64,7 +64,11 @@ public class ConnectionPageTests
 
         rig.Connection!.SetStatus(ConnectionStatus.Connected);
         Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Waiting for the controller…", label.Text);
+        Assert.False(page.FindControl<TextBlock>("HardwareSummaryText")!.IsVisible);   // no stale hardware
 
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Led }));
+        Dispatcher.UIThread.RunJobs();
         Assert.Equal("Connected", label.Text);
         Assert.Equal(ThemeColor("SuccessBrush"), Assert.IsAssignableFrom<ISolidColorBrush>(dot.Fill).Color);
         Assert.StartsWith(rig.Config.Config.Connection.Serial.ComPort, page.FindControl<TextBlock>("TransportDetails")!.Text);

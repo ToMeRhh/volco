@@ -44,6 +44,7 @@
         <!-- 1. Status -->
         <Border Name="StatusPanel" Classes="Panel">
           <StackPanel Spacing="10">
+            <ProgressBar Name="WaitingBar" IsIndeterminate="True" IsVisible="{Binding IsWaiting}" Height="3" MinHeight="3"/>
             <StackPanel Orientation="Horizontal" Spacing="12">
               <TextBlock Name="StatusText" Classes="Subtitle" Text="{Binding StatusText}"/>
               <TextBlock Name="ChipText" Classes="Secondary" VerticalAlignment="Center" Text="{Binding ChipText}"/>
@@ -53,6 +54,8 @@
               <StackPanel Spacing="8">
                 <TextBlock Name="BannerText" TextWrapping="Wrap" Text="{Binding BannerText}"/>
                 <WrapPanel Orientation="Horizontal">
+                  <Button Name="CheckFirmwareBannerButton" Classes="Primary" Content="Check firmware" Margin="0,0,8,0"
+                          Command="{Binding CheckWhatsConnectedCommand}" IsVisible="{Binding ShowCheckFirmware}"/>
                   <Button Name="UseControllersButton" Content="Use the controller's" Margin="0,0,8,0"
                           Command="{Binding UseControllersCommand}" IsVisible="{Binding ShowUseControllers}"/>
                   <Button Name="ApplyMineButton" Content="Apply mine" Margin="0,0,8,0"
@@ -72,15 +75,6 @@
             </Border>
             <TextBlock Name="NoticeText" Classes="Caption" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
                        Text="{Binding Notice}" IsVisible="{Binding HasNotice}"/>
-
-            <!-- The serial port is open but nothing says Hello (spec 8.6) -->
-            <Border Name="NoHelloPanel" Classes="Indent" IsVisible="{Binding HasNoHelloHint}">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Name="NoHelloText" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding NoHelloHint}"/>
-                <Button Name="CheckWhatsConnectedButton" Grid.Column="1" Margin="12,0,0,0" Content="Check"
-                        Command="{Binding CheckWhatsConnectedCommand}" IsEnabled="{Binding CanUseFirmware}"/>
-              </Grid>
-            </Border>
 
             <!-- Firmware: install, update, check (spec 8.6) -->
             <StackPanel Name="FirmwarePanel" Spacing="8">
@@ -133,6 +127,10 @@
           </StackPanel>
         </Border>
 
+        <TextBlock Name="EditorPlaceholderText" Classes="Secondary" TextWrapping="Wrap" Margin="4,0"
+                   Text="{Binding EditorPlaceholder}" IsVisible="{Binding !ShowEditor}"/>
+
+        <StackPanel Name="EditorSections" Spacing="{StaticResource SpaceM}" IsVisible="{Binding ShowEditor}">
         <!-- 2. Hardware -->
         <Border Name="HardwarePanel" Classes="Panel">
           <StackPanel Spacing="14">
@@ -457,6 +455,7 @@
                          IsVisible="{Binding WifiError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
             </StackPanel>
           </Border>
+        </StackPanel>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

@@ -37,7 +37,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private bool _udpChangedInSave;
 
     public ControllerViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui,
-                               FirmwareService? firmware = null, TimeProvider? time = null)
+                               FirmwareService? firmware = null)
     {
         _config = config;
         _runtime = runtime;
@@ -48,11 +48,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.OperationChanged += OnServiceChanged;
         _service.MirrorChanged += OnMirrorChanged;
         _runtime.ControllerStateChanged += OnControllerStateChanged;
+        _runtime.ControllerSilentChanged += OnControllerSilentChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _runtime.InTestModeChanged += OnInTestModeChanged;
         _runtime.RawInput += OnRawInput;
 
-        InitFirmware(firmware, time);
+        InitFirmware(firmware);
         LoadDraftFromMirror();
         RebuildTest();
         RefreshStatus();
@@ -63,9 +64,24 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public string StatusText => _runtime.ControllerState switch
     {
         ControllerState.Ready => "Connected",
+        ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
         ControllerState.AwaitingHello => "Waiting for the controller…",
         ControllerState.VersionMismatch => "Firmware mismatch",
         _ => "Not connected",
+    };
+
+    /// <summary>The port is open and the first seconds of waiting for a Hello are running.</summary>
+    public bool IsWaiting => _runtime.ControllerState == ControllerState.AwaitingHello && !_runtime.ControllerSilent;
+
+    /// <summary>Hardware, Test, Screens and Advanced need a controller that answers.</summary>
+    public bool ShowEditor => _runtime.ControllerState == ControllerState.Ready;
+
+    public string EditorPlaceholder => _runtime.ControllerState switch
+    {
+        ControllerState.VersionMismatch => "Update the controller's firmware to set it up.",
+        ControllerState.AwaitingHello when _runtime.ControllerSilent => "Check the controller's firmware above, then set it up here.",
+        ControllerState.AwaitingHello => "Waiting for the controller…",
+        _ => "Connect the controller to set it up. Choose its port on the Connection page.",
     };
 
     public string ChipText => _service.LastHello?.Chip == ChipFamily.Esp32 ? "ESP32" : _service.LastHello is null ? "" : "Unknown";
@@ -91,6 +107,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         BannerKind.NotSetUp => "Set up your controller.",
         BannerKind.Unusable => "The controller's saved setup can't be used.",
         BannerKind.BrokenWithFirmware => "Your saved setup doesn't work with this firmware.",
+        BannerKind.NoAnswer => $"No Volco controller answered on {_config.Config.Connection.Serial.ComPort}. " +
+                               "It may not have Volco's firmware yet: check it, install it if needed, then set it up.",
         _ => null,
     };
 
@@ -103,6 +121,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public bool ShowApplySaved => Has(BannerActions.ApplySaved);
     public bool ShowSetUp => Has(BannerActions.SetUp);
     public bool ShowFixIt => Has(BannerActions.FixIt);
+    public bool ShowCheckFirmware => Has(BannerActions.CheckFirmware) && CanUseFirmware;
 
     /// <summary>Drives the sidebar dot (and in stage 6 the tray).</summary>
     public bool FirmwareUpdateAvailable => Banner.FirmwareUpdateAvailable;
@@ -714,6 +733,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (!_disposed) RefreshAll();
     });
 
+    private void OnControllerSilentChanged(object? sender, bool silent) => _ui.Post(() =>
+    {
+        if (!_disposed) RefreshAll();
+    });
+
     private void OnControllerInfoChanged(object? sender, EventArgs e) => _ui.Post(() =>
     {
         if (!_disposed && !IsTesting) RebuildTest();
@@ -743,7 +767,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(BannerText));
         OnPropertyChanged(nameof(HasBanner));
         foreach (var n in new[] { nameof(ShowUseControllers), nameof(ShowApplyMine), nameof(ShowRetry), nameof(ShowSetUpFromScratch),
-                                  nameof(ShowApplySaved), nameof(ShowSetUp), nameof(ShowFixIt), nameof(FirmwareUpdateAvailable) })
+                                  nameof(ShowApplySaved), nameof(ShowSetUp), nameof(ShowFixIt), nameof(FirmwareUpdateAvailable),
+                                  nameof(ShowCheckFirmware), nameof(IsWaiting), nameof(ShowEditor), nameof(EditorPlaceholder) })
             OnPropertyChanged(n);
     }
 
@@ -771,6 +796,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.OperationChanged -= OnServiceChanged;
         _service.MirrorChanged -= OnMirrorChanged;
         _runtime.ControllerStateChanged -= OnControllerStateChanged;
+        _runtime.ControllerSilentChanged -= OnControllerSilentChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.InTestModeChanged -= OnInTestModeChanged;
         _runtime.RawInput -= OnRawInput;

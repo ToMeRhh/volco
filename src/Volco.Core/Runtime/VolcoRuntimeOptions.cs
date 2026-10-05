@@ -24,6 +24,10 @@ public sealed record VolcoRuntimeOptions
     /// Hello's build id with it. Empty for tests and local builds.</summary>
     public FirmwareCatalog Firmware { get; init; } = FirmwareCatalog.Empty;
 
+    /// <summary>How long an open USB port may go without a Hello before the controller counts as
+    /// silent (the Controller page then suggests checking its firmware).</summary>
+    public TimeSpan SilentAfter { get; init; } = TimeSpan.FromSeconds(5);
+
     /// <summary>HelloRequest retry, heartbeat and tick intervals.</summary>
     public ControllerLinkOptions Link { get; init; } = ControllerLinkOptions.Default;
 }

@@ -110,6 +110,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         _link.StateChanged += (_, state) =>
         {
             AppLog.Info($"Controller state: {state}");
+            WatchForSilence(state);
             if (!IsDisposed) ControllerStateChanged?.Invoke(this, state);
         };
         _link.HelloReceived += OnHello;
@@ -502,6 +503,43 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
     }
 
+    // ── A silent controller ──────────────────────────────────────────────────────────────────
+
+    private readonly object _silenceGate = new();
+    private ITimer? _silenceTimer;   // guarded by _silenceGate
+    private int _silent;
+
+    /// <summary>The USB port has been open for <see cref="VolcoRuntimeOptions.SilentAfter"/> with
+    /// no Hello: whatever is on it isn't answering as a Volco controller.</summary>
+    public bool ControllerSilent => Volatile.Read(ref _silent) != 0;
+
+    /// <summary><see cref="ControllerSilent"/> changed. Any thread.</summary>
+    public event EventHandler<bool>? ControllerSilentChanged;
+
+    private void WatchForSilence(ControllerState state)
+    {
+        lock (_silenceGate)
+        {
+            _silenceTimer?.Dispose();
+            _silenceTimer = null;
+            if (state == ControllerState.AwaitingHello && !IsDisposed)
+                _silenceTimer = _options.Time.CreateTimer(_ =>
+                {
+                    if (_link.State == ControllerState.AwaitingHello
+                        && Config.Config.Connection.Type == ConnectionType.Serial) SetSilent(true);
+                }, null, _options.SilentAfter, Timeout.InfiniteTimeSpan);
+        }
+        if (state != ControllerState.AwaitingHello) SetSilent(false);
+    }
+
+    private void SetSilent(bool silent)
+    {
+        if (Interlocked.Exchange(ref _silent, silent ? 1 : 0) == (silent ? 1 : 0)) return;
+        if (silent) AppLog.Info($"No Hello on {Config.Config.Connection.Serial.ComPort} for {_options.SilentAfter.TotalSeconds:F0} s");
+        ControllerConfig.OnControllerSilent(silent);
+        if (!IsDisposed) ControllerSilentChanged?.Invoke(this, silent);
+    }
+
     // ── Suspension (spec §8.6) ───────────────────────────────────────────────────────────────
 
     private int _suspensions;
@@ -560,6 +598,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         else
         {
             _link.Detach();
+            ControllerConfig.OnDetached();
             ExitTestMode(-1);
         }
     }
@@ -943,6 +982,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         // Before the transport goes: nothing may be sent to it while it is being retired. An
         // operation in flight ends as if the connection were replaced.
         ControllerConfig.Dispose();
+        lock (_silenceGate)
+        {
+            _silenceTimer?.Dispose();
+            _silenceTimer = null;
+        }
+
         bool wasTesting;
         lock (_testGate)
         {

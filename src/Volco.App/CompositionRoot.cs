@@ -8,6 +8,7 @@ using Volco.App.Views;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Diagnostics;
+using Volco.Core.Controller;
 using Volco.Core.Firmware;
 using Volco.Core.Input;
 using Volco.Core.Runtime;
@@ -36,6 +37,7 @@ internal sealed class CompositionRoot : IDisposable
     private TrayIcon? _trayIcon;
     private NativeMenuItem? _firmwareMenuItem;
     private bool _trayShowsUpdate;
+    private bool _trayShowsAttention;
     private FirmwareService? _firmware;
     private EventHandler<VolumeChangeNotification>? _osdHandler;
     private bool _shutDown;
@@ -161,6 +163,7 @@ internal sealed class CompositionRoot : IDisposable
     /// <summary>The tray's update state (spec §8.3): the icon with a dot, a tooltip line and the
     /// menu item, all from the runtime banner's <c>FirmwareUpdateAvailable</c>.</summary>
     internal bool TrayShowsFirmwareUpdate => _trayShowsUpdate;
+    internal bool TrayShowsAttention => _trayShowsAttention;
 
     private void OnBannerChanged(object? sender, EventArgs e)
         => Avalonia.Threading.Dispatcher.UIThread.Post(UpdateTrayFirmware);
@@ -168,20 +171,29 @@ internal sealed class CompositionRoot : IDisposable
     private void UpdateTrayFirmware()
     {
         if (_runtime is null || _shutDown) return;
-        var available = _runtime.ControllerConfig.Banner.FirmwareUpdateAvailable;
-        if (available == _trayShowsUpdate && _trayIcon is not null) return;
+        var banner = _runtime.ControllerConfig.Banner;
+        var available = banner.FirmwareUpdateAvailable;
+        var attention = banner.NeedsAttention;
+        if (available == _trayShowsUpdate && attention == _trayShowsAttention && _trayIcon is not null) return;
         _trayShowsUpdate = available;
+        _trayShowsAttention = attention;
         if (_trayIcon is not { } tray) return;
         try
         {
-            using var icon = AssetLoader.Open(new Uri(available
+            using var icon = AssetLoader.Open(new Uri(attention
                 ? "avares://Volco.App/Assets/volco-update.ico" : "avares://Volco.App/Assets/volco.ico"));
             tray.Icon = new WindowIcon(icon);
             var baseTip = _runtime.AudioEngineFailed
                 ? "Volco — audio engine failed to start; see volco.log"
                 : $"Volco {BuildInfo.DisplayVersion}";
-            tray.ToolTipText = available ? $"{baseTip}\nController firmware update available" : baseTip;
-            if (_firmwareMenuItem is not null) _firmwareMenuItem.IsVisible = available;
+            tray.ToolTipText = available ? $"{baseTip}\nController firmware update available"
+                : banner.Kind == BannerKind.NoAnswer ? $"{baseTip}\nNo controller answering"
+                : attention ? $"{baseTip}\nThe controller needs setting up" : baseTip;
+            if (_firmwareMenuItem is not null)
+            {
+                _firmwareMenuItem.IsVisible = attention;
+                _firmwareMenuItem.Header = available ? "Update controller firmware…" : "Set up the controller…";
+            }
         }
         catch (Exception ex)
         {

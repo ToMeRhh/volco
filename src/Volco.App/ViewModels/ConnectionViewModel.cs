@@ -61,24 +61,52 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     public bool IsConnected => Status == ConnectionStatus.Connected;
 
     /// <summary>The navigation footer's text: "Connected · COM3", "Not connected", …</summary>
-    public string FooterText => _runtime.ControllerState == ControllerState.VersionMismatch ? "Firmware mismatch" : Status switch
+    public string FooterText => _runtime.ControllerState switch
     {
-        ConnectionStatus.Connected => ConnectionType switch
+        ControllerState.VersionMismatch => "Firmware mismatch",
+        ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
+        ControllerState.AwaitingHello => "Waiting for the controller…",
+        _ => Status switch
         {
-            ConnectionType.Serial => $"Connected · {ComPort}",
-            ConnectionType.Udp => "Connected · Wi-Fi",
-            _ => "Connected · WebSocket",
+            ConnectionStatus.Connected => ConnectionType switch
+            {
+                ConnectionType.Serial => $"Connected · {ComPort}",
+                ConnectionType.Udp => "Connected · Wi-Fi",
+                _ => "Connected · WebSocket",
+            },
+            ConnectionStatus.Error => "Connection error",
+            _ => "Not connected",
         },
-        ConnectionStatus.Error => "Connection error",
-        _ => "Not connected",
     };
+
+    /// <summary>The status panel's headline: the port can be open with nothing answering on it.</summary>
+    private string StatusFor(ConnectionStatus status) => status switch
+    {
+        ConnectionStatus.Connected => _runtime.ControllerState switch
+        {
+            ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
+            ControllerState.AwaitingHello => "Waiting for the controller…",
+            ControllerState.VersionMismatch => "Firmware mismatch",
+            _ => "Connected",
+        },
+        ConnectionStatus.Disconnected => "Not connected",
+        ConnectionStatus.Error => "Error",
+        _ => status.ToString(),
+    };
+
+    public const string SilentText = "Nothing on this port answers as a Volco controller. Open the Controller page to check its firmware.";
 
     public const string MismatchText = "Controller firmware doesn't match this version of Volco. Reflash it.";
 
-    /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", from the last Hello; "" before one.</summary>
-    public string HardwareSummary => Summarize(_config.Config.Controller);
+    /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", while a controller answers; "" otherwise.</summary>
+    public string HardwareSummary => _runtime.ControllerState == ControllerState.Ready ? Summarize(_config.Config.Controller) : "";
     public bool HasHardwareSummary => HardwareSummary.Length > 0;
-    public string ControllerError => _runtime.ControllerState == ControllerState.VersionMismatch ? MismatchText : "";
+    public string ControllerError => _runtime.ControllerState switch
+    {
+        ControllerState.VersionMismatch => MismatchText,
+        ControllerState.AwaitingHello when _runtime.ControllerSilent => SilentText,
+        _ => "",
+    };
     public bool HasControllerError => ControllerError.Length > 0;
 
     internal static string Summarize(ControllerInfoConfig? c)
@@ -99,13 +127,19 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         return $"{Plural(c.Sliders, "slider")} · {buttons}";
     }
 
-    private void OnControllerChanged(object? sender, ControllerState state)
+    private void OnControllerChanged(object? sender, ControllerState state) => RefreshController();
+    private void OnControllerSilent(object? sender, bool silent) => RefreshController();
+
+    private void RefreshController()
         => _ui.Post(() =>
         {
             if (_disposed) return;
+            StatusText = StatusFor(Status);
             OnPropertyChanged(nameof(ControllerError));
             OnPropertyChanged(nameof(HasControllerError));
             OnPropertyChanged(nameof(FooterText));
+            OnPropertyChanged(nameof(HardwareSummary));
+            OnPropertyChanged(nameof(HasHardwareSummary));
         });
 
     private void OnControllerInfo(object? sender, EventArgs e)
@@ -192,6 +226,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // it creates), so unlike the old per-transport subscription this never needs re-wiring.
         _runtime.ConnectionStatusChanged += OnConnectionStatusChanged;
         _runtime.ControllerStateChanged += OnControllerChanged;
+        _runtime.ControllerSilentChanged += OnControllerSilent;
         _runtime.ControllerInfoChanged += OnControllerInfo;
         UpdateStatus(_runtime.ConnectionStatus);
     }
@@ -248,6 +283,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _disposed = true;
         _runtime.ConnectionStatusChanged -= OnConnectionStatusChanged;
         _runtime.ControllerStateChanged -= OnControllerChanged;
+        _runtime.ControllerSilentChanged -= OnControllerSilent;
         _runtime.ControllerInfoChanged -= OnControllerInfo;
         _config.ConnectionConfigChanged -= OnConfigSaved;
         _config.ConfigChanged -= OnConfigSaved;
@@ -262,13 +298,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     private void UpdateStatus(ConnectionStatus status)
     {
         Status = status;
-        StatusText = status switch
-        {
-            ConnectionStatus.Connected    => "Connected",
-            ConnectionStatus.Disconnected => "Not connected",
-            ConnectionStatus.Error        => "Error",
-            _                             => status.ToString()
-        };
+        StatusText = StatusFor(status);
     }
 
     // ── Property-change hooks — write back to config ───────────────────────────

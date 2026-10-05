@@ -27,6 +27,9 @@ public enum BannerKind
     Unusable,
     /// <summary>"Your saved setup doesn't work with this firmware."</summary>
     BrokenWithFirmware,
+    /// <summary>The port is open but no Hello came within a few seconds: "No Volco controller
+    /// answered on COM3. It may not have Volco's firmware yet." (USB only.)</summary>
+    NoAnswer,
 }
 
 [Flags]
@@ -41,6 +44,8 @@ public enum BannerActions
     SetUp = 32,
     FixIt = 64,
     Update = 128,
+    /// <summary>Check what's on the port (the firmware probe).</summary>
+    CheckFirmware = 256,
 }
 
 /// <param name="FirmwareUpdateAvailable">The firmware notice, or an incompatible firmware that an
@@ -49,14 +54,20 @@ public enum BannerActions
 public sealed record ControllerBanner(BannerKind Kind, BannerActions Actions, bool FirmwareUpdateAvailable, bool DevelopmentFirmware)
 {
     public static ControllerBanner Empty { get; } = new(BannerKind.None, BannerActions.None, false, false);
+
+    /// <summary>The controller needs the user: the sidebar dot and the tray say so.</summary>
+    public bool NeedsAttention => FirmwareUpdateAvailable || Kind is BannerKind.NoAnswer or BannerKind.Incompatible
+        or BannerKind.DifferentSetup or BannerKind.ReadFailed or BannerKind.NotSetUpHasMirror or BannerKind.NotSetUp
+        or BannerKind.Unusable or BannerKind.BrokenWithFirmware;
 }
 
 /// <param name="Hello">The last Hello on the current connection, if any.</param>
 /// <param name="Mirror">The mirror's bytes, or null when there is none.</param>
 /// <param name="ReadFailed">The last read under this Hello failed.</param>
 /// <param name="BundledFirmwareVersion">The build id Volco carries; null when it carries no firmware.</param>
+/// <param name="Silent">The port has been open for a while with no Hello (USB only).</param>
 public sealed record BannerInputs(HelloMessage? Hello, byte[]? Mirror, ConfigOperation Operation, bool ReadFailed,
-                                  ConnectionType ConnectionType, string? BundledFirmwareVersion);
+                                  ConnectionType ConnectionType, string? BundledFirmwareVersion, bool Silent = false);
 
 /// <summary>Spec §8.3: the banner as a pure function of the last Hello, the mirror and the operation.</summary>
 public static class ControllerBannerLogic
@@ -66,7 +77,10 @@ public static class ControllerBannerLogic
     public static ControllerBanner Compute(BannerInputs i)
     {
         var h = i.Hello;
-        if (h is null) return ControllerBanner.Empty;
+        if (h is null)
+            return i.Silent && i.ConnectionType == ConnectionType.Serial
+                ? new(BannerKind.NoAnswer, BannerActions.CheckFirmware, false, false)
+                : ControllerBanner.Empty;
 
         bool canUpdate = i.ConnectionType == ConnectionType.Serial && i.BundledFirmwareVersion is not null;
 

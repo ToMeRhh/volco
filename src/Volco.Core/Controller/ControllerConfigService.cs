@@ -81,6 +81,7 @@ public sealed class ControllerConfigService : IDisposable
     private Channel<Event>? _events;
     private byte _seq;
     private bool _readFailed;
+    private bool _silent;
     private (byte, ControllerConfigState, uint)? _autoReadKey;
     private ControllerBanner _banner = ControllerBanner.Empty;
     private bool _disposed;
@@ -164,6 +165,31 @@ public sealed class ControllerConfigService : IDisposable
             _readFailed = false;
             _autoReadKey = null;
             _events?.Writer.TryWrite(new ReplacedEvent());
+        }
+        UpdateBanner();
+    }
+
+    /// <summary>The transport went away (Detach). The last Hello no longer describes a controller
+    /// that is there; an operation in flight carries on (a reboot detaches too, spec §5.4).</summary>
+    public void OnDetached()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _lastHello = null;
+            _readFailed = false;
+            _autoReadKey = null;
+        }
+        UpdateBanner();
+    }
+
+    /// <summary>The runtime says the open port has had no Hello for a while (or no longer).</summary>
+    public void OnControllerSilent(bool silent)
+    {
+        lock (_gate)
+        {
+            if (_disposed || _silent == silent) return;
+            _silent = silent;
         }
         UpdateBanner();
     }
@@ -445,7 +471,7 @@ public sealed class ControllerConfigService : IDisposable
             lock (_gate)
             {
                 if (_disposed) return;
-                inputs = inputs with { Hello = _lastHello, Operation = _operation, ReadFailed = _readFailed };
+                inputs = inputs with { Hello = _lastHello, Operation = _operation, ReadFailed = _readFailed, Silent = _silent };
             }
             var banner = ControllerBannerLogic.Compute(inputs);
             lock (_gate)

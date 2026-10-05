@@ -14,18 +14,21 @@ namespace Volco.App.Tests.ViewModels;
 public sealed class ControllerFirmwareTests : IDisposable
 {
     private static readonly FirmwareCatalog Catalog = FirmwareCatalog.Load(MemoryFirmwareSource.Valid());
-    private readonly TestRig _rig = new(options: new VolcoRuntimeOptions
-    {
-        Link = new ControllerLinkOptions(TimeSpan.FromHours(1), TimeSpan.FromHours(1), TimeSpan.FromHours(1)),
-        Firmware = Catalog,
-    });
+    private readonly FakeTimeProvider _time;
+    private readonly TestRig _rig;
     private readonly RecordingDispatcher _ui = new();
-    private readonly FakeTimeProvider _time = new();
     private readonly FakeFlasher _flasher;
     private ControllerViewModel? _vm;
 
     public ControllerFirmwareTests()
     {
+        _time = new FakeTimeProvider();
+        _rig = new TestRig(options: new VolcoRuntimeOptions
+        {
+            Link = new ControllerLinkOptions(TimeSpan.FromHours(1), TimeSpan.FromHours(1), TimeSpan.FromHours(1)),
+            Firmware = Catalog,
+            Time = _time,
+        });
         _rig.Config.Config.Connection.Serial.ComPort = "COM3";
         _flasher = new FakeFlasher(() => _rig.Runtime.IsSuspended);
     }
@@ -38,7 +41,7 @@ public sealed class ControllerFirmwareTests : IDisposable
 
     private ControllerViewModel Vm(FirmwareCatalog? catalog = null)
         => _vm = new ControllerViewModel(_rig.Config, _rig.Runtime, _ui,
-            new FirmwareService(_rig.Runtime, _flasher, catalog ?? Catalog, _time), _time);
+            new FirmwareService(_rig.Runtime, _flasher, catalog ?? Catalog, _time));
 
     private void Until(Func<bool> condition)
     {
@@ -104,34 +107,63 @@ public sealed class ControllerFirmwareTests : IDisposable
     }
 
     [Fact]
-    public void TheNoHelloHint_After5sOfSilenceOnSerial()
+    public void ASilentController_GetsTheNoAnswerBanner_WithCheckFirmware_AndTheCurrentPort()
     {
         var vm = Vm();
         _rig.Connection!.SetStatus(ConnectionStatus.Connected);   // HelloRequest sent, no Hello
-        _time.Advance(TimeSpan.FromSeconds(1));
         _ui.RunAll();
-        Assert.Null(vm.NoHelloHint);
+        Assert.True(vm.IsWaiting);
+        Assert.False(vm.ShowEditor);
         _time.Advance(TimeSpan.FromSeconds(5));
         _ui.RunAll();
-        Assert.Equal("No Volco controller answered on COM3. Check what's connected?", vm.NoHelloHint);
+        Assert.True(_rig.Runtime.ControllerSilent);
+        Assert.False(vm.IsWaiting);
+        Assert.Equal("No controller answering", vm.StatusText);
+        Assert.StartsWith("No Volco controller answered on COM3.", vm.BannerText);
+        Assert.True(vm.ShowCheckFirmware);
+
+        // Another port, then a reconnect: the text follows, and the wait starts over.
+        _rig.Config.Config.Connection.Serial.ComPort = "COM5";
+        _rig.Config.Save();
+        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _ui.RunAll();
+        Assert.False(_rig.Runtime.ControllerSilent);
+        _time.Advance(TimeSpan.FromSeconds(5));
+        _ui.RunAll();
+        Assert.StartsWith("No Volco controller answered on COM5.", vm.BannerText);
 
         _rig.Connection.RaiseMessage(Hello("dev"));
-        _time.Advance(TimeSpan.FromSeconds(1));
         _ui.RunAll();
-        Assert.Null(vm.NoHelloHint);
+        Assert.False(_rig.Runtime.ControllerSilent);
+        Assert.NotEqual(Volco.Core.Controller.BannerKind.NoAnswer, vm.Banner.Kind);
         Assert.Equal("Development firmware", vm.FirmwareText);
+        Assert.True(vm.ShowEditor);
     }
 
     [Fact]
-    public void TheNoHelloHint_NeverOnWebSocket()
+    public void NoNoAnswerBanner_OnWebSocket()
     {
         _rig.Config.Config.Connection.Type = ConnectionType.WebSocket;
         var vm = Vm();
         _rig.Connection!.SetStatus(ConnectionStatus.Connected);
-        _time.Advance(TimeSpan.FromSeconds(1));
         _time.Advance(TimeSpan.FromSeconds(6));
         _ui.RunAll();
-        Assert.Null(vm.NoHelloHint);
+        Assert.False(_rig.Runtime.ControllerSilent);
+        Assert.Null(vm.BannerText);
+    }
+
+    [Fact]
+    public void ADetach_ForgetsTheLastHello()
+    {
+        var vm = Vm();
+        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection.RaiseMessage(Hello("dev"));
+        _ui.RunAll();
+        Assert.Equal("Development firmware", vm.FirmwareText);
+        _rig.Connection.SetStatus(ConnectionStatus.Disconnected);
+        _ui.RunAll();
+        Assert.Equal("", vm.FirmwareText);
+        Assert.Null(_rig.Runtime.ControllerConfig.LastHello);
     }
 
     [Fact]

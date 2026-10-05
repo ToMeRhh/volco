@@ -91,6 +91,10 @@ public class SettingsViewModelTests
         Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
         ui.RunAll();
         Assert.Equal(ConnectionStatus.Connected, connection.Status);
+        Assert.Equal("Waiting for the controller…", connection.StatusText);   // the port is open; no Hello yet
+
+        rig.Connection!.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Led }));
+        ui.RunAll();
         Assert.Equal("Connected", connection.StatusText);
     }
 
