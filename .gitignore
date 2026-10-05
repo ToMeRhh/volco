@@ -4,5 +4,6 @@ obj/
 *.suo
 .vs/
 publish/
+src/Volco.Windows/Firmware/esp32/
 .claude/
 .vscode/

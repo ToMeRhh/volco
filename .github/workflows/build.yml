@@ -39,6 +39,8 @@ jobs:
   firmware-test:
     name: Firmware Tests
     runs-on: ubuntu-latest
+    outputs:
+      build-id: ${{ steps.fwid.outputs.id }}
     steps:
     - name: Checkout Code
       uses: actions/checkout@v7
@@ -52,7 +54,13 @@ jobs:
       run: pip install platformio==6.1.19
 
     - name: Firmware build id
-      run: python firmware/tools/check_firmware_id_paths.py
+      id: fwid
+      run: |
+        python firmware/tools/check_firmware_id_paths.py
+        echo "id=$(bash firmware/scripts/firmware_id.sh)" >> "$GITHUB_OUTPUT"
+
+    - name: Manifest script self-test
+      run: python firmware/scripts/manifest.py --selftest
 
     - name: Config vectors are up to date
       run: |
@@ -66,7 +74,19 @@ jobs:
 
     - name: Build firmware (ESP32)
       working-directory: firmware
-      run: pio run -e esp32
+      env:
+        VOLCO_FW_VERSION: ${{ steps.fwid.outputs.id }}
+      run: |
+        export VOLCO_FW_DISPLAY="ci+${GITHUB_SHA::7}"
+        pio run -e esp32
+        grep -q "\"version\": \"${VOLCO_FW_VERSION}\"" .pio/build/esp32/dist/firmware-manifest.json
+
+    - name: Upload firmware
+      uses: actions/upload-artifact@v7
+      with:
+        name: firmware-esp32
+        path: firmware/.pio/build/esp32/dist/
+        retention-days: 7
 
   simulator-test:
     name: Simulator Tests
@@ -97,6 +117,7 @@ jobs:
   build:
     name: Build and Publish
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_build == true)
+    needs: firmware-test
     runs-on: windows-latest
     permissions:
       contents: read
@@ -115,6 +136,12 @@ jobs:
         cache: true
         cache-dependency-path: Volco.sln
 
+    - name: Download firmware
+      uses: actions/download-artifact@v7
+      with:
+        name: firmware-esp32
+        path: src/Volco.Windows/Firmware/esp32
+
     - name: Publish
       run: |
         dotnet publish src/Volco.Windows/Volco.Windows.csproj `
@@ -124,6 +151,8 @@ jobs:
           -p:PublishSingleFile=true `
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true `
+          -p:RequireFirmware=true `
+          -p:VolcoFirmwareBuildId=${{ needs.firmware-test.outputs.build-id }} `
           -o ./publish/
 
     - name: Upload Artifact

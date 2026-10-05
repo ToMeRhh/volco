@@ -19,6 +19,26 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- The controller firmware (spec 9.3): CI downloads it into Firmware/esp32; local builds have none. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Firmware\**\*" Exclude="Firmware\README.md"
+                      LogicalName="Firmware/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- CI sets RequireFirmware: the build fails without the firmware, or with firmware from another build. -->
+  <Target Name="CheckFirmware" BeforeTargets="BeforeBuild" Condition="'$(RequireFirmware)' == 'true'">
+    <PropertyGroup>
+      <_VolcoFirmwareManifest>$(MSBuildProjectDirectory)\Firmware\esp32\firmware-manifest.json</_VolcoFirmwareManifest>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_VolcoFirmwareManifest)')" Text="RequireFirmware: $(_VolcoFirmwareManifest) is missing." />
+    <Error Condition="'$(VolcoFirmwareBuildId)' == ''" Text="RequireFirmware: VolcoFirmwareBuildId is not set." />
+    <PropertyGroup>
+      <_VolcoFirmwareManifestText>$([System.IO.File]::ReadAllText('$(_VolcoFirmwareManifest)'))</_VolcoFirmwareManifestText>
+    </PropertyGroup>
+    <Error Condition="!$(_VolcoFirmwareManifestText.Contains('&quot;version&quot;: &quot;$(VolcoFirmwareBuildId)&quot;'))"
+           Text="RequireFirmware: the embedded firmware isn't build $(VolcoFirmwareBuildId)." />
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\Volco.Core\Volco.Core.csproj" />
     <ProjectReference Include="..\Volco.App\Volco.App.csproj" />
