@@ -72,6 +72,54 @@
             </Border>
             <TextBlock Name="NoticeText" Classes="Caption" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
                        Text="{Binding Notice}" IsVisible="{Binding HasNotice}"/>
+
+            <!-- The serial port is open but nothing says Hello (spec 8.6) -->
+            <Border Name="NoHelloPanel" Classes="Indent" IsVisible="{Binding HasNoHelloHint}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Name="NoHelloText" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding NoHelloHint}"/>
+                <Button Name="CheckWhatsConnectedButton" Grid.Column="1" Margin="12,0,0,0" Content="Check"
+                        Command="{Binding CheckWhatsConnectedCommand}" IsEnabled="{Binding CanUseFirmware}"/>
+              </Grid>
+            </Border>
+
+            <!-- Firmware: install, update, check (spec 8.6) -->
+            <StackPanel Name="FirmwarePanel" Spacing="8">
+              <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Name="FirmwarePortCombo" Width="140" Margin="0,0,4,0" ItemsSource="{Binding FirmwarePorts}"
+                          SelectedItem="{Binding FirmwarePort, Mode=TwoWay}" IsEnabled="{Binding CanUseFirmware}"/>
+                <Button Name="RefreshFirmwarePortsButton" Classes="Icon" Margin="0,0,12,0" ToolTip.Tip="Refresh the port list"
+                        Command="{Binding RefreshFirmwarePortsCommand}">
+                  <PathIcon Data="{StaticResource Icon.Refresh}" Width="12" Height="12"/>
+                </Button>
+                <Button Name="UpdateFirmwareButton" Classes="Primary" Content="Update firmware" Margin="0,0,8,0"
+                        Command="{Binding UpdateFirmwareCommand}" IsVisible="{Binding ShowUpdateFirmware}"
+                        IsEnabled="{Binding CanUseFirmware}"/>
+                <Button Name="InstallFirmwareButton" Content="Install firmware…" Margin="0,0,8,0"
+                        Command="{Binding InstallFirmwareCommand}" IsEnabled="{Binding CanUseFirmware}"/>
+                <Button Name="CheckFirmwareButton" Content="Check firmware" Margin="0,0,8,0"
+                        Command="{Binding CheckFirmwareCommand}" IsEnabled="{Binding CanUseFirmware}"/>
+              </WrapPanel>
+              <TextBlock Name="FirmwareHintText" Classes="Caption" TextWrapping="Wrap" Text="{Binding FirmwareHint}"
+                         IsVisible="{Binding FirmwareHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+              <StackPanel Name="FirmwareProgressPanel" Spacing="4" IsVisible="{Binding IsFirmwareRunning}">
+                <TextBlock Name="FirmwareStageText" Text="{Binding FirmwareStage}"/>
+                <Grid ColumnDefinitions="*,Auto">
+                  <ProgressBar Name="FirmwareProgressBar" Minimum="0" Maximum="1" Value="{Binding FirmwareProgress}"
+                               VerticalAlignment="Center"/>
+                  <Button Name="CancelFirmwareButton" Grid.Column="1" Margin="12,0,0,0" Content="Cancel"
+                          Command="{Binding CancelFirmwareCommand}" IsVisible="{Binding CanCancelFirmware}"/>
+                </Grid>
+                <TextBlock Classes="Caption" Text="Don't unplug the controller until this finishes."/>
+              </StackPanel>
+              <Grid ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding HasFirmwareMessage}">
+                <TextBlock Name="FirmwareMessageText" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding FirmwareMessage}"/>
+                <Button Name="OfferInstallButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0" Content="Install"
+                        Command="{Binding InstallFirmwareCommand}" IsVisible="{Binding OfferInstall}"/>
+                <Button Name="TestNowButton" Grid.Column="2" Classes="Primary" Margin="12,0,0,0" Content="Test your controller now"
+                        Command="{Binding TestNowCommand}" IsVisible="{Binding OfferTest}"/>
+              </Grid>
+            </StackPanel>
           </StackPanel>
         </Border>
 

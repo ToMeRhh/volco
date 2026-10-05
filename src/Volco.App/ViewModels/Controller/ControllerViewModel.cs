@@ -7,6 +7,7 @@ using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
+using Volco.Core.Firmware;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
@@ -35,7 +36,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private IDisposable? _testHandle;
     private bool _udpChangedInSave;
 
-    public ControllerViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui)
+    public ControllerViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui,
+                               FirmwareService? firmware = null, TimeProvider? time = null)
     {
         _config = config;
         _runtime = runtime;
@@ -50,6 +52,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _runtime.InTestModeChanged += OnInTestModeChanged;
         _runtime.RawInput += OnRawInput;
 
+        InitFirmware(firmware, time);
         LoadDraftFromMirror();
         RebuildTest();
         RefreshStatus();
@@ -72,7 +75,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         null => "",
         { FirmwareVersion: ControllerBannerLogic.DevFirmware } => "Development firmware",
         { FirmwareVersion: "" } => "Unknown firmware",
-        var h => $"Firmware {h.FirmwareVersion}",
+        var h => FirmwareVersionText(h.FirmwareVersion),
     };
 
     public ControllerBanner Banner => _service.Banner;
@@ -108,8 +111,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public bool HasNotice => Notice is not null;
     partial void OnNoticeChanged(string? value) => OnPropertyChanged(nameof(HasNotice));
 
-    /// <summary>An operation runs or a test is on: every action that writes to the controller is disabled.</summary>
-    private bool Busy => _service.Operation != ConfigOperation.Idle || IsTesting;
+    /// <summary>An operation runs, a test is on, or firmware is being written: every action that
+    /// writes to the controller is disabled.</summary>
+    private bool Busy => _service.Operation != ConfigOperation.Idle || IsTesting || IsFirmwareRunning;
 
     [RelayCommand]
     private void UseControllers() => _ = ReadAndReport(_service.ReadAsync(adopt: true));
@@ -630,10 +634,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private bool _isTesting;
 
-    public bool CanStartTest => !IsTesting && _runtime.ControllerState == ControllerState.Ready
+    public bool CanStartTest => !IsTesting && !IsFirmwareRunning && _runtime.ControllerState == ControllerState.Ready
                                 && _service.Operation == ConfigOperation.Idle;
 
     partial void OnIsTestingChanged(bool value) => RefreshAll();
+
+    partial void OnIsFirmwareRunningChanged(bool value) => RefreshAll();
 
     [RelayCommand]
     private void StartTest()
@@ -751,6 +757,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanStartTest));
         foreach (var r in AllRows()) r.RefreshCanEdit();
         Recompute();
+        RefreshFirmware();
         StartTestCommand.NotifyCanExecuteChanged();
     }
 
@@ -758,6 +765,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         OnPageLeft();
+        DisposeFirmware();
         _disposed = true;
         _service.BannerChanged -= OnServiceChanged;
         _service.OperationChanged -= OnServiceChanged;

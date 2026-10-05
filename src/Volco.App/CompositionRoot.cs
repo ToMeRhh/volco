@@ -8,6 +8,7 @@ using Volco.App.Views;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Diagnostics;
+using Volco.Core.Firmware;
 using Volco.Core.Input;
 using Volco.Core.Runtime;
 using Volco.Core.Updates;
@@ -33,6 +34,9 @@ internal sealed class CompositionRoot : IDisposable
     private SettingsViewModel? _settingsViewModel;
     private VolumeOsdWindow? _osd;
     private TrayIcon? _trayIcon;
+    private NativeMenuItem? _firmwareMenuItem;
+    private bool _trayShowsUpdate;
+    private FirmwareService? _firmware;
     private EventHandler<VolumeChangeNotification>? _osdHandler;
     private bool _shutDown;
 
@@ -59,7 +63,10 @@ internal sealed class CompositionRoot : IDisposable
         // Audio first: the runtime's v1 to v2 migration needs the device list.
         _platform = _createPlatform();
 
-        _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory);
+        var catalog = FirmwareCatalog.Load(_platform.Firmware ?? EmptyFirmwareSource.Instance);
+        _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
+                                    new VolcoRuntimeOptions { Firmware = catalog });
+        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog);
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
@@ -72,6 +79,7 @@ internal sealed class CompositionRoot : IDisposable
         _runtime.Start();
 
         if (_createTray) CreateTray();
+        _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
 
         // A tooltip needs hovering to notice; if audio failed, put a window in front of the user.
         if (_runtime.AudioEngineFailed) ShowSettings();
@@ -110,6 +118,16 @@ internal sealed class CompositionRoot : IDisposable
             };
             menu.Items.Add(open);
 
+            // Shown while a controller firmware update is available (spec §8.3).
+            _firmwareMenuItem = new NativeMenuItem("Update controller firmware…") { IsVisible = false };
+            _firmwareMenuItem.Click += (_, _) =>
+            {
+                AppLog.Info("Update controller firmware menu item clicked");
+                ShowSettings();
+                _settingsWindow?.ShowPage("controller");
+            };
+            menu.Items.Add(_firmwareMenuItem);
+
             // The in-app updater only makes sense for official release builds.
             if (BuildInfo.IsRelease)
             {
@@ -131,11 +149,43 @@ internal sealed class CompositionRoot : IDisposable
             tray.Menu = menu;
             TrayIcon.SetIcons(app, new TrayIcons { tray });
             _trayIcon = tray;
+            UpdateTrayFirmware();
             AppLog.Info("Tray icon created");
         }
         catch (Exception ex)
         {
             AppLog.Error($"Tray icon creation failed: {ex}");
+        }
+    }
+
+    /// <summary>The tray's update state (spec §8.3): the icon with a dot, a tooltip line and the
+    /// menu item, all from the runtime banner's <c>FirmwareUpdateAvailable</c>.</summary>
+    internal bool TrayShowsFirmwareUpdate => _trayShowsUpdate;
+
+    private void OnBannerChanged(object? sender, EventArgs e)
+        => Avalonia.Threading.Dispatcher.UIThread.Post(UpdateTrayFirmware);
+
+    private void UpdateTrayFirmware()
+    {
+        if (_runtime is null || _shutDown) return;
+        var available = _runtime.ControllerConfig.Banner.FirmwareUpdateAvailable;
+        if (available == _trayShowsUpdate && _trayIcon is not null) return;
+        _trayShowsUpdate = available;
+        if (_trayIcon is not { } tray) return;
+        try
+        {
+            using var icon = AssetLoader.Open(new Uri(available
+                ? "avares://Volco.App/Assets/volco-update.ico" : "avares://Volco.App/Assets/volco.ico"));
+            tray.Icon = new WindowIcon(icon);
+            var baseTip = _runtime.AudioEngineFailed
+                ? "Volco — audio engine failed to start; see volco.log"
+                : $"Volco {BuildInfo.DisplayVersion}";
+            tray.ToolTipText = available ? $"{baseTip}\nController firmware update available" : baseTip;
+            if (_firmwareMenuItem is not null) _firmwareMenuItem.IsVisible = available;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Tray update state failed: {ex.Message}");
         }
     }
 
@@ -147,7 +197,7 @@ internal sealed class CompositionRoot : IDisposable
             if (_runtime is null) return;
             if (_settingsWindow is null)
             {
-                _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher());
+                _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher(), _firmware);
                 _settingsWindow = new SettingsWindow(_settingsViewModel, _runtime);
                 _settingsWindow.Closed += (_, _) =>
                 {
@@ -187,6 +237,8 @@ internal sealed class CompositionRoot : IDisposable
         // Unsubscribe the OSD before closing it; a never-shown window may not raise Closed.
         if (_runtime is not null && _osdHandler is not null) _runtime.VolumeChanged -= _osdHandler;
         _osdHandler = null;
+
+        if (_runtime is not null) _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
 
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.

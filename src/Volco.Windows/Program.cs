@@ -1,5 +1,6 @@
 using Volco.App;
 using Volco.Core.Diagnostics;
+using Volco.Windows.Firmware;
 using Volco.Windows.Platform;
 
 namespace Volco.Windows;
@@ -22,7 +23,8 @@ internal static class Program
         {
             var engine = new Volco.Windows.Audio.AudioEngine();
             bool ready = engine.Start();
-            return new PlatformServices(engine, ready, new Win32WindowEffects());
+            return new PlatformServices(engine, ready, new Win32WindowEffects(),
+                                        new EspDotNetFirmwareFlasher(), new EmbeddedFirmwareSource());
         });
     }
 }

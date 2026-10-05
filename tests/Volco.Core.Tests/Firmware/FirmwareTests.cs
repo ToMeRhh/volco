@@ -14,7 +14,7 @@ using Xunit;
 namespace Volco.Core.Tests.Firmware;
 
 /// <summary>An in-memory firmware bundle: four parts and a manifest, like manifest.py writes.</summary>
-internal sealed class MemoryFirmwareSource : IFirmwareSource
+public sealed class MemoryFirmwareSource : IFirmwareSource
 {
     public readonly Dictionary<string, byte[]> Files = new();
 
@@ -98,7 +98,7 @@ public class FirmwareManifestTests
 }
 
 /// <summary>A flasher that records what it was asked and checks the runtime is suspended.</summary>
-internal sealed class FakeFlasher : IFirmwareFlasher
+public sealed class FakeFlasher : IFirmwareFlasher
 {
     private readonly Func<bool> _isSuspended;
     public FakeFlasher(Func<bool> isSuspended) => _isSuspended = isSuspended;

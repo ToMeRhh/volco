@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.Core.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Firmware;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
@@ -17,6 +18,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
     private readonly VolcoRuntime _runtime;
+    private readonly FirmwareService? _firmware;
 
     // Runtime and engine events fire on arbitrary threads (audio thread, SliderProcessor's
     // coalescing timer, transport threads). Every handler posts through this first.
@@ -58,15 +60,17 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _generalViewModel ??= new GeneralViewModel(_config);
 
     public ControllerViewModel Controller =>
-        _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui);
+        _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware);
 
     /// <summary>The dot on the Controller navigation entry (spec §8.3): a firmware update is
     /// available. Read from the runtime's config session, so it is right before the page is opened.</summary>
     [ObservableProperty]
     private bool _controllerNavDot;
 
-    public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui)
+    public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui,
+                             FirmwareService? firmware = null)
     {
+        _firmware = firmware;
         _config = config;
         _audio = audio;
         _runtime = runtime;
