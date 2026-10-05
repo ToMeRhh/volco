@@ -127,21 +127,9 @@ The reference build is an **ESP32** with **5 sliders and 3 buttons**: two button
 
 ### 🛠️ Make it yours
 
-The whole hardware description is **two tables** in [`firmware/src/config.h`](firmware/src/config.h):
+You describe the hardware in Volco, not in code: **Settings → Controller** lists the sliders, the buttons with their indicator (LED, LED pair or screen) and the screen buses, with a **DIY reference** preset to start from. Saving stores the setup **on the controller** (it restarts into it), and Volco keeps a copy, so a new board or a reinstall picks up where you left off.
 
-```cpp
-// Analog sliders: one ADC pin per slider.
-static constexpr uint8_t SLIDER_PINS[] = {33, 35, 32, 36, 34};
-
-// Buttons: { input pin, indicator }.
-static constexpr ButtonDef BUTTONS[] = {
-    {4,  IND_SCREEN(0, 0x3C)},                // OLED on I²C bus 0
-    {14, IND_LED(21, ACTIVE_LOW)},            // single LED
-    {5,  IND_LED_PAIR(18, 19, ACTIVE_HIGH)},  // two LEDs: A / B
-};
-```
-
-A control's **position in its table is its input number**, and the app lists the controls in the same order. Add a slider, swap a LED for a screen, add a fourth button: reflash once, and when the controller connects it sends a **Hello** describing its sliders, buttons and indicators. The settings window follows.
+A control's **position in its list is its input number**, and the Sliders and Buttons pages list the controls in the same order. Add a slider, swap a LED for a screen, add a fourth button: change it on the Controller page, save, and the controller's **Hello** tells the app what it has now. **Start test** shows every slider and button live, without touching your volume.
 
 > [!TIP]
 > No hardware yet? Open [`tools/simulator/index.html`](tools/simulator/) in a browser. It's a full **simulated controller** (LED or OLED variant) that connects to the app over WebSocket.
@@ -157,7 +145,7 @@ A control's **position in its table is its input number**, and the app lists the
 - 💓 **Keeps the link healthy**: keepalives, auto-reconnect, and a *"not connected"* screen when the PC goes away.
 - 🖼️ **Draws screens** on its own 1-bit canvas (U8g2 is only the SSD1306 driver), with Arimo fonts, Hebrew/RTL support, scrolling for long names, slide transitions, dimming, pixel shift and auto-off.
 
-Everything you'd want to tweak is a `#define` in `config.h`: the transport (`TRANSPORT_SERIAL`, `TRANSPORT_UDP`, `TRANSPORT_WEBSOCKET`), Wi-Fi credentials, pins, debounce, slider smoothing, screen brightness, scroll speed, burn-in timers and more.
+It is **one generic firmware**: the hardware layout, the optional Wi-Fi (UDP) link, the screen behaviour and the input tuning are a small protobuf config the app stores on the controller (`proto/volco_config.proto`). USB serial is always on, so a wrong Wi-Fi setting can always be fixed over USB.
 
 The protocol, rendering and screen-state logic live in pure C++ libraries under [`firmware/lib/`](firmware/lib/) (`volco_protocol`, `volco_bidi`, `volco_screen_state`, `volco_render`). They are **unit-tested on your PC** with `pio test -e native`, and some golden frames are shared with the C# tests so both sides agree on every byte.
 
@@ -272,25 +260,24 @@ Today the Windows build is the one that ships. Porting Volco means implementing 
 
 ### 1. Build the controller
 
-Wire your sliders, buttons and indicators to an ESP32, then describe them in [`firmware/src/config.h`](firmware/src/config.h). See [the firmware guide](firmware/README.md) for wiring notes.
+Wire your sliders, buttons and indicators to an ESP32. See [the firmware guide](firmware/README.md) for wiring notes and pin choices.
 
-### 2. Flash the firmware
-
-```bash
-cd firmware
-pio run -t upload        # build & flash (needs PlatformIO Core >= 6.1.19)
-pio device monitor       # optional: watch the serial log
-```
-
-### 3. Install the app
+### 2. Install the app
 
 Download **`Volco.exe`** from the [latest release](https://github.com/ToMeRhh/volco/releases/latest). It's a single self-contained file with nothing to install. Run it and it appears in the tray.
+
+### 3. Install the firmware
+
+Plug the ESP32 in over USB, open **Settings → Connection**, choose **USB cable** and its COM port, then go to **Settings → Controller → Install firmware…**. Volco carries the matching firmware and flashes it in well under a minute. When a later Volco brings new firmware, the Controller page, the sidebar and the tray offer **Update firmware**, which keeps your setup.
+
+> [!NOTE]
+> Prefer PlatformIO? `cd firmware && pio run -t upload` flashes a development build (it reports `dev`, and Volco never offers to replace it). The controller's setup survives either way.
 
 <!-- TODO: winget / Scoop / installer instructions, once available -->
 
 ### 4. Connect & configure
 
-Open the tray icon → **Connection**, pick **USB cable** (or Wi-Fi UDP / WebSocket, to match your firmware), and the controller's sliders and buttons appear in the settings window. Map them, and you're done. 🎉
+On **Settings → Controller**, choose **Set up**, start from the **DIY reference** (or your own layout) and **Save to controller**. Then map the sliders and buttons on their pages, and you're done. 🎉 Wi-Fi (UDP) is in the Controller page's **Advanced** section.
 
 > [!IMPORTANT]
 > The repository is currently **private**, so the in-app updater needs a GitHub Personal Access Token (`repo` read scope, plus `actions:read` for dev builds). Enter it in **General → Updates**; it's stored only in your local `config.json`.
@@ -350,8 +337,9 @@ src/Volco.App/         Avalonia UI (net8.0, platform-free): tray, settings pages
 src/Volco.Windows/     Windows host → Volco.exe: Core Audio engine, Win32 window effects
 
 firmware/
-├── src/               main, config.h (hardware tables), transports, indicators, screens
-├── lib/               Pure C++ libs: volco_protocol, volco_bidi, volco_screen_state, volco_render
+├── src/               main, config.h (fixed constants), config store and session, transports, indicators, screens
+├── lib/               Pure C++ libs: volco_protocol, volco_config, volco_bidi, volco_screen_state, volco_render
+├── scripts/           firmware_id.sh (build id), version.py and manifest.py (build steps)
 ├── assets/            Icon PNGs and Arimo fonts
 ├── tools/             gen_assets.py (icons & fonts → C++, C#, JS)
 └── test/              Native tests and golden frames shared with C#
@@ -393,7 +381,7 @@ pio test -e native       # host-side tests of lib/
 python3 tools/gen_assets.py   # regenerate icons & fonts (needs Pillow ≥ 10)
 ```
 
-**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu, firmware native tests plus ESP32 builds of every transport and the screens variant, and, on `main`, a Windows single-file build published as the `Volco-win-x64` artifact.
+**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu (plus a compile of the Windows project), the firmware's native tests and ESP32 build (uploaded as `firmware-esp32` with its build id), the simulator's tests, and, on `main`, a Windows single-file build with that firmware embedded, published as the `Volco-win-x64` artifact. Releases (`release.yml`) also attach `volco-firmware-esp32-<version>.zip` with the licence notices.
 
 </details>
 

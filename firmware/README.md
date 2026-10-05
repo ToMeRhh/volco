@@ -208,3 +208,16 @@ Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to USB serial only
 ## Tests
 
 `pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
+
+## Developing the firmware
+
+```bash
+cd firmware && pio run -e esp32 -t upload   # build and flash local firmware
+cd firmware && pio device monitor           # DEBUG_LOG output
+cd firmware && pio test -e native           # host-side tests (needs a host g++)
+```
+
+- **Same firmware, `dev` build id.** A local build reports `dev` in Hello unless `VOLCO_FW_VERSION` is set (CI sets it to `bash scripts/firmware_id.sh`, a hash of the firmware's sources, so a release whose firmware didn't change offers no update). Volco shows "Development firmware" and never offers to replace it; **Install firmware…** brings back the bundled build.
+- **The config survives.** `pio run -t upload` writes the bootloader, the partition table, `boot_app0` and the app at their offsets and never touches NVS (0x9000–0xDFFF). PlatformIO patches the bootloader header on upload, which is harmless: Volco's probe compares the app only.
+- **The build writes `dist/`.** `scripts/manifest.py` copies the four parts to `.pio/build/esp32/dist/` with `firmware-manifest.json` (offsets, sizes, MD5s, the NVS range), which is what Volco installs; it fails the build if a part would overlap NVS (`python scripts/manifest.py --selftest` tests that check).
+- **Pins:** GPIO 34–39 are input-only with no internal pull-up (buttons there need a resistor to 3.3 V); 37/38 aren't pinned out on WROOM modules; 16/17 are used by PSRAM on WROVER/PICO boards.
