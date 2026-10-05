@@ -36,6 +36,11 @@ jobs:
         dotnet test tests/Volco.App.Tests/Volco.App.Tests.csproj \
           --configuration Release
 
+    # The Windows project only builds in the Windows job (main or on request); compile it here too so
+    # Windows-only code (the flasher, the audio engine) breaks on every push, not at release time.
+    - name: Compile the Windows project
+      run: dotnet build src/Volco.Windows/Volco.Windows.csproj --configuration Release -p:EnableWindowsTargeting=true
+
   firmware-test:
     name: Firmware Tests
     runs-on: ubuntu-latest
