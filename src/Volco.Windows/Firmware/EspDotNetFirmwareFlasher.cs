@@ -138,7 +138,22 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
         public SoftLoader? Soft { get; private set; }
         public int Baud => _port.BaudRate;
 
+        /// <summary>Thrown when the board took the faster baud rate but doesn't answer at it (a
+        /// USB-serial chip or cable that can't keep up): the session restarts at 115200.</summary>
+        private sealed class FastBaudFailedException(string message) : Exception(message);
+
         public static async Task<Session> StartAsync(string portName, IProgress<FlashProgress> progress, CancellationToken ct)
+        {
+            try { return await StartAsync(portName, progress, ct, fast: true).ConfigureAwait(false); }
+            catch (FastBaudFailedException e)
+            {
+                AppLog.Info($"{e.Message}; starting again at {RomBaud} baud");
+                await Task.Delay(300, ct).ConfigureAwait(false);   // the reset board boots before the next bootloader entry
+                return await StartAsync(portName, progress, ct, fast: false).ConfigureAwait(false);
+            }
+        }
+
+        private static async Task<Session> StartAsync(string portName, IProgress<FlashProgress> progress, CancellationToken ct, bool fast)
         {
             progress.Report(new FlashProgress(FlashStage.Connecting, 0));
             var port = await OpenAsync(portName, ct).ConfigureAwait(false);
@@ -151,9 +166,14 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(ConnectTimeout);
                 using var reg = timeout.Token.Register(() => { try { port.Close(); } catch { /* closing */ } });
-                await session.ConnectAsync(timeout.Token).ConfigureAwait(false);
+                await session.ConnectAsync(fast, timeout.Token).ConfigureAwait(false);
                 progress.Report(new FlashProgress(FlashStage.Connecting, 1));
                 return session;
+            }
+            catch (FastBaudFailedException)
+            {
+                await session.DisposeAsync().ConfigureAwait(false);   // resets the board out of the stub
+                throw;
             }
             catch (Exception e)
             {
@@ -164,7 +184,7 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
             }
         }
 
-        private async Task ConnectAsync(CancellationToken ct)
+        private async Task ConnectAsync(bool fast, CancellationToken ct)
         {
             _entered = true;
             var bootloader = await new BootloaderTool(_comm, _config.BootloaderSequence).StartBootloaderAsync(ct).ConfigureAwait(false);
@@ -182,17 +202,31 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
             if (Chip != ChipTypes.ESP32) return;
             Soft = await new SoftLoaderTool(_comm, new RamUploadTool(bootloader, Device))
                 .StartAsync(DefaultFirmwareProviders.GetSoftloaderForDevice(Chip), ct).ConfigureAwait(false);
+            if (!fast) return;
             try
             {
                 await new ChangeBaudRateTool(Soft).ChangeBaudAsync(FastBaud, RomBaud, ct).ConfigureAwait(false);
-                _port.BaudRate = FastBaud;   // the caller reconfigures the port (EspDotNet's contract)
-                await Task.Delay(50, ct).ConfigureAwait(false);
-                _comm.ClearBuffer();
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
-                AppLog.Info($"Staying at {RomBaud} baud: {e.Message}");
-                _port.BaudRate = RomBaud;
+                AppLog.Info($"Staying at {RomBaud} baud: {e.Message}");   // the stub refused: still at 115200
+                return;
+            }
+            _port.BaudRate = FastBaud;   // the caller reconfigures the port (EspDotNet's contract)
+            await Task.Delay(50, ct).ConfigureAwait(false);
+            _comm.ClearBuffer();
+            // The stub now talks at 460800, but not every USB-serial chip or cable copes (CH340,
+            // CP2102 and FTDI usually do). One cheap command proves it; if it fails, the board is
+            // reset and the session starts over at 115200 (StartAsync).
+            using var check = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            check.CancelAfter(TimeSpan.FromSeconds(2));
+            try
+            {
+                await Soft.SpiFlashMd5Async(0x1000, 0x1000, check.Token).ConfigureAwait(false);
+            }
+            catch (Exception e) when (!ct.IsCancellationRequested)
+            {
+                throw new FastBaudFailedException($"No answer at {FastBaud} baud ({e.GetType().Name})");
             }
         }
 
