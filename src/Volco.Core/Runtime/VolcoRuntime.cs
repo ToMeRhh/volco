@@ -107,7 +107,11 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         _link = new ControllerLink(
             step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step),
             ControllerDisplay.AnnounceSteps, _options.Link);
-        _link.StateChanged += (_, state) => { if (!IsDisposed) ControllerStateChanged?.Invoke(this, state); };
+        _link.StateChanged += (_, state) =>
+        {
+            AppLog.Info($"Controller state: {state}");
+            if (!IsDisposed) ControllerStateChanged?.Invoke(this, state);
+        };
         _link.HelloReceived += OnHello;
         ControllerConfig = new ControllerConfigService(Config, this, _options.Time, () => _options.Firmware.BundledVersion);
     }
@@ -572,7 +576,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
                 if (!ReferenceEquals(sender, Volatile.Read(ref _connection))) break;
                 _link.OnMessage(msg);
                 ControllerConfig.OnMessage(msg);   // after the link: the controller info is stored
-                if (msg is HelloMessage hello) HelloReceived?.Invoke(this, hello);
+                if (msg is HelloMessage hello)
+                {
+                    AppLog.Info($"Hello: v{hello.Version}, {hello.Chip}, firmware '{hello.FirmwareVersion}', config {hello.ConfigState} " +
+                                $"crc {hello.ConfigCrc:X8}, {hello.SliderCount} sliders, buttons [{string.Join(",", hello.Buttons)}]");
+                    HelloReceived?.Invoke(this, hello);
+                }
                 break;
             case ConfigDataMessage or ConfigResultMessage:
                 // Same stale-sender filter as Hello (spec §8.2).
