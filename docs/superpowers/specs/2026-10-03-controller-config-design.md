@@ -665,7 +665,7 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
   That excludes the simulator and alternative controllers.
 - **Where the update is signalled.** When the firmware notice applies, or the firmware is incompatible (below), the update shows in three places:
   - **Controller page:** the banner and the Update button.
-  - **Settings sidebar:** a small accent dot on the **Controller** navigation entry, with the accessible name "Controller, firmware update available".
+  - **Settings sidebar:** a small accent dot on the **Controller** navigation entry, with the accessible name "Controller needs attention". (Widened on 2026-10-05: the dot, and the tray below, also show for a controller that doesn't answer and for the setup states, from `ControllerBanner.NeedsAttention`.)
   - **Tray:**
     - The tray icon switches to a variant with a dot (`volco-update.ico`, next to `volco.ico`; set through Avalonia's `TrayIcon.Icon`, which is platform-free).
     - The tooltip gains a line: "Controller firmware update available".
@@ -947,9 +947,9 @@ A post-build `extra_scripts` step (`firmware/scripts/manifest.py`) **copies all 
 - **C#:** `Volco.Core.csproj` references `Google.Protobuf` and `Grpc.Tools` (`PrivateAssets="all"`), with `<Protobuf Include="../../proto/volco_config.proto" ProtoRoot="../../proto" GrpcServices="None" />`. Grpc.Tools bundles protoc for Linux and Windows. Spike S3 verifies it in both CI jobs.
 - **Firmware:** nanopb's PlatformIO integration generates code at build time in both the `esp32` and `native` environments.
 - **Simulator:**
-  - A small script, `tools/simulator/gen_config_proto.py` (standard library only), writes `tools/simulator/config_proto.js`, the `.proto` text as a JS string that protobufjs parses at runtime.
+  - `tools/simulator/test/gen_descriptor.mjs` (Node, protobufjs) writes `tools/simulator/volco_config_descriptor.js`, the schema as a protobufjs JSON descriptor in a script (the simulator opens from file://, where fetch fails).
   - The output is committed.
-  - `firmware-test` re-runs the script and fails on a diff.
+  - The `simulator-test` job re-runs it and fails on a diff.
 
 ### 9.4 Development firmware (PlatformIO)
 
@@ -1120,7 +1120,7 @@ cd firmware && pio device monitor           # DEBUG_LOG output
 ### 12.5 CI checks (tests of the pipeline itself)
 
 - A deliberately missing manifest with `RequireFirmware=true` fails the build. This is checked once while implementing, and documented.
-- The stale `config_proto.js` check fails on a diff.
+- The stale `volco_config_descriptor.js` check fails on a diff.
 
 ### 12.6 Spikes (done in stage 1)
 

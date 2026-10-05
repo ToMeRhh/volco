@@ -51,6 +51,7 @@ public sealed class FirmwareService
         if (!IsSerial) return new(null, SerialOnlyMessage, false);
         if (_runtime.IsUserDisconnected) return new(null, DisconnectedMessage, false);
         if (!TryEnter()) return new(null, "Another firmware operation is running.", false);
+        using var quiet = _runtime.HoldSilence();
         try
         {
             ProbeResult result;
@@ -106,6 +107,7 @@ public sealed class FirmwareService
         // After a manual Disconnect the resume wouldn't reconnect, so the Hello could never come.
         if (_runtime.IsUserDisconnected) return new(false, DisconnectedMessage);
         if (!TryEnter()) return new(false, "Another firmware operation is running.");
+        using var quiet = _runtime.HoldSilence();
         var verb = mode == FlashMode.Install ? "Install" : "Update";
         try
         {
@@ -137,6 +139,12 @@ public sealed class FirmwareService
                 _runtime.HelloReceived += OnHello;
             }
 
+            if (_runtime.IsUserDisconnected)
+            {
+                _runtime.HelloReceived -= OnHello;
+                var done0 = mode == FlashMode.Install ? "Installed" : "Updated";
+                return new(true, $"{done0} firmware {version}. Volco is disconnected: Connect to see the controller.");
+            }
             try
             {
                 using var timeout = new CancellationTokenSource(HelloWait, _time);

@@ -120,6 +120,19 @@ public class ProtocolGoldenTests
     }
 
     [Fact]
+    public void ATwoChunkReadReply_AssemblesToTheBlob()
+    {
+        var blob = Enumerable.Range(0, 250).Select(i => (byte)(i * 7 + 1)).ToArray();
+        var parts = new[] { "config_data_250_seq3_part0", "config_data_250_seq3_part1" }
+            .Select(n => Assert.IsType<ConfigDataMessage>(Assert.Single(Parse(Golden[n])))).ToList();
+        Assert.Equal(new[] { 0, 240 }, parts.Select(p => (int)p.Offset));
+        Assert.All(parts, p => Assert.Equal((3, 250, 0xF6E6129Eu), (p.Seq, (int)p.Total, p.Crc32)));
+        var assembled = parts.SelectMany(p => p.Data).ToArray();
+        Assert.Equal(blob, assembled);
+        Assert.Equal(0xF6E6129Eu, Volco.Core.Controller.ControllerConfigCodec.Crc32(assembled));
+    }
+
+    [Fact]
     public void PcOnlyMessages_AreNotParsedAsControllerMessages()
     {
         Assert.Empty(Parse(Golden["heartbeat"]));

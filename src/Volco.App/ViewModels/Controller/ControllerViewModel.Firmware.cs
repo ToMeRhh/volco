@@ -226,7 +226,8 @@ public sealed partial class ControllerViewModel
         {
             if (_disposed) return;
             EndFirmware(outcome.Message);
-            OfferTest = outcome.Succeeded;
+            // After an Install the controller has no setup yet: the banner's "Set up" comes first.
+            OfferTest = outcome.Succeeded && mode == FlashMode.Update;
         });
     }
 

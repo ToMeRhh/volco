@@ -221,7 +221,8 @@ Volco lives in the **system tray**. Click it to open the settings window:
 | 🎚️ **Sliders** | Map each slider to apps, a device, "all other apps", or nothing; pick a response curve |
 | 🔘 **Buttons** | Set single / double / long press actions per preset, with a live preview of the LED or screen |
 | 🎧 **Devices** | Give your audio devices nicknames and icons, and see which controls use each one |
-| 🔗 **Connection** | USB (port & baud), Wi-Fi UDP or WebSocket, with the ports to match your firmware |
+| 🔗 **Connection** | USB (port), Wi-Fi UDP or WebSocket, with the ports to match your controller; Disconnect/Connect |
+| 🎛️ **Controller** | The controller's hardware, screens, input tuning and Wi-Fi, stored on the controller; a live hardware test; install and update its firmware |
 | ⚙️ **General** | Updates, detailed logging and the log folder |
 
 ### Button actions

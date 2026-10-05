@@ -62,6 +62,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public ControllerViewModel Controller =>
         _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware);
 
+    /// <summary>The Controller page's view model if the page was ever opened; null otherwise.</summary>
+    public ControllerViewModel? ControllerIfCreated => _controllerViewModel;
+
     /// <summary>The dot on the Controller navigation entry: a firmware update, a controller that
     /// doesn't answer, or one that needs setting up. Read from the runtime's config session, so it
     /// is right before the page is opened.</summary>

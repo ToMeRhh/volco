@@ -60,6 +60,18 @@ void test_maximal_blob_is_five_ordered_chunks() {
   TEST_ASSERT_EQUAL_MEMORY(blob, joined.data(), 1024);
 }
 
+void test_two_chunk_reply_is_the_golden_frames() {
+  static uint8_t buf[kMaxReadReply];
+  uint8_t blob[250];
+  for (int i = 0; i < 250; i++) blob[i] = (uint8_t)(i * 7 + 1);
+  size_t n = buildReadReply(3, blob, 250, 0xF6E6129E, buf, sizeof buf);
+  auto g0 = golden("config_data_250_seq3_part0");
+  auto g1 = golden("config_data_250_seq3_part1");
+  TEST_ASSERT_EQUAL(g0.size() + g1.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g0.data(), buf, g0.size());
+  TEST_ASSERT_EQUAL_MEMORY(g1.data(), buf + g0.size(), g1.size());
+}
+
 void test_too_small_buffer_gives_zero() {
   uint8_t buf[20];
   const uint8_t blob[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -71,6 +83,7 @@ int main(int, char**) {
   RUN_TEST(test_small_blob_is_one_golden_frame);
   RUN_TEST(test_empty_blob_is_the_empty_golden_frame);
   RUN_TEST(test_maximal_blob_is_five_ordered_chunks);
+  RUN_TEST(test_two_chunk_reply_is_the_golden_frames);
   RUN_TEST(test_too_small_buffer_gives_zero);
   return UNITY_END();
 }

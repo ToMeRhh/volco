@@ -577,7 +577,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             if (state == ControllerState.AwaitingHello && !IsDisposed)
                 _silenceTimer = _options.Time.CreateTimer(_ =>
                 {
-                    if (_link.State == ControllerState.AwaitingHello
+                    // Not while a firmware operation holds the port (it waits for the Hello itself).
+                    if (_link.State == ControllerState.AwaitingHello && !IsSuspended && Volatile.Read(ref _firmwareWaits) == 0
                         && Config.Config.Connection.Type == ConnectionType.Serial) SetSilent(true);
                 }, null, _options.SilentAfter, Timeout.InfiniteTimeSpan);
         }
@@ -598,6 +599,26 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
     /// <summary>A firmware probe or flash holds the port: no connection is open or opened.</summary>
     public bool IsSuspended => Volatile.Read(ref _suspensions) > 0;
+
+    private int _firmwareWaits;
+
+    /// <summary>The firmware service is waiting for the Hello after a probe or flash: the silence
+    /// timer stays quiet meanwhile (the service reports a silent board itself).</summary>
+    internal IDisposable HoldSilence()
+    {
+        Interlocked.Increment(ref _firmwareWaits);
+        return new SilenceHold(this);
+    }
+
+    private sealed class SilenceHold(VolcoRuntime runtime) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0) Interlocked.Decrement(ref runtime._firmwareWaits);
+        }
+    }
 
     /// <summary>Releases the connection (and so the serial port) until the handle is disposed:
     /// the link detaches, a config operation fails and test mode ends, as on a replacement, and

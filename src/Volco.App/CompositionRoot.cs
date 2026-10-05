@@ -209,12 +209,15 @@ internal sealed class CompositionRoot : IDisposable
         tray.ToolTipText = !attention ? status.ToolTip
             : _trayShowsUpdate ? $"{status.ToolTip}\nController firmware update available"
             : banner.Kind == BannerKind.NoAnswer ? $"{status.ToolTip}\nNo controller answering"
-            : $"{status.ToolTip}\nThe controller needs setting up";
+            : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? $"{status.ToolTip}\nThe controller needs setting up"
+            : $"{status.ToolTip}\nThe controller needs attention";
         if (_trayConnectionItem is not null) _trayConnectionItem.Header = status.ConnectionMenuText;
         if (_firmwareMenuItem is not null)
         {
             _firmwareMenuItem.IsVisible = attention;
-            _firmwareMenuItem.Header = _trayShowsUpdate ? "Update controller firmware…" : "Set up the controller…";
+            _firmwareMenuItem.Header = _trayShowsUpdate ? "Update controller firmware…"
+                : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? "Set up the controller…"
+                : "Open the Controller page…";
         }
     }
 

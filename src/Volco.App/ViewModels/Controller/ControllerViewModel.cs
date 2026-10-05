@@ -77,7 +77,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>Hardware, Test, Screens and Advanced need a controller that answers.</summary>
     public bool ShowEditor => _runtime.ControllerState == ControllerState.Ready;
 
-    public string EditorPlaceholder => _runtime.ControllerState switch
+    public string EditorPlaceholder => _runtime.IsUserDisconnected ? "Volco is disconnected. Connect first (the Connection page or the tray)."
+        : _runtime.ControllerState switch
     {
         ControllerState.VersionMismatch => "Update the controller's firmware to set it up.",
         ControllerState.AwaitingHello when _runtime.ControllerSilent => "Check the controller's firmware above, then set it up here.",

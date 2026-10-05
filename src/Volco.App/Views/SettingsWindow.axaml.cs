@@ -99,7 +99,7 @@ public partial class SettingsWindow : Window
     private void OnNavSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         // Leaving the Controller page ends a running hardware test (spec §8.5).
-        if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controller")) _vm.Controller.OnPageLeft();
+        if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controller")) _vm.ControllerIfCreated?.OnPageLeft();
         if (_navList.SelectedItem is not NavItem item) return;
         if (!_pages.TryGetValue(item.Tag, out var page))
             _pages[item.Tag] = page = item.CreatePage();
@@ -123,7 +123,7 @@ public partial class SettingsWindow : Window
         // Hide instead of close so the tray's Open Settings can bring the same window back.
         if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
-        _vm.Controller.OnPageLeft();   // hiding the window ends a running test too
+        _vm.ControllerIfCreated?.OnPageLeft();   // hiding the window ends a running test too
         Hide();
     }
 
