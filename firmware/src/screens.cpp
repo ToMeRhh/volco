@@ -118,8 +118,13 @@ constexpr u8x8_msg_cb kByteCb[volco::kI2cBuses] = {i2cByte<0>, i2cByte<1>, i2cBy
 
 void startBus(uint8_t index, const volco::RuntimeBus& bus) {
   switch (index) {
-    case 0: Wire.begin(bus.sda, bus.scl, bus.clockHz); break;
-    case 1: Wire1.begin(bus.sda, bus.scl, bus.clockHz); break;
+    // A bad pin pair fails here, and the screens would otherwise just stay dark (spec 14.1).
+    case 0:
+      if (!Wire.begin(bus.sda, bus.scl, bus.clockHz)) DEBUG_LOG("[DBG] I2C bus 0 failed to start on " + String(bus.sda) + "/" + String(bus.scl));
+      break;
+    case 1:
+      if (!Wire1.begin(bus.sda, bus.scl, bus.clockHz)) DEBUG_LOG("[DBG] I2C bus 1 failed to start on " + String(bus.sda) + "/" + String(bus.scl));
+      break;
     default: softBus[index - 2].begin(bus.sda, bus.scl, bus.clockHz); break;
   }
 }

@@ -1192,7 +1192,6 @@ Minor findings each stage's final review raised and the user hasn't asked for ye
 | Stage 2 | No golden decode-fail vectors one byte over a string limit (preset 25 bytes, password 65); a few §12.1 cases missing. | An off-by-one in a limit check on one side wouldn't be caught by the shared vectors. |
 | Stage 2 | The NUL prescan (`hasNulInStrings`) doesn't descend into repeated fields' strings. | None today: no repeated message has a string field. |
 | Stage 2 | `ControllerPresets.All` hands out mutable `ControllerConfig` objects. | A caller that edits a preset's `Hardware` changes it for everyone; `ApplyTo` clones, so none does today. |
-| Stage 3 | `Wire.begin()`'s result isn't logged. | A bad I2C pin pair fails silently at boot; the screens just stay dark. |
 | Stage 3 | Re-starting UDP can interrupt a Wi-Fi connect already in progress. | A slower Wi-Fi join after a config change; it retries. |
 | Stage 4b | A Hello from a just-replaced connection can arrive after the replacement. | The Controller page briefly shows the old controller's banner. |
 | Stage 4b | The config is saved debounced (`RequestSave`), and nothing flushes it at exit. | A save confirmed in the moment before Volco exits can be missing from the mirror; the next start shows "different setup", and "Use the controller's" fixes it. |
