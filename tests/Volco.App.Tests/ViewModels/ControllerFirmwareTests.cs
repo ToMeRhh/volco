@@ -122,10 +122,13 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.StartsWith("No Volco controller answered on COM3.", vm.BannerText);
         Assert.True(vm.ShowCheckFirmware);
 
-        // Another port, then a reconnect: the text follows, and the wait starts over.
+        // Another port, then an unplug and replug: the text follows, and the wait starts over.
         _rig.Config.Config.Connection.Serial.ComPort = "COM5";
         _rig.Config.Save();
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection!.SetStatus(ConnectionStatus.Disconnected);
+        _ui.RunAll();
+        Assert.Null(vm.BannerText);
+        _rig.Connection.SetStatus(ConnectionStatus.Connected);
         _ui.RunAll();
         Assert.False(_rig.Runtime.ControllerSilent);
         _time.Advance(TimeSpan.FromSeconds(5));
