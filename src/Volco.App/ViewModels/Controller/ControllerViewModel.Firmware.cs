@@ -89,8 +89,27 @@ public sealed partial class ControllerViewModel
     [RelayCommand]
     private void RefreshFirmwarePorts() => RefreshPorts();
 
+    /// <summary>Install wipes the controller's setup, so it asks first (Volco keeps its copy).</summary>
+    [ObservableProperty] private bool _confirmInstallPending;
+
     [RelayCommand]
-    private void InstallFirmware() => _ = RunFlash(FlashMode.Install);
+    private void InstallFirmware()
+    {
+        if (!CanUseFirmware) return;
+        FirmwareMessage = null;
+        OfferInstall = false;
+        ConfirmInstallPending = true;
+    }
+
+    [RelayCommand]
+    private void ConfirmInstall()
+    {
+        ConfirmInstallPending = false;
+        _ = RunFlash(FlashMode.Install);
+    }
+
+    [RelayCommand]
+    private void CancelInstall() => ConfirmInstallPending = false;
 
     [RelayCommand]
     private void UpdateFirmware() => _ = RunFlash(FlashMode.Update);
@@ -112,9 +131,12 @@ public sealed partial class ControllerViewModel
 
     private sealed class UiProgress(ControllerViewModel vm) : IProgress<FlashProgress>
     {
+        private FlashStage _latest = FlashStage.Connecting;
+
         public void Report(FlashProgress p) => vm._ui.Post(() =>
         {
-            if (vm._disposed) return;
+            if (vm._disposed || !vm.IsFirmwareRunning || p.Stage < _latest) return;   // late or after the end
+            _latest = p.Stage;
             vm.FirmwareStage = p.Stage switch
             {
                 FlashStage.Connecting => "Connecting to the board…",
@@ -168,6 +190,7 @@ public sealed partial class ControllerViewModel
 
     private async Task RunFlash(FlashMode mode)
     {
+        ConfirmInstallPending = false;
         if (!BeginFirmware()) return;
         var outcome = await _firmware!.FlashAsync(FirmwarePort!, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>

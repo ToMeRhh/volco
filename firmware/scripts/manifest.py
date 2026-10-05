@@ -17,8 +17,6 @@ except NameError:  # run directly: python firmware/scripts/manifest.py --selftes
 
 def parse_size(text):
     text = str(text).strip()
-    if isinstance(text, int):
-        return text
     mult = 1
     if text[-1:].upper() == "K":
         mult, text = 1024, text[:-1]
@@ -48,7 +46,10 @@ def nvs_range(csv_path):
 
 
 def check_overlap(name, offset, size, nvs_offset, nvs_size):
-    """Fails the build when a part would write into NVS (spec §9.1)."""
+    """Fails the build when a part would write into NVS (spec §9.1). Erases are whole 4 KB
+    sectors, so NVS must be sector-aligned for "outside NVS" to also mean "never erases it"."""
+    if nvs_offset % 0x1000 or nvs_size % 0x1000:
+        raise SystemExit(f"manifest.py: NVS 0x{nvs_offset:X}+0x{nvs_size:X} isn't whole 4 KB sectors")
     if offset < nvs_offset + nvs_size and nvs_offset < offset + size:
         raise SystemExit(f"manifest.py: {name} at 0x{offset:X}+{size} overlaps NVS 0x{nvs_offset:X}+0x{nvs_size:X}")
 
@@ -67,6 +68,11 @@ def selftest():
         except SystemExit:
             continue
         raise AssertionError(f"0x{offset:X}+0x{size:X} not caught")
+    try:
+        check_overlap("part", 0x1000, 0x10, 0x9800, 0x5000)
+        raise AssertionError("unaligned NVS not caught")
+    except SystemExit:
+        pass
     print("manifest.py SELFTEST OK")
 
 

@@ -6,5 +6,13 @@ namespace Volco.Windows.Firmware;
 /// "Firmware/esp32/…" (Volco.Windows.csproj). A local build has none.</summary>
 public sealed class EmbeddedFirmwareSource : IFirmwareSource
 {
-    public Stream? Open(string path) => typeof(EmbeddedFirmwareSource).Assembly.GetManifestResourceStream($"Firmware/{path}");
+    public Stream? Open(string path)
+    {
+        var assembly = typeof(EmbeddedFirmwareSource).Assembly;
+        var name = $"Firmware/{path}";
+        // The csproj names them with '/'; tolerate a '\' from a build that used RecursiveDir.
+        return assembly.GetManifestResourceStream(name)
+               ?? assembly.GetManifestResourceNames().Where(n => n.Replace('\\', '/') == name)
+                          .Select(assembly.GetManifestResourceStream).FirstOrDefault();
+    }
 }

@@ -11,7 +11,8 @@ public enum FlashMode
 public enum ProbeKind { NoDevice, UnsupportedChip, VolcoMatches, DifferentFirmware }
 
 /// <param name="ChipName">For UnsupportedChip, e.g. "ESP32-S3".</param>
-public sealed record ProbeResult(ProbeKind Kind, string? ChipName = null);
+/// <param name="Message">For NoDevice, the flasher's own reason (e.g. the port is in use).</param>
+public sealed record ProbeResult(ProbeKind Kind, string? ChipName = null, string? Message = null);
 
 public enum FlashStage { Connecting, Erasing, Writing, Verifying, Restarting }
 

@@ -66,7 +66,7 @@ public sealed class FirmwareService
             }
             return result.Kind switch
             {
-                ProbeKind.NoDevice => new(result, $"No ESP32 found on {port}.", false),
+                ProbeKind.NoDevice => new(result, result.Message ?? $"No ESP32 found on {port}.", false),
                 ProbeKind.UnsupportedChip => new(result, new UnsupportedChipException(result.ChipName ?? "unknown chip").Message, false),
                 ProbeKind.VolcoMatches => new(result, "Volco's firmware is installed but didn't answer. Reinstall it?", true),
                 _ => new(result, "This ESP32 doesn't have this version of Volco's firmware.", true),
@@ -97,14 +97,14 @@ public sealed class FirmwareService
                 var started = _time.GetTimestamp();
                 try { await _flasher!.FlashAsync(port, image, mode, progress, ct).ConfigureAwait(false); }
                 catch (OperationCanceledException) { return new(false, "Cancelled. Nothing was written."); }
-                catch (NoDeviceException) { return new(false, $"No ESP32 found on {port}."); }
+                catch (NoDeviceException e) { return new(false, e.Message); }
                 catch (UnsupportedChipException e) { return new(false, e.Message); }
                 catch (Exception e)
                 {
                     AppLog.Error($"Firmware {verb.ToLowerInvariant()} failed: {e}");
                     return new(false, e is FirmwareFlashException { Written: false }
                         ? $"{verb} failed: {e.Message}. Nothing was written. Try again."
-                        : $"{verb} failed: {e.Message}. The controller won't work until the install succeeds. Try again.");
+                        : $"{verb} failed: {e.Message}. The controller won't work until the {verb.ToLowerInvariant()} succeeds. Try again.");
                 }
                 AppLog.Info($"Firmware {verb.ToLowerInvariant()} of {version} on {port} took {_time.GetElapsedTime(started).TotalSeconds:F1} s");
                 SavePort(port);   // still suspended: the change can't restart the connection mid-flash

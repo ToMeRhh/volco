@@ -23,12 +23,16 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
     private const int FastBaud = 460800;
     private static readonly TimeSpan PortOpenRetry = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(6);
+    /// <summary>EspDotNet has no per-read timeout: a board that stops answering mid-write (a
+    /// brownout, a stub crash) would hang forever. The watchdog closes the port, which ends it.</summary>
+    private static readonly TimeSpan FlashWatchdog = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan ProbeWatchdog = TimeSpan.FromSeconds(30);
 
     public async Task<ProbeResult> ProbeAsync(string port, FirmwareImage bundled, IProgress<FlashProgress> progress, CancellationToken ct)
     {
         Session session;
         try { session = await Session.StartAsync(port, progress, ct).ConfigureAwait(false); }
-        catch (NoDeviceException) { return new ProbeResult(ProbeKind.NoDevice); }
+        catch (NoDeviceException e) { return new ProbeResult(ProbeKind.NoDevice, Message: e.Message); }
         await using (session)
         {
             if (session.Chip != ChipTypes.ESP32)
@@ -37,7 +41,8 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
                 return new ProbeResult(ProbeKind.UnsupportedChip, ChipName(session.Chip));
             }
             var app = bundled.App.Info;
-            var md5 = Convert.ToHexString(await session.Soft!.SpiFlashMd5Async(app.Offset, app.Size, ct).ConfigureAwait(false)).ToLowerInvariant();
+            using var watchdog = session.Watchdog(ProbeWatchdog, ct);
+            var md5 = Convert.ToHexString(await session.Soft!.SpiFlashMd5Async(app.Offset, app.Size, watchdog.Token).ConfigureAwait(false)).ToLowerInvariant();
             await session.ResetAsync().ConfigureAwait(false);
             AppLog.Info($"Probe: app region MD5 {md5}, bundled {app.Md5}");
             return new ProbeResult(md5 == app.Md5 ? ProbeKind.VolcoMatches : ProbeKind.DifferentFirmware);
@@ -54,7 +59,8 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
             throw new UnsupportedChipException(ChipName(session.Chip));
         }
         ct.ThrowIfCancellationRequested();   // the last point a flash can be cancelled (spec §8.6)
-        var none = CancellationToken.None;
+        using var watchdog = session.Watchdog(FlashWatchdog, CancellationToken.None);
+        var none = watchdog.Token;           // from here only the watchdog stops it
         bool written = false;
         try
         {
@@ -71,7 +77,7 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
             }
 
             progress.Report(new FlashProgress(FlashStage.Writing, 0));
-            upload.Progress = new Progress<float>(p => progress.Report(new FlashProgress(FlashStage.Writing, p)));
+            upload.Progress = new SyncProgress(p => progress.Report(new FlashProgress(FlashStage.Writing, p)));
             written = true;
             // Each part at its own offset (spec §8.6): the gaps, NVS included, are never written.
             await upload.UploadFirmwareAsync(new FirmwareProvider(0,
@@ -92,10 +98,19 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
             AppLog.Info($"Flash ({mode}) of {image.Manifest.Version} on {port}: {sw.Elapsed.TotalSeconds:F1} s at {session.Baud} baud");
         }
         catch (FirmwareFlashException) { throw; }
+        catch (Exception e) when (watchdog.IsCancellationRequested)
+        {
+            throw new FirmwareFlashException($"the board stopped answering ({e.GetType().Name})", written);
+        }
         catch (Exception e)
         {
             throw new FirmwareFlashException(e.Message, written);
         }
+    }
+
+    private sealed class SyncProgress(Action<float> report) : IProgress<float>
+    {
+        public void Report(float value) => report(value);
     }
 
     private static string ChipName(ChipTypes chip) => chip switch
@@ -114,6 +129,9 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
 
         private Session(SerialPort port, Communicator comm, ESPToolConfig config)
             => (_port, _comm, _config) = (port, comm, config);
+
+        private bool _entered;   // the DTR/RTS bootloader sequence has run
+        private bool _reset;
 
         public ChipTypes Chip { get; private set; }
         public DeviceConfig? Device { get; private set; }
@@ -142,15 +160,25 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
                 await session.DisposeAsync().ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
                 AppLog.Info($"No ESP32 bootloader on {portName}: {e.GetType().Name}: {e.Message}");
-                throw new NoDeviceException($"No ESP32 found on {portName}.");
+                throw e as NoDeviceException ?? new NoDeviceException($"No ESP32 found on {portName}.");
             }
         }
 
         private async Task ConnectAsync(CancellationToken ct)
         {
+            _entered = true;
             var bootloader = await new BootloaderTool(_comm, _config.BootloaderSequence).StartBootloaderAsync(ct).ConfigureAwait(false);
-            Device = await new ChipTypeDetectTool(bootloader, _config).DetectAndGetDeviceConfigAsync(ct).ConfigureAwait(false);
-            Chip = Device.ChipType;
+            try
+            {
+                Device = await new ChipTypeDetectTool(bootloader, _config).DetectAndGetDeviceConfigAsync(ct).ConfigureAwait(false);
+                Chip = Device.ChipType;
+            }
+            catch (InvalidOperationException e)   // a chip EspDotNet has no config for
+            {
+                AppLog.Info($"Unknown chip: {e.Message}");
+                Chip = ChipTypes.Unknown;
+                return;
+            }
             if (Chip != ChipTypes.ESP32) return;
             Soft = await new SoftLoaderTool(_comm, new RamUploadTool(bootloader, Device))
                 .StartAsync(DefaultFirmwareProviders.GetSoftloaderForDevice(Chip), ct).ConfigureAwait(false);
@@ -183,7 +211,8 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
                 catch (Exception e) when (e is UnauthorizedAccessException or IOException)
                 {
                     port.Dispose();
-                    if (sw.Elapsed > PortOpenRetry) throw new NoDeviceException($"{name} is in use or missing: {e.Message}");
+                    if (sw.Elapsed > PortOpenRetry)
+                        throw new NoDeviceException($"{name} is in use by another program, or isn't there. Close other serial tools and try again.");
                     await Task.Delay(100, ct).ConfigureAwait(false);
                 }
                 catch (Exception e)
@@ -194,18 +223,35 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
             }
         }
 
-        /// <summary>Hard reset via RTS into the new firmware.</summary>
+        /// <summary>A token that fires after <paramref name="limit"/> (or with <paramref name="ct"/>)
+        /// and closes the port, which ends whatever EspDotNet is waiting for.</summary>
+        public CancellationTokenSource Watchdog(TimeSpan limit, CancellationToken ct)
+        {
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(limit);
+            cts.Token.Register(() => { try { _port.Close(); } catch { /* closing */ } });
+            return cts;
+        }
+
+        /// <summary>Hard reset via RTS into the firmware.</summary>
         public async Task ResetAsync()
         {
-            try { await new ResetDeviceTool(_comm, _config.ResetSequence).ResetAsync(CancellationToken.None).ConfigureAwait(false); }
+            _reset = true;
+            try
+            {
+                if (!_port.IsOpen) _port.Open();
+                await new ResetDeviceTool(_comm, _config.ResetSequence).ResetAsync(CancellationToken.None).ConfigureAwait(false);
+            }
             catch (Exception e) { AppLog.Error($"Reset failed: {e.Message}"); }
         }
 
-        public ValueTask DisposeAsync()
+        /// <summary>Never leaves the board in its bootloader or the stub (a cancel, an error): it is
+        /// reset back into its firmware before the port closes.</summary>
+        public async ValueTask DisposeAsync()
         {
+            if (_entered && !_reset) await ResetAsync().ConfigureAwait(false);
             try { _port.Close(); } catch { /* already closed */ }
             _port.Dispose();
-            return ValueTask.CompletedTask;
         }
     }
 }

@@ -100,6 +100,16 @@
                 <Button Name="CheckFirmwareButton" Content="Check firmware" Margin="0,0,8,0"
                         Command="{Binding CheckFirmwareCommand}" IsEnabled="{Binding CanUseFirmware}"/>
               </WrapPanel>
+              <Border Name="ConfirmInstallPanel" Classes="Indent" IsVisible="{Binding ConfirmInstallPending}">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
+                             Text="Installing erases the controller's setup (Volco keeps a copy you can apply after). Install the firmware?"/>
+                  <Button Name="ConfirmInstallButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0" Content="Install"
+                          Command="{Binding ConfirmInstallCommand}"/>
+                  <Button Name="CancelInstallButton" Grid.Column="2" Margin="8,0,0,0" Content="Cancel"
+                          Command="{Binding CancelInstallCommand}"/>
+                </Grid>
+              </Border>
               <TextBlock Name="FirmwareHintText" Classes="Caption" TextWrapping="Wrap" Text="{Binding FirmwareHint}"
                          IsVisible="{Binding FirmwareHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
               <StackPanel Name="FirmwareProgressPanel" Spacing="4" IsVisible="{Binding IsFirmwareRunning}">

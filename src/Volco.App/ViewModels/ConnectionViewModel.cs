@@ -185,6 +185,9 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _webSocketPort   = cfg.WebSocket.Port;
 
         RefreshComPortsCommand.Execute(null);
+        // A firmware install may save another port (spec §8.6): show it, without re-saving it.
+        _config.ConnectionConfigChanged += OnConfigSaved;
+        _config.ConfigChanged += OnConfigSaved;
         // Survives transport restarts (the runtime re-attaches its own handler to each transport
         // it creates), so unlike the old per-transport subscription this never needs re-wiring.
         _runtime.ConnectionStatusChanged += OnConnectionStatusChanged;
@@ -192,6 +195,18 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _runtime.ControllerInfoChanged += OnControllerInfo;
         UpdateStatus(_runtime.ConnectionStatus);
     }
+
+    private void OnConfigSaved(object? sender, EventArgs e) => _ui.Post(() =>
+    {
+        if (_disposed) return;
+        var saved = _config.Config.Connection.Serial.ComPort;
+        if (saved == _comPort || string.IsNullOrEmpty(saved)) return;
+        if (!ComPorts.Contains(saved)) ComPorts.Add(saved);
+        _comPort = saved;   // the field: OnComPortChanged would save it again
+        OnPropertyChanged(nameof(ComPort));
+        OnPropertyChanged(nameof(TransportDetails));
+        OnPropertyChanged(nameof(FooterText));
+    });
 
     // ── COM-port refresh command ───────────────────────────────────────────────
 
@@ -234,6 +249,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _runtime.ConnectionStatusChanged -= OnConnectionStatusChanged;
         _runtime.ControllerStateChanged -= OnControllerChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfo;
+        _config.ConnectionConfigChanged -= OnConfigSaved;
+        _config.ConfigChanged -= OnConfigSaved;
     }
 
     partial void OnStatusChanged(ConnectionStatus value)

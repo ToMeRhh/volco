@@ -89,6 +89,9 @@ public sealed class ControllerFirmwareTests : IDisposable
     {
         var vm = Vm();
         vm.InstallFirmwareCommand.Execute(null);
+        Assert.True(vm.ConfirmInstallPending);               // it asks first: Install wipes the setup
+        Assert.Empty(_flasher.Calls);
+        vm.ConfirmInstallCommand.Execute(null);
         Until(() => _flasher.Calls.Count == 1 && !_rig.Runtime.IsSuspended && _rig.Connection!.ConnectCount == 1
                     && _rig.Connection.Status == ConnectionStatus.Disconnected);
         _rig.Connection!.SetStatus(ConnectionStatus.Connected);

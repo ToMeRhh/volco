@@ -51,6 +51,9 @@ public sealed record FirmwareManifest(string Chip, string Version, string Displa
     private void Validate()
     {
         if (Parts.Count(p => p.Name == "app") != 1) throw new FirmwareManifestException("Exactly one \"app\" part is required.");
+        // Erases are whole 4 KB sectors: with NVS sector-aligned, a part outside NVS can't erase into it.
+        if (NvsOffset % 0x1000 != 0 || NvsSize % 0x1000 != 0 || NvsSize == 0)
+            throw new FirmwareManifestException("The NVS range must be whole 4 KB sectors.");
         ulong nvsEnd = (ulong)NvsOffset + NvsSize;
         for (int i = 0; i < Parts.Count; i++)
         {

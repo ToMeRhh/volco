@@ -23,8 +23,7 @@
 
   <!-- The controller firmware (spec 9.3): CI downloads it into Firmware/esp32; local builds have none. -->
   <ItemGroup>
-    <EmbeddedResource Include="Firmware\**\*" Exclude="Firmware\README.md"
-                      LogicalName="Firmware/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Firmware\esp32\*" LogicalName="Firmware/esp32/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- CI sets RequireFirmware: the build fails without the firmware, or with firmware from another build. -->

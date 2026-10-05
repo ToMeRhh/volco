@@ -39,7 +39,13 @@ jobs:
     # The Windows project only builds in the Windows job (main or on request); compile it here too so
     # Windows-only code (the flasher, the audio engine) breaks on every push, not at release time.
     - name: Compile the Windows project
-      run: dotnet build src/Volco.Windows/Volco.Windows.csproj --configuration Release -p:EnableWindowsTargeting=true
+      run: |
+        # A stand-in manifest, so the embedded resource names are checked too: the app opens
+        # "Firmware/esp32/firmware-manifest.json" exactly (a '\' from RecursiveDir would break it).
+        mkdir -p src/Volco.Windows/Firmware/esp32
+        echo '{}' > src/Volco.Windows/Firmware/esp32/firmware-manifest.json
+        dotnet build src/Volco.Windows/Volco.Windows.csproj --configuration Release -p:EnableWindowsTargeting=true
+        grep -qa "Firmware/esp32/firmware-manifest.json" src/Volco.Windows/bin/Release/net8.0-windows10.0.22621.0/Volco.dll
 
   firmware-test:
     name: Firmware Tests
