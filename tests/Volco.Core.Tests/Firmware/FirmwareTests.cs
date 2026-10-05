@@ -126,7 +126,6 @@ public sealed class FirmwareServiceTests : IDisposable
     [Theory]
     [InlineData(ProbeKind.NoDevice, null, "No ESP32 found on COM3.", false)]
     [InlineData(ProbeKind.UnsupportedChip, "ESP32-S3", "This board is an ESP32-S3; this version of Volco only includes firmware for ESP32.", false)]
-    [InlineData(ProbeKind.VolcoMatches, null, "Volco's firmware is installed but didn't answer. Reinstall it?", true)]
     [InlineData(ProbeKind.DifferentFirmware, null, "This ESP32 doesn't have this version of Volco's firmware.", true)]
     public async Task EveryProbeResult_HasItsMessage(ProbeKind kind, string? chip, string message, bool offer)
     {
@@ -134,6 +133,32 @@ public sealed class FirmwareServiceTests : IDisposable
         var outcome = await _service.ProbeAsync("COM3", NoProgress);
         Assert.Equal(message, outcome.Message);
         Assert.Equal(offer, outcome.OfferInstall);
+    }
+
+    [Fact]
+    public async Task VolcoMatches_AndTheBoardAnswers_SaysItRunsTheFirmware()
+    {
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.VolcoMatches);
+        var probe = _service.ProbeAsync("COM3", NoProgress);
+        await Until(() => Count == 2);
+        Last.SetStatus(ConnectionStatus.Connected);
+        Last.RaiseMessage(Hello("3f9c2a1b5d07"));
+        var outcome = await probe;
+        Assert.Equal("This controller runs Volco's firmware 3f9c2a1b5d07.", outcome.Message);
+        Assert.False(outcome.OfferInstall);
+    }
+
+    [Fact]
+    public async Task VolcoMatches_ButSilent_OffersAReinstall()
+    {
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.VolcoMatches);
+        var probe = _service.ProbeAsync("COM3", NoProgress);
+        await Until(() => Count == 2);
+        await Task.Delay(50);
+        _time.Advance(TimeSpan.FromSeconds(10));
+        var outcome = await probe;
+        Assert.Equal("Volco's firmware is installed but didn't answer. Reinstall it?", outcome.Message);
+        Assert.True(outcome.OfferInstall);
     }
 
     [Fact]

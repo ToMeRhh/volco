@@ -75,10 +75,10 @@ public sealed class ControllerFirmwareTests : IDisposable
     public void Check_ShowsTheProbeMessage_AndOffersInstall()
     {
         var vm = Vm();
-        _flasher.ProbeResult = new ProbeResult(ProbeKind.VolcoMatches);
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         vm.CheckFirmwareCommand.Execute(null);
         Until(() => vm.FirmwareMessage is not null);
-        Assert.Equal("Volco's firmware is installed but didn't answer. Reinstall it?", vm.FirmwareMessage);
+        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
         Assert.True(vm.OfferInstall);
         Assert.False(vm.IsFirmwareRunning);
         Assert.Equal("probe COM3", _flasher.Calls.Single());

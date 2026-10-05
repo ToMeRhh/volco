@@ -803,7 +803,8 @@ The result is one of: `NoDevice | UnsupportedChip(name) | VolcoMatches | Differe
   |---|---|---|
   | `NoDevice` | "No ESP32 found on COM3." | — |
   | `UnsupportedChip` | the chip message above | — |
-  | `VolcoMatches` | "Volco's firmware is installed but didn't answer. Reinstall it?" | Install |
+  | `VolcoMatches`, and the board's Hello (bundled build) arrives within 10 s of the resume | "This controller runs Volco's firmware <id>." | — |
+  | `VolcoMatches`, no Hello within 10 s | "Volco's firmware is installed but didn't answer. Reinstall it?" | Install |
   | `DifferentFirmware` | "This ESP32 doesn't have this version of Volco's firmware." | Install |
 
 - **Cancellation:** possible only before the first write. After that the dialog can't be cancelled.

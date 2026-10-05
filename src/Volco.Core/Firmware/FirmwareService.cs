@@ -52,6 +52,14 @@ public sealed class FirmwareService
         try
         {
             ProbeResult result;
+            // The probe resets the board: when it holds the bundled build, its Hello after the
+            // resume tells "installed and answering" apart from "installed but silent".
+            var version = _catalog.BundledVersion;
+            var hello = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnHello(object? s, HelloMessage h)
+            {
+                if (h.FirmwareVersion == version) hello.TrySetResult();
+            }
             using (_runtime.SuspendConnection())
             {
                 try { result = await _flasher!.ProbeAsync(port, _catalog.Esp32!, progress, ct).ConfigureAwait(false); }
@@ -63,12 +71,26 @@ public sealed class FirmwareService
                 }
                 AppLog.Info($"Firmware probe on {port}: {result}");
                 if (result.Kind is ProbeKind.VolcoMatches or ProbeKind.DifferentFirmware) SavePort(port);
+                if (result.Kind == ProbeKind.VolcoMatches) _runtime.HelloReceived += OnHello;   // before the resume
+            }
+            if (result.Kind == ProbeKind.VolcoMatches)
+            {
+                try
+                {
+                    using var timeout = new CancellationTokenSource(HelloWait, _time);
+                    await hello.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
+                    return new(result, $"This controller runs Volco's firmware {version}.", false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return new(result, "Volco's firmware is installed but didn't answer. Reinstall it?", true);
+                }
+                finally { _runtime.HelloReceived -= OnHello; }
             }
             return result.Kind switch
             {
                 ProbeKind.NoDevice => new(result, result.Message ?? $"No ESP32 found on {port}.", false),
                 ProbeKind.UnsupportedChip => new(result, new UnsupportedChipException(result.ChipName ?? "unknown chip").Message, false),
-                ProbeKind.VolcoMatches => new(result, "Volco's firmware is installed but didn't answer. Reinstall it?", true),
                 _ => new(result, "This ESP32 doesn't have this version of Volco's firmware.", true),
             };
         }
