@@ -25,7 +25,7 @@ From spec §12.7 (`docs/superpowers/specs/2026-10-03-controller-config-design.md
 ## Stage 6 (install and CI)
 
 - [x] 1. Install on a blank ESP32 → Hello, "Set up your controller".
-- [ ] 5. Update firmware (a second build id) → the config survives (same CRC, no banner).
+- [x] 5. Update firmware (a second build id) → the config survives (same CRC, no banner).
 - [x] 5a. Flash a `dev` build with `pio run -t upload` → the config survives; "Development firmware" with no update indicator; Install brings back the bundled build.
 - [x] 5b. Two consecutive CI builds with no firmware change → the same build id → no update offered.
 - [ ] 7. UDP from a different PC IP is ignored. **Not tested; deferred** (user, 2026-10-05): firmware behaviour from before this work.
@@ -40,7 +40,7 @@ From spec §12.7 (`docs/superpowers/specs/2026-10-03-controller-config-design.md
 
 ## Already proven
 
-- Stage 6: items 1, 5a, 9, 10 and 11 passed on Windows (user), CI builds 37296490575/37319755534/37335616849, 2026-10-05; 5b by two CI builds with no firmware change keeping build id 0af5cda4a575. Install time 28.9 s at 460800 baud. Item 5 waits for a build with a firmware change.
+- Stage 6: items 1, 5a, 9, 10 and 11 passed on Windows (user), CI builds 37296490575/37319755534/37335616849, 2026-10-05; 5b by two CI builds with no firmware change keeping build id 0af5cda4a575. Install time 28.9 s at 460800 baud. Item 5 passed with CI build 37361551674 (0af5cda4a575 → 0901f1a99d77; offered on the page, sidebar and tray; setup kept; Update took 29.2 s at 460800 baud).
 
 - Stage 5: items 2, 3, 4, 6, 8, 12 and 13 passed on Windows (user), CI build 37262206851 from controller-config-stage2, 2026-10-05.
 
