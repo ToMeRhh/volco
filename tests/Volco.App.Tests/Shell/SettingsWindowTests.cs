@@ -1,6 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Headless.XUnit;
+using Avalonia.Styling;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
@@ -98,6 +100,23 @@ public class SettingsWindowTests
             Assert.Equal("TitleBar", region.GetValue(WindowDecorationProperties.ElementRoleProperty).ToString());
         }
         Assert.Equal("Volco", window.FindControl<TextBlock>("BrandText")!.Text);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_Decorations_HideTheTitleAndFullScreenButton()
+    {
+        var window = Create();
+        window.Show();
+
+        var theme = window.WindowDecorationsTheme!;
+        Assert.Equal(typeof(WindowDrawnDecorations), theme.TargetType);
+        Assert.NotNull(theme.BasedOn);
+        var hidden = theme.Children.OfType<Style>()
+            .Where(s => s.Setters.OfType<Setter>().Any(x => x.Property == Visual.IsVisibleProperty && Equals(x.Value, false)))
+            .Select(s => s.Selector!.ToString())
+            .ToList();
+        Assert.Contains(hidden, s => s.EndsWith("Panel#PART_TitleTextPanel"));
+        Assert.Contains(hidden, s => s.EndsWith("Button#PART_FullScreenButton"));
     }
 
     [AvaloniaFact]
