@@ -61,6 +61,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// </summary>
     private int _disposed;
 
+    /// <summary>0/1, see <see cref="IsUserDisconnected"/>. Written only with Interlocked.</summary>
+    private int _userDisconnected;
+
     private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
     /// <summary>
@@ -347,12 +350,55 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     }
 
     /// <summary>Drops the current transport and starts a fresh one from the current connection
-    /// config (the settings UI's Reconnect button).</summary>
+    /// config (the settings UI's Reconnect button). Also ends a <see cref="Disconnect"/>.</summary>
     public void Reconnect()
     {
         if (IsDisposed || !_started) return;
         AppLog.Info("Reconnect requested");
+        SetUserDisconnected(false);
         StartConnection();
+    }
+
+    /// <summary>
+    /// True after <see cref="Disconnect"/> until <see cref="Connect"/> or <see cref="Reconnect"/>:
+    /// there is no transport, and connection-config changes are saved but start none. Not
+    /// persisted; every launch connects.
+    /// </summary>
+    public bool IsUserDisconnected => Volatile.Read(ref _userDisconnected) != 0;
+
+    /// <summary><see cref="IsUserDisconnected"/> changed (argument: its new value). Any thread.</summary>
+    public event EventHandler<bool>? UserDisconnectedChanged;
+
+    /// <summary>Drops the current transport and starts none until <see cref="Connect"/> (the
+    /// settings UI's and the tray's Disconnect).</summary>
+    public void Disconnect()
+    {
+        if (IsDisposed || !_started) return;
+        AppLog.Info("Disconnect requested");
+        // Flag first, then take the transport: a StartConnection racing this one either sees the
+        // flag after publishing and retires its own transport, or published before the flag was
+        // set and so is taken out of _connection below (both are full fences, as with Dispose).
+        if (!SetUserDisconnected(true)) return;
+        StopConnection();
+    }
+
+    /// <summary>Ends a <see cref="Disconnect"/>: starts a transport from the current connection
+    /// config. Does nothing while connected normally.</summary>
+    public void Connect()
+    {
+        if (IsDisposed || !_started) return;
+        if (!SetUserDisconnected(false)) return;
+        AppLog.Info("Connect requested");
+        StartConnection();
+    }
+
+    /// <summary>Sets the flag and raises the event when it changed; returns whether it did.</summary>
+    private bool SetUserDisconnected(bool value)
+    {
+        var next = value ? 1 : 0;
+        if (Interlocked.Exchange(ref _userDisconnected, next) == next) return false;
+        if (!IsDisposed) UserDisconnectedChanged?.Invoke(this, value);
+        return true;
     }
 
     /// <summary>Runs one action now, as a button press would (the settings UI's Test button).
@@ -431,14 +477,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// <summary>
     /// Creates (or re-creates, on a connection-config change) the transport. Runs on the thread
     /// that called <see cref="Start"/>, or on the ConfigManager debounce-timer thread via
-    /// <see cref="OnConfigChanged"/> (Bug 1).
+    /// <see cref="OnConfigChanged"/> (Bug 1). Does nothing while <see cref="IsUserDisconnected"/>.
     /// </summary>
     private void StartConnection()
     {
-        // Spec §8.6: while a firmware probe or flash holds the port, nothing reopens it.
-        if (IsDisposed || IsSuspended) return;
+        // Spec §8.6: while a firmware probe or flash holds the port, nothing reopens it; nor after
+        // the user's Disconnect.
+        if (IsDisposed || IsSuspended || IsUserDisconnected) return;
 
-        RetireCurrentConnection();
+        StopConnection();
 
         var config = Config.Config.Connection;
         AppLog.Info($"Starting connection: {config.Type}");
@@ -466,8 +513,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         // itself. If it sees one, exactly one of us gets it out of the field: retire it only if
         // CompareExchange says it is still there, and never Connect() it.
         // Every transport (Serial, UDP, WebSocket) guards Connect() with its own disposed flag
-        // under its own lock, so a Connect() that loses a race with Dispose is a no-op.
-        if (IsDisposed || IsSuspended)
+        // under its own lock, so a Connect() that loses that race is a no-op and binds nothing -
+        // no port or listener can outlive the Dispose(). No lock is needed here, and none is held
+        // across Connect()/Dispose(), both of which raise StatusChanged synchronously into
+        // subscribers (a deadlock risk for a UI that marshals synchronously).
+        // The same holds for a Disconnect() or a suspension racing this restart.
+        if (IsDisposed || IsSuspended || IsUserDisconnected)
         {
             if (Interlocked.CompareExchange(ref _connection, null, connection) == connection)
                 RetireTransport(connection);
@@ -477,9 +528,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         connection.Connect();
     }
 
-    /// <summary>Takes ownership of the current transport and retires it, as a replacement does:
-    /// the link detaches, a config operation fails, test mode ends.</summary>
-    private void RetireCurrentConnection()
+    /// <summary>Takes the current transport out of <see cref="_connection"/>, if any, and retires
+    /// it as a replacement does: subscribers are told it is Disconnected, the link detaches, a
+    /// config operation fails and test mode ends.</summary>
+    private void StopConnection()
     {
         // Take ownership of the old transport (see _connection): if Dispose() got to it first,
         // this returns null and Dispose() retires it instead.
@@ -555,7 +607,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     {
         Interlocked.Increment(ref _suspensions);
         AppLog.Info("Connection suspended");
-        RetireCurrentConnection();
+        StopConnection();
         return new Suspension(this);
     }
 
@@ -963,8 +1015,13 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
     private void OnConfigChanged(object? sender, EventArgs e)
     {
-        AppLog.Info("Connection configuration changed, restarting connection");
         // Handler is invoked only when connection config changes
+        if (IsUserDisconnected)
+        {
+            AppLog.Info("Connection configuration changed while disconnected; used on Connect");
+            return;
+        }
+        AppLog.Info("Connection configuration changed, restarting connection");
         StartConnection();
     }
 

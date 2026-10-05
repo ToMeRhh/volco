@@ -1097,6 +1097,70 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void Disconnect_RetiresTheTransport_AndReportsDisconnected()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        var statuses = new Recorder<ConnectionStatus>();
+        var flags = new Recorder<bool>();
+        runtime.ConnectionStatusChanged += statuses.Handler;
+        runtime.UserDisconnectedChanged += flags.Handler;
+
+        runtime.Disconnect();
+
+        Assert.True(runtime.IsUserDisconnected);
+        Assert.Equal(1, Connection(0).DisposeCount);
+        Assert.Equal(ConnectionStatus.Disconnected, runtime.ConnectionStatus);
+        Assert.Equal(new[] { ConnectionStatus.Disconnected }, statuses.Items);
+        Assert.Equal(new[] { true }, flags.Items);
+        Assert.Equal(1, ConnectionCount);
+
+        runtime.Disconnect(); // already disconnected: nothing more
+        Assert.Single(flags.Items);
+    }
+
+    [Fact]
+    public void Disconnected_ConnectionConfigChange_StartsNoTransport_UntilConnect()
+    {
+        var config = NewConfig();
+        var runtime = StartRuntime(config);
+        runtime.Disconnect();
+
+        var changes = 0;
+        config.ConnectionConfigChanged += (_, _) => Interlocked.Increment(ref changes);
+        config.Config.Connection.Udp.ListenPort = 23456;
+        config.RequestSave(connectionChanged: true);
+        Assert.True(WaitUntil(() => Volatile.Read(ref changes) > 0), "the debounced save never ran");
+        Assert.Equal(1, ConnectionCount);
+
+        var flags = new Recorder<bool>();
+        runtime.UserDisconnectedChanged += flags.Handler;
+        runtime.Connect();
+
+        Assert.False(runtime.IsUserDisconnected);
+        Assert.Equal(new[] { false }, flags.Items);
+        Assert.Equal(2, ConnectionCount);
+        Assert.Equal(1, Connection(1).ConnectCount);
+        Assert.Equal(23456, Connection(1).Config.Udp.ListenPort);
+
+        runtime.Connect(); // already connected: no second transport
+        Assert.Equal(2, ConnectionCount);
+    }
+
+    [Fact]
+    public void Reconnect_EndsADisconnect()
+    {
+        var runtime = StartRuntime();
+        runtime.Disconnect();
+
+        runtime.Reconnect();
+
+        Assert.False(runtime.IsUserDisconnected);
+        Assert.Equal(2, ConnectionCount);
+        Assert.Equal(1, Connection(1).ConnectCount);
+    }
+
+    [Fact]
     public void NextPreset_SlidesLeft_EvenWhenWrapping()
     {
         var config = TwoPresetConfig();

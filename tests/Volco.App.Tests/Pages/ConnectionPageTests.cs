@@ -130,4 +130,38 @@ public class ConnectionPageTests
 
         Assert.NotSame(first, rig.Connection);
     }
+
+    [AvaloniaFact]
+    public void ConnectionPage_Disconnect_OffersConnect()
+    {
+        var (page, _, rig, vm) = Show();
+        using var _ = rig;
+        using var __ = vm;
+        var reconnect = page.FindControl<Button>("ReconnectButton")!;
+        var disconnect = page.FindControl<Button>("DisconnectButton")!;
+        var connect = page.FindControl<Button>("ConnectButton")!;
+        rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(disconnect.IsEffectivelyVisible);
+        Assert.False(connect.IsVisible);
+
+        disconnect.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1, rig.Connection.DisposeCount);
+        Assert.Equal("Disconnected", page.FindControl<TextBlock>("StatusLabel")!.Text);
+        Assert.Equal("Disconnected", vm.Connection.FooterText);
+        Assert.False(reconnect.IsVisible);
+        Assert.False(disconnect.IsVisible);
+        Assert.True(connect.IsEffectivelyVisible);
+
+        var old = rig.Connection;
+        connect.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.NotSame(old, rig.Connection);
+        Assert.Equal("Not connected", page.FindControl<TextBlock>("StatusLabel")!.Text);
+        Assert.True(disconnect.IsEffectivelyVisible);
+        Assert.False(connect.IsVisible);
+    }
 }

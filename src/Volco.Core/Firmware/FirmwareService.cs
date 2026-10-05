@@ -19,6 +19,7 @@ public sealed class FirmwareService
 {
     public static readonly TimeSpan HelloWait = TimeSpan.FromSeconds(10);
     public const string SerialOnlyMessage = "Connect the controller with USB and set the connection to Serial.";
+    public const string DisconnectedMessage = "Volco is disconnected. Connect first (the Connection page or the tray).";
 
     private readonly VolcoRuntime _runtime;
     private readonly IFirmwareFlasher? _flasher;
@@ -48,6 +49,7 @@ public sealed class FirmwareService
     {
         if (!IsAvailable) return new(null, "This build of Volco has no firmware.", false);
         if (!IsSerial) return new(null, SerialOnlyMessage, false);
+        if (_runtime.IsUserDisconnected) return new(null, DisconnectedMessage, false);
         if (!TryEnter()) return new(null, "Another firmware operation is running.", false);
         try
         {
@@ -101,6 +103,8 @@ public sealed class FirmwareService
     {
         if (!IsAvailable) return new(false, "This build of Volco has no firmware.");
         if (!IsSerial) return new(false, SerialOnlyMessage);
+        // After a manual Disconnect the resume wouldn't reconnect, so the Hello could never come.
+        if (_runtime.IsUserDisconnected) return new(false, DisconnectedMessage);
         if (!TryEnter()) return new(false, "Another firmware operation is running.");
         var verb = mode == FlashMode.Install ? "Install" : "Update";
         try

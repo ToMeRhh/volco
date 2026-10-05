@@ -239,6 +239,27 @@ public sealed class FirmwareServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AfterAManualDisconnect_FirmwareIsRefused()
+    {
+        _runtime.Disconnect();
+        Assert.Equal(FirmwareService.DisconnectedMessage, (await _service.FlashAsync("COM3", FlashMode.Update, NoProgress)).Message);
+        Assert.Equal(FirmwareService.DisconnectedMessage, (await _service.ProbeAsync("COM3", NoProgress)).Message);
+        Assert.Empty(_flasher.Calls);
+    }
+
+    [Fact]
+    public void ASuspensionEndingDuringAManualDisconnect_OpensNothing()
+    {
+        var suspension = _runtime.SuspendConnection();
+        _runtime.Disconnect();
+        var count = Count;
+        suspension.Dispose();
+        Assert.Equal(count, Count);
+        _runtime.Connect();
+        Assert.Equal(count + 1, Count);
+    }
+
+    [Fact]
     public async Task ASecondOperationWhileBusy_IsRefused()
     {
         var gate = new TaskCompletionSource();

@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Headless.XUnit;
+using Avalonia.Styling;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
@@ -81,6 +84,39 @@ public class SettingsWindowTests
         window.Show();
 
         Assert.Equal("Not connected", window.FindControl<TextBlock>("FooterText")!.Text);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_ExtendsIntoTheTitleBar_WithDragRegions()
+    {
+        var window = Create();
+        window.Show();
+
+        Assert.True(window.ExtendClientAreaToDecorationsHint);
+        Assert.Equal(WindowDecorations.Full, window.WindowDecorations);
+        foreach (var name in new[] { "SidebarTitleBar", "PageTitleBar" })
+        {
+            var region = window.FindControl<Border>(name)!;
+            Assert.Equal("TitleBar", region.GetValue(WindowDecorationProperties.ElementRoleProperty).ToString());
+        }
+        Assert.Equal("Volco", window.FindControl<TextBlock>("BrandText")!.Text);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_Decorations_HideTheTitleAndFullScreenButton()
+    {
+        var window = Create();
+        window.Show();
+
+        var theme = window.WindowDecorationsTheme!;
+        Assert.Equal(typeof(WindowDrawnDecorations), theme.TargetType);
+        Assert.NotNull(theme.BasedOn);
+        var hidden = theme.Children.OfType<Style>()
+            .Where(s => s.Setters.OfType<Setter>().Any(x => x.Property == Visual.IsVisibleProperty && Equals(x.Value, false)))
+            .Select(s => s.Selector!.ToString())
+            .ToList();
+        Assert.Contains(hidden, s => s.Contains("Panel#PART_TitleTextPanel") && s.EndsWith("TextBlock"));
+        Assert.Contains(hidden, s => s.EndsWith("Button#PART_FullScreenButton"));
     }
 
     [AvaloniaFact]

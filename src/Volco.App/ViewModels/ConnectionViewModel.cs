@@ -61,7 +61,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     public bool IsConnected => Status == ConnectionStatus.Connected;
 
     /// <summary>The navigation footer's text: "Connected · COM3", "Not connected", …</summary>
-    public string FooterText => _runtime.ControllerState switch
+    public string FooterText => IsUserDisconnected ? "Disconnected" : _runtime.ControllerState switch
     {
         ControllerState.VersionMismatch => "Firmware mismatch",
         ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
@@ -134,7 +134,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         => _ui.Post(() =>
         {
             if (_disposed) return;
-            StatusText = StatusFor(Status);
+            StatusText = IsUserDisconnected ? "Disconnected" : StatusFor(Status);
             OnPropertyChanged(nameof(ControllerError));
             OnPropertyChanged(nameof(HasControllerError));
             OnPropertyChanged(nameof(FooterText));
@@ -153,6 +153,26 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     /// <summary>Starts the connection again with the current settings.</summary>
     [RelayCommand]
     private void Reconnect() => _runtime.Reconnect();
+
+    /// <summary>Drops the connection until <see cref="ConnectCommand"/>.</summary>
+    [RelayCommand]
+    private void Disconnect() => _runtime.Disconnect();
+
+    /// <summary>Ends a Disconnect.</summary>
+    [RelayCommand]
+    private void Connect() => _runtime.Connect();
+
+    /// <summary>True after Disconnect, until Connect or Reconnect: the page offers Connect.</summary>
+    [ObservableProperty]
+    private bool _isUserDisconnected;
+
+    partial void OnIsUserDisconnectedChanged(bool value) => UpdateStatus(Status);
+
+    private void OnUserDisconnectedChanged(object? sender, bool value)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) IsUserDisconnected = _runtime.IsUserDisconnected;
+        });
 
     // ── ComboBox index helpers (x:Bind two-way to ComboBox.SelectedIndex) ─────
 
@@ -228,6 +248,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _runtime.ControllerStateChanged += OnControllerChanged;
         _runtime.ControllerSilentChanged += OnControllerSilent;
         _runtime.ControllerInfoChanged += OnControllerInfo;
+        _runtime.UserDisconnectedChanged += OnUserDisconnectedChanged;
+        _isUserDisconnected = _runtime.IsUserDisconnected;
         UpdateStatus(_runtime.ConnectionStatus);
     }
 
@@ -284,6 +306,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _runtime.ControllerInfoChanged -= OnControllerInfo;
         _config.ConnectionConfigChanged -= OnConfigSaved;
         _config.ConfigChanged -= OnConfigSaved;
+        _runtime.UserDisconnectedChanged -= OnUserDisconnectedChanged;
     }
 
     partial void OnStatusChanged(ConnectionStatus value)
@@ -295,7 +318,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     private void UpdateStatus(ConnectionStatus status)
     {
         Status = status;
-        StatusText = StatusFor(status);
+        OnPropertyChanged(nameof(FooterText));
+        StatusText = IsUserDisconnected ? "Disconnected" : StatusFor(status);
     }
 
     // ── Property-change hooks — write back to config ───────────────────────────

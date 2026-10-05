@@ -71,12 +71,13 @@ public sealed partial class ControllerViewModel
 
     /// <summary>Install/Update/Check can run now.</summary>
     public bool CanUseFirmware => _firmware is { IsAvailable: true, IsBusy: false } && IsSerialConnection
-                                  && !IsTesting && _service.Operation == ConfigOperation.Idle;
+                                  && !_runtime.IsUserDisconnected && !IsTesting && _service.Operation == ConfigOperation.Idle;
 
     /// <summary>Why the firmware buttons are disabled, or null.</summary>
     public string? FirmwareHint => _firmware is not { IsAvailable: true }
         ? "This build of Volco has no firmware."
-        : !IsSerialConnection ? FirmwareService.SerialOnlyMessage : null;
+        : !IsSerialConnection ? FirmwareService.SerialOnlyMessage
+        : _runtime.IsUserDisconnected ? FirmwareService.DisconnectedMessage : null;
 
     /// <summary>Update is offered: a newer bundled build, or firmware this app can't talk to.</summary>
     public bool ShowUpdateFirmware => Banner.FirmwareUpdateAvailable || Banner.Actions.HasFlag(BannerActions.Update);

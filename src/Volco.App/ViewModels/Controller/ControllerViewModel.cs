@@ -49,6 +49,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.MirrorChanged += OnMirrorChanged;
         _runtime.ControllerStateChanged += OnControllerStateChanged;
         _runtime.ControllerSilentChanged += OnControllerSilentChanged;
+        _runtime.UserDisconnectedChanged += OnControllerSilentChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _runtime.InTestModeChanged += OnInTestModeChanged;
         _runtime.RawInput += OnRawInput;
@@ -61,7 +62,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     // ── Status and banner ────────────────────────────────────────────────────────────────────
 
-    public string StatusText => _runtime.ControllerState switch
+    public string StatusText => _runtime.IsUserDisconnected ? "Disconnected" : _runtime.ControllerState switch
     {
         ControllerState.Ready => "Connected",
         ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
@@ -801,6 +802,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.MirrorChanged -= OnMirrorChanged;
         _runtime.ControllerStateChanged -= OnControllerStateChanged;
         _runtime.ControllerSilentChanged -= OnControllerSilentChanged;
+        _runtime.UserDisconnectedChanged -= OnControllerSilentChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.InTestModeChanged -= OnInTestModeChanged;
         _runtime.RawInput -= OnRawInput;
