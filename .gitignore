@@ -6,4 +6,4 @@ obj/
 publish/
 src/Volco.Windows/Firmware/esp32/
 .claude/
-.vscode/
+.vscode/firmware/tools/__pycache__/
