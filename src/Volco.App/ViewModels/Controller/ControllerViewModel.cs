@@ -684,6 +684,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (_testHandle is not null || IsTesting) StopTest();
         Confirmation = null;
+        ClearFirmwareResult();
     }
 
     private void RebuildTest()
@@ -730,7 +731,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private void OnControllerStateChanged(object? sender, ControllerState state) => _ui.Post(() =>
     {
-        if (!_disposed) RefreshAll();
+        if (_disposed) return;
+        // The controller went away: "Installed…" or "Test your controller now" no longer apply.
+        if (_runtime.ControllerState == ControllerState.NoController) ClearFirmwareResult();
+        RefreshAll();
     });
 
     private void OnControllerSilentChanged(object? sender, bool silent) => _ui.Post(() =>

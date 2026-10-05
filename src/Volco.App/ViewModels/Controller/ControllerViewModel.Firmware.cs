@@ -16,20 +16,58 @@ public sealed partial class ControllerViewModel
     private FirmwareService? _firmware;
     private CancellationTokenSource? _firmwareCts;
 
+    private string? _configuredPort;
+
     private void InitFirmware(FirmwareService? firmware)
     {
         _firmware = firmware;
         if (_firmware is not null) _firmware.BusyChanged += OnFirmwareBusyChanged;
+        _config.ConnectionConfigChanged += OnConnectionSettingsSaved;
+        _config.ConfigChanged += OnConnectionSettingsSaved;
+        _wasSerial = IsSerialConnection;
         RefreshPorts();
+    }
+
+    /// <summary>The connection type or port changed (the Connection page, or a firmware install):
+    /// the panel follows the configured port and drops a result that described the old connection.</summary>
+    private void OnConnectionSettingsSaved(object? sender, EventArgs e) => _ui.Post(() =>
+    {
+        if (_disposed) return;
+        var serial = IsSerialConnection;
+        var port = _config.Config.Connection.Serial.ComPort;
+        if (serial == _wasSerial && port == _configuredPort) return;
+        _wasSerial = serial;
+        ClearFirmwareResult();
+        RefreshPorts();
+        RefreshAll();
+    });
+
+    private bool _wasSerial = true;
+
+    /// <summary>The panel's last result ("Installed…", "Test your controller now", the Install offer)
+    /// belongs to the moment it happened: it goes when the page is left, the controller goes away or
+    /// the connection changes.</summary>
+    internal void ClearFirmwareResult()
+    {
+        if (IsFirmwareRunning) return;
+        FirmwareMessage = null;
+        OfferInstall = false;
+        OfferTest = false;
+        ConfirmInstallPending = false;
     }
 
     private void DisposeFirmware()
     {
+        _config.ConnectionConfigChanged -= OnConnectionSettingsSaved;
+        _config.ConfigChanged -= OnConnectionSettingsSaved;
         if (_firmware is not null) _firmware.BusyChanged -= OnFirmwareBusyChanged;
         _firmwareCts?.Cancel();
     }
 
     private bool IsSerialConnection => _config.Config.Connection.Type == ConnectionType.Serial;
+
+    /// <summary>The firmware buttons apply: the connection is USB (Serial).</summary>
+    public bool IsSerial => IsSerialConnection;
 
     /// <summary>Install/Update/Check can run now.</summary>
     public bool CanUseFirmware => _firmware is { IsAvailable: true, IsBusy: false } && IsSerialConnection
@@ -68,11 +106,13 @@ public sealed partial class ControllerViewModel
         try { names = System.IO.Ports.SerialPort.GetPortNames(); }
         catch (Exception) { names = Array.Empty<string>(); }
         var configured = _config.Config.Connection.Serial.ComPort;
+        var keep = FirmwarePort;
         FirmwarePorts.Clear();
         foreach (var n in names.Append(configured).Where(n => !string.IsNullOrEmpty(n)).Distinct().Order())
             FirmwarePorts.Add(n);
-        // Follows the configured port until the user picks another one here.
-        if (FirmwarePort is null || !FirmwarePorts.Contains(FirmwarePort)) FirmwarePort = configured;
+        // Follows the configured port; a port picked here stays until the configured one changes.
+        FirmwarePort = keep is not null && FirmwarePorts.Contains(keep) && configured == _configuredPort ? keep : configured;
+        _configuredPort = configured;
     }
 
     [RelayCommand]
@@ -206,6 +246,7 @@ public sealed partial class ControllerViewModel
     private void RefreshFirmware()
     {
         OnPropertyChanged(nameof(CanUseFirmware));
+        OnPropertyChanged(nameof(IsSerial));
         OnPropertyChanged(nameof(FirmwareHint));
         OnPropertyChanged(nameof(ShowUpdateFirmware));
         InstallFirmwareCommand.NotifyCanExecuteChanged();

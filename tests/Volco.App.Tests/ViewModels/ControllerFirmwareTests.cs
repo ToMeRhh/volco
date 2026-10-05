@@ -181,4 +181,53 @@ public sealed class ControllerFirmwareTests : IDisposable
         _ui.RunAll();
         Assert.False(vm.ShowUpdateFirmware);
     }
+
+    [Fact]
+    public void TheResult_GoesWithTheConnection_ThePage_OrTheController()
+    {
+        var vm = Vm();
+        vm.InstallFirmwareCommand.Execute(null);
+        vm.ConfirmInstallCommand.Execute(null);
+        Until(() => _flasher.Calls.Count == 1 && !_rig.Runtime.IsSuspended && _rig.Connection!.ConnectCount == 1
+                    && _rig.Connection.Status == ConnectionStatus.Disconnected);
+        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
+        Until(() => vm.OfferTest);
+
+        // The board is unplugged: the result no longer applies.
+        _rig.Connection.SetStatus(ConnectionStatus.Disconnected);
+        Until(() => vm.FirmwareMessage is null);
+        Assert.False(vm.OfferTest);
+    }
+
+    [Fact]
+    public void ChangingToUdp_HidesTheButtons_AndDropsTheResult()
+    {
+        var vm = Vm();
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.True(vm.IsSerial);
+
+        _rig.Config.Config.Connection.Type = ConnectionType.Udp;
+        _rig.Config.RequestSave(connectionChanged: true);
+        Until(() => vm.FirmwareMessage is null);
+        Assert.False(vm.IsSerial);
+        Assert.False(vm.OfferInstall);
+    }
+
+    [Fact]
+    public void LeavingThePage_DropsTheResult_AndThePortFollowsTheConfig()
+    {
+        var vm = Vm();
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => vm.FirmwareMessage is not null);
+        vm.OnPageLeft();
+        Assert.Null(vm.FirmwareMessage);
+
+        _rig.Config.Config.Connection.Serial.ComPort = "COM8";
+        _rig.Config.Save();
+        Until(() => vm.FirmwarePort == "COM8");
+    }
 }

@@ -78,7 +78,7 @@
 
             <!-- Firmware: install, update, check (spec 8.6) -->
             <StackPanel Name="FirmwarePanel" Spacing="8">
-              <WrapPanel Orientation="Horizontal">
+              <WrapPanel Name="FirmwareButtons" Orientation="Horizontal" IsVisible="{Binding IsSerial}">
                 <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox Name="FirmwarePortCombo" Width="140" Margin="0,0,4,0" ItemsSource="{Binding FirmwarePorts}"
                           SelectedItem="{Binding FirmwarePort, Mode=TwoWay}" IsEnabled="{Binding CanUseFirmware}"/>
