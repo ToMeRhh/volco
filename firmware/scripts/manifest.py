@@ -115,6 +115,11 @@ def write_manifest(target, source, env):
 
 
 if env is not None:
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", write_manifest)
+    # An always-built alias after firmware.bin, added to "buildprog": it runs on every build, also
+    # when nothing relinks, so a changed VOLCO_FW_DISPLAY (or a dist/ deleted by hand) is always
+    # reflected (spec §9.1). A post action on the .bin or on "buildprog" runs only on a relink.
+    manifest = env.Alias("volco_manifest", "$BUILD_DIR/${PROGNAME}.bin", write_manifest)
+    env.AlwaysBuild(manifest)
+    env.Alias("buildprog", manifest)
 elif "--selftest" in sys.argv:
     selftest()
