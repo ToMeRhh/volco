@@ -1181,7 +1181,7 @@ All answered: results and decisions are in `docs/superpowers/spikes/2026-10-03-c
 
 1. **The Wi-Fi password is plain text** in NVS and in `config.json`'s mirror, as in `config.h` today. Accepted (§3).
 2. (Resolved) Firmware updates are offered only when the firmware source changed (§9.2).
-3. **The firmware notices and the LGPL.** The Arduino core is LGPL 2.1, so a release that ships the firmware must let its users get the firmware's source to relink it. `THIRD-PARTY-NOTICES.txt` says the source is part of the Volco project; while the repository is private, that has to be met another way (e.g. publishing `firmware/` or the release's source). The user's decision, before a release ships firmware.
+3. **The firmware notices and the LGPL.** The Arduino core is LGPL 2.1, so a release that ships the firmware must let its users get the firmware's source to relink it. **Decided 2026-10-06 (the user): option C.** The repository stays private, and every release's firmware zip carries the firmware's object files and link command so it can be relinked with a modified core: `firmware/scripts/relink_bundle.py` writes `relink/` (the link inputs built for the firmware, the exact link command, and a README), and `release.yml` puts it in the zip. Relinking the unchanged objects reproduces `firmware.bin` byte for byte (checked 2026-10-06).
 
 ### 14.1 Deferred review findings
 
@@ -1189,18 +1189,9 @@ Minor findings each stage's final review raised and the user hasn't asked for ye
 
 | From | Finding | If left |
 |---|---|---|
-| Stage 2 | No golden decode-fail vectors one byte over a string limit (preset 25 bytes, password 65); a few §12.1 cases missing. | An off-by-one in a limit check on one side wouldn't be caught by the shared vectors. |
-| Stage 2 | The NUL prescan (`hasNulInStrings`) doesn't descend into repeated fields' strings. | None today: no repeated message has a string field. |
-| Stage 2 | `ControllerPresets.All` hands out mutable `ControllerConfig` objects. | A caller that edits a preset's `Hardware` changes it for everyone; `ApplyTo` clones, so none does today. |
-| Stage 3 | Re-starting UDP can interrupt a Wi-Fi connect already in progress. | A slower Wi-Fi join after a config change; it retries. |
-| Stage 4b | A Hello from a just-replaced connection can arrive after the replacement. | The Controller page briefly shows the old controller's banner. |
-| Stage 4b | The config is saved debounced (`RequestSave`), and nothing flushes it at exit. | A save confirmed in the moment before Volco exits can be missing from the mirror; the next start shows "different setup", and "Use the controller's" fixes it. |
-| Stage 5 | Clearing a number box in Screens or Advanced is dropped by the binding. | The box shows empty while the old value is kept. |
-| Stage 6 | Exiting Volco during a flash isn't blocked or warned about. | The write stops midway; Install again recovers (the ROM bootloader always can). |
-| Stage 6 | `FirmwareService` saves a new port from a thread-pool thread. | A rare race with a settings edit made at the same instant. |
-| Stage 6 | `dist/` is rewritten only when `firmware.bin` relinks. | Locally, changing only `VOLCO_FW_DISPLAY` leaves a stale manifest; CI builds are always fresh. |
 | Stage 6 | An install takes about 29 s at 460800 baud (measured 2026-10-05), over the §8.6 target of 20 s; 921600 with fallbacks is the next step. The user will handle it in a separate session. | Installs and updates take about half a minute. |
-| Stage 6 | `CheckFirmware` (the build-id match) runs only in the Windows build and release jobs. | A mismatch shows only when those run; the resource names are checked on every push. |
+
+Closed 2026-10-06: `transport_begin_udp` runs once, in `setup()`, and every config save reboots, so nothing restarts UDP at run time.
 
 ## 15. Delivery stages
 
