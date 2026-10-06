@@ -77,7 +77,7 @@ New and changed pieces:
 | Firmware | `lib/volco_protocol` (new Hello, config frames, active-transport logic) | changed |
 | Firmware | `src/` (runtime-sized tables, NVS store, dual transport, reboot after save) | changed |
 | Firmware | `config.h` (only fixed constants remain) | reduced |
-| App, Core | `Volco.Core/ControllerConfig/` (codec, validator, presets, service, banner logic) | new |
+| App, Core | `Volco.Core/Controller/` (codec, validator, presets, service, banner logic) | new |
 | App, Core | `Volco.Core/Firmware/` (`IFirmwareFlasher` seam, catalog, manifest, `FirmwareService`) | new |
 | App, Core | `Communication/` (Hello parsing, config frames encode/parse) | changed |
 | App, Core | `Runtime/VolcoRuntime` (test mode, connection suspend, routing), `ControllerLink` (`SendRaw`) | changed |
@@ -206,7 +206,7 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
    - `total` = 0 or > 1024 → reply TOO_LARGE and close. A saved blob is never empty: `ControllerConfigCodec.Encode` always sets `preset` (`"blank"` for a config not based on a preset). There is **no factory-reset frame**: Install already wipes NVS (§8.6), and saving a Blank config covers "start fresh".
 2. **Chunks and End from a different transport** than the open transfer's are ignored.
 3. **A chunk or End with no open transfer is ignored silently.** After a transfer closes, by success or by error, nothing more is sent for it. This guarantees **at most one ConfigResult per Begin**.
-4. **Within an open transfer**, a chunk with the wrong `seq` or offset, or overrunning `total` → reply BAD_SEQUENCE and close. An End with the wrong `seq`, or received ≠ `total` → reply BAD_SEQUENCE and close.
+4. **Within an open transfer**, a chunk with the wrong `seq` or offset, with 0 or more than 240 data bytes, or overrunning `total` → reply BAD_SEQUENCE and close. An End with the wrong `seq`, or received ≠ `total` → reply BAD_SEQUENCE and close.
 5. **End with all bytes:**
    - check the CRC → BAD_CRC
    - decode → DECODE_FAILED
@@ -214,7 +214,7 @@ C:  if code == OK: reboots ~200 ms later; boots; sends Hello (configState 1, con
    - store → STORAGE_FAILED
 
    The first failure replies with its code and closes. If all pass → reply OK, close, then reboot (§6.7). The ConfigResult always goes out on the transport the Begin arrived on.
-6. **Timeout:** an open transfer with no accepted config frame for **2000 ms** closes silently.
+6. **Timeout:** an open transfer with no accepted config frame for **2000 ms** closes silently. The check also runs on every incoming chunk and End, so a frame arriving late after a long pause finds the transfer already closed even if the loop hasn't ticked.
 7. **Nothing else stops:** inputs are still reported during a transfer, and Led, Screen, Begin and Commit still apply.
 
 **App write rules** (`ControllerConfigService.SaveAsync`):
@@ -263,7 +263,7 @@ Why this works:
 ```proto
 syntax = "proto2";
 package volco.config;
-option csharp_namespace = "Volco.Core.ControllerConfig.Proto";
+option csharp_namespace = "Volco.Core.Controller.Proto";
 
 // The whole controller configuration. One blob in NVS key "volco"/"cfg".
 // Field numbers are never reused. An absent field takes its default.
@@ -276,6 +276,8 @@ message ControllerConfig {
   optional ScreenBehaviour screens = 6;
   optional InputTuning input = 7;
   optional string preset = 8;      // max 24 bytes; informational, e.g. "diy-reference"
+  optional I2cBus i2c2 = 9;        // required when a screen uses bus 2 (software I2C)
+  optional I2cBus i2c3 = 10;       // required when a screen uses bus 3 (software I2C)
 }
 
 message Slider {
@@ -303,7 +305,7 @@ message LedPair {
 }
 
 message Screen {
-  optional uint32 bus = 1 [default = 0];        // 0 or 1
+  optional uint32 bus = 1 [default = 0];        // 0-3: 0 and 1 hardware I2C, 2 and 3 software I2C
   optional uint32 address = 2 [default = 0x3C]; // 0x3C or 0x3D
 }
 
@@ -372,7 +374,7 @@ Notes:
   - `ControllerConfigCodec` therefore reads an absent submessage as a default instance (`config.Screens ?? new ScreenBehaviour()`, and likewise `Input`, `Udp`, `I2c0`/`I2c1`). It never dereferences a possibly-null submessage.
   - A golden case asserts that the empty blob gives `screens.brightness == 255` on both sides.
 - **The ranges in the comments are normative.** They are enforced by §6.4 on the firmware and the app, and the UI uses them as its control limits.
-- **Sizes:** the largest valid blob is about 663 bytes. `kMaxConfigBlob` = 1024, and a golden case asserts the maximal blob fits.
+- **Sizes:** the largest valid blob is about 683 bytes (with all four I2C buses). `kMaxConfigBlob` = 1024, and a golden case asserts the maximal blob fits.
 - **Units:** times are seconds where the old constants were minutes, and milliseconds where they were sub-second. The firmware converts to milliseconds at load.
 
 ### 6.2 Presets
@@ -413,11 +415,10 @@ Notes:
 | `HOST_TIMEOUT_MS` | 3000 |
 | `KEEPALIVE_MS` | 1000 |
 | `COMMIT_FALLBACK_MS` | 500 |
-| `RECONNECT_INTERVAL_MS` | 3000 |
 | `WIFI_RETRY_MS` | 10000 |
 | `kMaxConfigBlob` | 1024 |
 | `kMaxSliders` | 16 |
-| `kMaxScreens` | 4 (2 buses × 2 addresses) |
+| `kMaxScreens` | 8 (4 buses × 2 addresses) |
 
 Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHECK` and the transport `#define`s are removed.
 
@@ -457,7 +458,7 @@ Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHEC
 
 - **`item`:**
   - Slider and button rules: the slider or button index.
-  - I2C rules (fields 8–10): the bus number (0 or 1).
+  - I2C rules (fields 8–10): the bus number (0–3).
   - UDP rules (fields 11–14): 0xFF.
   - Range rules (fields 15–16): the protobuf field number within `ScreenBehaviour` or `InputTuning`.
 
@@ -465,7 +466,7 @@ Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHEC
 
 **Steps:**
 
-1. **Counts:** sliders ≤ 16 and buttons ≤ 32. A decoded config already guarantees this, because the decoder enforces `max_count`; the step stays for the C# path.
+1. **Counts:** sliders ≤ 16 and buttons ≤ 32. A decoded config already guarantees this, because the decoder enforces `max_count`; the step stays for the C# path. The violations are reported as (INVALID, 0xFF, 1) for sliders and (INVALID, 0xFF, 2) for buttons.
 2. **Sliders:**
    - `pin` absent, not usable, or not ADC-capable → field 1.
    - If `udp.enabled` and `pin` ∈ ADC2 → field 1. ADC2 cannot be read while Wi-Fi is on.
@@ -473,9 +474,9 @@ Everything else in today's `config.h` moves into the schema. `VOLCO_SCREENS_CHEC
    - `pin` absent or not usable → field 2.
    - **LED:** `pin` absent or not output-capable → field 3.
    - **LED pair:** `pin_a` absent or not output-capable → field 4. `pin_b` absent, not output-capable, or equal to `pin_a` → field 5.
-   - **Screen:** `bus` ∉ {0, 1} → field 6. `address` ∉ {0x3C, 0x3D} → field 7. (bus, address) already used by an earlier button's screen → field 7, reported on the **later** button. There are only two addresses, so this also limits each bus to two screens; there is no separate "third screen" rule.
+   - **Screen:** `bus` ∉ {0, 1, 2, 3} → field 6. `address` ∉ {0x3C, 0x3D} → field 7. (bus, address) already used by an earlier button's screen → field 7, reported on the **later** button. There are only two addresses, so this also limits each bus to two screens; there is no separate "third screen" rule.
    - **This is a single pass, one button at a time:** its pin, then its indicator fields, then the (bus, address) duplicate check. All of button *n* is checked before button *n+1*.
-4. **I2C**, for each bus that some screen uses:
+4. **I2C**, for each bus that some screen uses, in bus order 0, 1, 2, 3 (`item` = the bus):
    - `I2cBus` message absent → field 8, `item` = bus.
    - `sda` or `scl` absent, not output-capable, or `sda` = `scl` → field 9, `item` = bus.
    - `clock_hz` out of range → field 10, `item` = bus.
@@ -556,7 +557,7 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 - **`screens.cpp`:**
   - The `constexpr` counting and the `static_assert`s become runtime code. Their rules are validation steps 3–4.
   - Panels are created once in `setup()`, keeping the per-bus approach from PR #64:
-    - Each used bus is started with `Wire.begin(sda, scl, clock_hz)` / `Wire1.begin(...)`, using `RuntimeConfig` values instead of the `I2C*_` defines.
+    - Each used bus is started from `RuntimeConfig`: buses 0 and 1 with `Wire.begin(sda, scl, clock_hz)` / `Wire1.begin(...)`; buses 2 and 3 are software I2C (PR #66's bit-banged `SoftI2c`, SCL push-pull, SDA open-drain), for fixed-address screens that need a bus of their own.
     - Each panel is the `Ssd1306` class writing through `i2cByte<bus>`. U8g2's `2ND_HW_I2C` driver sends nothing on ESP32 core 3.x, which is why PR #64 replaced it.
     - The panels live in a static `Screen[kMaxScreens]` array.
   - The timings come from `RuntimeConfig`.
@@ -568,7 +569,7 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
     - Init never blocks; today's wait-for-connect loop is removed.
     - The UDP socket binds to `local_port`.
     - The source filter and the active-transport rule (§5.5) apply.
-  - **Wi-Fi retry:** `transport_reconnect()` calls `WiFi.begin` again only when the status is `WL_CONNECT_FAILED`, `WL_NO_SSID_AVAIL` or `WL_DISCONNECTED`, and at most every `WIFI_RETRY_MS`.
+  - **Wi-Fi retry:** `transport_maintain()`, which runs every loop pass, calls `WiFi.begin` again whenever the status isn't `WL_CONNECTED`, at most every `WIFI_RETRY_MS`. That includes `WL_CONNECTION_LOST` and `WL_IDLE_STATUS` (associated but no IP). It also retries a failed `udp.begin` on every pass while connected.
   - **Wi-Fi connect events:** the transition to `WL_CONNECTED` is noticed in the loop (a status edge), and it triggers the §5.5 Hello on UDP.
   - Wi-Fi is explicitly off (`WIFI_OFF`) when UDP is disabled.
   - The WebSocket and LOCAL_DEBUG code is deleted, along with the `links2004/WebSockets` dependency.
@@ -611,9 +612,9 @@ On serial the USB bridge stays enumerated, so Volco's COM port stays open. The E
 - **`ControllerInfoConfig`** gains `Chip` and `FirmwareVersion`, and `SameAs` compares them too.
 - **`SerialConnection`:** uses the fixed 115200 baud rate. Its error handling is otherwise unchanged. Stage 1 found that Windows raises no `ErrorReceived` when the board resets with the port open, and the ROM banner is clean at 115200.
 
-### 8.2 Core: `ControllerConfig/`
+### 8.2 Core: `Controller/`
 
-- **`ControllerConfigCodec`:** wraps the generated `Volco.Core.ControllerConfig.Proto.ControllerConfig`. It provides `Encode(model) → byte[]`, `Decode(byte[]) → model` (parse, then the §6.1 limit and NUL checks; throws `ControllerConfigFormatException`), and `Crc32(byte[])`.
+- **`ControllerConfigCodec`:** wraps the generated `Volco.Core.Controller.Proto.ControllerConfig` (namespace `Volco.Core.Controller`, not `ControllerConfig`: under that name the message type would be shadowed by the namespace). It provides `Encode(model) → byte[]`, `Decode(byte[]) → model` (parse, then the §6.1 limit and NUL checks; throws `ControllerConfigFormatException`), and `Crc32(byte[])`.
 - **`ControllerConfigValidator`:** the §6.4 steps and the ESP32 table, returning the same `(code, item, field)` triple.
 - **`ControllerPresets`:** the embedded DIY reference, plus the hard-coded placeholder entry.
 - **`ControllerConfigService`:** constructed and owned by `VolcoRuntime`.
@@ -664,7 +665,7 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
   That excludes the simulator and alternative controllers.
 - **Where the update is signalled.** When the firmware notice applies, or the firmware is incompatible (below), the update shows in three places:
   - **Controller page:** the banner and the Update button.
-  - **Settings sidebar:** a small accent dot on the **Controller** navigation entry, with the accessible name "Controller, firmware update available".
+  - **Settings sidebar:** a small accent dot on the **Controller** navigation entry, with the accessible name "Controller needs attention". (Widened on 2026-10-05: the dot, and the tray below, also show for a controller that doesn't answer and for the setup states, from `ControllerBanner.NeedsAttention`.)
   - **Tray:**
     - The tray icon switches to a variant with a dot (`volco-update.ico`, next to `volco.ico`; set through Avalonia's `TrayIcon.Icon`, which is platform-free).
     - The tooltip gains a line: "Controller firmware update available".
@@ -802,7 +803,8 @@ The result is one of: `NoDevice | UnsupportedChip(name) | VolcoMatches | Differe
   |---|---|---|
   | `NoDevice` | "No ESP32 found on COM3." | — |
   | `UnsupportedChip` | the chip message above | — |
-  | `VolcoMatches` | "Volco's firmware is installed but didn't answer. Reinstall it?" | Install |
+  | `VolcoMatches`, and the board's Hello (bundled build) arrives within 10 s of the resume | "This controller runs Volco's firmware <id>." | — |
+  | `VolcoMatches`, no Hello within 10 s | "Volco's firmware is installed but didn't answer. Reinstall it?" | Install |
   | `DifferentFirmware` | "This ESP32 doesn't have this version of Volco's firmware." | Install |
 
 - **Cancellation:** possible only before the first write. After that the dialog can't be cancelled.
@@ -827,8 +829,8 @@ A sixth settings page, **Controller**, after Connection. The sections, top to bo
   - Indicator: None / LED / LED pair / Screen.
   - LED: pin and "Lights when the pin is: High / Low".
   - LED pair: pin A, pin B and polarity.
-  - Screen: bus 0/1 and address 0x3C/0x3D.
-- **I2C buses:** bus 0 and bus 1 rows (SDA, SCL), shown only when a screen uses that bus.
+  - Screen: bus 0–3 (2 and 3 are software I2C) and address 0x3C/0x3D.
+- **I2C buses:** rows for buses 0–3 (SDA, SCL), each shown only when a screen uses that bus.
 - **Hints** (informational, never blocking):
   - a button on GPIO 34–39: "This pin has no internal pull-up; add a resistor to 3.3 V."
   - a slider on ADC2 while UDP is off: "This pin can't be read if you enable Wi-Fi."
@@ -945,9 +947,9 @@ A post-build `extra_scripts` step (`firmware/scripts/manifest.py`) **copies all 
 - **C#:** `Volco.Core.csproj` references `Google.Protobuf` and `Grpc.Tools` (`PrivateAssets="all"`), with `<Protobuf Include="../../proto/volco_config.proto" ProtoRoot="../../proto" GrpcServices="None" />`. Grpc.Tools bundles protoc for Linux and Windows. Spike S3 verifies it in both CI jobs.
 - **Firmware:** nanopb's PlatformIO integration generates code at build time in both the `esp32` and `native` environments.
 - **Simulator:**
-  - A small script, `tools/simulator/gen_config_proto.py` (standard library only), writes `tools/simulator/config_proto.js`, the `.proto` text as a JS string that protobufjs parses at runtime.
+  - `tools/simulator/test/gen_descriptor.mjs` (Node, protobufjs) writes `tools/simulator/volco_config_descriptor.js`, the schema as a protobufjs JSON descriptor in a script (the simulator opens from file://, where fetch fails).
   - The output is committed.
-  - `firmware-test` re-runs the script and fails on a diff.
+  - The `simulator-test` job re-runs it and fails on a diff.
 
 ### 9.4 Development firmware (PlatformIO)
 
@@ -1118,7 +1120,7 @@ cd firmware && pio device monitor           # DEBUG_LOG output
 ### 12.5 CI checks (tests of the pipeline itself)
 
 - A deliberately missing manifest with `RequireFirmware=true` fails the build. This is checked once while implementing, and documented.
-- The stale `config_proto.js` check fails on a diff.
+- The stale `volco_config_descriptor.js` check fails on a diff.
 
 ### 12.6 Spikes (done in stage 1)
 
@@ -1179,6 +1181,26 @@ All answered: results and decisions are in `docs/superpowers/spikes/2026-10-03-c
 
 1. **The Wi-Fi password is plain text** in NVS and in `config.json`'s mirror, as in `config.h` today. Accepted (§3).
 2. (Resolved) Firmware updates are offered only when the firmware source changed (§9.2).
+3. **The firmware notices and the LGPL.** The Arduino core is LGPL 2.1, so a release that ships the firmware must let its users get the firmware's source to relink it. `THIRD-PARTY-NOTICES.txt` says the source is part of the Volco project; while the repository is private, that has to be met another way (e.g. publishing `firmware/` or the release's source). The user's decision, before a release ships firmware.
+
+### 14.1 Deferred review findings
+
+Minor findings each stage's final review raised and the user hasn't asked for yet. None blocks a release; each says what goes wrong if it's left.
+
+| From | Finding | If left |
+|---|---|---|
+| Stage 2 | No golden decode-fail vectors one byte over a string limit (preset 25 bytes, password 65); a few §12.1 cases missing. | An off-by-one in a limit check on one side wouldn't be caught by the shared vectors. |
+| Stage 2 | The NUL prescan (`hasNulInStrings`) doesn't descend into repeated fields' strings. | None today: no repeated message has a string field. |
+| Stage 2 | `ControllerPresets.All` hands out mutable `ControllerConfig` objects. | A caller that edits a preset's `Hardware` changes it for everyone; `ApplyTo` clones, so none does today. |
+| Stage 3 | Re-starting UDP can interrupt a Wi-Fi connect already in progress. | A slower Wi-Fi join after a config change; it retries. |
+| Stage 4b | A Hello from a just-replaced connection can arrive after the replacement. | The Controller page briefly shows the old controller's banner. |
+| Stage 4b | The config is saved debounced (`RequestSave`), and nothing flushes it at exit. | A save confirmed in the moment before Volco exits can be missing from the mirror; the next start shows "different setup", and "Use the controller's" fixes it. |
+| Stage 5 | Clearing a number box in Screens or Advanced is dropped by the binding. | The box shows empty while the old value is kept. |
+| Stage 6 | Exiting Volco during a flash isn't blocked or warned about. | The write stops midway; Install again recovers (the ROM bootloader always can). |
+| Stage 6 | `FirmwareService` saves a new port from a thread-pool thread. | A rare race with a settings edit made at the same instant. |
+| Stage 6 | `dist/` is rewritten only when `firmware.bin` relinks. | Locally, changing only `VOLCO_FW_DISPLAY` leaves a stale manifest; CI builds are always fresh. |
+| Stage 6 | An install takes about 29 s at 460800 baud (measured 2026-10-05), over the §8.6 target of 20 s; 921600 with fallbacks is the next step. The user will handle it in a separate session. | Installs and updates take about half a minute. |
+| Stage 6 | `CheckFirmware` (the build-id match) runs only in the Windows build and release jobs. | A mismatch shows only when those run; the resource names are checked on every push. |
 
 ## 15. Delivery stages
 
@@ -1189,8 +1211,8 @@ The work is delivered in stages. **Each stage is its own PR that merges to `main
 | **1. Spikes** | S1 (EspDotNet on the DIY board), S2 (platform pin, nanopb, NVS behaviour of `initArduino` and `pio upload`), S3 (Grpc.Tools in both CI jobs). Throwaway code; results recorded in the plan. | Each question answered. Any spec change it forces is agreed with the user. | none |
 | **2. Schema and codecs** | `proto/`, nanopb and Google.Protobuf generation, `volco_config` (decode, validate, chip table, CRC, `BlobReceiver`), the C# codec and validator, the DIY preset, `config.txt` goldens, `firmware_id.sh`. Nothing calls it yet. | Both test suites pass the shared vectors. | none |
 | **3. Firmware on runtime config** | `RuntimeConfig` throughout `src/`; NVS load at boot; dual transport with the active-transport rule; the WebSocket client and LOCAL_DEBUG removed; platform pinned. Until stage 4, the stored config is seeded from the DIY preset blob when NVS is empty, which keeps today's hardware working with the current app. The seed is removed in stage 4. | Native tests pass. Checklist items 3, 4 (pin change via a re-seeded blob) and 12 pass on hardware. | The ESP32 behaves the same; the WebSocket client is gone. |
-| **4. Protocol and config session** | New Hello, config frames, `seq`, the firmware receiver/store/reboot, `ControllerConfigService`, the mirror and schema v5, the simulator's config support, the banner logic (Core only). The DIY seed is removed. | Goldens and service tests pass. The simulator round-trips a config. A save over serial and over UDP is confirmed on hardware (items 6, 8, 13). | Baud setting removed. Config can be saved through tests or the simulator; no UI yet. |
-| **5. Controller page and test mode** | The page (status, hardware, test, behaviour, advanced), the editing model, `ButtonPressDetector.Reset`, test mode, the sidebar dot. | App tests pass. Items 2, 3, 4, 11 and 12 pass. | Configure and test the controller from Volco. |
+| **4. Protocol and config session** | New Hello, config frames, `seq`, the firmware receiver/store/reboot, `ControllerConfigService`, the mirror and schema v5, the simulator's config support, the banner logic (Core only). The DIY seed is removed. | Goldens, service and banner tests pass. The simulator's Node test round-trips a config. A write is confirmed on hardware with `config_tool.py` over serial (stage 4a). Items 6, 8 and 13 need a UI to start a save from Volco, so they moved to stage 5. | Baud setting removed. Config can be saved through tests or the simulator; no UI yet. |
+| **5. Controller page and test mode** | The page (status, hardware, test, behaviour, advanced), the editing model, `ButtonPressDetector.Reset`, test mode, the sidebar dot. | App tests pass. Items 2, 3, 4, 6, 8, 11, 12 and 13 pass. | Configure and test the controller from Volco. |
 | **6. Firmware install and CI** | The flasher in `Volco.Windows`, `FirmwareService`, the probe, the suspension guard, embedded firmware with `RequireFirmware`, the build id, the release zip and notices, the tray indicators, the docs (§13). | Items 1, 5, 5a, 5b, 7, 9 and 10 pass. A release dry run produces an exe with firmware. | Install/update from Volco, update indicators, dev-firmware handling. |
 
 **Each stage gets its own implementation plan,** written when the previous stage merges, so later plans can include what earlier stages taught us.

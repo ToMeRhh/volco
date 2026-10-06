@@ -19,6 +19,9 @@ namespace Volco.Core.Communication;
 /// </summary>
 public class SerialConnection : IControllerConnection
 {
+    /// <summary>Fixed since config schema v5 (spec §8.1): the firmware's serial rate.</summary>
+    public const int BaudRate = 115200;
+
     private const int WatchdogIntervalMs = 2000;
     private const int ReconnectIntervalMs = 3000;
 
@@ -85,7 +88,7 @@ public class SerialConnection : IControllerConnection
         SerialPort? port = null;
         try
         {
-            port = new SerialPort(_config.ComPort, _config.BaudRate);
+            port = new SerialPort(_config.ComPort, BaudRate);
             port.ErrorReceived += OnErrorReceived;
             port.DataReceived += OnDataReceived;
             port.Open();

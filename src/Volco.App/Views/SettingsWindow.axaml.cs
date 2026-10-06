@@ -10,7 +10,29 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.Views;
 
-public sealed record NavItem(string Label, string Tag, Geometry? Icon, Func<Control> CreatePage);
+public sealed class NavItem(string label, string tag, Geometry? icon, Func<Control> createPage) : INotifyPropertyChanged
+{
+    private bool _showDot;
+
+    public string Label { get; } = label;
+    public string Tag { get; } = tag;
+    public Geometry? Icon { get; } = icon;
+    public Func<Control> CreatePage { get; } = createPage;
+
+    /// <summary>A dot after the label (the Controller entry: a firmware update is available).</summary>
+    public bool ShowDot
+    {
+        get => _showDot;
+        set
+        {
+            if (_showDot == value) return;
+            _showDot = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowDot)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+}
 
 public partial class SettingsWindow : Window
 {
@@ -22,6 +44,7 @@ public partial class SettingsWindow : Window
     private readonly ContentControl _pageHost;
     private readonly Dictionary<string, Control> _pages = new();
     private IDisposable? _toastTimer;
+    private readonly NavItem _controllerNav;
 
     /// <summary>Set by the composition root at shutdown so Closing is not cancelled.</summary>
     internal bool AllowClose { get; set; }
@@ -40,12 +63,18 @@ public partial class SettingsWindow : Window
             Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage(vm.Buttons)),
             Nav("Devices", "devices", "Icon.Speaker", () => new DevicesPage(vm.Devices)),
             Nav("Connection", "connection", "Icon.Connection", () => new ConnectionPage(vm.Connection)),
+            _controllerNav = Nav("Controller", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
             Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
         };
         _navList.SelectionChanged += OnNavSelectionChanged;
         _navList.SelectedIndex = 0;
 
         vm.Toast.PropertyChanged += OnToastChanged;
+        _controllerNav.ShowDot = vm.ControllerNavDot;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsViewModel.ControllerNavDot)) _controllerNav.ShowDot = vm.ControllerNavDot;
+        };
         Closing += OnClosing;
     }
 
@@ -56,7 +85,7 @@ public partial class SettingsWindow : Window
         return new NavItem(label, tag, icon, create);
     }
 
-    /// <summary>Switches to the page with this tag ("sliders", "buttons", "devices", "connection", "general").</summary>
+    /// <summary>Switches to the page with this tag ("sliders", "buttons", "devices", "connection", "controller", "general").</summary>
     public void ShowPage(string tag)
     {
         var items = _navList.ItemsSource?.Cast<NavItem>().ToList() ?? new List<NavItem>();
@@ -69,6 +98,8 @@ public partial class SettingsWindow : Window
 
     private void OnNavSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
+        // Leaving the Controller page ends a running hardware test (spec §8.5).
+        if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controller")) _vm.ControllerIfCreated?.OnPageLeft();
         if (_navList.SelectedItem is not NavItem item) return;
         if (!_pages.TryGetValue(item.Tag, out var page))
             _pages[item.Tag] = page = item.CreatePage();
@@ -92,6 +123,7 @@ public partial class SettingsWindow : Window
         // Hide instead of close so the tray's Open Settings can bring the same window back.
         if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
+        _vm.ControllerIfCreated?.OnPageLeft();   // hiding the window ends a running test too
         Hide();
     }
 

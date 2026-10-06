@@ -1,0 +1,463 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:ctl="using:Volco.Core.Controller"
+             x:Class="Volco.App.Views.Pages.ControllerPage"
+             x:DataType="vm:ControllerViewModel">
+
+  <DockPanel>
+    <!-- Footer: sticky while there is something to save, a save runs, or its result shows -->
+    <Border Name="Footer" DockPanel.Dock="Bottom" Classes="Panel" Margin="24,0,24,16"
+            IsVisible="{Binding ShowFooter}">
+      <StackPanel Spacing="10">
+        <Border Name="ConfirmPanel" Classes="Indent" IsVisible="{Binding HasConfirmation}">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Name="ConfirmText" TextWrapping="Wrap" VerticalAlignment="Center"
+                       Text="{Binding Confirmation.Message, FallbackValue=''}"/>
+            <Button Name="ConfirmButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0"
+                    Content="{Binding Confirmation.ConfirmLabel, FallbackValue=''}"
+                    Command="{Binding Confirmation.ConfirmCommand, FallbackValue={x:Null}}"/>
+            <Button Name="CancelConfirmButton" Grid.Column="2" Margin="8,0,0,0" Content="Cancel"
+                    Command="{Binding Confirmation.CancelCommand, FallbackValue={x:Null}}"/>
+          </Grid>
+        </Border>
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBlock Name="ProgressText" Classes="Secondary" TextWrapping="Wrap" VerticalAlignment="Center"
+                     Text="{Binding ProgressText}"/>
+          <Button Name="RevertButton" Grid.Column="1" Content="Revert" Margin="12,0,0,0"
+                  Command="{Binding RevertCommand}" IsVisible="{Binding IsDirty}"/>
+          <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save to controller" Margin="8,0,0,0"
+                  Command="{Binding SaveCommand}" IsVisible="{Binding IsDirty}"/>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="{StaticResource PagePadding}" Spacing="{StaticResource SpaceM}"
+                  MaxWidth="{StaticResource PageMaxWidth}">
+
+        <StackPanel Spacing="2" Margin="0,8,0,4">
+          <TextBlock Text="Controller" Classes="Title"/>
+          <TextBlock Classes="Secondary" Text="The controller's hardware and behaviour, stored on the controller."/>
+        </StackPanel>
+
+        <!-- 1. Status -->
+        <Border Name="StatusPanel" Classes="Panel">
+          <StackPanel Spacing="10">
+            <ProgressBar Name="WaitingBar" IsIndeterminate="True" IsVisible="{Binding IsWaiting}" Height="3" MinHeight="3"/>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Name="StatusText" Classes="Subtitle" Text="{Binding StatusText}"/>
+              <TextBlock Name="ChipText" Classes="Secondary" VerticalAlignment="Center" Text="{Binding ChipText}"/>
+              <TextBlock Name="FirmwareText" Classes="Secondary" VerticalAlignment="Center" Text="{Binding FirmwareText}"/>
+            </StackPanel>
+            <Border Name="BannerPanel" Classes="Indent" IsVisible="{Binding HasBanner}">
+              <StackPanel Spacing="8">
+                <TextBlock Name="BannerText" TextWrapping="Wrap" Text="{Binding BannerText}"/>
+                <WrapPanel Orientation="Horizontal">
+                  <Button Name="CheckFirmwareBannerButton" Classes="Primary" Content="Check firmware" Margin="0,0,8,0"
+                          Command="{Binding CheckWhatsConnectedCommand}" IsVisible="{Binding ShowCheckFirmware}"/>
+                  <Button Name="UseControllersButton" Content="Use the controller's" Margin="0,0,8,0"
+                          Command="{Binding UseControllersCommand}" IsVisible="{Binding ShowUseControllers}"/>
+                  <Button Name="ApplyMineButton" Content="Apply mine" Margin="0,0,8,0"
+                          Command="{Binding ApplyMineCommand}" IsVisible="{Binding ShowApplyMine}"/>
+                  <Button Name="RetryButton" Content="Retry" Margin="0,0,8,0"
+                          Command="{Binding RetryCommand}" IsVisible="{Binding ShowRetry}"/>
+                  <Button Name="ApplySavedButton" Content="Apply my saved setup" Margin="0,0,8,0"
+                          Command="{Binding ApplySavedCommand}" IsVisible="{Binding ShowApplySaved}"/>
+                  <Button Name="SetUpButton" Classes="Primary" Content="Set up" Margin="0,0,8,0"
+                          Command="{Binding SetUpCommand}" IsVisible="{Binding ShowSetUp}"/>
+                  <Button Name="SetUpFromScratchButton" Content="Set up from scratch" Margin="0,0,8,0"
+                          Command="{Binding SetUpFromScratchCommand}" IsVisible="{Binding ShowSetUpFromScratch}"/>
+                  <Button Name="FixItButton" Classes="Primary" Content="Fix it" Margin="0,0,8,0"
+                          Command="{Binding FixItCommand}" IsVisible="{Binding ShowFixIt}"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock Name="NoticeText" Classes="Caption" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
+                       Text="{Binding Notice}" IsVisible="{Binding HasNotice}"/>
+
+            <!-- Firmware: install, update, check (spec 8.6) -->
+            <StackPanel Name="FirmwarePanel" Spacing="8">
+              <WrapPanel Name="FirmwareButtons" Orientation="Horizontal" IsVisible="{Binding IsSerial}">
+                <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Name="FirmwarePortCombo" Width="140" Margin="0,0,4,0" ItemsSource="{Binding FirmwarePorts}"
+                          SelectedItem="{Binding FirmwarePort, Mode=TwoWay}" IsEnabled="{Binding CanUseFirmware}"/>
+                <Button Name="RefreshFirmwarePortsButton" Classes="Icon" Margin="0,0,12,0" ToolTip.Tip="Refresh the port list"
+                        Command="{Binding RefreshFirmwarePortsCommand}">
+                  <PathIcon Data="{StaticResource Icon.Refresh}" Width="12" Height="12"/>
+                </Button>
+                <Button Name="UpdateFirmwareButton" Classes="Primary" Content="Update firmware" Margin="0,0,8,0"
+                        Command="{Binding UpdateFirmwareCommand}" IsVisible="{Binding ShowUpdateFirmware}"
+                        IsEnabled="{Binding CanUseFirmware}"/>
+                <Button Name="InstallFirmwareButton" Content="Install firmware…" Margin="0,0,8,0"
+                        Command="{Binding InstallFirmwareCommand}" IsEnabled="{Binding CanUseFirmware}"/>
+                <Button Name="CheckFirmwareButton" Content="Check firmware" Margin="0,0,8,0"
+                        Command="{Binding CheckFirmwareCommand}" IsEnabled="{Binding CanUseFirmware}"/>
+              </WrapPanel>
+              <Border Name="ConfirmInstallPanel" Classes="Indent" IsVisible="{Binding ConfirmInstallPending}">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
+                             Text="Installing erases the controller's setup (Volco keeps a copy you can apply after). Install the firmware?"/>
+                  <Button Name="ConfirmInstallButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0" Content="Install"
+                          Command="{Binding ConfirmInstallCommand}"/>
+                  <Button Name="CancelInstallButton" Grid.Column="2" Margin="8,0,0,0" Content="Cancel"
+                          Command="{Binding CancelInstallCommand}"/>
+                </Grid>
+              </Border>
+              <TextBlock Name="FirmwareHintText" Classes="Caption" TextWrapping="Wrap" Text="{Binding FirmwareHint}"
+                         IsVisible="{Binding FirmwareHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+              <StackPanel Name="FirmwareProgressPanel" Spacing="4" IsVisible="{Binding IsFirmwareRunning}">
+                <TextBlock Name="FirmwareStageText" Text="{Binding FirmwareStage}"/>
+                <Grid ColumnDefinitions="*,Auto">
+                  <ProgressBar Name="FirmwareProgressBar" Minimum="0" Maximum="1" Value="{Binding FirmwareProgress}"
+                               VerticalAlignment="Center"/>
+                  <Button Name="CancelFirmwareButton" Grid.Column="1" Margin="12,0,0,0" Content="Cancel"
+                          Command="{Binding CancelFirmwareCommand}" IsVisible="{Binding CanCancelFirmware}"/>
+                </Grid>
+                <TextBlock Classes="Caption" Text="Don't unplug the controller until this finishes."/>
+              </StackPanel>
+              <Grid ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding HasFirmwareMessage}">
+                <TextBlock Name="FirmwareMessageText" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding FirmwareMessage}"/>
+                <Button Name="OfferInstallButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0" Content="Install"
+                        Command="{Binding InstallFirmwareCommand}" IsVisible="{Binding OfferInstall}"/>
+                <Button Name="TestNowButton" Grid.Column="2" Classes="Primary" Margin="12,0,0,0" Content="Test your controller now"
+                        Command="{Binding TestNowCommand}" IsVisible="{Binding OfferTest}"/>
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Name="EditorPlaceholderText" Classes="Secondary" TextWrapping="Wrap" Margin="4,0"
+                   Text="{Binding EditorPlaceholder}" IsVisible="{Binding !ShowEditor}"/>
+
+        <StackPanel Name="EditorSections" Spacing="{StaticResource SpaceM}" IsVisible="{Binding ShowEditor}">
+        <!-- 2. Hardware -->
+        <Border Name="HardwarePanel" Classes="Panel">
+          <StackPanel Spacing="14">
+            <TextBlock Text="Hardware" Classes="Subtitle"/>
+            <TextBlock Name="PageErrorText" Classes="Caption" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}"
+                       Text="{Binding PageError}" IsVisible="{Binding PageError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+            <Grid ColumnDefinitions="150,Auto,*">
+              <TextBlock Text="Start from" Classes="Secondary" VerticalAlignment="Center"/>
+              <ComboBox Name="PresetCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
+                        ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
+                        IsEnabled="{Binding CanEdit}" PlaceholderText="Choose a preset…">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="ctl:ControllerPreset">
+                    <TextBlock Text="{Binding DisplayName}"/>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Name="BasedOnText" Grid.Column="2" Classes="Caption" Margin="12,0,0,0"
+                         VerticalAlignment="Center" Text="{Binding BasedOnText}"/>
+            </Grid>
+
+            <!-- Sliders -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="Sliders" Classes="Secondary"/>
+              <ItemsControl Name="SliderRows" ItemsSource="{Binding Sliders}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:HwSliderRowViewModel">
+                    <StackPanel Spacing="2" Margin="0,2">
+                      <Grid ColumnDefinitions="150,Auto,Auto">
+                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                        <NumericUpDown Name="PinBox" Grid.Column="1" Width="140" Minimum="0" Maximum="63"
+                                       FormatString="0" Value="{Binding Pin, Mode=TwoWay}"
+                                       IsEnabled="{Binding CanEdit}"/>
+                        <Button Name="RemoveSliderButton" Grid.Column="2" Classes="Ghost" Margin="6,0,0,0" Content="Remove"
+                                Command="{Binding RemoveCommand}" IsEnabled="{Binding CanEdit}"/>
+                      </Grid>
+                      <TextBlock Classes="Caption" Margin="150,0,0,0" Foreground="{DynamicResource DangerBrush}"
+                                 Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
+                      <TextBlock Classes="Caption" Margin="150,0,0,0" Text="{Binding HintText}" IsVisible="{Binding HasHint}"/>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Name="AddSliderButton" Content="Add slider" Command="{Binding AddSliderCommand}" IsEnabled="{Binding CanEdit}"/>
+            </StackPanel>
+
+            <!-- Buttons -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="Buttons" Classes="Secondary"/>
+              <ItemsControl Name="ButtonRows" ItemsSource="{Binding Buttons}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:HwButtonRowViewModel">
+                    <StackPanel Spacing="4" Margin="0,4">
+                      <Grid ColumnDefinitions="150,Auto,Auto,Auto">
+                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                        <NumericUpDown Name="PinBox" Grid.Column="1" Width="140" Minimum="0" Maximum="63"
+                                       FormatString="0" Value="{Binding Pin, Mode=TwoWay}"
+                                       IsEnabled="{Binding CanEdit}"/>
+                        <ComboBox Name="IndicatorCombo" Grid.Column="2" Width="130" Margin="8,0,0,0"
+                                  ItemsSource="{x:Static vm:HwButtonRowViewModel.IndicatorChoices}"
+                                  SelectedIndex="{Binding IndicatorIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                        <Button Name="RemoveButtonButton" Grid.Column="3" Classes="Ghost" Margin="6,0,0,0" Content="Remove"
+                                Command="{Binding RemoveCommand}" IsEnabled="{Binding CanEdit}"/>
+                      </Grid>
+                      <StackPanel Orientation="Horizontal" Spacing="8" Margin="150,0,0,0" IsVisible="{Binding IsLed}">
+                        <TextBlock Text="LED pin" Classes="Secondary" VerticalAlignment="Center"/>
+                        <NumericUpDown Name="LedPinBox" Width="140" Minimum="0" Maximum="63" FormatString="0"
+                                       Value="{Binding LedPin, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                        <TextBlock Text="Lights when the pin is" Classes="Secondary" VerticalAlignment="Center"/>
+                        <ComboBox Name="LedPolarityCombo" Width="90"
+                                  ItemsSource="{x:Static vm:HwButtonRowViewModel.PolarityChoices}"
+                                  SelectedIndex="{Binding LedPolarityIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="8" Margin="150,0,0,0" IsVisible="{Binding IsPair}">
+                        <TextBlock Text="Pin A" Classes="Secondary" VerticalAlignment="Center"/>
+                        <NumericUpDown Name="PairPinABox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                                       Value="{Binding PairPinA, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                        <TextBlock Text="Pin B" Classes="Secondary" VerticalAlignment="Center"/>
+                        <NumericUpDown Name="PairPinBBox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                                       Value="{Binding PairPinB, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                        <ComboBox Name="PairPolarityCombo" Width="90"
+                                  ItemsSource="{x:Static vm:HwButtonRowViewModel.PolarityChoices}"
+                                  SelectedIndex="{Binding PairPolarityIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="8" Margin="150,0,0,0" IsVisible="{Binding IsScreen}">
+                        <ComboBox Name="ScreenBusCombo" Width="160"
+                                  ItemsSource="{x:Static vm:HwButtonRowViewModel.BusChoices}"
+                                  SelectedIndex="{Binding ScreenBusIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                        <ComboBox Name="ScreenAddressCombo" Width="100"
+                                  ItemsSource="{x:Static vm:HwButtonRowViewModel.AddressChoices}"
+                                  SelectedIndex="{Binding ScreenAddressIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                      </StackPanel>
+                      <TextBlock Classes="Caption" Margin="150,0,0,0" Foreground="{DynamicResource DangerBrush}"
+                                 Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
+                      <TextBlock Classes="Caption" Margin="150,0,0,0" Text="{Binding HintText}" IsVisible="{Binding HasHint}"/>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Name="AddButtonButton" Content="Add button" Command="{Binding AddButtonCommand}" IsEnabled="{Binding CanEdit}"/>
+            </StackPanel>
+
+            <!-- I2C buses some screen uses -->
+            <StackPanel Spacing="6" IsVisible="{Binding HasBuses}">
+              <TextBlock Text="Screen buses (I2C)" Classes="Secondary"/>
+              <ItemsControl Name="BusRows" ItemsSource="{Binding Buses}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:I2cBusRowViewModel">
+                    <StackPanel Spacing="2" Margin="0,2">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Title}" Width="150" VerticalAlignment="Center"/>
+                        <TextBlock Text="SDA" Classes="Secondary" VerticalAlignment="Center"/>
+                        <NumericUpDown Name="SdaBox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                                       Value="{Binding Sda, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                        <TextBlock Text="SCL" Classes="Secondary" VerticalAlignment="Center"/>
+                        <NumericUpDown Name="SclBox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                                       Value="{Binding Scl, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
+                      </StackPanel>
+                      <TextBlock Classes="Caption" Margin="150,0,0,0" Foreground="{DynamicResource DangerBrush}"
+                                 Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- 3. Test -->
+        <Border Name="TestPanel" Classes="Panel">
+          <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Test" Classes="Subtitle" VerticalAlignment="Center"/>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Name="StartTestButton" Content="Start test" Command="{Binding StartTestCommand}"
+                        IsVisible="{Binding !IsTesting}" IsEnabled="{Binding CanStartTest}"/>
+                <Button Name="StopTestButton" Classes="Primary" Content="Stop test" Command="{Binding StopTestCommand}"
+                        IsVisible="{Binding IsTesting}"/>
+              </StackPanel>
+            </Grid>
+            <TextBlock Classes="Caption" TextWrapping="Wrap"
+                       Text="While testing, the controller doesn't change volume or run actions."/>
+            <StackPanel Name="TestBody" Spacing="8" IsVisible="{Binding IsTesting}">
+              <ItemsControl Name="TestSliderRows" ItemsSource="{Binding TestSliders}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TestSliderViewModel">
+                    <Grid ColumnDefinitions="150,200,Auto" Margin="0,2">
+                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                      <ProgressBar Grid.Column="1" Classes="Level" Minimum="0" Maximum="1" Value="{Binding Level}"
+                                   VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="2" Classes="Caption" Margin="10,0,0,0" VerticalAlignment="Center"
+                                 Text="{Binding Value}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <ItemsControl Name="TestButtonRows" ItemsSource="{Binding TestButtons}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TestButtonViewModel">
+                    <Grid ColumnDefinitions="150,Auto,Auto" Margin="0,2">
+                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                      <Ellipse Grid.Column="1" Classes="Led" Classes.on="{Binding IsPressed}" VerticalAlignment="Center"/>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
+                        <ComboBox Name="TestLedCombo" Width="90" IsVisible="{Binding IsLed}"
+                                  ItemsSource="{x:Static vm:TestButtonViewModel.LedChoices}"
+                                  SelectedIndex="{Binding IndicatorIndex, Mode=TwoWay}"/>
+                        <ComboBox Name="TestPairCombo" Width="90" IsVisible="{Binding IsPair}"
+                                  ItemsSource="{x:Static vm:TestButtonViewModel.PairChoices}"
+                                  SelectedIndex="{Binding IndicatorIndex, Mode=TwoWay}"/>
+                        <TextBlock Classes="Caption" Text="Shows the test screen" IsVisible="{Binding IsScreen}"
+                                   VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- 4. Behaviour -->
+        <Border Name="BehaviourPanel" Classes="Panel">
+          <StackPanel Spacing="12">
+            <TextBlock Text="Screens" Classes="Subtitle"/>
+            <TextBlock Name="NoScreensText" Classes="Secondary" IsVisible="{Binding !ShowBehaviour}"
+                       Text="These settings apply to screens. None of the buttons has one."/>
+            <StackPanel Name="BehaviourBody" Spacing="12" IsVisible="{Binding ShowBehaviour}" IsEnabled="{Binding CanEdit}">
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="Brightness" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="BrightnessBox" Grid.Column="1" Width="140" Minimum="0" Maximum="255" FormatString="0"
+                               Value="{Binding Brightness, Mode=TwoWay}"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto,Auto,Auto,Auto">
+                <TextBlock Text="Dim when idle" Classes="Secondary" VerticalAlignment="Center"/>
+                <ToggleSwitch Name="DimToggle" Grid.Column="1" IsChecked="{Binding DimEnabled, Mode=TwoWay}"/>
+                <NumericUpDown Name="DimAfterBox" Grid.Column="2" Width="130" Minimum="10" Maximum="86400" FormatString="0 s"
+                               Value="{Binding DimAfterS, Mode=TwoWay}" IsEnabled="{Binding DimEnabled}" Margin="8,0,0,0"/>
+                <TextBlock Grid.Column="3" Text="to" Classes="Secondary" VerticalAlignment="Center" Margin="8,0"/>
+                <NumericUpDown Name="DimBrightnessBox" Grid.Column="4" Width="110" Minimum="0" Maximum="255" FormatString="0"
+                               Value="{Binding DimBrightness, Mode=TwoWay}" IsEnabled="{Binding DimEnabled}"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto,Auto">
+                <TextBlock Text="Turn off when idle" Classes="Secondary" VerticalAlignment="Center"/>
+                <ToggleSwitch Name="OffToggle" Grid.Column="1" IsChecked="{Binding OffEnabled, Mode=TwoWay}"/>
+                <NumericUpDown Name="OffAfterBox" Grid.Column="2" Width="130" Minimum="10" Maximum="86400" FormatString="0 s"
+                               Value="{Binding OffAfterS, Mode=TwoWay}" IsEnabled="{Binding OffEnabled}" Margin="8,0,0,0"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto,Auto">
+                <TextBlock Text="Pixel shift" Classes="Secondary" VerticalAlignment="Center"/>
+                <ToggleSwitch Name="PixelShiftToggle" Grid.Column="1" IsChecked="{Binding PixelShiftEnabled, Mode=TwoWay}"/>
+                <NumericUpDown Name="PixelShiftBox" Grid.Column="2" Width="130" Minimum="10" Maximum="86400" FormatString="0 s"
+                               Value="{Binding PixelShiftEveryS, Mode=TwoWay}" IsEnabled="{Binding PixelShiftEnabled}" Margin="8,0,0,0"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="A press that wakes the screens isn't sent to the PC" Classes="Secondary"
+                           TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <ToggleSwitch Name="WakeToggle" Grid.Column="1" IsChecked="{Binding WakeSwallowsPress, Mode=TwoWay}"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto,Auto,Auto">
+                <TextBlock Text="Scrolling (hold, speed, end hold)" Classes="Secondary" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                <NumericUpDown Name="ScrollHoldBox" Grid.Column="1" Width="120" Minimum="0" Maximum="10000" FormatString="0 ms"
+                               Value="{Binding ScrollHoldMs, Mode=TwoWay}"/>
+                <NumericUpDown Name="ScrollSpeedBox" Grid.Column="2" Width="120" Minimum="5" Maximum="200" FormatString="0 px/s"
+                               Value="{Binding ScrollSpeed, Mode=TwoWay}" Margin="8,0,0,0"/>
+                <NumericUpDown Name="ScrollEndHoldBox" Grid.Column="3" Width="120" Minimum="0" Maximum="10000" FormatString="0 ms"
+                               Value="{Binding ScrollEndHoldMs, Mode=TwoWay}" Margin="8,0,0,0"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="Slide duration" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="TransitionBox" Grid.Column="1" Width="120" Minimum="0" Maximum="2000" FormatString="0 ms"
+                               Value="{Binding TransitionMs, Mode=TwoWay}"/>
+              </Grid>
+              <TextBlock Classes="Caption" Foreground="{DynamicResource DangerBrush}" Text="{Binding BehaviourError}"
+                         IsVisible="{Binding BehaviourError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- 5. Advanced -->
+        <StackPanel Spacing="8">
+          <ToggleButton Name="AdvancedToggle" Classes="Advanced" IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="Advanced"/>
+              <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="10" Height="10"/>
+            </StackPanel>
+          </ToggleButton>
+          <Border Name="AdvancedSection" Classes="Panel" IsVisible="{Binding IsAdvancedOpen}">
+            <StackPanel Spacing="12" IsEnabled="{Binding CanEdit}">
+              <TextBlock Text="Input tuning" Classes="Secondary"/>
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="Debounce" VerticalAlignment="Center"/>
+                <NumericUpDown Name="DebounceBox" Grid.Column="1" Width="120" Minimum="1" Maximum="200" FormatString="0 ms"
+                               Value="{Binding DebounceMs, Mode=TwoWay}"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="Slider sample interval" VerticalAlignment="Center"/>
+                <NumericUpDown Name="SliderIntervalBox" Grid.Column="1" Width="120" Minimum="1" Maximum="100" FormatString="0 ms"
+                               Value="{Binding SliderIntervalMs, Mode=TwoWay}"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="Smoothing" VerticalAlignment="Center"/>
+                <NumericUpDown Name="SmoothingBox" Grid.Column="1" Width="120" Minimum="1" Maximum="100" FormatString="0 '%'"
+                               Value="{Binding SmoothingPct, Mode=TwoWay}"/>
+              </Grid>
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="Deadband" VerticalAlignment="Center"/>
+                <NumericUpDown Name="DeadbandBox" Grid.Column="1" Width="120" Minimum="0" Maximum="500" FormatString="0"
+                               Value="{Binding Deadband, Mode=TwoWay}"/>
+              </Grid>
+              <TextBlock Name="InputErrorText" Classes="Caption" Foreground="{DynamicResource DangerBrush}" Text="{Binding InputError}"
+                         IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+
+              <TextBlock Text="Screen bus clock" Classes="Secondary" IsVisible="{Binding HasBuses}"/>
+              <ItemsControl Name="BusClockRows" ItemsSource="{Binding Buses}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:I2cBusRowViewModel">
+                    <Grid ColumnDefinitions="200,Auto" Margin="0,2">
+                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                      <NumericUpDown Name="ClockBox" Grid.Column="1" Width="120" Minimum="100" Maximum="1000"
+                                     FormatString="0 kHz" Value="{Binding ClockKhz, Mode=TwoWay}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Text="Wi-Fi (UDP)" Classes="Secondary"/>
+              <Grid ColumnDefinitions="200,Auto">
+                <TextBlock Text="Use Wi-Fi" VerticalAlignment="Center"/>
+                <ToggleSwitch Name="UdpToggle" Grid.Column="1" IsChecked="{Binding UdpEnabled, Mode=TwoWay}"/>
+              </Grid>
+              <StackPanel Spacing="10" IsVisible="{Binding UdpEnabled}">
+                <Grid ColumnDefinitions="200,Auto">
+                  <TextBlock Text="Network name (SSID)" VerticalAlignment="Center"/>
+                  <TextBox Name="SsidBox" Grid.Column="1" Width="220" MaxLength="32" Text="{Binding Ssid, Mode=TwoWay}"/>
+                </Grid>
+                <Grid ColumnDefinitions="200,Auto,Auto">
+                  <TextBlock Text="Password" VerticalAlignment="Center"/>
+                  <TextBox Name="PasswordBox" Grid.Column="1" Width="220" MaxLength="64" PasswordChar="{Binding PasswordChar}"
+                           Text="{Binding Password, Mode=TwoWay}"/>
+                  <CheckBox Name="ShowPasswordBox" Grid.Column="2" Content="Show" Margin="8,0,0,0"
+                            IsChecked="{Binding ShowPassword, Mode=TwoWay}"/>
+                </Grid>
+                <Grid ColumnDefinitions="200,Auto">
+                  <TextBlock Text="PC IP address" VerticalAlignment="Center"/>
+                  <TextBox Name="PcIpBox" Grid.Column="1" Width="220" PlaceholderText="192.168.1.10"
+                           Text="{Binding PcIp, Mode=TwoWay}"/>
+                </Grid>
+                <Grid ColumnDefinitions="200,Auto">
+                  <TextBlock Text="PC port" VerticalAlignment="Center"/>
+                  <NumericUpDown Name="PcPortBox" Grid.Column="1" Width="140" Minimum="1" Maximum="65535" FormatString="0"
+                                 Value="{Binding PcPort, Mode=TwoWay}"/>
+                </Grid>
+                <Grid ColumnDefinitions="200,Auto">
+                  <TextBlock Text="Controller port" VerticalAlignment="Center"/>
+                  <NumericUpDown Name="LocalPortBox" Grid.Column="1" Width="140" Minimum="1" Maximum="65535" FormatString="0"
+                                 Value="{Binding LocalPort, Mode=TwoWay}"/>
+                </Grid>
+                <TextBlock Classes="Caption" TextWrapping="Wrap"
+                           Text="USB keeps working. If the Wi-Fi settings are wrong, fix them over USB."/>
+              </StackPanel>
+              <TextBlock Classes="Caption" Foreground="{DynamicResource DangerBrush}" Text="{Binding WifiError}"
+                         IsVisible="{Binding WifiError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

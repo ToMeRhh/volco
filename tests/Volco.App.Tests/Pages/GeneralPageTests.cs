@@ -90,4 +90,19 @@ public class GeneralPageTests
         Assert.Null(without.Updates);
         Assert.Null(without.FindControl<ContentControl>("UpdatesHost")!.Content);
     }
+
+    [AvaloniaFact]
+    public void TheThirdPartyNotices_LoadWhenOpened()
+    {
+        using var rig = new TestRig();
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var page = new GeneralPage(vm.General);
+        new Window { Content = page }.Show();
+        var box = page.FindControl<TextBox>("NoticesBox")!;
+        Assert.True(string.IsNullOrEmpty(box.Text));
+        page.FindControl<Expander>("NoticesExpander")!.IsExpanded = true;
+        Assert.Contains("nanopb", box.Text);
+        Assert.Contains("GNU LESSER GENERAL PUBLIC LICENSE", box.Text);
+        Assert.Contains("SIL OPEN FONT LICENSE", box.Text!.ToUpperInvariant());
+    }
 }

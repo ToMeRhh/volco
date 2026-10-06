@@ -1,0 +1,85 @@
+syntax = "proto2";
+package volco.config;
+option csharp_namespace = "Volco.Core.Controller.Proto";
+
+// The whole controller configuration. One blob in NVS key "volco"/"cfg".
+// Field numbers are never reused. An absent field takes its default.
+message ControllerConfig {
+  repeated Slider sliders = 1;     // max 16. Order = slider input number.
+  repeated Button buttons = 2;     // max 32. Order = button input number.
+  optional I2cBus i2c0 = 3;        // required when a screen uses bus 0
+  optional I2cBus i2c1 = 4;        // required when a screen uses bus 1
+  optional Udp udp = 5;            // absent = UDP off
+  optional ScreenBehaviour screens = 6;
+  optional InputTuning input = 7;
+  optional string preset = 8;      // max 24 bytes; informational, e.g. "diy-reference"
+  optional I2cBus i2c2 = 9;        // required when a screen uses bus 2 (software I2C)
+  optional I2cBus i2c3 = 10;       // required when a screen uses bus 3 (software I2C)
+}
+
+message Slider {
+  optional uint32 pin = 1;         // ADC-capable GPIO
+}
+
+message Button {
+  optional uint32 pin = 1;         // input GPIO, INPUT_PULLUP, pressed = LOW
+  oneof indicator {                // none set = no indicator
+    Led led = 2;
+    LedPair led_pair = 3;
+    Screen screen = 4;
+  }
+}
+
+message Led {
+  optional uint32 pin = 1;
+  optional bool active_low = 2 [default = false];
+}
+
+message LedPair {
+  optional uint32 pin_a = 1;       // lit for value 1
+  optional uint32 pin_b = 2;       // lit for value 2
+  optional bool active_low = 3 [default = false];
+}
+
+message Screen {
+  optional uint32 bus = 1 [default = 0];        // 0-3: 0 and 1 hardware I2C, 2 and 3 software I2C
+  optional uint32 address = 2 [default = 0x3C]; // 0x3C or 0x3D
+}
+
+message I2cBus {
+  optional uint32 sda = 1;
+  optional uint32 scl = 2;
+  optional uint32 clock_hz = 3 [default = 400000];   // 100000..1000000
+}
+
+message Udp {
+  optional bool enabled = 1 [default = false];
+  optional string ssid = 2;                         // 1..32 bytes when enabled
+  optional string password = 3;                     // 0 (open network) or 8..64 bytes
+  optional fixed32 pc_ip = 4;                       // IPv4, a.b.c.d = a<<24|b<<16|c<<8|d
+  optional uint32 pc_port = 5 [default = 12345];    // 1..65535
+  optional uint32 local_port = 6 [default = 12346]; // 1..65535
+}
+
+message ScreenBehaviour {
+  optional uint32 brightness = 1 [default = 255];            // 0..255
+  optional uint32 transition_ms = 2 [default = 360];         // 0..2000
+  optional uint32 scroll_hold_ms = 3 [default = 2000];       // 0..10000
+  optional uint32 scroll_speed_px_s = 4 [default = 30];      // 5..200
+  optional uint32 scroll_end_hold_ms = 5 [default = 1200];   // 0..10000
+  optional bool dim_enabled = 6 [default = true];
+  optional uint32 dim_after_s = 7 [default = 120];           // 10..86400
+  optional uint32 dim_brightness = 8 [default = 8];          // 0..255
+  optional bool off_enabled = 9 [default = true];
+  optional uint32 off_after_s = 10 [default = 1800];         // 10..86400
+  optional bool pixel_shift_enabled = 11 [default = true];
+  optional uint32 pixel_shift_every_s = 12 [default = 180];  // 10..86400
+  optional bool wake_swallows_press = 13 [default = true];
+}
+
+message InputTuning {
+  optional uint32 debounce_ms = 1 [default = 30];          // 1..200
+  optional uint32 slider_interval_ms = 2 [default = 10];   // 1..100
+  optional uint32 filter_weight_pct = 3 [default = 20];    // 1..100 (EMA weight, %)
+  optional uint32 slider_deadband = 4 [default = 25];      // 0..500 (ADC units)
+}

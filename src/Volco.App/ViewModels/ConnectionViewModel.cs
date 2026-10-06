@@ -47,12 +47,12 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         set { if (value) ConnectionType = ConnectionType.WebSocket; }
     }
 
-    /// <summary>What the status panel says under the state, e.g. "COM3 · 115,200 baud".</summary>
+    /// <summary>What the status panel says under the state, e.g. "COM3 · USB cable".</summary>
     public string TransportDetails => ConnectionType switch
     {
         ConnectionType.Serial => string.IsNullOrEmpty(ComPort)
             ? "USB cable · no port selected"
-            : $"{ComPort} · {BaudRate.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} baud",
+            : $"{ComPort} · USB cable",
         ConnectionType.Udp => $"Wi-Fi (UDP) · port {UdpListenPort}",
         ConnectionType.WebSocket => $"WebSocket · port {WebSocketPort}",
         _ => "",
@@ -61,25 +61,52 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     public bool IsConnected => Status == ConnectionStatus.Connected;
 
     /// <summary>The navigation footer's text: "Connected · COM3", "Not connected", …</summary>
-    public string FooterText => IsUserDisconnected ? "Disconnected"
-        : _runtime.ControllerState == ControllerState.VersionMismatch ? "Firmware mismatch" : Status switch
+    public string FooterText => IsUserDisconnected ? "Disconnected" : _runtime.ControllerState switch
     {
-        ConnectionStatus.Connected => ConnectionType switch
+        ControllerState.VersionMismatch => "Firmware mismatch",
+        ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
+        ControllerState.AwaitingHello => "Waiting for the controller…",
+        _ => Status switch
         {
-            ConnectionType.Serial => $"Connected · {ComPort}",
-            ConnectionType.Udp => "Connected · Wi-Fi",
-            _ => "Connected · WebSocket",
+            ConnectionStatus.Connected => ConnectionType switch
+            {
+                ConnectionType.Serial => $"Connected · {ComPort}",
+                ConnectionType.Udp => "Connected · Wi-Fi",
+                _ => "Connected · WebSocket",
+            },
+            ConnectionStatus.Error => "Connection error",
+            _ => "Not connected",
         },
-        ConnectionStatus.Error => "Connection error",
-        _ => "Not connected",
     };
+
+    /// <summary>The status panel's headline: the port can be open with nothing answering on it.</summary>
+    private string StatusFor(ConnectionStatus status) => status switch
+    {
+        ConnectionStatus.Connected => _runtime.ControllerState switch
+        {
+            ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
+            ControllerState.AwaitingHello => "Waiting for the controller…",
+            ControllerState.VersionMismatch => "Firmware mismatch",
+            _ => "Connected",
+        },
+        ConnectionStatus.Disconnected => "Not connected",
+        ConnectionStatus.Error => "Error",
+        _ => status.ToString(),
+    };
+
+    public const string SilentText = "Nothing on this port answers as a Volco controller. Open the Controller page to check its firmware.";
 
     public const string MismatchText = "Controller firmware doesn't match this version of Volco. Reflash it.";
 
-    /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", from the last Hello; "" before one.</summary>
-    public string HardwareSummary => Summarize(_config.Config.Controller);
+    /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", while a controller answers; "" otherwise.</summary>
+    public string HardwareSummary => _runtime.ControllerState == ControllerState.Ready ? Summarize(_config.Config.Controller) : "";
     public bool HasHardwareSummary => HardwareSummary.Length > 0;
-    public string ControllerError => _runtime.ControllerState == ControllerState.VersionMismatch ? MismatchText : "";
+    public string ControllerError => _runtime.ControllerState switch
+    {
+        ControllerState.VersionMismatch => MismatchText,
+        ControllerState.AwaitingHello when _runtime.ControllerSilent => SilentText,
+        _ => "",
+    };
     public bool HasControllerError => ControllerError.Length > 0;
 
     internal static string Summarize(ControllerInfoConfig? c)
@@ -100,13 +127,19 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         return $"{Plural(c.Sliders, "slider")} · {buttons}";
     }
 
-    private void OnControllerChanged(object? sender, ControllerState state)
+    private void OnControllerChanged(object? sender, ControllerState state) => RefreshController();
+    private void OnControllerSilent(object? sender, bool silent) => RefreshController();
+
+    private void RefreshController()
         => _ui.Post(() =>
         {
             if (_disposed) return;
+            StatusText = IsUserDisconnected ? "Disconnected" : StatusFor(Status);
             OnPropertyChanged(nameof(ControllerError));
             OnPropertyChanged(nameof(HasControllerError));
             OnPropertyChanged(nameof(FooterText));
+            OnPropertyChanged(nameof(HardwareSummary));
+            OnPropertyChanged(nameof(HasHardwareSummary));
         });
 
     private void OnControllerInfo(object? sender, EventArgs e)
@@ -165,39 +198,10 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         };
     }
 
-    /// <summary>
-    /// Zero-based index into the baud-rate list: 9600=0, 19200=1, 38400=2, 57600=3, 115200=4.
-    /// Used by the baud-rate ComboBox in ConnectionTab.xaml.
-    /// </summary>
-    public int BaudRateIndex
-    {
-        get => BaudRate switch
-        {
-            9600   => 0,
-            19200  => 1,
-            38400  => 2,
-            57600  => 3,
-            115200 => 4,
-            _      => 4, // default to 115200
-        };
-        set => BaudRate = value switch
-        {
-            0 => 9600,
-            1 => 19200,
-            2 => 38400,
-            3 => 57600,
-            4 => 115200,
-            _ => 115200,
-        };
-    }
-
     // ── Serial settings ────────────────────────────────────────────────────────
 
     [ObservableProperty]
     private string _comPort = "";
-
-    [ObservableProperty]
-    private int _baudRate;
 
     public ObservableCollection<string> ComPorts { get; } = new();
 
@@ -231,20 +235,32 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         var cfg = config.Config.Connection;
         _connectionType  = cfg.Type;
         _comPort         = cfg.Serial.ComPort;
-        _baudRate        = cfg.Serial.BaudRate;
         _udpListenPort   = cfg.Udp.ListenPort;
         _webSocketPort   = cfg.WebSocket.Port;
 
         RefreshComPortsCommand.Execute(null);
+        // A firmware install may save another port (spec §8.6): show it, without re-saving it.
+        _config.ConnectionConfigChanged += OnConfigSaved;
+        _config.ConfigChanged += OnConfigSaved;
         // Survives transport restarts (the runtime re-attaches its own handler to each transport
         // it creates), so unlike the old per-transport subscription this never needs re-wiring.
         _runtime.ConnectionStatusChanged += OnConnectionStatusChanged;
         _runtime.ControllerStateChanged += OnControllerChanged;
+        _runtime.ControllerSilentChanged += OnControllerSilent;
         _runtime.ControllerInfoChanged += OnControllerInfo;
         _runtime.UserDisconnectedChanged += OnUserDisconnectedChanged;
         _isUserDisconnected = _runtime.IsUserDisconnected;
         UpdateStatus(_runtime.ConnectionStatus);
     }
+
+    private void OnConfigSaved(object? sender, EventArgs e) => _ui.Post(() =>
+    {
+        if (_disposed) return;
+        var saved = _config.Config.Connection.Serial.ComPort;
+        if (saved == ComPort || string.IsNullOrEmpty(saved)) return;
+        if (!ComPorts.Contains(saved)) ComPorts.Add(saved);
+        ComPort = saved;   // already the saved port: OnComPortChanged neither saves nor restarts
+    });
 
     // ── COM-port refresh command ───────────────────────────────────────────────
 
@@ -286,7 +302,10 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _disposed = true;
         _runtime.ConnectionStatusChanged -= OnConnectionStatusChanged;
         _runtime.ControllerStateChanged -= OnControllerChanged;
+        _runtime.ControllerSilentChanged -= OnControllerSilent;
         _runtime.ControllerInfoChanged -= OnControllerInfo;
+        _config.ConnectionConfigChanged -= OnConfigSaved;
+        _config.ConfigChanged -= OnConfigSaved;
         _runtime.UserDisconnectedChanged -= OnUserDisconnectedChanged;
     }
 
@@ -300,13 +319,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     {
         Status = status;
         OnPropertyChanged(nameof(FooterText));
-        StatusText = IsUserDisconnected ? "Disconnected" : status switch
-        {
-            ConnectionStatus.Connected    => "Connected",
-            ConnectionStatus.Disconnected => "Not connected",
-            ConnectionStatus.Error        => "Error",
-            _                             => status.ToString()
-        };
+        StatusText = IsUserDisconnected ? "Disconnected" : StatusFor(status);
     }
 
     // ── Property-change hooks — write back to config ───────────────────────────
@@ -336,14 +349,6 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // nothing to save, and no reason to restart the connection.
         if (value == _config.Config.Connection.Serial.ComPort) return;
         _config.Config.Connection.Serial.ComPort = value;
-        Persist();
-    }
-
-    partial void OnBaudRateChanged(int value)
-    {
-        _config.Config.Connection.Serial.BaudRate = value;
-        OnPropertyChanged(nameof(BaudRateIndex));
-        OnPropertyChanged(nameof(TransportDetails));
         Persist();
     }
 

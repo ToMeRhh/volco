@@ -79,17 +79,6 @@
                 <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
               </Button>
             </Grid>
-            <Grid ColumnDefinitions="150,Auto">
-              <TextBlock Text="Baud rate" Classes="Secondary" VerticalAlignment="Center"/>
-              <ComboBox Name="BaudCombo" Grid.Column="1" Width="160"
-                        SelectedIndex="{Binding BaudRateIndex, Mode=TwoWay}">
-                <ComboBoxItem Content="9600"/>
-                <ComboBoxItem Content="19200"/>
-                <ComboBoxItem Content="38400"/>
-                <ComboBoxItem Content="57600"/>
-                <ComboBoxItem Content="115200"/>
-              </ComboBox>
-            </Grid>
           </StackPanel>
 
           <StackPanel Name="UdpSection" Spacing="12" IsVisible="{Binding IsUdp}">

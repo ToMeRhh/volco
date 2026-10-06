@@ -35,7 +35,6 @@ public enum ButtonActionType
 public class SerialConfig
 {
     public string ComPort { get; set; } = "COM3";
-    public int BaudRate { get; set; } = 115200;
 }
 
 public class UdpConfig
@@ -157,7 +156,7 @@ public class UpdateConfig
 
 public class AppConfig
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     /// <summary>Id of the preset every migrated or new config starts with.</summary>
     public const string DefaultPresetId = "default";
@@ -183,6 +182,10 @@ public class AppConfig
 
     /// <summary>The last Hello the controller sent; null until the first one.</summary>
     public ControllerInfoConfig? Controller { get; set; }
+
+    /// <summary>The mirror (spec §8.2): base64 of the controller's config bytes exactly as stored.
+    /// Written only by <c>ControllerConfigService</c>, on a confirmed save or an adopted read.</summary>
+    public string? ControllerConfigBlob { get; set; }
 
     /// <summary>The settings entry for an endpoint id, or null.</summary>
     public DeviceSettingsConfig? FindDevice(string? id)

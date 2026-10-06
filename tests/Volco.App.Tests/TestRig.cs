@@ -42,7 +42,7 @@ internal sealed class TestRig : IDisposable
     public FakeControllerConnection? Connection { get; private set; }
     public VolcoRuntime Runtime { get; }
 
-    public TestRig(FakeAudioEngine? engine = null)
+    public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -50,7 +50,7 @@ internal sealed class TestRig : IDisposable
         Config.Load();
         Engine = engine ?? new FakeAudioEngine();
         Runtime = new VolcoRuntime(Config, Engine, audioReady: true, connectionFactory: cfg =>
-            Connection = new FakeControllerConnection(cfg));
+            Connection = new FakeControllerConnection(cfg), options: options);
         Runtime.Start();
     }
 

@@ -367,7 +367,6 @@ public class ConfigMigratorTests
         // Migration must not be a data-loss step: non-device settings survive intact.
         Assert.Equal(ConnectionType.Serial, cm.Config.Connection.Type);
         Assert.Equal("COM7", cm.Config.Connection.Serial.ComPort);
-        Assert.Equal(9600, cm.Config.Connection.Serial.BaudRate);
 
         Assert.Equal(SliderMappingType.Device, cm.Config.Sliders[0].Type);
         Assert.True(cm.Config.Sliders[0].Invert);

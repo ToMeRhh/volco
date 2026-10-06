@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.Core.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Firmware;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
@@ -17,6 +18,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
     private readonly VolcoRuntime _runtime;
+    private readonly FirmwareService? _firmware;
 
     // Runtime and engine events fire on arbitrary threads (audio thread, SliderProcessor's
     // coalescing timer, transport threads). Every handler posts through this first.
@@ -27,6 +29,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private SlidersViewModel? _slidersViewModel;
     private ButtonsViewModel? _buttonsViewModel;
     private GeneralViewModel? _generalViewModel;
+    private ControllerViewModel? _controllerViewModel;
 
     /// <summary>The window's one "… · Undo" message.</summary>
     public UndoToastViewModel Toast { get; } = new();
@@ -56,8 +59,22 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config);
 
-    public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui)
+    public ControllerViewModel Controller =>
+        _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware);
+
+    /// <summary>The Controller page's view model if the page was ever opened; null otherwise.</summary>
+    public ControllerViewModel? ControllerIfCreated => _controllerViewModel;
+
+    /// <summary>The dot on the Controller navigation entry: a firmware update, a controller that
+    /// doesn't answer, or one that needs setting up. Read from the runtime's config session, so it
+    /// is right before the page is opened.</summary>
+    [ObservableProperty]
+    private bool _controllerNavDot;
+
+    public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui,
+                             FirmwareService? firmware = null)
     {
+        _firmware = firmware;
         _config = config;
         _audio = audio;
         _runtime = runtime;
@@ -69,6 +86,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ActivePresetChanged += OnActivePresetChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
+        _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
+        _controllerNavDot = _runtime.ControllerConfig.Banner.NeedsAttention;
 
         // The controller only reports a slider when it moves, so levels reported before this VM
         // existed would never reach the bars. Seed them now; the subscription above (kept for the
@@ -127,6 +146,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             _slidersViewModel?.RefreshController();
         });
 
+    private void OnBannerChanged(object? sender, EventArgs e)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) ControllerNavDot = _runtime.ControllerConfig.Banner.NeedsAttention;
+        });
+
     /// <summary>A mute flipped (from a button, the Windows mixer, anywhere): light previews follow.</summary>
     private void OnDeviceVolumeChanged(object? sender, DeviceVolumeChangedEventArgs e)
         => _ui.Post(() =>
@@ -145,6 +170,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ActivePresetChanged -= OnActivePresetChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
+        _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
+        _controllerViewModel?.Dispose();
         if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();
     }
