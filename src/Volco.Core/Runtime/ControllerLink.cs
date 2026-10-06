@@ -131,6 +131,19 @@ public sealed class ControllerLink : IDisposable
         Drain();
     }
 
+    /// <summary>Sends a whole burst (a config read or write, spec §5.3/§5.4) as one transport
+    /// send. Needs only an attached connection, not Ready. False when none is attached.</summary>
+    public bool SendRaw(byte[] burst)
+    {
+        lock (_gate)
+        {
+            if (_connection is null || _disposed) return false;
+            Send(burst);
+        }
+        Drain();
+        return true;
+    }
+
     /// <summary>Sends every button whose display changed, with no transition.</summary>
     public void Push()
     {

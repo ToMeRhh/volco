@@ -36,20 +36,48 @@ jobs:
         dotnet test tests/Volco.App.Tests/Volco.App.Tests.csproj \
           --configuration Release
 
+    # The Windows project only builds in the Windows job (on request only); compile it here too so
+    # Windows-only code (the flasher, the audio engine) breaks on every push, not at release time.
+    - name: Compile the Windows project
+      run: |
+        # A stand-in manifest, so the embedded resource names are checked too: the app opens
+        # "Firmware/esp32/firmware-manifest.json" exactly (a '\' from RecursiveDir would break it).
+        mkdir -p src/Volco.Windows/Firmware/esp32
+        echo '{}' > src/Volco.Windows/Firmware/esp32/firmware-manifest.json
+        dotnet build src/Volco.Windows/Volco.Windows.csproj --configuration Release -p:EnableWindowsTargeting=true
+        grep -qa "Firmware/esp32/firmware-manifest.json" src/Volco.Windows/bin/Release/net8.0-windows10.0.22621.0/Volco.dll
+
   firmware-test:
     name: Firmware Tests
     runs-on: ubuntu-latest
+    outputs:
+      build-id: ${{ steps.fwid.outputs.id }}
     steps:
     - name: Checkout Code
       uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Install PlatformIO
       run: pip install platformio==6.1.19
+
+    - name: Firmware build id
+      id: fwid
+      run: |
+        python firmware/tools/check_firmware_id_paths.py
+        echo "id=$(bash firmware/scripts/firmware_id.sh)" >> "$GITHUB_OUTPUT"
+
+    - name: Manifest script self-test
+      run: python firmware/scripts/manifest.py --selftest
+
+    - name: Config vectors are up to date
+      run: |
+        pip install protobuf==7.36.2 grpcio-tools==1.84.0
+        python firmware/tools/gen_config_vectors.py
+        git diff --exit-code firmware/test/golden/config.txt
 
     - name: Native tests
       working-directory: firmware
@@ -57,25 +85,52 @@ jobs:
 
     - name: Build firmware (ESP32)
       working-directory: firmware
-      run: pio run -e denky32
+      env:
+        VOLCO_FW_VERSION: ${{ steps.fwid.outputs.id }}
+      run: |
+        export VOLCO_FW_DISPLAY="ci+${GITHUB_SHA::7}"
+        pio run -e esp32
+        grep -q "\"version\": \"${VOLCO_FW_VERSION}\"" .pio/build/esp32/dist/firmware-manifest.json
 
-    - name: Build-check screens
-      working-directory: firmware
-      run: pio run -e denky32_screens_check
+    - name: Upload firmware
+      uses: actions/upload-artifact@v7
+      with:
+        name: firmware-esp32
+        path: firmware/.pio/build/esp32/dist/
+        retention-days: 7
 
-    - name: Build-check UDP transport
-      working-directory: firmware
-      run: pio run -e denky32_udp_check
+  simulator-test:
+    name: Simulator Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
 
-    - name: Build-check WebSocket transport
-      working-directory: firmware
-      run: pio run -e denky32_websocket_check
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+
+    - name: Install
+      working-directory: tools/simulator/test
+      run: npm ci
+
+    - name: Check the protobuf descriptor is current
+      working-directory: tools/simulator/test
+      run: |
+        node gen_descriptor.mjs
+        git diff --exit-code ../volco_config_descriptor.js
+
+    - name: Config session tests
+      working-directory: tools/simulator/test
+      run: node --test
 
   build:
     name: Build and Publish
     # Manual only: never on push. Run it from the Actions tab or with
     # `gh workflow run build.yml --ref <branch> --field run_build=true`.
     if: github.event_name == 'workflow_dispatch' && inputs.run_build == true
+    needs: firmware-test
     runs-on: windows-latest
     permissions:
       contents: read
@@ -94,6 +149,12 @@ jobs:
         cache: true
         cache-dependency-path: Volco.sln
 
+    - name: Download firmware
+      uses: actions/download-artifact@v8
+      with:
+        name: firmware-esp32
+        path: src/Volco.Windows/Firmware/esp32
+
     - name: Publish
       run: |
         dotnet publish src/Volco.Windows/Volco.Windows.csproj `
@@ -103,6 +164,8 @@ jobs:
           -p:PublishSingleFile=true `
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true `
+          -p:RequireFirmware=true `
+          -p:VolcoFirmwareBuildId=${{ needs.firmware-test.outputs.build-id }} `
           -o ./publish/
 
     - name: Upload Artifact

@@ -13,6 +13,28 @@ public class ProtocolEncoderTests
     }
 
     [Fact]
+    public void EncodeConfigWrite_MaximalBlob_FiveChunksAt240ByteOffsets()
+    {
+        var blob = Enumerable.Range(0, 1024).Select(i => (byte)i).ToArray();
+        var burst = ProtocolEncoder.EncodeConfigWrite(3, blob);
+        var frames = new List<byte[]>();
+        for (int i = 0; i < burst.Length; i += burst[i + 1] + 3) frames.Add(burst[i..(i + burst[i + 1] + 3)]);
+        Assert.Equal(7, frames.Count);  // Begin, 5 chunks, End
+        Assert.Equal(0x88, frames[0][2]);
+        Assert.Equal(0x8A, frames[6][2]);
+        var offsets = frames.Skip(1).Take(5).Select(f => f[4] << 8 | f[5]).ToArray();
+        Assert.Equal(new[] { 0, 240, 480, 720, 960 }, offsets);
+        Assert.All(frames, f => Assert.True(f[1] <= 255));
+        Assert.Equal(blob, frames.Skip(1).Take(5).SelectMany(f => f[6..^1]).ToArray());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1025)]
+    public void EncodeConfigWrite_RejectsEmptyAndOversizedBlobs(int size)
+        => Assert.Throws<ArgumentException>(() => ProtocolEncoder.EncodeConfigWrite(1, new byte[size]));
+
+    [Fact]
     public void EncodeLed_FrameShape()
         => Assert.Equal(new byte[] { 0xAA, 0x03, 0x83, 0x07, 0x00, 0x84 }, ProtocolEncoder.EncodeLed(7, 0));
 

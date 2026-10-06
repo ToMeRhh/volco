@@ -195,6 +195,17 @@ public class SliderProcessor : IDisposable
         }
     }
 
+    /// <summary>Forgets slider values not yet applied (spec §8.5: test mode starts with nothing
+    /// queued for audio).</summary>
+    public void DropPending()
+    {
+        lock (_lock)
+        {
+            _pendingValues.Clear();
+            _pendingSync.Clear();
+        }
+    }
+
     /// <summary>
     /// Fix D: the most recently processed (post-curve, post-smoothing) volume in [0,1] for a
     /// slider index, or null when the index is out of range or that slider has never reported a

@@ -45,6 +45,14 @@ public class ButtonPressDetector
         tracker.HandleState(state, longPressMs, doublePressWindowMs);
     }
 
+    /// <summary>Spec §8.5: forgets every gesture in progress. Pending long-press and single-press
+    /// timers never fire, and a release whose press came before the reset does nothing. Used when
+    /// test mode starts and ends.</summary>
+    public void Reset()
+    {
+        foreach (var tracker in _trackers.Values) tracker.Reset();
+    }
+
     private void OnPressDetected(int buttonIndex, PressType pressType)
     {
         PressDetected?.Invoke(this, new ButtonPressEventArgs(buttonIndex, pressType));
@@ -59,6 +67,9 @@ public class ButtonPressDetector
         private CancellationTokenSource? _singlePressCts;
         private bool _longPressFired;
         private bool _waitingForDoublePress;
+        // Spec §8.5: set on Pressed, cleared on Released, so a release with no matching press
+        // (a press before a Reset, or a lost frame) fires nothing.
+        private bool _down;
 
         // Fix A: set on every HandleState call (under _lock), not just once at construction -
         // see the comment on HandleButtonEvent above.
@@ -85,8 +96,25 @@ public class ButtonPressDetector
             }
         }
 
+        public void Reset()
+        {
+            lock (_lock)
+            {
+                _longPressCts?.Cancel();
+                _longPressCts?.Dispose();
+                _longPressCts = null;
+                _singlePressCts?.Cancel();
+                _singlePressCts?.Dispose();
+                _singlePressCts = null;
+                _longPressFired = false;
+                _waitingForDoublePress = false;
+                _down = false;
+            }
+        }
+
         private void OnPressed()
         {
+            _down = true;
             _longPressFired = false;
 
             _longPressCts?.Cancel();
@@ -102,6 +130,9 @@ public class ButtonPressDetector
 
         private void OnReleased()
         {
+            if (!_down) return;
+            _down = false;
+
             _longPressCts?.Cancel();
             _longPressCts?.Dispose();
             _longPressCts = null;
@@ -148,7 +179,8 @@ public class ButtonPressDetector
                 await Task.Delay(longPressMs, ct);
                 lock (_lock)
                 {
-                    if (ct.IsCancellationRequested) return;
+                    // Cancelled, or replaced/cleared by a later press or a Reset.
+                    if (ct.IsCancellationRequested || _longPressCts is null || _longPressCts.Token != ct) return;
                     _longPressFired = true;
                     _waitingForDoublePress = false;
                     _callback(_buttonIndex, PressType.Long);
@@ -166,7 +198,7 @@ public class ButtonPressDetector
                 await Task.Delay(doublePressWindowMs, ct);
                 lock (_lock)
                 {
-                    if (ct.IsCancellationRequested) return;
+                    if (ct.IsCancellationRequested || _singlePressCts is null || _singlePressCts.Token != ct) return;
                     _waitingForDoublePress = false;
                     _callback(_buttonIndex, PressType.Single);
                     _singlePressCts?.Dispose();

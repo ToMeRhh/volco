@@ -1,152 +1,82 @@
+#include "transport.h"
+
 #include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiUdp.h>
 
 #include "config.h"
 #include "debug_log.h"
-#include "transport.h"
+#include "volco_protocol.h"
 
-// ============================================================
-// Conditional includes for transport
-// ============================================================
-#if defined(TRANSPORT_WEBSOCKET)
-#include <WebSocketsClient.h>
-#include <WiFi.h>
-#elif defined(TRANSPORT_UDP)
-#include <WiFi.h>
-#include <WiFiUdp.h>
-#elif defined(TRANSPORT_SERIAL)
-// Import the WiFi library so we can explicitly disable WiFi and turn off the
-// WiFi radio.
-#include <WiFi.h>
-#endif
+namespace {
+volco::RuntimeUdp cfg;
+WiFiUDP udp;
+uint8_t udpPacket[UDP_BUFFER];
+size_t udpLen = 0, udpPos = 0;
+bool udpStarted = false, wasConnected = false;
+uint32_t lastBegin = 0;
 
-// ============================================================
-// Transport implementations, one per TRANSPORT_*
-// ============================================================
+uint32_t toU32(const IPAddress& a) {
+  return ((uint32_t)a[0] << 24) | ((uint32_t)a[1] << 16) | ((uint32_t)a[2] << 8) | (uint32_t)a[3];
+}
+IPAddress pcAddress() {
+  return IPAddress((cfg.pcIp >> 24) & 0xFF, (cfg.pcIp >> 16) & 0xFF, (cfg.pcIp >> 8) & 0xFF, cfg.pcIp & 0xFF);
+}
+bool udpUp() { return cfg.enabled && udpStarted && WiFi.status() == WL_CONNECTED; }
+void joinWifi(uint32_t now) {
+  WiFi.begin(cfg.ssid, cfg.password[0] ? cfg.password : nullptr);
+  lastBegin = now;
+}
+}  // namespace
 
-#if defined(TRANSPORT_SERIAL)
-
-void transport_init() {
-  WiFi.disconnect(true, true);
-  WiFi.mode(WIFI_OFF);
-  // A preset change is a ~560-byte burst and a screen redraw blocks the loop for ~30 ms:
-  // the default 256-byte UART buffer could overflow.
-  Serial.setRxBufferSize(1024);
+void transport_begin_serial() {
+  // A preset change is a ~560-byte burst and a config write ~1.1 KB, while a screen redraw blocks
+  // the loop for ~30 ms: the default buffers could overflow.
+  Serial.setRxBufferSize(SERIAL_RX_BUFFER);
+  Serial.setTxBufferSize(SERIAL_TX_BUFFER);
   Serial.begin(SERIAL_BAUD);
 }
 
-bool transport_connected() { return (bool)Serial; }
-
-void transport_send(const uint8_t* data, size_t len) {
-  Serial.write(data, len);
+void transport_begin_udp(const volco::RuntimeUdp& udpConfig) {
+  cfg = udpConfig;
+  if (!cfg.enabled) {
+    WiFi.mode(WIFI_OFF);  // never WiFi.disconnect() before Wi-Fi is up: it logs ESP_ERR_WIFI_NOT_INIT
+    return;
+  }
+  WiFi.persistent(false);  // the driver must not copy credentials into our NVS partition
+  WiFi.setAutoReconnect(true);
+  WiFi.mode(WIFI_STA);
+  joinWifi(millis());
+  DEBUG_LOG(String("[DBG] Wi-Fi: joining ") + cfg.ssid);
 }
 
-int transport_receive(uint8_t* buf, size_t maxLen) {
-  int available = Serial.available();
-  if (available <= 0) return 0;
-  size_t toRead = min((size_t)available, maxLen);
-  return Serial.readBytes(buf, toRead);
+uint8_t transport_up_mask() {
+  return (uint8_t)((1u << TRANSPORT_SERIAL) | (udpUp() ? (1u << TRANSPORT_UDP) : 0u));
 }
 
-void transport_reconnect() {
-  // No-op — USB manages the serial connection
-}
-
-#elif defined(TRANSPORT_WEBSOCKET)
-
-static WebSocketsClient wsClient;
-static uint8_t wsBuf[1024];
-static volatile size_t wsBufLen = 0;
-
-static void wsEvent(WStype_t type, uint8_t* payload, size_t length) {
-  switch (type) {
-    case WStype_CONNECTED:
-      DEBUG_LOG("[DBG] WebSocket connected");
-      break;
-    case WStype_DISCONNECTED:
-      DEBUG_LOG("[DBG] WebSocket disconnected");
-      break;
-    case WStype_BIN:
-      if (wsBufLen + length <= sizeof(wsBuf)) {
-        memcpy(wsBuf + wsBufLen, payload, length);
-        wsBufLen += length;
-      } else {
-        DEBUG_LOG("[DBG] WebSocket receive buffer full; message dropped");
-      }
-      break;
-    default:
-      break;
+void transport_send(uint8_t id, const uint8_t* data, size_t len) {
+  if (id == TRANSPORT_SERIAL) {
+    Serial.write(data, len);
+  } else if (id == TRANSPORT_UDP && udpUp()) {
+    udp.beginPacket(pcAddress(), cfg.pcPort);
+    udp.write(data, len);
+    udp.endPacket();
   }
 }
 
-void transport_init() {
-  Serial.begin(SERIAL_BAUD);  // for debug logging
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  DEBUG_LOG("[DBG] Connecting to WiFi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
+int transport_receive(uint8_t id, uint8_t* buf, size_t maxLen) {
+  if (id == TRANSPORT_SERIAL) {
+    int available = Serial.available();
+    if (available <= 0) return 0;
+    size_t toRead = min((size_t)available, maxLen);
+    return Serial.readBytes(buf, toRead);
   }
-  DEBUG_LOG("[DBG] WiFi connected: " + WiFi.localIP().toString());
-  wsClient.begin(SERVER_IP, SERVER_PORT, "/");
-  wsClient.onEvent(wsEvent);
-  wsClient.setReconnectInterval(RECONNECT_INTERVAL_MS);
-}
-
-bool transport_connected() { return wsClient.isConnected(); }
-
-void transport_send(const uint8_t* data, size_t len) {
-  wsClient.sendBIN(data, len);
-}
-
-int transport_receive(uint8_t* buf, size_t maxLen) {
-  wsClient.loop();  // drive the WebSocket event pump
-  size_t avail = wsBufLen;
-  if (avail == 0) return 0;
-  size_t toRead = min(avail, maxLen);
-  memcpy(buf, wsBuf, toRead);
-  if (toRead < avail) {
-    memmove(wsBuf, wsBuf + toRead, avail - toRead);
-  }
-  wsBufLen = avail - toRead;
-  return (int)toRead;
-}
-
-void transport_reconnect() {
-  // WebSocketsClient handles reconnection internally
-}
-
-#elif defined(TRANSPORT_UDP)
-
-static WiFiUDP udpClient;
-static uint8_t udpPacket[1024];
-static size_t udpLen = 0, udpPos = 0;
-
-void transport_init() {
-  Serial.begin(SERIAL_BAUD);  // for debug logging
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  DEBUG_LOG("[DBG] Connecting to WiFi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-  }
-  DEBUG_LOG("[DBG] WiFi connected: " + WiFi.localIP().toString());
-  udpClient.begin(UDP_LOCAL_PORT);
-  DEBUG_LOG("[DBG] UDP listening on port " + String(UDP_LOCAL_PORT));
-}
-
-bool transport_connected() { return WiFi.status() == WL_CONNECTED; }
-
-void transport_send(const uint8_t* data, size_t len) {
-  udpClient.beginPacket(SERVER_IP, SERVER_PORT);
-  udpClient.write(data, len);
-  udpClient.endPacket();
-}
-
-int transport_receive(uint8_t* buf, size_t maxLen) {
+  if (id != TRANSPORT_UDP || !udpUp()) return 0;
   if (udpPos >= udpLen) {
-    int size = udpClient.parsePacket();
+    int size = udp.parsePacket();
     if (size <= 0) return 0;
-    if (size > (int)sizeof(udpPacket)) DEBUG_LOG("[DBG] UDP packet larger than the buffer; truncated");
-    int r = udpClient.read(udpPacket, sizeof(udpPacket));
-    if (r <= 0) {
+    int r = udp.read(udpPacket, sizeof udpPacket);
+    if (r <= 0 || !volco::acceptUdpSource(toU32(udp.remoteIP()), cfg.pcIp)) {  // strangers: dropped
       udpLen = udpPos = 0;
       return 0;
     }
@@ -159,35 +89,22 @@ int transport_receive(uint8_t* buf, size_t maxLen) {
   return (int)n;
 }
 
-void transport_reconnect() {
-  if (WiFi.status() != WL_CONNECTED) {
-    DEBUG_LOG("[DBG] WiFi reconnecting...");
-    WiFi.reconnect();
+bool transport_maintain(uint32_t now) {
+  if (!cfg.enabled) return false;
+  const wl_status_t st = WiFi.status();
+  const bool connected = st == WL_CONNECTED;
+  bool edge = false;
+  if (connected && !wasConnected) {
+    DEBUG_LOG("[DBG] Wi-Fi: connected, " + WiFi.localIP().toString());
+    edge = true;
   }
+  if (connected && !udpStarted) {  // retried every pass, so a failed bind doesn't leave UDP dead
+    udpStarted = udp.begin(cfg.localPort);
+    if (!udpStarted) DEBUG_LOG("[DBG] UDP: bind failed, retrying");
+  }
+  // Any state but connected (failed, no SSID, dropped, lost, or associated without an IP) is
+  // retried, at most every WIFI_RETRY_MS so a slow attempt isn't interrupted.
+  if (!connected && now - lastBegin >= WIFI_RETRY_MS) joinWifi(now);
+  wasConnected = connected;
+  return edge;
 }
-
-#elif defined(TRANSPORT_LOCAL_DEBUG)
-
-void transport_init() { Serial.begin(SERIAL_BAUD); }
-
-bool transport_connected() { return true; }
-
-void transport_send(const uint8_t* data, size_t len) {
-  // No host — discard outbound frames silently
-  (void)data;
-  (void)len;
-}
-
-int transport_receive(uint8_t* buf, size_t maxLen) {
-  // No host — nothing to receive
-  (void)buf;
-  (void)maxLen;
-  return 0;
-}
-
-void transport_reconnect() {}
-
-#else
-#error \
-    "Define exactly one of TRANSPORT_SERIAL, TRANSPORT_WEBSOCKET, TRANSPORT_UDP, or TRANSPORT_LOCAL_DEBUG in config.h"
-#endif

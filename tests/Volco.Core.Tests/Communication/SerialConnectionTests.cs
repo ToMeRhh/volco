@@ -13,7 +13,7 @@ public class SerialConnectionTests
     [Fact]
     public void Connect_NullComPort_SetsErrorStatusWithoutThrowing()
     {
-        var connection = new SerialConnection(new SerialConfig { ComPort = null!, BaudRate = 115200 });
+        var connection = new SerialConnection(new SerialConfig { ComPort = null! });
         ConnectionStatus? lastStatus = null;
         connection.StatusChanged += (_, s) => lastStatus = s;
 
@@ -27,7 +27,7 @@ public class SerialConnectionTests
     [Fact]
     public void Connect_EmptyComPort_SetsErrorStatusWithoutThrowing()
     {
-        var connection = new SerialConnection(new SerialConfig { ComPort = "", BaudRate = 115200 });
+        var connection = new SerialConnection(new SerialConfig { ComPort = "" });
         ConnectionStatus? lastStatus = null;
         connection.StatusChanged += (_, s) => lastStatus = s;
 
@@ -46,7 +46,7 @@ public class SerialConnectionTests
     [Fact]
     public void Connect_BlankComPort_DoesNotStartBackgroundTimers()
     {
-        var connection = new SerialConnection(new SerialConfig { ComPort = "", BaudRate = 115200 });
+        var connection = new SerialConnection(new SerialConfig { ComPort = "" });
 
         connection.Connect();
 
@@ -61,7 +61,7 @@ public class SerialConnectionTests
     [Fact]
     public void Disconnect_BeforeConnect_IsSafeAndIdempotent()
     {
-        var connection = new SerialConnection(new SerialConfig { ComPort = "COM99", BaudRate = 115200 });
+        var connection = new SerialConnection(new SerialConfig { ComPort = "COM99" });
 
         var ex1 = Record.Exception(() => connection.Disconnect());
         var ex2 = Record.Exception(() => connection.Disconnect());
@@ -80,7 +80,7 @@ public class SerialConnectionTests
     [Fact]
     public void Dispose_BeforeConnect_IsSafeAndIdempotent()
     {
-        var connection = new SerialConnection(new SerialConfig { ComPort = "COM99", BaudRate = 115200 });
+        var connection = new SerialConnection(new SerialConfig { ComPort = "COM99" });
 
         var ex1 = Record.Exception(() => connection.Dispose());
         var ex2 = Record.Exception(() => connection.Dispose());
@@ -99,7 +99,7 @@ public class SerialConnectionTests
     [Fact]
     public void Dispose_AfterBlankPortConnect_IsSafe()
     {
-        var connection = new SerialConnection(new SerialConfig { ComPort = null!, BaudRate = 115200 });
+        var connection = new SerialConnection(new SerialConfig { ComPort = null! });
         connection.Connect();
 
         var ex = Record.Exception(() => connection.Dispose());
@@ -116,7 +116,7 @@ public class SerialConnectionTests
     [Fact]
     public void Disconnect_WhenAlreadyDisconnected_DoesNotRaiseStatusChanged()
     {
-        var connection = new SerialConnection(new SerialConfig { ComPort = "COM99", BaudRate = 115200 });
+        var connection = new SerialConnection(new SerialConfig { ComPort = "COM99" });
         var raised = false;
         connection.StatusChanged += (_, _) => raised = true;
 
