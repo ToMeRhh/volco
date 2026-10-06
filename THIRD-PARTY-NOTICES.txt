@@ -10,9 +10,9 @@ Components:
   - U8g2 2.36.18 (SSD1306 display driver)           BSD 2-clause licence (the U8g2 code; no U8g2
                                                     fonts are used)
   - Arduino core for the ESP32 3.3.8                GNU LGPL 2.1
-    (https://github.com/espressif/arduino-esp32, tag 3.3.8). The firmware's own source, which
-    with the core's source lets you rebuild and relink it with a modified core, is part of the
-    Volco project (firmware/ in its repository).
+    (https://github.com/espressif/arduino-esp32, tag 3.3.8, where the core's source is). To
+    relink the firmware with a modified core, use relink/ in the firmware zip: every other link
+    input as object files, and the exact link command (see relink/README-relink.txt).
   - ESP-IDF 5.5.4 (via the Arduino core)             Apache License 2.0, and the third-party
     components it links into the firmware, each with its licence below: lwIP (BSD 3-clause),
     wpa_supplicant (BSD), FreeRTOS kernel (MIT), newlib (various permissive licences) and

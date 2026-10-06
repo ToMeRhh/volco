@@ -578,4 +578,18 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Empty(cm.Config.Sliders);
         Assert.NotNull(cm.Config.Buttons[0].Actions);
     }
+
+    [Fact]
+    public void FlushPendingSave_WritesADebouncedSaveNow()
+    {
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+        cm.Config.ControllerConfigBlob = "MgIIZA==";
+        cm.RequestSave();
+        cm.FlushPendingSave();                                   // before the 400 ms debounce
+        var again = new ConfigManager(_configPath);
+        again.Load();
+        Assert.Equal("MgIIZA==", again.Config.ControllerConfigBlob);
+        cm.FlushPendingSave();                                   // nothing pending: no-op
+    }
 }
