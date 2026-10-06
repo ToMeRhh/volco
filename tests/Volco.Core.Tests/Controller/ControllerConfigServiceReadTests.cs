@@ -282,12 +282,26 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
     {
         var old = new object();
         var current = new object();
-        _k.Service.OnConnectionStarted(old);
+        _k.Service.OnConnectionStarted(old, () => old);
         _k.Service.OnConnectionReplaced();
-        _k.Service.OnConnectionStarted(current);
+        _k.Service.OnConnectionStarted(current, () => current);
         _k.Service.OnMessage(old, Hello(ControllerConfigState.None, 0));    // arrived late
         Assert.Null(_k.Service.LastHello);
         _k.Service.OnMessage(current, Hello(ControllerConfigState.None, 0));
+        Assert.NotNull(_k.Service.LastHello);
+    }
+
+    // Two StartConnection calls can overlap: one that publishes a connection, loses it to a newer
+    // one, and only then reports it, must not make the service ignore the live connection.
+    [Fact]
+    public void AStartReportedAfterANewerConnection_DoesNotReplaceTheLiveSource()
+    {
+        var stale = new object();
+        var live = new object();
+        object? current = live;
+        _k.Service.OnConnectionStarted(live, () => current);
+        _k.Service.OnConnectionStarted(stale, () => current);   // stale is no longer published
+        _k.Service.OnMessage(live, Hello(ControllerConfigState.None, 0));
         Assert.NotNull(_k.Service.LastHello);
     }
 }
