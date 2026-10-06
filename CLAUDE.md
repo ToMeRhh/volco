@@ -15,8 +15,7 @@ gh run list --branch <branch-name> --limit 3
 ```
 
 **IMPORTANT — build job rules:**
-- Pushing to `main` automatically triggers both tests and the build/publish job.
-- Pushing to any other branch automatically triggers tests only.
+- Pushing to any branch, `main` included, automatically triggers tests only. The build/publish job never runs on push; it is manual only.
 - `gh workflow run` (workflow_dispatch) triggers tests only by default. **Never trigger the build on a branch unless the user explicitly asks.** If they do ask, use:
   ```bash
   gh workflow run build.yml --ref <branch-name> --field run_build=true

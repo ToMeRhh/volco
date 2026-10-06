@@ -382,7 +382,7 @@ pio test -e native       # host-side tests of lib/
 python3 tools/gen_assets.py   # regenerate icons & fonts (needs Pillow ≥ 10)
 ```
 
-**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu (plus a compile of the Windows project), the firmware's native tests and ESP32 build (uploaded as `firmware-esp32` with its build id), the simulator's tests, and, on `main`, a Windows single-file build with that firmware embedded, published as the `Volco-win-x64` artifact. Releases (`release.yml`) also attach `volco-firmware-esp32-<version>.zip` with the licence notices.
+**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu (plus a compile of the Windows project), the firmware's native tests and ESP32 build (uploaded as `firmware-esp32` with its build id), and the simulator's tests. The Windows single-file build, with that firmware embedded and published as the `Volco-win-x64` artifact, runs only on request: `gh workflow run build.yml --ref <branch> --field run_build=true`, or **Run workflow** in the Actions tab with *Also run the Build and Publish job* ticked. Releases (`release.yml`) also attach `volco-firmware-esp32-<version>.zip` with the licence notices.
 
 </details>
 
