@@ -1189,10 +1189,7 @@ Minor findings each stage's final review raised and the user hasn't asked for ye
 
 | From | Finding | If left |
 |---|---|---|
-| Stage 2 | No golden decode-fail vectors one byte over a string limit (preset 25 bytes, password 65); a few §12.1 cases missing. | An off-by-one in a limit check on one side wouldn't be caught by the shared vectors. |
-| Stage 2 | The NUL prescan (`hasNulInStrings`) doesn't descend into repeated fields' strings. | None today: no repeated message has a string field. |
 | Stage 2 | `ControllerPresets.All` hands out mutable `ControllerConfig` objects. | A caller that edits a preset's `Hardware` changes it for everyone; `ApplyTo` clones, so none does today. |
-| Stage 3 | Re-starting UDP can interrupt a Wi-Fi connect already in progress. | A slower Wi-Fi join after a config change; it retries. |
 | Stage 4b | A Hello from a just-replaced connection can arrive after the replacement. | The Controller page briefly shows the old controller's banner. |
 | Stage 4b | The config is saved debounced (`RequestSave`), and nothing flushes it at exit. | A save confirmed in the moment before Volco exits can be missing from the mirror; the next start shows "different setup", and "Use the controller's" fixes it. |
 | Stage 5 | Clearing a number box in Screens or Advanced is dropped by the binding. | The box shows empty while the old value is kept. |
@@ -1201,6 +1198,8 @@ Minor findings each stage's final review raised and the user hasn't asked for ye
 | Stage 6 | `dist/` is rewritten only when `firmware.bin` relinks. | Locally, changing only `VOLCO_FW_DISPLAY` leaves a stale manifest; CI builds are always fresh. |
 | Stage 6 | An install takes about 29 s at 460800 baud (measured 2026-10-05), over the §8.6 target of 20 s; 921600 with fallbacks is the next step. The user will handle it in a separate session. | Installs and updates take about half a minute. |
 | Stage 6 | `CheckFirmware` (the build-id match) runs only in the Windows build and release jobs. | A mismatch shows only when those run; the resource names are checked on every push. |
+
+Closed 2026-10-06: `transport_begin_udp` runs once, in `setup()`, and every config save reboots, so nothing restarts UDP at run time.
 
 ## 15. Delivery stages
 
