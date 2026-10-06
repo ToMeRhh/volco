@@ -73,7 +73,17 @@ internal sealed class CompositionRoot : IDisposable
         var catalog = FirmwareCatalog.Load(_platform.Firmware ?? EmptyFirmwareSource.Instance);
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
                                     new VolcoRuntimeOptions { Firmware = catalog });
-        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog);
+        // The port a flash or probe settles on is saved on the UI thread, which owns the config.
+        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThread: a =>
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() =>
+            {
+                try { a(); done.SetResult(); }
+                catch (Exception e) { done.SetException(e); }
+            });
+            return done.Task;
+        });
         var firmware = _firmware;
         VolcoApplication.Gate = new ExitGate(() => firmware.IsBusy);
         firmware.BusyChanged += (_, _) => Dispatcher.UIThread.Post(() => VolcoApplication.Gate?.OnBusyChanged());
