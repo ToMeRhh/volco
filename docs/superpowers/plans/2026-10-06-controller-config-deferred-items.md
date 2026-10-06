@@ -486,7 +486,15 @@ _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThre
 - [ ] **Step 3: Push.** CI green. In the log, check that the negative step printed `RequireFirmware: the embedded firmware isn't build 000000000000.` and passed. This is spec §12.5's check, automated.
 - [ ] **Step 4:** Remove the row; update CLAUDE.md's CI paragraph; commit `ci: check the embedded firmware's build id on every push`.
 
-### Task 10: The LGPL relink bundle in the release zip (the user chose option C, 2026-10-06)
+### Task 10: The LGPL relink bundle in the release zip (the user chose option C, 2026-10-06) — DONE
+
+**Done 2026-10-06:**
+- **Script:** the bundle comes from `firmware/scripts/relink_bundle.py`, a post action on the `.elf` link step. It copies exactly the inputs on the link line and writes `link-command.txt`, with `objects/` and `$HOME` paths.
+- **Relink proof:** run from a copy of `relink/` alone, the relink plus `elf2image`, with the build's flags, reproduced `firmware.bin` byte for byte.
+- **Size:** about 27 MB uncompressed, mostly U8g2's font objects.
+- **CI:** `firmware-test` checks that the bundle exists, and `release.yml` zips it.
+
+The steps below are the original plan, kept for reference.
 
 **Why:** the firmware statically links the Arduino core (LGPL 2.1). A release given to others must let its recipients relink the firmware with a modified core. The user keeps the repository private, so each release's firmware zip carries the firmware's **object files** and the **link command** instead of its source.
 
@@ -510,7 +518,7 @@ _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThre
   - `link-command.txt` (`env.subst("$LINKCOM")` with `$BUILD_DIR` replaced by `objects`)
   - `README-relink.txt`
 
-- [ ] **Step 1: Write the script.** Use a post action on `buildprog`, like the manifest after Task 7:
+- [x] **Step 1: Write the script.** Use a post action on `buildprog`, like the manifest after Task 7:
 
 ```python
 # PlatformIO post-script: the LGPL 2.1 relink bundle (spec §14, point 3, option C). The firmware
@@ -562,18 +570,18 @@ def write_bundle(target, source, env):
 env.AddPostAction("buildprog", write_bundle)  # noqa: F821
 ```
 
-- [ ] **Step 2: Wire it and check it.**
+- [x] **Step 2: Wire it and check it.**
   - Add `post:scripts/relink_bundle.py` to `extra_scripts` in `platformio.ini`.
   - Run `pio run -e esp32`.
   - **Expect:** `.pio/build/esp32/relink/` holds `objects/src/main.cpp.o` (and the other `src/` objects), `objects/lib…/libvolco_*.a`, the nanopb and U8g2 libraries, plus `link-command.txt` (one long `xtensa-esp32-elf-g++ … -o …firmware.elf` line) and `README-relink.txt`.
   - If `$LINKCOM` doesn't expand to the real command line, capture the link line from `pio run -e esp32 -v` instead: run it in `release.yml`, pick the line that ends in `firmware.elf`, and write that.
   - Check the bundle's size (expect a few MB).
-- [ ] **Step 3: Prove a relink works (on this host).** From a copy of `relink/`, run `link-command.txt` with the core paths pointing at the PlatformIO packages already on this machine; it must produce a `firmware.elf`. Then `esptool elf2image` must produce a `firmware.bin` the same size as the shipped one (byte equality isn't expected: the build embeds timestamps). Record the result in the PR.
-- [ ] **Step 4: Ship it.**
+- [x] **Step 3: Prove a relink works (on this host).** From a copy of `relink/`, run `link-command.txt` with the core paths pointing at the PlatformIO packages already on this machine; it must produce a `firmware.elf`. Then `esptool elf2image` must produce a `firmware.bin` the same size as the shipped one (byte equality isn't expected: the build embeds timestamps). Record the result in the PR.
+- [x] **Step 4: Ship it.**
   - In `release.yml`, the "Firmware zip" step also copies `firmware/.pio/build/esp32/relink` into the zip as `relink/` (`cp -r`).
   - In `THIRD-PARTY-NOTICES.txt`, the Arduino core paragraph replaces its source sentence with: *"The firmware's object files and link command are in relink/ in this zip (see README-relink.txt), so you can relink it with a modified core; the core's source is at that tag."*
   - Regenerate nothing else, then run `actionlint`.
-- [ ] **Step 5: Close the decision.** Spec §14 point 3 becomes *"Resolved 2026-10-06 (the user): option C. The repository stays private; every release's firmware zip carries the relink bundle (`firmware/scripts/relink_bundle.py`)."* Tick the matching "Before merging" item in the hardware checklist. Commit `feat(release): LGPL relink bundle in the firmware zip`.
+- [x] **Step 5: Close the decision.** Spec §14 point 3 becomes *"Resolved 2026-10-06 (the user): option C. The repository stays private; every release's firmware zip carries the relink bundle (`firmware/scripts/relink_bundle.py`)."* Tick the matching "Before merging" item in the hardware checklist. Commit `feat(release): LGPL relink bundle in the firmware zip`.
 
 ### Task 11: Close out
 

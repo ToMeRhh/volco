@@ -91,6 +91,7 @@ jobs:
         export VOLCO_FW_DISPLAY="ci+${GITHUB_SHA::7}"
         pio run -e esp32
         grep -q "\"version\": \"${VOLCO_FW_VERSION}\"" .pio/build/esp32/dist/firmware-manifest.json
+        test -s .pio/build/esp32/relink/link-command.txt   # the LGPL relink bundle the release zip carries
 
     - name: Upload firmware
       uses: actions/upload-artifact@v7
