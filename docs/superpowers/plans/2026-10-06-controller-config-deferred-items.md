@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Close the deferred review findings in spec §14.1, except the install speed, which the user handles separately.
+**Goal:** Close the deferred review findings in spec §14.1, except the install speed, which the user handles separately. Also carry out the user's LGPL decision (spec §14, point 3): option C, a relink bundle in every release's firmware zip.
 
 **Architecture:** Nine small, independent fixes across the firmware tools, `Volco.Core`, `Volco.App` and CI.
 - One row of §14.1 is obsolete: the firmware starts UDP once per boot and every config save reboots, so a restart can no longer interrupt a Wi-Fi connect. Task 1 closes that row with the evidence.
@@ -486,8 +486,98 @@ _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThre
 - [ ] **Step 3: Push.** CI green. In the log, check that the negative step printed `RequireFirmware: the embedded firmware isn't build 000000000000.` and passed. This is spec §12.5's check, automated.
 - [ ] **Step 4:** Remove the row; update CLAUDE.md's CI paragraph; commit `ci: check the embedded firmware's build id on every push`.
 
-### Task 10: Close out
+### Task 10: The LGPL relink bundle in the release zip (the user chose option C, 2026-10-06)
+
+**Why:** the firmware statically links the Arduino core (LGPL 2.1). A release given to others must let its recipients relink the firmware with a modified core. The user keeps the repository private, so each release's firmware zip carries the firmware's **object files** and the **link command** instead of its source.
+
+**What goes in the bundle:**
+- **Objects:** the compiled objects of Volco's own code and of the non-core libraries (nanopb, U8g2), i.e. everything under `.pio/build/esp32/` that is an input to the final link.
+- **The link command:** the exact final link command line, with paths made relative.
+- **`README-relink.txt`:** how to relink against a modified core.
+- **Not included:** the core's own libraries and linker scripts. Recipients get those from Espressif, at arduino-esp32 3.3.8 / pioarduino 55.03.38.
+
+**Files:**
+- Create: `firmware/scripts/relink_bundle.py`. It runs as a post action, after the manifest; nothing in the regular build depends on its output.
+- Modify:
+  - `firmware/platformio.ini` (add it to `extra_scripts`)
+  - `.github/workflows/release.yml` (the zip includes `relink/`)
+  - `THIRD-PARTY-NOTICES.txt` (the Arduino core paragraph)
+  - spec §14 point 3 (resolved)
+
+**Interfaces:**
+- Produces: `$BUILD_DIR/relink/`, containing:
+  - `objects/` (the `.o` and `.a` link inputs under `$BUILD_DIR`, copied with their relative paths)
+  - `link-command.txt` (`env.subst("$LINKCOM")` with `$BUILD_DIR` replaced by `objects`)
+  - `README-relink.txt`
+
+- [ ] **Step 1: Write the script.** Use a post action on `buildprog`, like the manifest after Task 7:
+
+```python
+# PlatformIO post-script: the LGPL 2.1 relink bundle (spec §14, point 3, option C). The firmware
+# statically links the Arduino core; recipients of a release must be able to relink it with a
+# modified core. This copies the link inputs built from Volco's code and the non-core libraries,
+# and the exact link command, into $BUILD_DIR/relink/. The core's own libraries and linker scripts
+# are not included: they come from Espressif (arduino-esp32 3.3.8, pioarduino 55.03.38).
+import os
+import shutil
+
+Import("env")  # noqa: F821
+
+README = """Relinking the Volco controller firmware (GNU LGPL 2.1, section 6)
+
+The firmware statically links the Arduino core for the ESP32 (arduino-esp32 3.3.8, LGPL 2.1).
+To relink it with a modified core:
+1. Install PlatformIO with the pioarduino platform 55.03.38 (Arduino core 3.3.8) and apply your
+   changes to the core.
+2. Build the core's libraries as usual (any PlatformIO esp32dev Arduino project builds them).
+3. Run link-command.txt from this folder, with the core paths in it pointing at your build.
+   objects/ holds every other input: Volco's own code, nanopb and U8g2, compiled for ESP32.
+4. Convert firmware.elf to firmware.bin with esptool (elf2image) and flash it at 0x10000.
+"""
+
+
+def write_bundle(target, source, env):
+    build = env.subst("$BUILD_DIR")
+    out = os.path.join(build, "relink")
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(os.path.join(out, "objects"))
+    for dirpath, _, files in os.walk(build):
+        if dirpath.startswith(out):
+            continue
+        for f in files:
+            if f.endswith((".o", ".a")):
+                rel = os.path.relpath(os.path.join(dirpath, f), build)
+                dst = os.path.join(out, "objects", rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(os.path.join(dirpath, f), dst)
+    command = env.subst("$LINKCOM", target=[env.File("$BUILD_DIR/${PROGNAME}.elf")],
+                        source=env.get("PIOBUILDFILES", []))
+    with open(os.path.join(out, "link-command.txt"), "w") as fp:
+        fp.write(command.replace(build, "objects") + "\n")
+    with open(os.path.join(out, "README-relink.txt"), "w") as fp:
+        fp.write(README)
+    print(f"Relink bundle: {out}")
+
+
+env.AddPostAction("buildprog", write_bundle)  # noqa: F821
+```
+
+- [ ] **Step 2: Wire it and check it.**
+  - Add `post:scripts/relink_bundle.py` to `extra_scripts` in `platformio.ini`.
+  - Run `pio run -e esp32`.
+  - **Expect:** `.pio/build/esp32/relink/` holds `objects/src/main.cpp.o` (and the other `src/` objects), `objects/lib…/libvolco_*.a`, the nanopb and U8g2 libraries, plus `link-command.txt` (one long `xtensa-esp32-elf-g++ … -o …firmware.elf` line) and `README-relink.txt`.
+  - If `$LINKCOM` doesn't expand to the real command line, capture the link line from `pio run -e esp32 -v` instead: run it in `release.yml`, pick the line that ends in `firmware.elf`, and write that.
+  - Check the bundle's size (expect a few MB).
+- [ ] **Step 3: Prove a relink works (on this host).** From a copy of `relink/`, run `link-command.txt` with the core paths pointing at the PlatformIO packages already on this machine; it must produce a `firmware.elf`. Then `esptool elf2image` must produce a `firmware.bin` the same size as the shipped one (byte equality isn't expected: the build embeds timestamps). Record the result in the PR.
+- [ ] **Step 4: Ship it.**
+  - In `release.yml`, the "Firmware zip" step also copies `firmware/.pio/build/esp32/relink` into the zip as `relink/` (`cp -r`).
+  - In `THIRD-PARTY-NOTICES.txt`, the Arduino core paragraph replaces its source sentence with: *"The firmware's object files and link command are in relink/ in this zip (see README-relink.txt), so you can relink it with a modified core; the core's source is at that tag."*
+  - Regenerate nothing else, then run `actionlint`.
+- [ ] **Step 5: Close the decision.** Spec §14 point 3 becomes *"Resolved 2026-10-06 (the user): option C. The repository stays private; every release's firmware zip carries the relink bundle (`firmware/scripts/relink_bundle.py`)."* Tick the matching "Before merging" item in the hardware checklist. Commit `feat(release): LGPL relink bundle in the firmware zip`.
+
+### Task 11: Close out
 
 - [ ] Run a whole-branch review on a fresh reviewer (Opus) over `origin/main...HEAD`, fix the findings, and push until CI is green with 0 warnings.
 - [ ] §14.1 now holds only the install-speed row. Update CLAUDE.md where a task changed behaviour (Tasks 5, 6, 9).
 - [ ] Open the PR into `main`. The base is `main` directly, with no stacking.
+- [ ] The next real release is the first to run the rewritten `release.yml`. Suggest a test release first (e.g. `v1.1.0-rc1`), checking that it attaches `Volco.exe` and the firmware zip with `relink/`.

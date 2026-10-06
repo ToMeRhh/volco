@@ -1181,7 +1181,7 @@ All answered: results and decisions are in `docs/superpowers/spikes/2026-10-03-c
 
 1. **The Wi-Fi password is plain text** in NVS and in `config.json`'s mirror, as in `config.h` today. Accepted (§3).
 2. (Resolved) Firmware updates are offered only when the firmware source changed (§9.2).
-3. **The firmware notices and the LGPL.** The Arduino core is LGPL 2.1, so a release that ships the firmware must let its users get the firmware's source to relink it. `THIRD-PARTY-NOTICES.txt` says the source is part of the Volco project; while the repository is private, that has to be met another way (e.g. publishing `firmware/` or the release's source). The user's decision, before a release ships firmware.
+3. **The firmware notices and the LGPL.** The Arduino core is LGPL 2.1, so a release that ships the firmware must let its users get the firmware's source to relink it. **Decided 2026-10-06 (the user): option C.** The repository stays private, and every release's firmware zip carries the firmware's object files and link command so it can be relinked with a modified core (deferred-items plan, Task 10).
 
 ### 14.1 Deferred review findings
 
