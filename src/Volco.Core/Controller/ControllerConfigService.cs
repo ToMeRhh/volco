@@ -76,6 +76,7 @@ public sealed class ControllerConfigService : IDisposable
 
     // Guarded by _gate.
     private HelloMessage? _lastHello;
+    private object? _source;   // the connection whose messages count; null between connections
     private ConfigOperation _operation;
     private SaveProgress? _progress;
     private Channel<Event>? _events;
@@ -127,25 +128,57 @@ public sealed class ControllerConfigService : IDisposable
 
     // ── Inbound ──────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Hello, ConfigData and ConfigResult from the current connection (already filtered
-    /// for stale senders by the runtime). Any thread.</summary>
+    /// <summary>The runtime published <paramref name="connection"/>: from now on only its messages
+    /// count (<see cref="OnMessage(object, ControllerMessage)"/>). Any thread.</summary>
+    public void OnConnectionStarted(object connection)
+    {
+        lock (_gate) _source = connection;
+    }
+
+    /// <summary>Hello, ConfigData and ConfigResult from <paramref name="source"/>. The runtime has
+    /// already filtered stale senders, but a message can pass that check just before the connection
+    /// is replaced; checking under <c>_gate</c>, which the replacement takes too, drops it. Any thread.</summary>
+    public void OnMessage(object source, ControllerMessage message)
+    {
+        if (message is not (HelloMessage or ConfigDataMessage or ConfigResultMessage)) return;
+        lock (_gate)
+        {
+            if (_disposed || !ReferenceEquals(source, _source)) return;
+            Accept(message);
+        }
+        AfterAccept(message);
+    }
+
+    /// <summary>Hello, ConfigData and ConfigResult from the current connection. Any thread.</summary>
     public void OnMessage(ControllerMessage message)
     {
         if (message is not (HelloMessage or ConfigDataMessage or ConfigResultMessage)) return;
         lock (_gate)
         {
             if (_disposed) return;
-            if (message is HelloMessage hello)
-            {
-                if (_lastHello is null || Key(_lastHello) != Key(hello))
-                {
-                    _readFailed = false;
-                    _autoReadKey = null;
-                }
-                _lastHello = hello;
-            }
-            _events?.Writer.TryWrite(new MessageEvent(message));
+            Accept(message);
         }
+        AfterAccept(message);
+    }
+
+    /// <summary>Under <c>_gate</c>.</summary>
+    private void Accept(ControllerMessage message)
+    {
+        if (message is HelloMessage hello)
+        {
+            if (_lastHello is null || Key(_lastHello) != Key(hello))
+            {
+                _readFailed = false;
+                _autoReadKey = null;
+            }
+            _lastHello = hello;
+        }
+        _events?.Writer.TryWrite(new MessageEvent(message));
+    }
+
+    /// <summary>Outside <c>_gate</c>.</summary>
+    private void AfterAccept(ControllerMessage message)
+    {
         if (message is HelloMessage)
         {
             UpdateBanner();
@@ -161,6 +194,7 @@ public sealed class ControllerConfigService : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
+            _source = null;
             _lastHello = null;
             _readFailed = false;
             _autoReadKey = null;

@@ -1189,7 +1189,6 @@ Minor findings each stage's final review raised and the user hasn't asked for ye
 
 | From | Finding | If left |
 |---|---|---|
-| Stage 4b | A Hello from a just-replaced connection can arrive after the replacement. | The Controller page briefly shows the old controller's banner. |
 | Stage 4b | The config is saved debounced (`RequestSave`), and nothing flushes it at exit. | A save confirmed in the moment before Volco exits can be missing from the mirror; the next start shows "different setup", and "Use the controller's" fixes it. |
 | Stage 6 | Exiting Volco during a flash isn't blocked or warned about. | The write stops midway; Install again recovers (the ROM bootloader always can). |
 | Stage 6 | `FirmwareService` saves a new port from a thread-pool thread. | A rare race with a settings edit made at the same instant. |

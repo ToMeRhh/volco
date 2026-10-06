@@ -506,6 +506,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             ControllerConfig.OnConnectionReplaced();
             ExitTestMode(-1);
         }
+        ControllerConfig.OnConnectionStarted(connection);   // after the replacement, which clears it
 
         // Dispose() or SuspendConnection() may have started after the check at the top. Both the
         // publish above and their flag writes are full fences, so if this read still sees neither,
@@ -687,7 +688,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
                 // transport must not mark the new session Ready.
                 if (!ReferenceEquals(sender, Volatile.Read(ref _connection))) break;
                 _link.OnMessage(msg);
-                ControllerConfig.OnMessage(msg);   // after the link: the controller info is stored
+                ControllerConfig.OnMessage(sender!, msg);   // after the link: the controller info is stored
                 if (msg is HelloMessage hello)
                 {
                     AppLog.Info($"Hello: v{hello.Version}, {hello.Chip}, firmware '{hello.FirmwareVersion}', config {hello.ConfigState} " +
@@ -697,7 +698,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
                 break;
             case ConfigDataMessage or ConfigResultMessage:
                 // Same stale-sender filter as Hello (spec §8.2).
-                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) ControllerConfig.OnMessage(msg);
+                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) ControllerConfig.OnMessage(sender!, msg);
                 break;
             case SliderMessage or ButtonMessage when InTestMode:
                 // Spec §8.5: raw input only; nothing reaches the slider processor or the detector.
