@@ -1190,7 +1190,6 @@ Minor findings each stage's final review raised and the user hasn't asked for ye
 | From | Finding | If left |
 |---|---|---|
 | Stage 6 | An install takes about 29 s at 460800 baud (measured 2026-10-05), over the §8.6 target of 20 s; 921600 with fallbacks is the next step. The user will handle it in a separate session. | Installs and updates take about half a minute. |
-| Stage 6 | `CheckFirmware` (the build-id match) runs only in the Windows build and release jobs. | A mismatch shows only when those run; the resource names are checked on every push. |
 
 Closed 2026-10-06: `transport_begin_udp` runs once, in `setup()`, and every config save reboots, so nothing restarts UDP at run time.
 
