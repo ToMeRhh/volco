@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/volco-banner.svg" alt="Volco: real faders and buttons for your PC's audio" width="100%">
+<img src="docs/images/volco-banner.jpg" alt="Volco: real faders and buttons for your PC's audio" width="100%">
 
 <br>
 
