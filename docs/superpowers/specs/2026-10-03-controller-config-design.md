@@ -1189,7 +1189,6 @@ Minor findings each stage's final review raised and the user hasn't asked for ye
 
 | From | Finding | If left |
 |---|---|---|
-| Stage 2 | `ControllerPresets.All` hands out mutable `ControllerConfig` objects. | A caller that edits a preset's `Hardware` changes it for everyone; `ApplyTo` clones, so none does today. |
 | Stage 4b | A Hello from a just-replaced connection can arrive after the replacement. | The Controller page briefly shows the old controller's banner. |
 | Stage 4b | The config is saved debounced (`RequestSave`), and nothing flushes it at exit. | A save confirmed in the moment before Volco exits can be missing from the mirror; the next start shows "different setup", and "Use the controller's" fixes it. |
 | Stage 5 | Clearing a number box in Screens or Advanced is dropped by the binding. | The box shows empty while the old value is kept. |
