@@ -73,7 +73,9 @@ jobs:
 
   build:
     name: Build and Publish
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_build == true)
+    # Manual only: never on push. Run it from the Actions tab or with
+    # `gh workflow run build.yml --ref <branch> --field run_build=true`.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_build == true
     runs-on: windows-latest
     permissions:
       contents: read

@@ -393,7 +393,7 @@ pio test -e native       # host-side tests of lib/
 python3 tools/gen_assets.py   # regenerate icons & fonts (needs Pillow ≥ 10)
 ```
 
-**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu, firmware native tests plus ESP32 builds of every transport and the screens variant, and, on `main`, a Windows single-file build published as the `Volco-win-x64` artifact.
+**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu, firmware native tests plus ESP32 builds of every transport and the screens variant, and, when run manually (`gh workflow run build.yml --ref <branch> --field run_build=true`, or **Run workflow** in the Actions tab with *Also run the Build and Publish job* ticked), a Windows single-file build published as the `Volco-win-x64` artifact.
 
 </details>
 
