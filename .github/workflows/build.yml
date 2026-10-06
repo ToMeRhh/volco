@@ -49,7 +49,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install PlatformIO
-      run: pip install platformio==6.1.18
+      run: pip install platformio==6.1.19
 
     - name: Native tests
       working-directory: firmware

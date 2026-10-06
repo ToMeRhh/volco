@@ -24,7 +24,7 @@ gh run list --branch <branch-name> --limit 3
 
 CI runs tests on Ubuntu (net8.0) and builds/publishes on Windows (net8.0-windows10.0.22621.0, win-x64) with `dotnet publish` (single-file, self-contained; no msbuild). There are two test projects, both run by the Linux job: `tests/Volco.Core.Tests/` (xUnit 2) and `tests/Volco.App.Tests/` (Avalonia headless, xUnit v3). `global.json` pins SDK 10.0.100 (needed by the Avalonia analyzers); every project still targets net8.0 / net8.0-windows10.0.22621.0, and both workflows install the 8.0.x and 10.0.x SDKs.
 
-**Firmware** (ESP32, in `firmware/`):
+**Firmware** (ESP32, in `firmware/`; needs PlatformIO Core >= 6.1.19 for the pinned pioarduino 55.03.38 platform, and a host `g++` for the native tests):
 ```bash
 cd firmware && pio run              # build
 cd firmware && pio run -t upload    # flash
