@@ -129,10 +129,16 @@ public sealed class ControllerConfigService : IDisposable
     // ── Inbound ──────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The runtime published <paramref name="connection"/>: from now on only its messages
-    /// count (<see cref="OnMessage(object, ControllerMessage)"/>). Any thread.</summary>
-    public void OnConnectionStarted(object connection)
+    /// count (<see cref="OnMessage(object, ControllerMessage)"/>). <paramref name="current"/> reads
+    /// the runtime's published connection: two starts can overlap, and one that already lost its
+    /// connection to a newer one must not take the source from it. A replacement unpublishes before
+    /// it takes <c>_gate</c>, so the check under <c>_gate</c> is enough. Any thread.</summary>
+    public void OnConnectionStarted(object connection, Func<object?> current)
     {
-        lock (_gate) _source = connection;
+        lock (_gate)
+        {
+            if (ReferenceEquals(current(), connection)) _source = connection;
+        }
     }
 
     /// <summary>Hello, ConfigData and ConfigResult from <paramref name="source"/>. The runtime has

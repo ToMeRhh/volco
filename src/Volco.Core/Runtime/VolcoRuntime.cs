@@ -506,7 +506,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             ControllerConfig.OnConnectionReplaced();
             ExitTestMode(-1);
         }
-        ControllerConfig.OnConnectionStarted(connection);   // after the replacement, which clears it
+        // After the replacement, which clears it; only while it is still the published one.
+        ControllerConfig.OnConnectionStarted(connection, () => Volatile.Read(ref _connection));
 
         // Dispose() or SuspendConnection() may have started after the check at the top. Both the
         // publish above and their flag writes are full fences, so if this read still sees neither,
