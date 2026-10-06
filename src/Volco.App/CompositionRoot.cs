@@ -275,6 +275,8 @@ internal sealed class CompositionRoot : IDisposable
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.
         _runtime?.Dispose();
+        // After the runtime, so a mirror written while it disposed is saved too.
+        _config?.FlushPendingSave();
         _platform?.Audio.Dispose();
 
         if (_osd is { } osdWindow)
