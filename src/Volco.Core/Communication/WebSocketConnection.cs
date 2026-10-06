@@ -62,8 +62,8 @@ public class WebSocketConnection : IControllerConnection
     private int _generation;
 
     public event EventHandler<ControllerMessage>? MessageReceived;
-    public event EventHandler<ConnectionStatus>? StatusChanged;
-    public ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
+    public event EventHandler<TransportStatus>? StatusChanged;
+    public TransportStatus Status { get; private set; } = TransportStatus.Closed;
 
     public WebSocketConnection(WebSocketConfig config)
     {
@@ -96,18 +96,18 @@ public class WebSocketConnection : IControllerConnection
                 try { listener?.Close(); } catch (Exception) { }
                 listener = null;
                 _httpListener = null;
-                raiseError = Status != ConnectionStatus.Error;
-                Status = ConnectionStatus.Error;
+                raiseError = Status != TransportStatus.Failed;
+                Status = TransportStatus.Failed;
             }
         }
 
         if (listener == null)
         {
-            if (raiseError) StatusChanged?.Invoke(this, ConnectionStatus.Error);
+            if (raiseError) StatusChanged?.Invoke(this, TransportStatus.Failed);
             return;
         }
 
-        // Server is listening but no client yet - remain Disconnected until a client connects
+        // Server is listening but no client yet - remain Closed until a client connects
         _ = AcceptLoopAsync(listener, token, generation);
     }
 
@@ -160,7 +160,7 @@ public class WebSocketConnection : IControllerConnection
                 if (!ct.IsCancellationRequested && IsCurrent(generation))
                 {
                     AppLog.Error($"Error in WebSocket accept loop: {ex.Message}");
-                    Teardown(ConnectionStatus.Error, generation);
+                    Teardown(TransportStatus.Failed, generation);
                 }
                 break;
             }
@@ -181,9 +181,9 @@ public class WebSocketConnection : IControllerConnection
                 previous = _activeClient;
                 _activeClient = session;
                 _sessions.Add(session);
-                if (_sessions.Count == 1 && Status != ConnectionStatus.Connected)
+                if (_sessions.Count == 1 && Status != TransportStatus.Open)
                 {
-                    Status = ConnectionStatus.Connected;
+                    Status = TransportStatus.Open;
                     raiseConnected = true;
                 }
             }
@@ -199,9 +199,9 @@ public class WebSocketConnection : IControllerConnection
         previous?.Queue.Writer.TryComplete();
         _ = DrainSendQueueAsync(session, ct);
 
-        // _activeClient is set before the status flips, so a subscriber reacting to Connected by
+        // _activeClient is set before the status flips, so a subscriber reacting to Open by
         // calling Send() reaches this client.
-        if (raiseConnected) StatusChanged?.Invoke(this, ConnectionStatus.Connected);
+        if (raiseConnected) StatusChanged?.Invoke(this, TransportStatus.Open);
 
         var buffer = new byte[1024];
         try
@@ -242,9 +242,9 @@ public class WebSocketConnection : IControllerConnection
                 if (generation == _generation && _sessions.Remove(session))
                 {
                     if (ReferenceEquals(_activeClient, session)) _activeClient = null;
-                    if (!_disposed && _sessions.Count == 0 && Status == ConnectionStatus.Connected)
+                    if (!_disposed && _sessions.Count == 0 && Status == TransportStatus.Open)
                     {
-                        Status = ConnectionStatus.Disconnected;
+                        Status = TransportStatus.Closed;
                         raiseDisconnected = true;
                     }
                 }
@@ -253,7 +253,7 @@ public class WebSocketConnection : IControllerConnection
             session.Queue.Writer.TryComplete();
             try { webSocket.Dispose(); } catch (Exception) { }
 
-            if (raiseDisconnected) StatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
+            if (raiseDisconnected) StatusChanged?.Invoke(this, TransportStatus.Closed);
         }
     }
 
@@ -299,7 +299,7 @@ public class WebSocketConnection : IControllerConnection
     /// failure path). Announces when something was running or the status actually changes, so the
     /// first teardown always reports once and repeated ones report nothing; an Error is announced
     /// once per transition.</summary>
-    private void Teardown(ConnectionStatus finalStatus, int? onlyGeneration = null)
+    private void Teardown(TransportStatus finalStatus, int? onlyGeneration = null)
     {
         HttpListener? listener;
         CancellationTokenSource? cts;
@@ -319,9 +319,9 @@ public class WebSocketConnection : IControllerConnection
             _activeClient = null;
             _generation++;
 
-            announce = finalStatus == ConnectionStatus.Error
-                ? Status != ConnectionStatus.Error
-                : wasRunning || Status != ConnectionStatus.Disconnected;
+            announce = finalStatus == TransportStatus.Failed
+                ? Status != TransportStatus.Failed
+                : wasRunning || Status != TransportStatus.Closed;
             if (announce) Status = finalStatus;
         }
 
@@ -345,7 +345,7 @@ public class WebSocketConnection : IControllerConnection
         if (announce) StatusChanged?.Invoke(this, finalStatus);
     }
 
-    public void Disconnect() => Teardown(ConnectionStatus.Disconnected);
+    public void Disconnect() => Teardown(TransportStatus.Closed);
 
     public void Dispose()
     {
@@ -355,6 +355,6 @@ public class WebSocketConnection : IControllerConnection
             _disposed = true;
         }
 
-        Teardown(ConnectionStatus.Disconnected);
+        Teardown(TransportStatus.Closed);
     }
 }

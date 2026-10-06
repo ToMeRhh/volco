@@ -101,11 +101,11 @@ public class WebSocketConnectionHardeningTests
 
     private sealed class Probe
     {
-        public readonly ConcurrentQueue<ConnectionStatus> Statuses = new();
+        public readonly ConcurrentQueue<TransportStatus> Statuses = new();
 
         public Probe(WebSocketConnection conn) => conn.StatusChanged += (_, s) => Statuses.Enqueue(s);
 
-        public int Count(ConnectionStatus s) => Statuses.Count(x => x == s);
+        public int Count(TransportStatus s) => Statuses.Count(x => x == s);
     }
 
     private static async Task<bool> CanConnectTcpAsync(int port)
@@ -150,17 +150,17 @@ public class WebSocketConnectionHardeningTests
 
         conn.Connect();
         using var client = await ConnectClientAsync(port);
-        Assert.True(await WaitUntilAsync(() => conn.Status == ConnectionStatus.Connected));
+        Assert.True(await WaitUntilAsync(() => conn.Status == TransportStatus.Open));
 
         conn.Dispose();
         conn.Dispose();
         conn.Disconnect();
 
-        Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(1, probe.Count(TransportStatus.Closed));
         // The client handler unwinding afterwards must not add a second one.
         Assert.True(await WaitUntilClosedAsync(client));
         await Task.Delay(200);
-        Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(1, probe.Count(TransportStatus.Closed));
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class WebSocketConnectionHardeningTests
         var probe = new Probe(conn);
         conn.Connect();
         using var client = await ConnectClientAsync(port);
-        Assert.True(await WaitUntilAsync(() => conn.Status == ConnectionStatus.Connected));
+        Assert.True(await WaitUntilAsync(() => conn.Status == TransportStatus.Open));
 
         const int threads = 8;
         using var barrier = new Barrier(threads);
@@ -188,7 +188,7 @@ public class WebSocketConnectionHardeningTests
 
         await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Empty(errors);
-        Assert.True(probe.Count(ConnectionStatus.Disconnected) <= 1);
+        Assert.True(probe.Count(TransportStatus.Closed) <= 1);
     }
 
     // Regression pin only: probably green on the old code too. The real A7 witness is
@@ -201,10 +201,10 @@ public class WebSocketConnectionHardeningTests
         var probe = new Probe(conn);
         conn.Connect();
         using var client = await ConnectClientAsync(port);
-        Assert.True(await WaitUntilAsync(() => conn.Status == ConnectionStatus.Connected));
+        Assert.True(await WaitUntilAsync(() => conn.Status == TransportStatus.Open));
 
         conn.Disconnect();
-        Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(1, probe.Count(TransportStatus.Closed));
 
         // The client socket is closed by Disconnect() itself (not only the token cancelled).
         using var cts = new CancellationTokenSource(5000);
@@ -215,7 +215,7 @@ public class WebSocketConnectionHardeningTests
         var snapshot = probe.Statuses.ToArray();
         await Task.Delay(300);
         Assert.Equal(snapshot, probe.Statuses.ToArray());
-        Assert.Equal(ConnectionStatus.Disconnected, conn.Status);
+        Assert.Equal(TransportStatus.Closed, conn.Status);
     }
 
     // The real A7 witness: a stale handler from the previous connection must not flip the new one.
@@ -230,7 +230,7 @@ public class WebSocketConnectionHardeningTests
 
         conn.Connect();
         using var first = await ConnectClientAsync(port);
-        Assert.True(await WaitUntilAsync(() => conn.Status == ConnectionStatus.Connected));
+        Assert.True(await WaitUntilAsync(() => conn.Status == TransportStatus.Open));
 
         conn.Disconnect();
         conn.Connect();
@@ -238,13 +238,13 @@ public class WebSocketConnectionHardeningTests
         using var second = await ConnectClientAsync(port);
         await second.SendAsync(Frame(0x04, 0x00, 0x01), WebSocketMessageType.Binary, true, CancellationToken.None);
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref received) == 1));
-        Assert.Equal(ConnectionStatus.Connected, conn.Status);
+        Assert.Equal(TransportStatus.Open, conn.Status);
 
         // The first client's handler unwinding must not flip the new connection to Disconnected.
         Assert.True(await WaitUntilClosedAsync(first));
         await Task.Delay(300);
-        Assert.Equal(ConnectionStatus.Connected, conn.Status);
-        Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(TransportStatus.Open, conn.Status);
+        Assert.Equal(1, probe.Count(TransportStatus.Closed));
 
         conn.Send(new byte[] { 0x42 });
         var buffer = new byte[8];
@@ -284,7 +284,7 @@ public class WebSocketConnectionHardeningTests
         }
 
         using var client = await ConnectClientAsync(port);
-        Assert.True(await WaitUntilAsync(() => conn.Status == ConnectionStatus.Connected));
-        Assert.Equal(0, probe.Count(ConnectionStatus.Error));
+        Assert.True(await WaitUntilAsync(() => conn.Status == TransportStatus.Open));
+        Assert.Equal(0, probe.Count(TransportStatus.Failed));
     }
 }

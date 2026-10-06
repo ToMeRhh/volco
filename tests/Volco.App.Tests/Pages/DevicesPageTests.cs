@@ -63,7 +63,7 @@ public class DevicesPageTests
         using var _ = rig; using var __ = vm;
         var sony = vm.Devices.Outputs.Single(d => d.Id == "sony");
         var tv = vm.Devices.Outputs.Single(d => d.Id == "tv");
-        Assert.Equal(("Sony", "Not connected", true), (sony.DisplayName, sony.StatusText, sony.CanForget));
+        Assert.Equal(("Sony", "Unplugged", true), (sony.DisplayName, sony.StatusText, sony.CanForget));
         Assert.Equal(("LG TV", false, "Used by Slider 0"), (tv.DisplayName, tv.CanForget, tv.UsedBy));
     }
 

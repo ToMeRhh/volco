@@ -26,7 +26,7 @@ public enum SaveStatus
     DidNotComeBack,
     /// <summary>"The controller didn't answer."</summary>
     NoAnswer,
-    /// <summary>"Connection lost while saving. Reconnect to see which setup the controller has."</summary>
+    /// <summary>"The controller disconnected while saving. Once it's connected again, check which setup it has."</summary>
     ConnectionLost,
     Busy,
     Cancelled,

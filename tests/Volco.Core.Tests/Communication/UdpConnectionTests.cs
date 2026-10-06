@@ -12,7 +12,7 @@ public class UdpConnectionTests
 {
     private sealed class Probe
     {
-        public readonly ConcurrentQueue<ConnectionStatus> Statuses = new();
+        public readonly ConcurrentQueue<TransportStatus> Statuses = new();
         public int Messages;
 
         public Probe(UdpConnection conn)
@@ -21,7 +21,7 @@ public class UdpConnectionTests
             conn.MessageReceived += (_, _) => Interlocked.Increment(ref Messages);
         }
 
-        public int Count(ConnectionStatus s) => Statuses.Count(x => x == s);
+        public int Count(TransportStatus s) => Statuses.Count(x => x == s);
     }
 
     private static readonly byte[] SliderFrame = Frame(0x03, 0x00, 0x01, 0x00); // slider 0 = 256
@@ -72,7 +72,7 @@ public class UdpConnectionTests
         conn.Dispose();
         conn.Disconnect();
 
-        Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(1, probe.Count(TransportStatus.Closed));
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class UdpConnectionTests
 
         await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Empty(errors);
-        Assert.True(probe.Count(ConnectionStatus.Disconnected) <= 1);
+        Assert.True(probe.Count(TransportStatus.Closed) <= 1);
         Assert.False(PortIsBound(port));
     }
 
@@ -114,8 +114,8 @@ public class UdpConnectionTests
         using var sender = NewSender();
         await SendPacketAsync(sender, port);
 
-        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Connected) == 1));
-        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Disconnected) == 1));
+        Assert.True(await WaitUntilAsync(() => probe.Count(TransportStatus.Open) == 1));
+        Assert.True(await WaitUntilAsync(() => probe.Count(TransportStatus.Closed) == 1));
     }
 
     [Fact]
@@ -129,16 +129,16 @@ public class UdpConnectionTests
 
         using var sender = NewSender();
         await SendPacketAsync(sender, port);
-        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Connected) == 1));
+        Assert.True(await WaitUntilAsync(() => probe.Count(TransportStatus.Open) == 1));
 
         conn.Disconnect();
-        Assert.Equal(1, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(1, probe.Count(TransportStatus.Closed));
         var snapshot = probe.Statuses.Count;
 
         // Wait well past the inactivity timeout: nothing more may be raised.
         await Task.Delay(timeoutMs * 4);
         Assert.Equal(snapshot, probe.Statuses.Count);
-        Assert.Equal(ConnectionStatus.Disconnected, conn.Status);
+        Assert.Equal(TransportStatus.Closed, conn.Status);
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class UdpConnectionTests
 
         using var sender = NewSender();
         await SendPacketAsync(sender, port);
-        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Connected) == 1));
+        Assert.True(await WaitUntilAsync(() => probe.Count(TransportStatus.Open) == 1));
 
         // Proves Send() reaches the wire before the race starts.
         conn.Send(new byte[] { 1, 2, 3 });
@@ -201,14 +201,14 @@ public class UdpConnectionTests
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref probe.Messages) == 1));
 
         conn.Disconnect();
-        Assert.Equal(ConnectionStatus.Disconnected, conn.Status);
+        Assert.Equal(TransportStatus.Closed, conn.Status);
         Assert.False(PortIsBound(port));
 
         conn.Connect();
         Assert.True(PortIsBound(port));
         await SendPacketAsync(sender, port);
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref probe.Messages) == 2));
-        Assert.Equal(ConnectionStatus.Connected, conn.Status);
+        Assert.Equal(TransportStatus.Open, conn.Status);
     }
 
     [Fact]
@@ -223,24 +223,24 @@ public class UdpConnectionTests
 
         conn.Connect();
         await SendPacketAsync(sender, port);
-        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Connected) == 1));
+        Assert.True(await WaitUntilAsync(() => probe.Count(TransportStatus.Open) == 1));
         var oldGeneration = conn.CurrentGeneration;
 
         conn.Disconnect();
         conn.Connect();
         await SendPacketAsync(sender, port);
-        Assert.True(await WaitUntilAsync(() => probe.Count(ConnectionStatus.Connected) == 2));
+        Assert.True(await WaitUntilAsync(() => probe.Count(TransportStatus.Open) == 2));
         var currentGeneration = conn.CurrentGeneration;
         Assert.NotEqual(oldGeneration, currentGeneration);
-        var disconnectedBefore = probe.Count(ConnectionStatus.Disconnected);
+        var disconnectedBefore = probe.Count(TransportStatus.Closed);
 
         conn.OnInactivity(oldGeneration);
-        Assert.Equal(ConnectionStatus.Connected, conn.Status);
-        Assert.Equal(disconnectedBefore, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(TransportStatus.Open, conn.Status);
+        Assert.Equal(disconnectedBefore, probe.Count(TransportStatus.Closed));
 
         // Proves the callback path does fire for the current generation.
         conn.OnInactivity(currentGeneration);
-        Assert.Equal(ConnectionStatus.Disconnected, conn.Status);
-        Assert.Equal(disconnectedBefore + 1, probe.Count(ConnectionStatus.Disconnected));
+        Assert.Equal(TransportStatus.Closed, conn.Status);
+        Assert.Equal(disconnectedBefore + 1, probe.Count(TransportStatus.Closed));
     }
 }

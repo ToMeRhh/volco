@@ -14,28 +14,28 @@ public class SerialConnectionTests
     public void Connect_NullComPort_SetsErrorStatusWithoutThrowing()
     {
         var connection = new SerialConnection(new SerialConfig { ComPort = null! });
-        ConnectionStatus? lastStatus = null;
+        TransportStatus? lastStatus = null;
         connection.StatusChanged += (_, s) => lastStatus = s;
 
         var ex = Record.Exception(() => connection.Connect());
 
         Assert.Null(ex);
-        Assert.Equal(ConnectionStatus.Error, connection.Status);
-        Assert.Equal(ConnectionStatus.Error, lastStatus);
+        Assert.Equal(TransportStatus.Failed, connection.Status);
+        Assert.Equal(TransportStatus.Failed, lastStatus);
     }
 
     [Fact]
     public void Connect_EmptyComPort_SetsErrorStatusWithoutThrowing()
     {
         var connection = new SerialConnection(new SerialConfig { ComPort = "" });
-        ConnectionStatus? lastStatus = null;
+        TransportStatus? lastStatus = null;
         connection.StatusChanged += (_, s) => lastStatus = s;
 
         var ex = Record.Exception(() => connection.Connect());
 
         Assert.Null(ex);
-        Assert.Equal(ConnectionStatus.Error, connection.Status);
-        Assert.Equal(ConnectionStatus.Error, lastStatus);
+        Assert.Equal(TransportStatus.Failed, connection.Status);
+        Assert.Equal(TransportStatus.Failed, lastStatus);
     }
 
     /// <summary>
@@ -68,7 +68,7 @@ public class SerialConnectionTests
 
         Assert.Null(ex1);
         Assert.Null(ex2);
-        Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+        Assert.Equal(TransportStatus.Closed, connection.Status);
         Assert.False(connection.HasBackgroundTimers);
     }
 
@@ -87,7 +87,7 @@ public class SerialConnectionTests
 
         Assert.Null(ex1);
         Assert.Null(ex2);
-        Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+        Assert.Equal(TransportStatus.Closed, connection.Status);
         Assert.False(connection.HasBackgroundTimers);
     }
 
@@ -123,6 +123,6 @@ public class SerialConnectionTests
         connection.Disconnect();
 
         Assert.False(raised);
-        Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+        Assert.Equal(TransportStatus.Closed, connection.Status);
     }
 }

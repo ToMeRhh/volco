@@ -19,7 +19,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     private readonly ConfigManager _config;
     private readonly VolcoRuntime _runtime;
 
-    // ConnectionStatusChanged can fire on any thread; the handler marshals through this.
+    // LinkStatusChanged can fire on any thread; the handler marshals through this.
     private readonly IUiDispatcher _ui;
     private bool _disposed;
 
@@ -47,67 +47,33 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         set { if (value) ConnectionType = ConnectionType.WebSocket; }
     }
 
-    /// <summary>What the status panel says under the state, e.g. "COM3 · USB cable".</summary>
-    public string TransportDetails => ConnectionType switch
-    {
-        ConnectionType.Serial => string.IsNullOrEmpty(ComPort)
-            ? "USB cable · no port selected"
-            : $"{ComPort} · USB cable",
-        ConnectionType.Udp => $"Wi-Fi (UDP) · port {UdpListenPort}",
-        ConnectionType.WebSocket => $"WebSocket · port {WebSocketPort}",
-        _ => "",
-    };
+    // ── Live status: only the runtime's link state (never the transport's) ───────
 
-    public bool IsConnected => Status == ConnectionStatus.Connected;
+    /// <summary>The link state the panel shows; read on the UI thread when it changes.</summary>
+    [ObservableProperty]
+    private LinkStatus _link = LinkStatus.Disconnected;
 
-    /// <summary>The navigation footer's text: "Connected · COM3", "Not connected", …</summary>
-    public string FooterText => IsUserDisconnected ? "Disconnected" : _runtime.ControllerState switch
-    {
-        ControllerState.VersionMismatch => "Firmware mismatch",
-        ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
-        ControllerState.AwaitingHello => "Waiting for the controller…",
-        _ => Status switch
-        {
-            ConnectionStatus.Connected => ConnectionType switch
-            {
-                ConnectionType.Serial => $"Connected · {ComPort}",
-                ConnectionType.Udp => "Connected · Wi-Fi",
-                _ => "Connected · WebSocket",
-            },
-            ConnectionStatus.Error => "Connection error",
-            _ => "Not connected",
-        },
-    };
+    public bool IsConnected => Link.IsConnected;
 
-    /// <summary>The status panel's headline: the port can be open with nothing answering on it.</summary>
-    private string StatusFor(ConnectionStatus status) => status switch
-    {
-        ConnectionStatus.Connected => _runtime.ControllerState switch
-        {
-            ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
-            ControllerState.AwaitingHello => "Waiting for the controller…",
-            ControllerState.VersionMismatch => "Firmware mismatch",
-            _ => "Connected",
-        },
-        ConnectionStatus.Disconnected => "Not connected",
-        ConnectionStatus.Error => "Error",
-        _ => status.ToString(),
-    };
+    /// <summary>The status headline: "Connected", "Controller not responding", …</summary>
+    public string StatusText => LinkText.Headline(Link, _config.Config.Connection);
 
-    public const string SilentText = "Nothing on this port answers as a Volco controller. Open the Controller page to check its firmware.";
+    /// <summary>The dot's colour (and the explanation's).</summary>
+    public LinkTone StatusTone => LinkText.Tone(Link.State);
 
-    public const string MismatchText = "Controller firmware doesn't match this version of Volco. Reflash it.";
+    /// <summary>What the status panel says next to the state, e.g. "COM3 · USB cable", "192.168.1.40 · Wi-Fi".</summary>
+    public string TransportDetails => LinkText.Transport(_config.Config.Connection, Link.IsConnected ? _runtime.PeerAddress : null);
 
-    /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", while a controller answers; "" otherwise.</summary>
-    public string HardwareSummary => _runtime.ControllerState == ControllerState.Ready ? Summarize(_config.Config.Controller) : "";
+    /// <summary>The navigation footer's text: "Connected · COM3", "Looking for your controller", …</summary>
+    public string FooterText => LinkText.Footer(Link, _config.Config.Connection);
+
+    /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", while connected; "" otherwise.</summary>
+    public string HardwareSummary => Link.IsConnected ? Summarize(_config.Config.Controller) : "";
     public bool HasHardwareSummary => HardwareSummary.Length > 0;
-    public string ControllerError => _runtime.ControllerState switch
-    {
-        ControllerState.VersionMismatch => MismatchText,
-        ControllerState.AwaitingHello when _runtime.ControllerSilent => SilentText,
-        _ => "",
-    };
-    public bool HasControllerError => ControllerError.Length > 0;
+
+    /// <summary>What a status other than Connected means and what to do about it; "" when connected.</summary>
+    public string StatusExplanation => LinkText.Explanation(Link, _config.Config.Connection);
+    public bool HasStatusExplanation => StatusExplanation.Length > 0;
 
     internal static string Summarize(ControllerInfoConfig? c)
     {
@@ -127,28 +93,29 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         return $"{Plural(c.Sliders, "slider")} · {buttons}";
     }
 
-    private void OnControllerChanged(object? sender, ControllerState state) => RefreshController();
-    private void OnControllerSilent(object? sender, bool silent) => RefreshController();
-
-    private void RefreshController()
+    // LinkStatusChanged and ControllerInfoChanged fire on any thread: post, then read the
+    // runtime's current state on the UI thread (a later event can't be overtaken by an earlier one).
+    private void OnRuntimeLinkChanged(object? sender, LinkStatus link)
         => _ui.Post(() =>
         {
-            if (_disposed) return;
-            StatusText = IsUserDisconnected ? "Disconnected" : StatusFor(Status);
-            OnPropertyChanged(nameof(ControllerError));
-            OnPropertyChanged(nameof(HasControllerError));
-            OnPropertyChanged(nameof(FooterText));
-            OnPropertyChanged(nameof(HardwareSummary));
-            OnPropertyChanged(nameof(HasHardwareSummary));
+            if (!_disposed) Link = _runtime.LinkStatus;
         });
 
     private void OnControllerInfo(object? sender, EventArgs e)
         => _ui.Post(() =>
         {
-            if (_disposed) return;
-            OnPropertyChanged(nameof(HardwareSummary));
-            OnPropertyChanged(nameof(HasHardwareSummary));
+            if (!_disposed) RefreshStatus();
         });
+
+    partial void OnLinkChanged(LinkStatus value) => RefreshStatus();
+
+    private void RefreshStatus()
+    {
+        foreach (var name in new[] { nameof(IsConnected), nameof(IsUserDisconnected), nameof(StatusText), nameof(StatusTone),
+                                     nameof(TransportDetails), nameof(FooterText), nameof(HardwareSummary),
+                                     nameof(HasHardwareSummary), nameof(StatusExplanation), nameof(HasStatusExplanation) })
+            OnPropertyChanged(name);
+    }
 
     /// <summary>Starts the connection again with the current settings.</summary>
     [RelayCommand]
@@ -163,16 +130,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     private void Connect() => _runtime.Connect();
 
     /// <summary>True after Disconnect, until Connect or Reconnect: the page offers Connect.</summary>
-    [ObservableProperty]
-    private bool _isUserDisconnected;
-
-    partial void OnIsUserDisconnectedChanged(bool value) => UpdateStatus(Status);
-
-    private void OnUserDisconnectedChanged(object? sender, bool value)
-        => _ui.Post(() =>
-        {
-            if (!_disposed) IsUserDisconnected = _runtime.IsUserDisconnected;
-        });
+    public bool IsUserDisconnected => Link.State == LinkState.Disconnected;
 
     // ── ComboBox index helpers (x:Bind two-way to ComboBox.SelectedIndex) ─────
 
@@ -215,14 +173,6 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _webSocketPort;
 
-    // ── Live status (no XAML types — views map Status/StatusText to colour) ───
-
-    [ObservableProperty]
-    private ConnectionStatus _status = ConnectionStatus.Disconnected;
-
-    [ObservableProperty]
-    private string _statusText = "Disconnected";
-
     // ── Constructor ────────────────────────────────────────────────────────────
 
     public ConnectionViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui)
@@ -242,15 +192,10 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // A firmware install may save another port (spec §8.6): show it, without re-saving it.
         _config.ConnectionConfigChanged += OnConfigSaved;
         _config.ConfigChanged += OnConfigSaved;
-        // Survives transport restarts (the runtime re-attaches its own handler to each transport
-        // it creates), so unlike the old per-transport subscription this never needs re-wiring.
-        _runtime.ConnectionStatusChanged += OnConnectionStatusChanged;
-        _runtime.ControllerStateChanged += OnControllerChanged;
-        _runtime.ControllerSilentChanged += OnControllerSilent;
+        // Survives transport restarts: the runtime derives the link state across them.
+        _runtime.LinkStatusChanged += OnRuntimeLinkChanged;
         _runtime.ControllerInfoChanged += OnControllerInfo;
-        _runtime.UserDisconnectedChanged += OnUserDisconnectedChanged;
-        _isUserDisconnected = _runtime.IsUserDisconnected;
-        UpdateStatus(_runtime.ConnectionStatus);
+        _link = _runtime.LinkStatus;
     }
 
     private void OnConfigSaved(object? sender, EventArgs e) => _ui.Post(() =>
@@ -283,43 +228,15 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
             ComPort = previous;
     }
 
-    // ── Status subscription helpers ────────────────────────────────────────────
-
-    private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
-    {
-        // ConnectionStatusChanged may fire on any thread (audio thread, transport threads, timer
-        // threads, the config debounce thread); marshal to the UI thread without blocking.
-        _ui.Post(() =>
-        {
-            if (!_disposed) UpdateStatus(status);
-        });
-    }
-
     /// <summary>Unsubscribes from the runtime (carried rule d).</summary>
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        _runtime.ConnectionStatusChanged -= OnConnectionStatusChanged;
-        _runtime.ControllerStateChanged -= OnControllerChanged;
-        _runtime.ControllerSilentChanged -= OnControllerSilent;
+        _runtime.LinkStatusChanged -= OnRuntimeLinkChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfo;
         _config.ConnectionConfigChanged -= OnConfigSaved;
         _config.ConfigChanged -= OnConfigSaved;
-        _runtime.UserDisconnectedChanged -= OnUserDisconnectedChanged;
-    }
-
-    partial void OnStatusChanged(ConnectionStatus value)
-    {
-        OnPropertyChanged(nameof(IsConnected));
-        OnPropertyChanged(nameof(FooterText));
-    }
-
-    private void UpdateStatus(ConnectionStatus status)
-    {
-        Status = status;
-        OnPropertyChanged(nameof(FooterText));
-        StatusText = IsUserDisconnected ? "Disconnected" : StatusFor(status);
     }
 
     // ── Property-change hooks — write back to config ───────────────────────────
@@ -331,8 +248,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsUdp));
         OnPropertyChanged(nameof(IsWebSocket));
         OnPropertyChanged(nameof(ConnectionTypeIndex));
-        OnPropertyChanged(nameof(TransportDetails));
-        OnPropertyChanged(nameof(FooterText));
+        RefreshStatus();
         Persist();
     }
 
@@ -343,26 +259,29 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // selection, and therefore ComPort, to null) — never real user intent, since the picker
         // has no blank/"None" entry. Ignore it: no persist, no connection restart.
         if (string.IsNullOrEmpty(value)) return;
-        OnPropertyChanged(nameof(TransportDetails));
-        OnPropertyChanged(nameof(FooterText));
         // Already the saved port (RefreshComPorts restoring the selection the clear wiped):
         // nothing to save, and no reason to restart the connection.
-        if (value == _config.Config.Connection.Serial.ComPort) return;
+        if (value == _config.Config.Connection.Serial.ComPort)
+        {
+            RefreshStatus();
+            return;
+        }
         _config.Config.Connection.Serial.ComPort = value;
+        RefreshStatus();
         Persist();
     }
 
     partial void OnUdpListenPortChanged(int value)
     {
         _config.Config.Connection.Udp.ListenPort = value;
-        OnPropertyChanged(nameof(TransportDetails));
+        RefreshStatus();
         Persist();
     }
 
     partial void OnWebSocketPortChanged(int value)
     {
         _config.Config.Connection.WebSocket.Port = value;
-        OnPropertyChanged(nameof(TransportDetails));
+        RefreshStatus();
         Persist();
     }
 

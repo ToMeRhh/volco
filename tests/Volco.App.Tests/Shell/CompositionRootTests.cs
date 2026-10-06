@@ -50,7 +50,7 @@ public class CompositionRootTests
         {
             root.Start();
             Assert.False(root.TrayShowsFirmwareUpdate);
-            connection!.SetStatus(Volco.Core.Communication.ConnectionStatus.Connected);
+            connection!.SetStatus(Volco.Core.Communication.TransportStatus.Open);
             connection.RaiseMessage(new Volco.Core.Communication.HelloMessage(1, Volco.Core.Communication.ChipFamily.Esp32,
                 "0000aaaa1111", Volco.Core.Communication.ControllerConfigState.None, 0, 5, new[] { Volco.Core.Communication.IndicatorKind.Led }));
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();

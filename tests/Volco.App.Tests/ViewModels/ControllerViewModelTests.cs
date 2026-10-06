@@ -43,7 +43,7 @@ public sealed class ControllerViewModelTests : IDisposable
 
     private void Greet(HelloMessage hello)
     {
-        Conn.SetStatus(ConnectionStatus.Connected);
+        Conn.SetStatus(TransportStatus.Open);
         Conn.RaiseMessage(hello);
         _ui.RunAll();
     }
@@ -476,7 +476,7 @@ public sealed class ControllerViewModelTests : IDisposable
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
         vm.StartTestCommand.Execute(null);
-        Conn.SetStatus(ConnectionStatus.Disconnected);
+        Conn.SetStatus(TransportStatus.Closed);
         _ui.RunAll();
         Assert.False(vm.IsTesting);
         Assert.False(_rig.Runtime.InTestMode);

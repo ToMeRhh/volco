@@ -141,7 +141,7 @@ public sealed class FirmwareServiceTests : IDisposable
         _flasher.ProbeResult = new ProbeResult(ProbeKind.VolcoMatches);
         var probe = _service.ProbeAsync("COM3", NoProgress);
         await Until(() => Count == 2);
-        Last.SetStatus(ConnectionStatus.Connected);
+        Last.SetStatus(TransportStatus.Open);
         Last.RaiseMessage(Hello("3f9c2a1b5d07"));
         var outcome = await probe;
         Assert.Equal("This controller runs Volco's firmware 3f9c2a1b5d07.", outcome.Message);
@@ -166,13 +166,29 @@ public sealed class FirmwareServiceTests : IDisposable
     {
         var flash = _service.FlashAsync("COM3", FlashMode.Update, NoProgress);
         await Until(() => Count == 2);
-        Last.SetStatus(ConnectionStatus.Connected);
+        Last.SetStatus(TransportStatus.Open);
         Last.RaiseMessage(Hello("3f9c2a1b5d07"));
         var outcome = await flash;
         Assert.True(outcome.Succeeded, outcome.Message);
         Assert.Equal("Updated. The controller is running firmware 3f9c2a1b5d07.", outcome.Message);
         Assert.Contains("flash COM3 Update", _flasher.Calls);
         Assert.True(_flasher.WasSuspended);
+    }
+
+    [Fact]
+    public async Task Flash_IsAnExpectedWait_TheLinkIsNeverDown()
+    {
+        var seen = new List<LinkStatus>();
+        _runtime.LinkStatusChanged += (_, s) => { lock (seen) seen.Add(s); };
+        var flash = _service.FlashAsync("COM3", FlashMode.Update, NoProgress);
+        await Until(() => Count == 2);
+        Assert.Equal(new LinkStatus(LinkState.Waiting, LinkActivity.UpdatingFirmware), _runtime.LinkStatus);
+        Last.SetStatus(TransportStatus.Open);
+        Last.RaiseMessage(Hello("3f9c2a1b5d07"));
+        Assert.True((await flash).Succeeded);
+
+        Assert.Equal(LinkState.Connected, _runtime.LinkStatus.State);
+        lock (seen) Assert.All(seen, s => Assert.False(s.IsDown, $"{s} during a firmware update"));
     }
 
     [Fact]
@@ -187,7 +203,7 @@ public sealed class FirmwareServiceTests : IDisposable
         });
         var flash = service.FlashAsync("COM7", FlashMode.Install, NoProgress);
         await Until(() => Count == 2);
-        Last.SetStatus(ConnectionStatus.Connected);
+        Last.SetStatus(TransportStatus.Open);
         Last.RaiseMessage(Hello("3f9c2a1b5d07"));
         await flash;
         Assert.Equal(new[] { true }, ran);          // once, and still suspended
@@ -199,7 +215,7 @@ public sealed class FirmwareServiceTests : IDisposable
     {
         var flash = _service.FlashAsync("COM3", FlashMode.Install, NoProgress);
         await Until(() => Count == 2);
-        Last.SetStatus(ConnectionStatus.Connected);
+        Last.SetStatus(TransportStatus.Open);
         Last.RaiseMessage(Hello("dev"));                       // not the bundled build
         await Task.Delay(50);
         _time.Advance(TimeSpan.FromSeconds(10));
@@ -237,7 +253,7 @@ public sealed class FirmwareServiceTests : IDisposable
         await Until(() => Count == 2);
         Assert.Equal("COM7", Last.Config.Serial.ComPort);
         Assert.Equal(2, Count);                                // the save didn't open an extra connection
-        Last.SetStatus(ConnectionStatus.Connected);
+        Last.SetStatus(TransportStatus.Open);
         Last.RaiseMessage(Hello("3f9c2a1b5d07"));
         Assert.True((await flash).Succeeded);
 
@@ -288,7 +304,7 @@ public sealed class FirmwareServiceTests : IDisposable
         Assert.Equal("Another firmware operation is running.", (await _service.ProbeAsync("COM3", NoProgress)).Message);
         gate.SetResult();
         await Until(() => Count == 2);
-        Last.SetStatus(ConnectionStatus.Connected);
+        Last.SetStatus(TransportStatus.Open);
         Last.RaiseMessage(Hello("3f9c2a1b5d07"));
         Assert.True((await first).Succeeded);
         Assert.False(_service.IsBusy);
@@ -373,7 +389,7 @@ public sealed class FirmwareServiceTests : IDisposable
     {
         var hellos = new List<HelloMessage>();
         _runtime.HelloReceived += (_, h) => hellos.Add(h);
-        Last.SetStatus(ConnectionStatus.Connected);
+        Last.SetStatus(TransportStatus.Open);
         Last.RaiseMessage(HelloMessage.VersionOnly(2));
         Assert.Single(hellos);
         Assert.Equal(BannerKind.Incompatible, _runtime.ControllerConfig.Banner.Kind);
