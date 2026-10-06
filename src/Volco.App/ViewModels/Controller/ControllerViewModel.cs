@@ -48,8 +48,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.OperationChanged += OnServiceChanged;
         _service.MirrorChanged += OnMirrorChanged;
         _runtime.ControllerStateChanged += OnControllerStateChanged;
-        _runtime.ControllerSilentChanged += OnControllerSilentChanged;
-        _runtime.UserDisconnectedChanged += OnControllerSilentChanged;
+        _runtime.LinkStatusChanged += OnLinkStatusChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _runtime.InTestModeChanged += OnInTestModeChanged;
         _runtime.RawInput += OnRawInput;
@@ -62,29 +61,33 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     // ── Status and banner ────────────────────────────────────────────────────────────────────
 
-    public string StatusText => _runtime.IsUserDisconnected ? "Disconnected" : _runtime.ControllerState switch
-    {
-        ControllerState.Ready => "Connected",
-        ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
-        ControllerState.AwaitingHello => "Waiting for the controller…",
-        ControllerState.VersionMismatch => "Firmware mismatch",
-        _ => "Not connected",
-    };
+    /// <summary>The same headline as the Connection page and the tray (<see cref="LinkText"/>).</summary>
+    public string StatusText => LinkText.Headline(_runtime.LinkStatus, _config.Config.Connection);
 
-    /// <summary>The port is open and the first seconds of waiting for a Hello are running.</summary>
-    public bool IsWaiting => _runtime.ControllerState == ControllerState.AwaitingHello && !_runtime.ControllerSilent;
+    /// <summary>An expected wait is running: connecting, a firmware operation or a restart.</summary>
+    public bool IsWaiting => _runtime.LinkStatus.State == LinkState.Waiting;
 
-    /// <summary>Hardware, Test, Screens and Advanced need a controller that answers.</summary>
+    /// <summary>Hardware, Test, Screens and Advanced need a connected controller.</summary>
     public bool ShowEditor => _runtime.ControllerState == ControllerState.Ready;
 
-    public string EditorPlaceholder => _runtime.IsUserDisconnected ? "Volco is disconnected. Connect first (the Connection page or the tray)."
-        : _runtime.ControllerState switch
+    public string EditorPlaceholder
     {
-        ControllerState.VersionMismatch => "Update the controller's firmware to set it up.",
-        ControllerState.AwaitingHello when _runtime.ControllerSilent => "Check the controller's firmware above, then set it up here.",
-        ControllerState.AwaitingHello => "Waiting for the controller…",
-        _ => "Connect the controller to set it up. Choose its port on the Connection page.",
-    };
+        get
+        {
+            var link = _runtime.LinkStatus;
+            var connection = _config.Config.Connection;
+            return link.State switch
+            {
+                LinkState.Disconnected => "Volco is disconnected. Connect first (the Connection page or the tray).",
+                LinkState.Incompatible => "Update the controller's firmware to set it up.",
+                LinkState.NoAnswer => "Check the controller's firmware above, then set it up here.",
+                LinkState.Waiting => LinkText.Activity(link.Activity),
+                LinkState.Searching when connection.Type == ConnectionType.Serial
+                    => "Plug the controller in with USB and choose its port on the Connection page.",
+                _ => LinkText.Explanation(link, connection),
+            };
+        }
+    }
 
     public string ChipText => _service.LastHello?.Chip == ChipFamily.Esp32 ? "ESP32" : _service.LastHello is null ? "" : "Unknown";
 
@@ -109,7 +112,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         BannerKind.NotSetUp => "Set up your controller.",
         BannerKind.Unusable => "The controller's saved setup can't be used.",
         BannerKind.BrokenWithFirmware => "Your saved setup doesn't work with this firmware.",
-        BannerKind.NoAnswer => $"No Volco controller answered on {_config.Config.Connection.Serial.ComPort}. " +
+        BannerKind.NoAnswer => $"The device on {_config.Config.Connection.Serial.ComPort} isn't answering as a Volco controller. " +
                                "It may not have Volco's firmware yet: check it, install it if needed, then set it up.",
         _ => null,
     };
@@ -448,7 +451,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         }
         bool udpChanged = !UdpBytes(_draft).AsSpan().SequenceEqual(UdpBytes(BaselineConfig()));
         if (udpChanged && _config.Config.Connection.Type == ConnectionType.Udp)
-            Ask("Changing the Wi-Fi settings may disconnect the controller. If it doesn't come back, connect it with USB.",
+            Ask("Changing the Wi-Fi settings may disconnect the controller. If it doesn't come back, plug it in with USB.",
                 "Save", () => { if (CanSave) EncodeAndSave(udpChanged); });
         else EncodeAndSave(udpChanged);
     }
@@ -504,10 +507,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             SaveStatus.Rejected => "The controller couldn't read the setup. Update the firmware and try again.",
             SaveStatus.NotRunningNewSetup => "The controller restarted but isn't running the new setup.",
             SaveStatus.DidNotComeBack => _udpChangedInSave
-                ? "The controller didn't come back after restarting. If you changed the Wi-Fi settings, connect with USB to check them."
+                ? "The controller didn't come back after restarting. If you changed the Wi-Fi settings, plug it in with USB to check them."
                 : "The controller didn't come back after restarting.",
             SaveStatus.NoAnswer => "The controller didn't answer.",
-            SaveStatus.ConnectionLost => "Connection lost while saving. Reconnect to see which setup the controller has.",
+            SaveStatus.ConnectionLost => "The controller disconnected while saving. Once it's connected again, check which setup it has.",
             SaveStatus.Busy => "Another operation is running. Try again in a moment.",
             _ => null,
         };
@@ -739,7 +742,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         RefreshAll();
     });
 
-    private void OnControllerSilentChanged(object? sender, bool silent) => _ui.Post(() =>
+    private void OnLinkStatusChanged(object? sender, LinkStatus link) => _ui.Post(() =>
     {
         if (!_disposed) RefreshAll();
     });
@@ -802,8 +805,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.OperationChanged -= OnServiceChanged;
         _service.MirrorChanged -= OnMirrorChanged;
         _runtime.ControllerStateChanged -= OnControllerStateChanged;
-        _runtime.ControllerSilentChanged -= OnControllerSilentChanged;
-        _runtime.UserDisconnectedChanged -= OnControllerSilentChanged;
+        _runtime.LinkStatusChanged -= OnLinkStatusChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.InTestModeChanged -= OnInTestModeChanged;
         _runtime.RawInput -= OnRawInput;

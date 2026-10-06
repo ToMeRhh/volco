@@ -78,6 +78,28 @@ public class ArchitectureTests
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
+    /// <summary>
+    /// The UI says "connected" only of the link state (spec 2026-10-06): no view, view model or
+    /// tray code reads the transport's status, which is an open port, not a controller. A source
+    /// scan, because reflection can't see what a method body reads.
+    /// </summary>
+    [Fact]
+    public void TheUi_NeverReadsTheTransportStatus()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Volco.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var app = Path.Combine(dir!.FullName, "src", "Volco.App");
+        var offenders = Directory.EnumerateFiles(app, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml"))
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .Where(f => File.ReadAllText(f).Contains("TransportStatus"))
+            .Select(f => Path.GetRelativePath(dir.FullName, f))
+            .ToList();
+        Assert.True(offenders.Count == 0, "Use VolcoRuntime.LinkStatus instead in: " + string.Join(", ", offenders));
+    }
+
     // Self-test: Volco.Windows is not visible from here, so prove the detector works on a
     // private nested P/Invoke declared in this (test) assembly.
     private static class NativeProbe

@@ -169,7 +169,7 @@ public sealed partial class ControllerViewModel
             _latest = p.Stage;
             vm.FirmwareStage = p.Stage switch
             {
-                FlashStage.Connecting => "Connecting to the board…",
+                FlashStage.Connecting => "Starting the board's bootloader…",
                 FlashStage.Erasing => "Clearing the old settings…",
                 FlashStage.Writing => "Writing the firmware…",
                 FlashStage.Verifying => "Checking what was written…",
@@ -192,7 +192,7 @@ public sealed partial class ControllerViewModel
         OfferInstall = false;
         OfferTest = false;
         FirmwareProgress = 0;
-        FirmwareStage = "Connecting to the board…";
+        FirmwareStage = "Starting the board's bootloader…";
         return true;
     }
 

@@ -42,7 +42,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// Interlocked.Exchange / CompareExchange, so a restart on the ConfigManager debounce thread
     /// and a concurrent Dispose can never both dispose the same transport, and a transport a
     /// racing restart publishes is always found by exactly one of them. Readers
-    /// (ConnectionStatus, the sender filter) read it once and tolerate
+    /// (TransportStatus, the sender filter) read it once and tolerate
     /// null.
     /// </summary>
     private IControllerConnection? _connection;
@@ -115,9 +115,11 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             AppLog.Info($"Controller state: {state}");
             WatchForSilence(state);
             if (!IsDisposed) ControllerStateChanged?.Invoke(this, state);
+            UpdateLink();
         };
         _link.HelloReceived += OnHello;
         ControllerConfig = new ControllerConfigService(Config, this, _options.Time, () => _options.Firmware.BundledVersion);
+        ControllerConfig.OperationChanged += (_, _) => UpdateLink();
     }
 
     public IAudioEngine Audio { get; }
@@ -243,8 +245,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     public ConfigManager Config { get; }
     public bool AudioEngineFailed => !_audioReady;
 
-    /// <summary>The current transport's status; Disconnected when there is no transport.</summary>
-    public ConnectionStatus ConnectionStatus => Volatile.Read(ref _connection)?.Status ?? ConnectionStatus.Disconnected;
+    /// <summary>The current transport's status; Closed when there is no transport. A port or socket
+    /// fact only: the UI reads <see cref="LinkStatus"/>.</summary>
+    public TransportStatus TransportStatus => Volatile.Read(ref _connection)?.Status ?? TransportStatus.Closed;
+
+    /// <summary>The address the controller talks from, when the transport knows one (UDP).</summary>
+    public string? PeerAddress => Volatile.Read(ref _connection)?.PeerAddress;
 
     /// <summary>Where the controller session stands (spec §5.5).</summary>
     public ControllerState ControllerState => _link.State;
@@ -286,7 +292,113 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// the runtime attaches its handler to each transport it creates and detaches it from the old
     /// one on restart, so a subscriber never has to re-subscribe to a new IControllerConnection.
     /// </summary>
-    public event EventHandler<ConnectionStatus>? ConnectionStatusChanged;
+    public event EventHandler<TransportStatus>? TransportStatusChanged;
+
+    // ── The link state (what the UI calls connected) ─────────────────────────────────────────
+
+    private readonly object _linkGate = new();
+    private readonly List<Interruption> _interruptions = new();   // guarded by _linkGate
+    private LinkStatus? _lastLink;                                  // guarded by _linkGate
+
+    /// <summary>What the user is told: connected only once the controller answered with this
+    /// app's protocol version; an expected interruption is a wait, not a failure.</summary>
+    public LinkStatus LinkStatus
+    {
+        get { lock (_linkGate) return ComputeLinkLocked(); }
+    }
+
+    /// <summary><see cref="LinkStatus"/> changed. Any thread; a handler that posts to its UI thread
+    /// reads <see cref="LinkStatus"/> there rather than trusting the argument's order.</summary>
+    public event EventHandler<LinkStatus>? LinkStatusChanged;
+
+    /// <summary>
+    /// Volco is about to cause a gap in the link itself (a firmware operation, a connection it just
+    /// started): until the handle is disposed, or <paramref name="limit"/> runs out, the link
+    /// reports <see cref="LinkState.Waiting"/> with <paramref name="activity"/> instead of what the
+    /// transport says, and the silence timer stays quiet, so the tray never turns red for it. A
+    /// controller that answers is still Connected (or Incompatible) meanwhile.
+    /// </summary>
+    public IDisposable ExpectInterruption(LinkActivity activity, TimeSpan? limit = null)
+    {
+        var handle = new Interruption(this, activity);
+        lock (_linkGate) _interruptions.Add(handle);
+        if (limit is { } l) handle.Expire(_options.Time.CreateTimer(_ => handle.Dispose(), null, l, Timeout.InfiniteTimeSpan));
+        UpdateLink();
+        return handle;
+    }
+
+    /// <summary>An expected interruption is held.</summary>
+    private bool IsInterrupted
+    {
+        get { lock (_linkGate) return _interruptions.Count > 0; }
+    }
+
+    private void EndInterruption(Interruption handle)
+    {
+        bool last;
+        lock (_linkGate)
+        {
+            if (!_interruptions.Remove(handle)) return;
+            last = _interruptions.Count == 0;
+        }
+        // The silence the interruption held back counts now, if the port is still quiet.
+        if (last && Interlocked.Exchange(ref _silenceDeferred, 0) == 1) CheckSilence();
+        UpdateLink();
+    }
+
+    private sealed class Interruption(VolcoRuntime runtime, LinkActivity activity) : IDisposable
+    {
+        private int _disposed;
+        private ITimer? _timer;
+
+        public LinkActivity Activity => activity;
+
+        /// <summary>The timer that disposes this handle at its limit.</summary>
+        public void Expire(ITimer timer)
+        {
+            Interlocked.Exchange(ref _timer, timer)?.Dispose();
+            if (Volatile.Read(ref _disposed) != 0) Interlocked.Exchange(ref _timer, null)?.Dispose();
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            Interlocked.Exchange(ref _timer, null)?.Dispose();
+            runtime.EndInterruption(this);
+        }
+    }
+
+    private LinkStatus ComputeLinkLocked() => LinkStateLogic.Compute(new LinkInputs(
+        IsUserDisconnected, TransportStatus, _link.State, ControllerSilent, HeldActivityLocked(),
+        ControllerConfig.Operation == ConfigOperation.Writing));
+
+    /// <summary>The newest interruption's activity, a firmware operation's before a connect grace
+    /// (the grace of the reconnect that ends a flash must not turn "Updating firmware…" into
+    /// "Connecting…").</summary>
+    private LinkActivity HeldActivityLocked()
+    {
+        var activity = LinkActivity.None;
+        foreach (var i in _interruptions)
+            if (activity is LinkActivity.None or LinkActivity.Connecting || i.Activity != LinkActivity.Connecting)
+                activity = i.Activity;
+        return activity;
+    }
+
+    /// <summary>Recomputes the link state and raises <see cref="LinkStatusChanged"/> when it
+    /// changed. Called after every input changes.</summary>
+    private void UpdateLink()
+    {
+        if (IsDisposed) return;
+        LinkStatus status;
+        lock (_linkGate)
+        {
+            status = ComputeLinkLocked();
+            if (status == _lastLink) return;
+            _lastLink = status;
+        }
+        AppLog.Info(status.Activity == LinkActivity.None ? $"Link: {status.State}" : $"Link: {status.State} ({status.Activity})");
+        LinkStatusChanged?.Invoke(this, status);
+    }
 
     /// <summary>Every <see cref="IAudioEngine.DevicesChanged"/>, of every kind, forwarded.</summary>
     public event EventHandler<DevicesChangedEventArgs>? DevicesChanged;
@@ -355,6 +467,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     {
         if (IsDisposed || !_started) return;
         AppLog.Info("Reconnect requested");
+        ExpectConnect();
         SetUserDisconnected(false);
         StartConnection();
     }
@@ -386,7 +499,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// config. Does nothing while connected normally.</summary>
     public void Connect()
     {
-        if (IsDisposed || !_started) return;
+        if (IsDisposed || !_started || !IsUserDisconnected) return;
+        ExpectConnect();   // before the flag clears, so "Disconnected" turns straight into "Connecting…"
         if (!SetUserDisconnected(false)) return;
         AppLog.Info("Connect requested");
         StartConnection();
@@ -398,6 +512,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         var next = value ? 1 : 0;
         if (Interlocked.Exchange(ref _userDisconnected, next) == next) return false;
         if (!IsDisposed) UserDisconnectedChanged?.Invoke(this, value);
+        UpdateLink();
         return true;
     }
 
@@ -485,6 +600,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         // the user's Disconnect.
         if (IsDisposed || IsSuspended || IsUserDisconnected) return;
 
+        // Before the old transport goes, so the link never reports the gap between the two.
+        ExpectConnect();
         StopConnection();
 
         var config = Config.Config.Connection;
@@ -494,7 +611,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         if (connection == null) return;
 
         connection.MessageReceived += OnMessageReceived;
-        connection.StatusChanged += OnConnectionStatusChanged;
+        connection.StatusChanged += OnTransportStatusChanged;
 
         // Publish. Anything displaced is a transport a concurrent StartConnection published in
         // the meantime; by the ownership rule, removing it makes it ours to retire.
@@ -526,6 +643,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
 
         connection.Connect();
+        UpdateLink();
+    }
+
+    /// <summary>A transport Volco is starting isn't a failure until it has had a moment to find the
+    /// controller: no red tray for the first seconds of a launch, a Connect, a Reconnect or a port
+    /// change. The handle ends itself after <see cref="VolcoRuntimeOptions.ConnectGrace"/>.</summary>
+    private void ExpectConnect()
+    {
+        if (_options.ConnectGrace > TimeSpan.Zero) ExpectInterruption(LinkActivity.Connecting, _options.ConnectGrace);
     }
 
     /// <summary>Takes the current transport out of <see cref="_connection"/>, if any, and retires
@@ -547,12 +673,13 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             // WebSocket listener sits Disconnected and raises nothing.
             var lastStatus = old.Status;
             RetireTransport(old);
-            _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
+            _link.Detach(); // its Disconnected no longer reaches OnTransportStatusChanged
             ControllerConfig.OnConnectionReplaced();
             ExitTestMode(-1);
-            if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
-                ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
+            if (lastStatus != TransportStatus.Closed && !IsDisposed)
+                TransportStatusChanged?.Invoke(this, TransportStatus.Closed);
         }
+        UpdateLink();
     }
 
     // ── A silent controller ──────────────────────────────────────────────────────────────────
@@ -560,6 +687,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     private readonly object _silenceGate = new();
     private ITimer? _silenceTimer;   // guarded by _silenceGate
     private int _silent;
+    /// <summary>1 when the silence timer ran out during an expected interruption: the end of the
+    /// interruption checks again.</summary>
+    private int _silenceDeferred;
 
     /// <summary>The USB port has been open for <see cref="VolcoRuntimeOptions.SilentAfter"/> with
     /// no Hello: whatever is on it isn't answering as a Volco controller.</summary>
@@ -577,12 +707,23 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             if (state == ControllerState.AwaitingHello && !IsDisposed)
                 _silenceTimer = _options.Time.CreateTimer(_ =>
                 {
-                    // Not while a firmware operation holds the port (it waits for the Hello itself).
-                    if (_link.State == ControllerState.AwaitingHello && !IsSuspended && Volatile.Read(ref _firmwareWaits) == 0
-                        && Config.Config.Connection.Type == ConnectionType.Serial) SetSilent(true);
+                    // Not during an expected interruption (a firmware operation waits for the Hello
+                    // itself): its end checks again.
+                    if (IsInterrupted) Volatile.Write(ref _silenceDeferred, 1);
+                    else CheckSilence();
                 }, null, _options.SilentAfter, Timeout.InfiniteTimeSpan);
         }
-        if (state != ControllerState.AwaitingHello) SetSilent(false);
+        if (state != ControllerState.AwaitingHello)
+        {
+            Volatile.Write(ref _silenceDeferred, 0);
+            SetSilent(false);
+        }
+    }
+
+    private void CheckSilence()
+    {
+        if (_link.State == ControllerState.AwaitingHello && !IsSuspended
+            && Config.Config.Connection.Type == ConnectionType.Serial) SetSilent(true);
     }
 
     private void SetSilent(bool silent)
@@ -591,6 +732,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         if (silent) AppLog.Info($"No Hello on {Config.Config.Connection.Serial.ComPort} for {_options.SilentAfter.TotalSeconds:F0} s");
         ControllerConfig.OnControllerSilent(silent);
         if (!IsDisposed) ControllerSilentChanged?.Invoke(this, silent);
+        UpdateLink();
     }
 
     // ── Suspension (spec §8.6) ───────────────────────────────────────────────────────────────
@@ -599,26 +741,6 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
     /// <summary>A firmware probe or flash holds the port: no connection is open or opened.</summary>
     public bool IsSuspended => Volatile.Read(ref _suspensions) > 0;
-
-    private int _firmwareWaits;
-
-    /// <summary>The firmware service is waiting for the Hello after a probe or flash: the silence
-    /// timer stays quiet meanwhile (the service reports a silent board itself).</summary>
-    internal IDisposable HoldSilence()
-    {
-        Interlocked.Increment(ref _firmwareWaits);
-        return new SilenceHold(this);
-    }
-
-    private sealed class SilenceHold(VolcoRuntime runtime) : IDisposable
-    {
-        private int _disposed;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0) Interlocked.Decrement(ref runtime._firmwareWaits);
-        }
-    }
 
     /// <summary>Releases the connection (and so the serial port) until the handle is disposed:
     /// the link detaches, a config operation fails and test mode ends, as on a replacement, and
@@ -654,26 +776,27 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     private void RetireTransport(IControllerConnection connection)
     {
         connection.MessageReceived -= OnMessageReceived;
-        connection.StatusChanged -= OnConnectionStatusChanged;
+        connection.StatusChanged -= OnTransportStatusChanged;
         connection.Dispose();
     }
 
-    private void OnConnectionStatusChanged(object? sender, ConnectionStatus status)
+    private void OnTransportStatusChanged(object? sender, TransportStatus status)
     {
         // Belt and braces for the restart path above: an old transport's handler invocation that
         // was already in flight on another thread when StartConnection detached it is dropped.
         if (IsDisposed || !ReferenceEquals(sender, Volatile.Read(ref _connection))) return;
 
-        AppLog.Info($"Connection status changed: {status}");
-        ConnectionStatusChanged?.Invoke(this, status);
+        AppLog.Info($"Transport: {status}");
+        TransportStatusChanged?.Invoke(this, status);
 
-        if (status == ConnectionStatus.Connected) _link.Attach((IControllerConnection)sender!);
+        if (status == TransportStatus.Open) _link.Attach((IControllerConnection)sender!);
         else
         {
             _link.Detach();
             ControllerConfig.OnDetached();
             ExitTestMode(-1);
         }
+        UpdateLink();
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)

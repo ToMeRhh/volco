@@ -18,7 +18,7 @@ public sealed record FlashOutcome(bool Succeeded, string Message);
 public sealed class FirmwareService
 {
     public static readonly TimeSpan HelloWait = TimeSpan.FromSeconds(10);
-    public const string SerialOnlyMessage = "Connect the controller with USB and set the connection to Serial.";
+    public const string SerialOnlyMessage = "Plug the controller in with USB and choose \"USB cable\" on the Connection page.";
     public const string DisconnectedMessage = "Volco is disconnected. Connect first (the Connection page or the tray).";
 
     private readonly VolcoRuntime _runtime;
@@ -51,7 +51,7 @@ public sealed class FirmwareService
         if (!IsSerial) return new(null, SerialOnlyMessage, false);
         if (_runtime.IsUserDisconnected) return new(null, DisconnectedMessage, false);
         if (!TryEnter()) return new(null, "Another firmware operation is running.", false);
-        using var quiet = _runtime.HoldSilence();
+        using var expected = _runtime.ExpectInterruption(LinkActivity.CheckingFirmware);
         try
         {
             ProbeResult result;
@@ -107,7 +107,7 @@ public sealed class FirmwareService
         // After a manual Disconnect the resume wouldn't reconnect, so the Hello could never come.
         if (_runtime.IsUserDisconnected) return new(false, DisconnectedMessage);
         if (!TryEnter()) return new(false, "Another firmware operation is running.");
-        using var quiet = _runtime.HoldSilence();
+        using var expected = _runtime.ExpectInterruption(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware);
         var verb = mode == FlashMode.Install ? "Install" : "Update";
         try
         {

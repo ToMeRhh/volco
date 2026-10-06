@@ -39,17 +39,61 @@ public class ConnectionPageTests
         var page = new ConnectionPage(vm.Connection);
         new Window { Content = page }.Show();
 
-        rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5,
             new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("5 sliders · 3 buttons (2 LED, 1 LED pair)", vm.Connection.HardwareSummary);
-        Assert.False(vm.Connection.HasControllerError);
+        Assert.False(vm.Connection.HasStatusExplanation);
 
+        // Another protocol version: not connected, and amber rather than red.
         rig.Connection.RaiseMessage(new HelloMessage(9, 5, new[] { IndicatorKind.Led }));
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal("Controller firmware doesn't match this version of Volco. Reflash it.", vm.Connection.ControllerError);
-        Assert.Equal("Firmware mismatch", vm.Connection.FooterText);
+        Assert.Equal("Firmware update needed", vm.Connection.StatusText);
+        Assert.Equal("Firmware update needed", vm.Connection.FooterText);
+        Assert.StartsWith("The controller's firmware is from another version of Volco.", vm.Connection.StatusExplanation);
+        Assert.Equal(LinkTone.Warning, vm.Connection.StatusTone);
+        Assert.False(vm.Connection.HasHardwareSummary);
+        Assert.Equal(ThemeColor("WarningBrush"),
+            Assert.IsAssignableFrom<ISolidColorBrush>(page.FindControl<Ellipse>("StatusDot")!.Fill).Color);
+    }
+
+    [AvaloniaFact]
+    public void TheHardwareSummary_ShowsOnEveryTransport()
+    {
+        using var rig = new TestRig();
+        rig.Config.Config.Connection.Type = ConnectionType.Udp;
+        rig.Config.Save();
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        rig.Runtime.Reconnect();   // a UDP transport now
+
+        rig.Connection!.SetStatus(TransportStatus.Open);
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 2, new[] { IndicatorKind.Screen }));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Connected", vm.Connection.StatusText);
+        Assert.Equal("Connected · Wi-Fi", vm.Connection.FooterText);
+        Assert.Equal("2 sliders · 1 button (1 screen)", vm.Connection.HardwareSummary);
+    }
+
+    [AvaloniaFact]
+    public void NotAnswering_IsRed_AndSaysWhatIsPluggedIn()
+    {
+        var (page, _, rig, vm) = Show();
+        using var _ = rig;
+        using var __ = vm;
+        rig.Config.Config.Connection.Serial.ComPort = "COM3";
+        rig.Connection!.SetStatus(TransportStatus.Open);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Connecting…", vm.Connection.StatusText);
+        Assert.Equal(LinkTone.Neutral, vm.Connection.StatusTone);
+
+        rig.Connection.SetStatus(TransportStatus.Failed);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Can't use COM3", vm.Connection.StatusText);
+        Assert.StartsWith("Another app is using COM3", vm.Connection.StatusExplanation);
+        Assert.Equal(LinkTone.Danger, vm.Connection.StatusTone);
+        Assert.Equal(ThemeColor("DangerBrush"),
+            Assert.IsAssignableFrom<ISolidColorBrush>(page.FindControl<Ellipse>("StatusDot")!.Fill).Color);
     }
 
     [AvaloniaFact]
@@ -60,11 +104,11 @@ public class ConnectionPageTests
         using var __ = vm;
         var dot = page.FindControl<Ellipse>("StatusDot")!;
         var label = page.FindControl<TextBlock>("StatusLabel")!;
-        Assert.Equal("Not connected", label.Text);
+        Assert.Equal("Looking for your controller", label.Text);
 
-        rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        rig.Connection!.SetStatus(TransportStatus.Open);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal("Waiting for the controller…", label.Text);
+        Assert.Equal("Connecting…", label.Text);
         Assert.False(page.FindControl<TextBlock>("HardwareSummaryText")!.IsVisible);   // no stale hardware
 
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Led }));
@@ -140,7 +184,7 @@ public class ConnectionPageTests
         var reconnect = page.FindControl<Button>("ReconnectButton")!;
         var disconnect = page.FindControl<Button>("DisconnectButton")!;
         var connect = page.FindControl<Button>("ConnectButton")!;
-        rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        rig.Connection!.SetStatus(TransportStatus.Open);
         Dispatcher.UIThread.RunJobs();
         Assert.True(disconnect.IsEffectivelyVisible);
         Assert.False(connect.IsVisible);
@@ -151,6 +195,7 @@ public class ConnectionPageTests
         Assert.Equal(1, rig.Connection.DisposeCount);
         Assert.Equal("Disconnected", page.FindControl<TextBlock>("StatusLabel")!.Text);
         Assert.Equal("Disconnected", vm.Connection.FooterText);
+        Assert.StartsWith("You disconnected Volco.", vm.Connection.StatusExplanation);
         Assert.False(reconnect.IsVisible);
         Assert.False(disconnect.IsVisible);
         Assert.True(connect.IsEffectivelyVisible);
@@ -160,7 +205,7 @@ public class ConnectionPageTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.NotSame(old, rig.Connection);
-        Assert.Equal("Not connected", page.FindControl<TextBlock>("StatusLabel")!.Text);
+        Assert.Equal("Looking for your controller", page.FindControl<TextBlock>("StatusLabel")!.Text);
         Assert.True(disconnect.IsEffectivelyVisible);
         Assert.False(connect.IsVisible);
     }

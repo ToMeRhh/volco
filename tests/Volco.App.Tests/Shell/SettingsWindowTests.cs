@@ -83,7 +83,7 @@ public class SettingsWindowTests
         var window = Create();
         window.Show();
 
-        Assert.Equal("Not connected", window.FindControl<TextBlock>("FooterText")!.Text);
+        Assert.Equal("Looking for your controller", window.FindControl<TextBlock>("FooterText")!.Text);
     }
 
     [AvaloniaFact]

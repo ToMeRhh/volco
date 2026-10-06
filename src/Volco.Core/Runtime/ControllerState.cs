@@ -1,7 +1,7 @@
 namespace Volco.Core.Runtime;
 
 /// <summary>Where the controller session stands (spec §5.5), separate from the transport's
-/// <see cref="Communication.ConnectionStatus"/>.</summary>
+/// <see cref="Communication.TransportStatus"/>.</summary>
 public enum ControllerState
 {
     /// <summary>The transport is not connected.</summary>

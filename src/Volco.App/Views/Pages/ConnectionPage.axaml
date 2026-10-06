@@ -5,7 +5,7 @@
              x:Class="Volco.App.Views.Pages.ConnectionPage"
              x:DataType="vm:ConnectionViewModel">
   <UserControl.Resources>
-    <conv:ConnectionStatusToBrushConverter x:Key="StatusToBrush"/>
+    <conv:LinkToneToBrushConverter x:Key="ToneToBrush"/>
     <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
   </UserControl.Resources>
 
@@ -23,7 +23,7 @@
       <Border Name="StatusPanel" Classes="Panel">
         <Grid ColumnDefinitions="Auto,Auto,*,Auto" RowDefinitions="Auto,Auto">
           <Ellipse Name="StatusDot" Width="10" Height="10" VerticalAlignment="Center"
-                   Fill="{Binding Status, Converter={StaticResource StatusToBrush}}"/>
+                   Fill="{Binding StatusTone, Converter={StaticResource ToneToBrush}}"/>
           <TextBlock Name="StatusLabel" Grid.Column="1" Classes="Subtitle" Margin="8,0,16,0"
                      VerticalAlignment="Center" Text="{Binding StatusText}"/>
           <TextBlock Name="TransportDetails" Grid.Column="2" Classes="Secondary"
@@ -45,8 +45,9 @@
           <StackPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="18,6,0,0" Spacing="2">
             <TextBlock Name="HardwareSummaryText" Classes="Caption" Text="{Binding HardwareSummary}"
                        IsVisible="{Binding HasHardwareSummary}"/>
-            <TextBlock Name="ControllerErrorText" Classes="Caption" Foreground="{DynamicResource DangerBrush}"
-                       TextWrapping="Wrap" Text="{Binding ControllerError}" IsVisible="{Binding HasControllerError}"/>
+            <TextBlock Name="StatusExplanationText" Classes="Caption" TextWrapping="Wrap"
+                       Foreground="{Binding StatusTone, Converter={StaticResource ToneToBrush}, ConverterParameter=Text}"
+                       Text="{Binding StatusExplanation}" IsVisible="{Binding HasStatusExplanation}"/>
           </StackPanel>
         </Grid>
       </Border>
@@ -99,7 +100,7 @@
             </Grid>
           </StackPanel>
 
-          <TextBlock Classes="Caption" Text="These must match the values in your controller's firmware."/>
+          <TextBlock Classes="Caption" Text="These must match your controller's settings (the Controller page, Advanced)."/>
         </StackPanel>
       </Border>
 

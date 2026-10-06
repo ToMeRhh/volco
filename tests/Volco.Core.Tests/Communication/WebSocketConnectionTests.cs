@@ -9,7 +9,7 @@ public class WebSocketConnectionTests : IDisposable
 {
     private readonly WebSocketConnection _connection;
     private readonly int _port;
-    private readonly List<ConnectionStatus> _statusChanges = new();
+    private readonly List<TransportStatus> _statusChanges = new();
     private readonly List<ControllerMessage> _messages = new();
 
     public WebSocketConnectionTests()
@@ -44,8 +44,8 @@ public class WebSocketConnectionTests : IDisposable
         _connection.Connect();
 
         // Server is listening but no client yet — status should be Disconnected
-        Assert.Equal(ConnectionStatus.Disconnected, _connection.Status);
-        Assert.DoesNotContain(ConnectionStatus.Connected, _statusChanges);
+        Assert.Equal(TransportStatus.Closed, _connection.Status);
+        Assert.DoesNotContain(TransportStatus.Open, _statusChanges);
     }
 
     [Fact]
@@ -57,8 +57,8 @@ public class WebSocketConnectionTests : IDisposable
         await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
         await Task.Delay(50);
 
-        Assert.Equal(ConnectionStatus.Connected, _connection.Status);
-        Assert.Contains(ConnectionStatus.Connected, _statusChanges);
+        Assert.Equal(TransportStatus.Open, _connection.Status);
+        Assert.Contains(TransportStatus.Open, _statusChanges);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class WebSocketConnectionTests : IDisposable
         await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
         await Task.Delay(100);
 
-        Assert.Equal(ConnectionStatus.Disconnected, _connection.Status);
+        Assert.Equal(TransportStatus.Closed, _connection.Status);
     }
 
     [Fact]
@@ -82,8 +82,8 @@ public class WebSocketConnectionTests : IDisposable
         _connection.Connect();
         _connection.Disconnect();
 
-        Assert.Equal(ConnectionStatus.Disconnected, _connection.Status);
-        Assert.Contains(ConnectionStatus.Disconnected, _statusChanges);
+        Assert.Equal(TransportStatus.Closed, _connection.Status);
+        Assert.Contains(TransportStatus.Closed, _statusChanges);
     }
 
     private async Task ConnectWithRetryAsync(ClientWebSocket client, Uri uri, int maxRetries = 5)
@@ -148,7 +148,7 @@ public class WebSocketConnectionTests : IDisposable
         _connection.Connect();
         using var client = new ClientWebSocket();
         await ConnectWithRetryAsync(client, new Uri($"ws://localhost:{_port}/"));
-        for (int i = 0; i < 100 && _connection.Status != ConnectionStatus.Connected; i++)
+        for (int i = 0; i < 100 && _connection.Status != TransportStatus.Open; i++)
             await Task.Delay(20);
         await Task.Delay(50);
 
