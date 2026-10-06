@@ -276,4 +276,18 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
         Assert.Equal(Convert.ToBase64String(Small), _k.Config.Config.ControllerConfigBlob);
         Assert.Equal(BannerKind.None, _k.Service.Banner.Kind);
     }
+
+    [Fact]
+    public void AHelloFromAReplacedSource_IsDropped()
+    {
+        var old = new object();
+        var current = new object();
+        _k.Service.OnConnectionStarted(old);
+        _k.Service.OnConnectionReplaced();
+        _k.Service.OnConnectionStarted(current);
+        _k.Service.OnMessage(old, Hello(ControllerConfigState.None, 0));    // arrived late
+        Assert.Null(_k.Service.LastHello);
+        _k.Service.OnMessage(current, Hello(ControllerConfigState.None, 0));
+        Assert.NotNull(_k.Service.LastHello);
+    }
 }

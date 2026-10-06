@@ -78,4 +78,13 @@ public class ControllerPresetsTests
     [Fact]
     public void ApplyTo_UnavailablePreset_Throws()
         => Assert.Throws<InvalidOperationException>(() => ControllerPresets.ApplyTo(new ControllerConfig(), ControllerPresets.All[1]));
+
+    [Fact]
+    public void Hardware_IsACopy_EditingItLeavesThePresetAlone()
+    {
+        var diy = ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId);
+        diy.Hardware!.Sliders[0].Pin = 39;
+        Assert.Equal(33u, diy.Hardware!.Sliders[0].Pin);
+        Assert.NotSame(diy.Hardware, diy.Hardware);
+    }
 }
