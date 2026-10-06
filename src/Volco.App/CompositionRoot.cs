@@ -74,6 +74,9 @@ internal sealed class CompositionRoot : IDisposable
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
                                     new VolcoRuntimeOptions { Firmware = catalog });
         _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog);
+        var firmware = _firmware;
+        VolcoApplication.Gate = new ExitGate(() => firmware.IsBusy);
+        firmware.BusyChanged += (_, _) => Dispatcher.UIThread.Post(() => VolcoApplication.Gate?.OnBusyChanged());
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
