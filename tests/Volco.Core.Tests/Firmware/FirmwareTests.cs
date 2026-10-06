@@ -192,6 +192,25 @@ public sealed class FirmwareServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task TheNewPort_IsSavedThroughTheConfigThread_WhileSuspended()
+    {
+        var ran = new List<bool>();
+        var service = new FirmwareService(_runtime, _flasher, _catalog, _time, a =>
+        {
+            ran.Add(_runtime.IsSuspended);
+            a();
+            return Task.CompletedTask;
+        });
+        var flash = service.FlashAsync("COM7", FlashMode.Install, NoProgress);
+        await Until(() => Count == 2);
+        Last.SetStatus(TransportStatus.Open);
+        Last.RaiseMessage(Hello("3f9c2a1b5d07"));
+        await flash;
+        Assert.Equal(new[] { true }, ran);          // once, and still suspended
+        Assert.Equal("COM7", Last.Config.Serial.ComPort);
+    }
+
+    [Fact]
     public async Task Flash_NoHelloWithin10s_SaysSo()
     {
         var flash = _service.FlashAsync("COM3", FlashMode.Install, NoProgress);

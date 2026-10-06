@@ -1709,4 +1709,17 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.True(WaitUntil(() => levels.Items.Any(e => e.SliderIndex == 19)), "slider 19 never processed");
         Assert.Equal(1f, runtime.GetSliderLevel(19)!.Value);
     }
+
+    // The race through the runtime. The old connection's handler is detached on retirement, so
+    // deliver through the service the way a message already past the runtime's sender check would.
+    [Fact]
+    public void AHelloAlreadyPastTheSenderCheck_WhenTheConnectionIsReplaced_IsDropped()
+    {
+        var runtime = StartRuntime();
+        var old = Connection(0);
+        ConnectAndGreet(old);
+        runtime.Reconnect();
+        runtime.ControllerConfig.OnMessage(old, LedHello);
+        Assert.Null(runtime.ControllerConfig.LastHello);
+    }
 }

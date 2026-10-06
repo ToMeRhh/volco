@@ -73,7 +73,20 @@ internal sealed class CompositionRoot : IDisposable
         var catalog = FirmwareCatalog.Load(_platform.Firmware ?? EmptyFirmwareSource.Instance);
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
                                     new VolcoRuntimeOptions { Firmware = catalog });
-        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog);
+        // The port a flash or probe settles on is saved on the UI thread, which owns the config.
+        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThread: a =>
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() =>
+            {
+                try { a(); done.SetResult(); }
+                catch (Exception e) { done.SetException(e); }
+            });
+            return done.Task;
+        });
+        var firmware = _firmware;
+        VolcoApplication.Gate = new ExitGate(() => firmware.IsBusy);
+        firmware.BusyChanged += (_, _) => Dispatcher.UIThread.Post(() => VolcoApplication.Gate?.OnBusyChanged());
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
@@ -276,6 +289,8 @@ internal sealed class CompositionRoot : IDisposable
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.
         _runtime?.Dispose();
+        // After the runtime, so a mirror written while it disposed is saved too.
+        _config?.FlushPendingSave();
         _platform?.Audio.Dispose();
 
         if (_osd is { } osdWindow)

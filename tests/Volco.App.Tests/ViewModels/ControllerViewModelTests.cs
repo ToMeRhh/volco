@@ -488,4 +488,20 @@ public sealed class ControllerViewModelTests : IDisposable
         using var settings = _rig.CreateSettings(_ui);
         Assert.False(settings.ControllerNavDot);   // no bundled firmware until stage 6
     }
+
+    [Fact]
+    public void ClearingANumberBox_RestoresTheDefault_AndSavesTheFieldAsAbsent()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Brightness = 40;
+        Assert.True(vm.Draft.Screens.HasBrightness);
+        vm.Brightness = null;                       // the user empties the box
+        Assert.Equal(255m, vm.Brightness);          // the proto default shows again
+        Assert.False(vm.Draft.Screens.HasBrightness);
+        vm.DebounceMs = null;
+        Assert.Equal(30m, vm.DebounceMs);
+        vm.PcPort = null;
+        Assert.Equal(12345m, vm.PcPort);
+    }
 }

@@ -36,7 +36,7 @@ From spec §12.7 (`docs/superpowers/specs/2026-10-03-controller-config-design.md
 ## Before merging the branch
 
 - [x] Go over the warnings in the latest CI runs of the branch (all jobs: compiler, analyzer, actions and tooling warnings) and address them. Asked by the user on 2026-10-05. Done 2026-10-05 (run 37379701225: 0 warnings; the only remaining line is the default-branch hint printed by actions/checkout).
-- [ ] The firmware notices and the LGPL (spec §14, point 3): the user's decision before a release ships firmware.
+- [x] The firmware notices and the LGPL (spec §14, point 3): option C, decided 2026-10-06. Every release's firmware zip carries relink/ (`firmware/scripts/relink_bundle.py`); a relink from it reproduces firmware.bin byte for byte.
 
 ## Already proven
 
