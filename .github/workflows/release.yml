@@ -3,6 +3,8 @@ name: Release Volco
 # Publish a stamped release build with the single-file Volco.exe attached. The in-app updater
 # discovers builds via this Release. Trigger it either by pushing a semver tag (e.g. v1.2.3) or by
 # running the workflow manually from the Actions tab and supplying a version (creates the tag too).
+# The controller firmware is built first, embedded in the exe (RequireFirmware) and attached as a
+# zip with its licence notices (spec §9.3).
 on:
   push:
     tags: [ 'v*' ]
@@ -14,16 +16,13 @@ on:
         type: string
 
 jobs:
-  release:
-    name: Build and Publish Release
-    runs-on: windows-latest
-    permissions:
-      contents: write
-
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v7
-
     - name: Resolve version and tag
       id: ver
       shell: bash
@@ -36,6 +35,85 @@ jobs:
         version="${raw#v}"          # build version, no leading v (e.g. 0.1.0)
         echo "version=${version}" >> "$GITHUB_OUTPUT"
         echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+  firmware:
+    name: Build firmware
+    needs: version
+    runs-on: ubuntu-latest
+    outputs:
+      build-id: ${{ steps.fwid.outputs.id }}
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - name: Install PlatformIO
+      run: pip install platformio==6.1.19
+
+    - name: Firmware build id
+      id: fwid
+      run: |
+        python firmware/tools/check_firmware_id_paths.py
+        echo "id=$(bash firmware/scripts/firmware_id.sh)" >> "$GITHUB_OUTPUT"
+
+    - name: Native tests
+      working-directory: firmware
+      run: pio test -e native
+
+    - name: Build firmware (ESP32)
+      working-directory: firmware
+      env:
+        VOLCO_FW_VERSION: ${{ steps.fwid.outputs.id }}
+        VOLCO_FW_DISPLAY: ${{ needs.version.outputs.version }}
+      run: |
+        pio run -e esp32
+        grep -q "\"version\": \"${VOLCO_FW_VERSION}\"" .pio/build/esp32/dist/firmware-manifest.json
+
+    - name: Firmware zip
+      run: |
+        mkdir -p zip
+        cp firmware/.pio/build/esp32/dist/* zip/
+        cp THIRD-PARTY-NOTICES.txt firmware/assets/fonts/OFL.txt zip/
+        (cd zip && zip -q "../volco-firmware-esp32-${{ needs.version.outputs.version }}.zip" *)
+
+    - name: Upload firmware
+      uses: actions/upload-artifact@v7
+      with:
+        name: firmware-esp32
+        path: firmware/.pio/build/esp32/dist/
+
+    - name: Upload firmware zip
+      uses: actions/upload-artifact@v7
+      with:
+        name: firmware-zip
+        path: volco-firmware-esp32-${{ needs.version.outputs.version }}.zip
+
+  release:
+    name: Build and Publish Release
+    needs: [version, firmware]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
+
+    - name: Download firmware
+      uses: actions/download-artifact@v8
+      with:
+        name: firmware-esp32
+        path: src/Volco.Windows/Firmware/esp32
+
+    - name: Download firmware zip
+      uses: actions/download-artifact@v8
+      with:
+        name: firmware-zip
+        path: .
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -56,8 +134,10 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true `
           -o ./publish/ `
-          -p:VolcoVersion=${{ steps.ver.outputs.version }} `
-          -p:VolcoReleaseChannel=release
+          -p:VolcoVersion=${{ needs.version.outputs.version }} `
+          -p:VolcoReleaseChannel=release `
+          -p:RequireFirmware=true `
+          -p:VolcoFirmwareBuildId=${{ needs.firmware.outputs.build-id }}
 
     - name: Create GitHub Release
       env:
@@ -65,8 +145,9 @@ jobs:
       shell: bash
       run: |
         # For a tag push the tag already exists; for a manual run gh creates it at --target.
-        gh release create "${{ steps.ver.outputs.tag }}" \
-          --title "Volco ${{ steps.ver.outputs.tag }}" \
+        gh release create "${{ needs.version.outputs.tag }}" \
+          --title "Volco ${{ needs.version.outputs.tag }}" \
           --target "${{ github.sha }}" \
           --generate-notes \
-          ./publish/Volco.exe
+          ./publish/Volco.exe \
+          "./volco-firmware-esp32-${{ needs.version.outputs.version }}.zip"

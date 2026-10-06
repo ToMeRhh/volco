@@ -56,15 +56,18 @@ public class ConfigManager
                         }
                         json = root.ToJsonString();
                     }
-                    else if (version == 3)
+                    else if (version is 3 or 4)
                     {
-                        // v3 → v4 only adds "devices" and "controller", which deserialize to their
-                        // defaults when missing: stamp the version and keep a backup.
-                        BackupBeforeMigration(json, "config.v3.bak");
+                        // v3 → v4 only adds "devices" and "controller", and v4 → v5 only adds
+                        // "controllerConfigBlob" (and drops the baud rate, below); the new fields
+                        // deserialize to their defaults when missing: stamp the version, keep a backup.
+                        BackupBeforeMigration(json, $"config.v{version}.bak");
                         root["schemaVersion"] = AppConfig.CurrentSchemaVersion;
-                        migratedFrom = 3;
-                        json = root.ToJsonString();
+                        migratedFrom = version;
                     }
+                    // The serial baud rate is fixed at 115200 since v5 (spec §8.1).
+                    if (root["connection"]?["serial"] is JsonObject serial) serial.Remove("baudRate");
+                    json = root.ToJsonString();
                 }
                 Config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? AppConfig.CreateDefault();
             }

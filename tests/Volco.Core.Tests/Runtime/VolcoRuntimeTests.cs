@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Controller;
 using Volco.Core.Input;
 using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
@@ -215,6 +216,25 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.True(WaitUntil(() => volumes.Count > 0), "no slider OSD raised");
         Assert.Equal(OsdKind.Volume, volumes.Items[0].Kind);
         Assert.True(volumes.Items[0].Muted);
+    }
+
+    [Fact]
+    public void SlidersAfterHello_SetVolumeWithoutOsd()
+    {
+        var runtime = StartRuntime(); // slider 0 defaults to Device / current default output
+        var levels = new Recorder<SliderLevelEventArgs>();
+        var volumes = new Recorder<VolumeChangeNotification>();
+        runtime.SliderLevelChanged += levels.Handler;
+        runtime.VolumeChanged += volumes.Handler;
+
+        // The firmware follows every Hello with each slider's position.
+        ConnectAndGreet(Connection(0));
+        Connection(0).RaiseMessage(new SliderMessage(0, 4095));
+
+        Assert.True(WaitUntil(() => levels.Count > 0), "sync value did not reach the slider processor");
+        Assert.Equal(1.0, (double)Snapshot(_engine.DeviceVolumeCalls)[0].Level, 3);
+        // The OSD would have fired in the same tick as the level, so it is already counted if raised.
+        Assert.False(WaitUntil(() => volumes.Count > 0, QuietWindow), "a sync value raised the volume OSD");
     }
 
     [Fact]
@@ -797,6 +817,253 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Equal(1, infos);
     }
 
+    // ---- test mode (spec §8.5) -----------------------------------------------------------------
+
+    private static byte[]? LastLed(FakeControllerConnection c, int button)
+        => c.SentFrames.LastOrDefault(f => f.Length == 6 && f[2] == 0x83 && f[3] == button);
+
+    [Fact]
+    public void TestMode_SliderAndButtonMessages_RaiseRawInput_AndReachNothingElse()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var raw = new ConcurrentQueue<RawInputEventArgs>();
+        runtime.RawInput += (_, e) => raw.Enqueue(e);
+        var activity = 0;
+        runtime.ButtonActivity += (_, _) => activity++;
+
+        using (runtime.EnterTestMode())
+        {
+            Assert.True(runtime.InTestMode);
+            c.RaiseMessage(new SliderMessage(2, 1234));
+            Press(c, 0);
+            Thread.Sleep(100);
+        }
+
+        Assert.Equal(new[] { (RawInputKind.Slider, 2, 1234), (RawInputKind.Button, 0, 1), (RawInputKind.Button, 0, 0) },
+                     raw.Select(e => (e.Kind, e.Index, e.Value)).ToArray());
+        Assert.Empty(Snapshot(_engine.DeviceVolumeCalls));
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+        Assert.Equal(0, activity);
+        Assert.False(runtime.InTestMode);
+    }
+
+    [Fact]
+    public void TestMode_RawInputIsNotRaisedOutsideTestMode()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var raw = 0;
+        runtime.RawInput += (_, _) => raw++;
+        c.RaiseMessage(new SliderMessage(0, 100));
+        Press(c, 0);
+        Assert.Equal(0, raw);
+        Assert.True(WaitUntil(() => Snapshot(_engine.ToggleMuteCalls).Count == 1));
+    }
+
+    [Fact]
+    public void TestMode_AButtonHeldAcrossEntry_FiresNoLongPress()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].Default().LongPress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+            c.Buttons[0].LongPressMs = 150;
+        });
+        var runtime = StartRuntime(config);
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        c.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        using (runtime.EnterTestMode())
+        {
+            Thread.Sleep(400);
+            c.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+        }
+        Assert.True(StaysUnchanged(() => Snapshot(_engine.ToggleMuteCalls).Count));
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(80)]
+    public void TestMode_AButtonHeldAcrossExit_ItsReleaseFiresNothing(int doublePressWindowMs)
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].DoublePressWindowMs = doublePressWindowMs;
+            if (doublePressWindowMs > 0)
+                c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+        });
+        var runtime = StartRuntime(config);
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var test = runtime.EnterTestMode();
+        c.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        test.Dispose();
+        c.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+        Assert.True(StaysUnchanged(() => Snapshot(_engine.ToggleMuteCalls).Count));
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+    }
+
+    [Fact]
+    public void TestMode_Indicators_ThenExitRestoresTheRealState()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var real0 = LastLed(c, 0)!;
+        var real2 = LastLed(c, 2)!;
+
+        var test = runtime.EnterTestMode();
+        runtime.SetTestIndicator(0, TestIndicator.On);
+        runtime.SetTestIndicator(2, TestIndicator.B);
+        Assert.Equal(ProtocolEncoder.EncodeLed(0, 1), LastLed(c, 0));
+        Assert.Equal(ProtocolEncoder.EncodeLed(2, 2), LastLed(c, 2));
+
+        test.Dispose();
+        Assert.Equal(real0, LastLed(c, 0));
+        Assert.Equal(real2, LastLed(c, 2));
+    }
+
+    [Fact]
+    public void TestMode_ScreenButtons_ShowTheTestScreen()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen, IndicatorKind.Screen }));
+        using (runtime.EnterTestMode())
+        {
+            var expected = ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
+                ScreenContent.Text("Test", ScreenIcon.Generic, false, "Button 1"));   // the app numbers inputs from 0
+            Assert.True(ContainsFrame(c.SentFrames, expected));
+        }
+    }
+
+    [Fact]
+    public void TestMode_EndsOnDetach_Reconnect_AndDispose()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var changes = new ConcurrentQueue<bool>();
+        runtime.InTestModeChanged += (_, on) => changes.Enqueue(on);
+
+        runtime.EnterTestMode();
+        c.SetStatus(ConnectionStatus.Disconnected);
+        Assert.False(runtime.InTestMode);
+
+        c.SetStatus(ConnectionStatus.Connected);
+        runtime.EnterTestMode();
+        runtime.Reconnect();
+        Assert.False(runtime.InTestMode);
+
+        runtime.EnterTestMode();
+        runtime.Dispose();
+        Assert.False(runtime.InTestMode);
+        Assert.Equal(new[] { true, false, true, false, true, false }, changes.ToArray());
+    }
+
+    [Fact]
+    public void TestMode_AStaleHandle_DoesNotEndANewerSession()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        var first = runtime.EnterTestMode();
+        first.Dispose();
+        var second = runtime.EnterTestMode();
+        first.Dispose();
+        Assert.True(runtime.InTestMode);
+        second.Dispose();
+        Assert.False(runtime.InTestMode);
+    }
+
+    // ---- config session plumbing (spec §8.2) --------------------------------------------------
+
+    private static readonly byte[] SmallBlob = { 0x32, 0x02, 0x08, 0x64 };
+
+    private static HelloMessage StoredHello(uint crc) => new(ProtocolVersion.Current, ChipFamily.Esp32, "dev",
+        ControllerConfigState.Stored, crc, 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair });
+
+    private static byte LastWriteSeq(FakeControllerConnection c) => c.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88)[3];
+
+    private static async Task<T> Within<T>(Task<T> task)
+    {
+        Assert.Same(task, await Task.WhenAny(task, Task.Delay(WaitTimeout * 2)));
+        return await task;
+    }
+
+    [Fact]
+    public void Hello_ReachesTheConfigService_AfterTheLink()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        Assert.Same(LedHello, runtime.ControllerConfig.LastHello);
+        Assert.Equal(BannerKind.NotSetUp, runtime.ControllerConfig.Banner.Kind);
+    }
+
+    [Fact]
+    public async Task Save_DetachAndReattachOfTheSameConnectionWhileConfirming_StillConfirmed()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var save = runtime.ControllerConfig.SaveAsync(SmallBlob);
+        c.RaiseMessage(new ConfigResultMessage(LastWriteSeq(c), ConfigResultCode.Ok, 0xFF, 0xFF));
+        Assert.True(WaitUntil(() => runtime.ControllerConfig.Progress?.Phase == SavePhase.Confirming));
+
+        c.SetStatus(ConnectionStatus.Disconnected);   // the reboot drops the transport for a moment
+        c.SetStatus(ConnectionStatus.Connected);
+        c.RaiseMessage(StoredHello(ControllerConfigCodec.Crc32(SmallBlob)));
+
+        Assert.Equal(SaveStatus.Confirmed, (await Within(save)).Status);
+        Assert.Equal(Convert.ToBase64String(SmallBlob), runtime.Config.Config.ControllerConfigBlob);
+    }
+
+    [Fact]
+    public async Task Save_ReconnectMidSave_ConnectionLost()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        var save = runtime.ControllerConfig.SaveAsync(SmallBlob);
+        runtime.Reconnect();
+        Assert.Equal(SaveStatus.ConnectionLost, (await Within(save)).Status);
+        Assert.Null(runtime.Config.Config.ControllerConfigBlob);
+    }
+
+    [Fact]
+    public async Task ConfigMessages_FromARetiredConnection_AreDropped()
+    {
+        // Fake time: the 3 s result wait can't expire on a slow runner and change the seq.
+        var runtime = StartRuntime(options: Quiet with { Time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider() });
+        var old = Connection(0);
+        ConnectAndGreet(old);
+        runtime.Reconnect();
+        var current = Connection(1);
+        ConnectAndGreet(current);
+
+        var save = runtime.ControllerConfig.SaveAsync(SmallBlob);
+        var seq = LastWriteSeq(current);
+        old.RaiseMessage(new ConfigResultMessage(seq, ConfigResultCode.Invalid, 0, 1));   // retired: ignored
+        old.RaiseMessage(StoredHello(ControllerConfigCodec.Crc32(SmallBlob)));
+        await Task.Delay(100);
+        Assert.False(save.IsCompleted);
+
+        current.RaiseMessage(new ConfigResultMessage(seq, ConfigResultCode.Invalid, 0, 1));
+        Assert.Equal(SaveStatus.Rejected, (await Within(save)).Status);
+    }
+
+    [Fact]
+    public void ConfigSession_SendsNothing_ForATestHelloWithNoStoredConfig()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        Thread.Sleep(100);
+        Assert.DoesNotContain(c.SentFrames, f => f.Length > 2 && f[2] is 0x87 or 0x88);
+        Assert.Equal(ConfigOperation.Idle, runtime.ControllerConfig.Operation);
+    }
+
     [Fact]
     public void Hello_WrongVersion_IsAMismatch_AndInputStillWorks()
     {
@@ -827,6 +1094,70 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Assert.True(ContainsFrame(fresh.SentFrames, ProtocolEncoder.EncodeLed(0, 0)));
         Assert.True(ContainsFrame(fresh.SentFrames, ProtocolEncoder.EncodeLed(2, 0)));
+    }
+
+    [Fact]
+    public void Disconnect_RetiresTheTransport_AndReportsDisconnected()
+    {
+        var runtime = StartRuntime();
+        ConnectAndGreet(Connection(0));
+        var statuses = new Recorder<ConnectionStatus>();
+        var flags = new Recorder<bool>();
+        runtime.ConnectionStatusChanged += statuses.Handler;
+        runtime.UserDisconnectedChanged += flags.Handler;
+
+        runtime.Disconnect();
+
+        Assert.True(runtime.IsUserDisconnected);
+        Assert.Equal(1, Connection(0).DisposeCount);
+        Assert.Equal(ConnectionStatus.Disconnected, runtime.ConnectionStatus);
+        Assert.Equal(new[] { ConnectionStatus.Disconnected }, statuses.Items);
+        Assert.Equal(new[] { true }, flags.Items);
+        Assert.Equal(1, ConnectionCount);
+
+        runtime.Disconnect(); // already disconnected: nothing more
+        Assert.Single(flags.Items);
+    }
+
+    [Fact]
+    public void Disconnected_ConnectionConfigChange_StartsNoTransport_UntilConnect()
+    {
+        var config = NewConfig();
+        var runtime = StartRuntime(config);
+        runtime.Disconnect();
+
+        var changes = 0;
+        config.ConnectionConfigChanged += (_, _) => Interlocked.Increment(ref changes);
+        config.Config.Connection.Udp.ListenPort = 23456;
+        config.RequestSave(connectionChanged: true);
+        Assert.True(WaitUntil(() => Volatile.Read(ref changes) > 0), "the debounced save never ran");
+        Assert.Equal(1, ConnectionCount);
+
+        var flags = new Recorder<bool>();
+        runtime.UserDisconnectedChanged += flags.Handler;
+        runtime.Connect();
+
+        Assert.False(runtime.IsUserDisconnected);
+        Assert.Equal(new[] { false }, flags.Items);
+        Assert.Equal(2, ConnectionCount);
+        Assert.Equal(1, Connection(1).ConnectCount);
+        Assert.Equal(23456, Connection(1).Config.Udp.ListenPort);
+
+        runtime.Connect(); // already connected: no second transport
+        Assert.Equal(2, ConnectionCount);
+    }
+
+    [Fact]
+    public void Reconnect_EndsADisconnect()
+    {
+        var runtime = StartRuntime();
+        runtime.Disconnect();
+
+        runtime.Reconnect();
+
+        Assert.False(runtime.IsUserDisconnected);
+        Assert.Equal(2, ConnectionCount);
+        Assert.Equal(1, Connection(1).ConnectCount);
     }
 
     [Fact]

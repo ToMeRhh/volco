@@ -35,6 +35,35 @@ public class CompositionRootTests
         return root;
     }
 
+    [AvaloniaFact]
+    public void TheTrayUpdateState_FollowsTheBundledFirmware()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        FakeControllerConnection? connection = null;
+        var root = new CompositionRoot(Path.Combine(dir, "config.json"),
+            () => new PlatformServices(new FakeAudioEngine(), true, new RecordingEffects(), null,
+                                       Volco.Core.Tests.Firmware.MemoryFirmwareSource.Valid()),
+            connectionFactory: cfg => connection = new FakeControllerConnection(cfg),
+            createTray: false);
+        try
+        {
+            root.Start();
+            Assert.False(root.TrayShowsFirmwareUpdate);
+            connection!.SetStatus(Volco.Core.Communication.ConnectionStatus.Connected);
+            connection.RaiseMessage(new Volco.Core.Communication.HelloMessage(1, Volco.Core.Communication.ChipFamily.Esp32,
+                "0000aaaa1111", Volco.Core.Communication.ControllerConfigState.None, 0, 5, new[] { Volco.Core.Communication.IndicatorKind.Led }));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(root.TrayShowsFirmwareUpdate);
+
+            connection.RaiseMessage(new Volco.Core.Communication.HelloMessage(1, Volco.Core.Communication.ChipFamily.Esp32,
+                "3f9c2a1b5d07", Volco.Core.Communication.ControllerConfigState.None, 0, 5, new[] { Volco.Core.Communication.IndicatorKind.Led }));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(root.TrayShowsFirmwareUpdate);
+        }
+        finally { root.Shutdown(); }
+    }
+
     private static int VolumeChangedSubscribers(VolcoRuntime runtime)
         => (typeof(VolcoRuntime)
                 .GetField(nameof(VolcoRuntime.VolumeChanged), BindingFlags.Instance | BindingFlags.NonPublic)!

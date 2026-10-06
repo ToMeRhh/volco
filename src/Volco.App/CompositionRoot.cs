@@ -2,12 +2,15 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using Volco.App.Osd;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Diagnostics;
+using Volco.Core.Controller;
+using Volco.Core.Firmware;
 using Volco.Core.Input;
 using Volco.Core.Runtime;
 using Volco.Core.Updates;
@@ -33,6 +36,14 @@ internal sealed class CompositionRoot : IDisposable
     private SettingsViewModel? _settingsViewModel;
     private VolumeOsdWindow? _osd;
     private TrayIcon? _trayIcon;
+    private NativeMenuItem? _trayConnectionItem;
+    private NativeMenuItem? _firmwareMenuItem;
+    private WindowIcon? _connectedIcon;
+    private WindowIcon? _disconnectedIcon;
+    private WindowIcon? _attentionIcon;
+    private bool _trayShowsUpdate;
+    private bool _trayShowsAttention;
+    private FirmwareService? _firmware;
     private EventHandler<VolumeChangeNotification>? _osdHandler;
     private bool _shutDown;
 
@@ -59,7 +70,10 @@ internal sealed class CompositionRoot : IDisposable
         // Audio first: the runtime's v1 to v2 migration needs the device list.
         _platform = _createPlatform();
 
-        _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory);
+        var catalog = FirmwareCatalog.Load(_platform.Firmware ?? EmptyFirmwareSource.Instance);
+        _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
+                                    new VolcoRuntimeOptions { Firmware = catalog });
+        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog);
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
@@ -72,6 +86,7 @@ internal sealed class CompositionRoot : IDisposable
         _runtime.Start();
 
         if (_createTray) CreateTray();
+        _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
 
         // A tooltip needs hovering to notice; if audio failed, put a window in front of the user.
         if (_runtime.AudioEngineFailed) ShowSettings();
@@ -87,13 +102,11 @@ internal sealed class CompositionRoot : IDisposable
             var app = Application.Current;
             if (app is null) return;
 
-            using var iconStream = AssetLoader.Open(new Uri("avares://Volco.App/Assets/volco.ico"));
+            _connectedIcon = LoadIcon("volco.ico");
+            _disconnectedIcon = LoadIcon("volco-disconnected.ico");
+            _attentionIcon = LoadIcon("volco-update.ico");
             var tray = new TrayIcon
             {
-                Icon = new WindowIcon(iconStream),
-                ToolTipText = _runtime!.AudioEngineFailed
-                    ? "Volco — audio engine failed to start; see volco.log"
-                    : $"Volco {BuildInfo.DisplayVersion}",
                 Command = new ActionCommand(() =>
                 {
                     AppLog.Info("Tray icon left-clicked");
@@ -109,6 +122,27 @@ internal sealed class CompositionRoot : IDisposable
                 ShowSettings();
             };
             menu.Items.Add(open);
+
+            var connection = new NativeMenuItem("Disconnect");
+            connection.Click += (_, _) =>
+            {
+                AppLog.Info($"{connection.Header} menu item clicked");
+                if (_runtime!.IsUserDisconnected) _runtime.Connect();
+                else _runtime.Disconnect();
+            };
+            menu.Items.Add(connection);
+            _trayConnectionItem = connection;
+
+            // Shown while the controller needs the user: a firmware update, no controller
+            // answering, or a controller to set up (spec §8.3).
+            _firmwareMenuItem = new NativeMenuItem("Update controller firmware…") { IsVisible = false };
+            _firmwareMenuItem.Click += (_, _) =>
+            {
+                AppLog.Info($"{_firmwareMenuItem.Header} menu item clicked");
+                ShowSettings();
+                _settingsWindow?.ShowPage("controller");
+            };
+            menu.Items.Add(_firmwareMenuItem);
 
             // The in-app updater only makes sense for official release builds.
             if (BuildInfo.IsRelease)
@@ -131,11 +165,59 @@ internal sealed class CompositionRoot : IDisposable
             tray.Menu = menu;
             TrayIcon.SetIcons(app, new TrayIcons { tray });
             _trayIcon = tray;
+
+            _runtime!.ConnectionStatusChanged += OnTrayConnectionChanged;
+            _runtime.UserDisconnectedChanged += OnTrayConnectionChanged;
+            UpdateTray();
             AppLog.Info("Tray icon created");
         }
         catch (Exception ex)
         {
             AppLog.Error($"Tray icon creation failed: {ex}");
+        }
+    }
+
+    private static WindowIcon LoadIcon(string name)
+    {
+        using var stream = AssetLoader.Open(new Uri($"avares://Volco.App/Assets/{name}"));
+        return new WindowIcon(stream);
+    }
+
+    /// <summary>The tray's controller state (spec §8.3): the attention icon, a tooltip line and the
+    /// menu item, from the runtime banner. Tracked even without a tray, for tests.</summary>
+    internal bool TrayShowsFirmwareUpdate => _trayShowsUpdate;
+    internal bool TrayShowsAttention => _trayShowsAttention;
+
+    /// <summary>Runtime events come on any thread; the tray reads the runtime's current state.</summary>
+    private void OnTrayConnectionChanged<T>(object? sender, T e) => Dispatcher.UIThread.Post(UpdateTray);
+
+    private void OnBannerChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(UpdateTray);
+
+    /// <summary>One place decides the tray: red while not connected (manual Disconnect included),
+    /// else the attention icon while the controller needs the user, else the normal icon.</summary>
+    private void UpdateTray()
+    {
+        if (_runtime is not { } runtime || _shutDown) return;
+        var banner = runtime.ControllerConfig.Banner;
+        _trayShowsUpdate = banner.FirmwareUpdateAvailable;
+        _trayShowsAttention = banner.NeedsAttention;
+        if (_trayIcon is not { } tray) return;
+
+        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.ConnectionStatus, runtime.IsUserDisconnected);
+        var attention = _trayShowsAttention && !status.Disconnected;
+        tray.Icon = status.Disconnected ? _disconnectedIcon : attention ? _attentionIcon : _connectedIcon;
+        tray.ToolTipText = !attention ? status.ToolTip
+            : _trayShowsUpdate ? $"{status.ToolTip}\nController firmware update available"
+            : banner.Kind == BannerKind.NoAnswer ? $"{status.ToolTip}\nNo controller answering"
+            : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? $"{status.ToolTip}\nThe controller needs setting up"
+            : $"{status.ToolTip}\nThe controller needs attention";
+        if (_trayConnectionItem is not null) _trayConnectionItem.Header = status.ConnectionMenuText;
+        if (_firmwareMenuItem is not null)
+        {
+            _firmwareMenuItem.IsVisible = attention;
+            _firmwareMenuItem.Header = _trayShowsUpdate ? "Update controller firmware…"
+                : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? "Set up the controller…"
+                : "Open the Controller page…";
         }
     }
 
@@ -147,7 +229,7 @@ internal sealed class CompositionRoot : IDisposable
             if (_runtime is null) return;
             if (_settingsWindow is null)
             {
-                _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher());
+                _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher(), _firmware);
                 _settingsWindow = new SettingsWindow(_settingsViewModel, _runtime);
                 _settingsWindow.Closed += (_, _) =>
                 {
@@ -188,6 +270,8 @@ internal sealed class CompositionRoot : IDisposable
         if (_runtime is not null && _osdHandler is not null) _runtime.VolumeChanged -= _osdHandler;
         _osdHandler = null;
 
+        if (_runtime is not null) _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
+
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.
         _runtime?.Dispose();
@@ -204,6 +288,12 @@ internal sealed class CompositionRoot : IDisposable
             w.AllowClose = true;
             w.Close();
             _settingsWindow = null;
+        }
+
+        if (_runtime is not null)
+        {
+            _runtime.ConnectionStatusChanged -= OnTrayConnectionChanged;
+            _runtime.UserDisconnectedChanged -= OnTrayConnectionChanged;
         }
 
         if (_trayIcon is { } tray)

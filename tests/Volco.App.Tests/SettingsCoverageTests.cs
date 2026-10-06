@@ -56,14 +56,13 @@ public class SettingsCoverageTests
     }
 
     [AvaloniaFact]
-    public void Connection_TypePortBaudUdpWebSocket()
+    public void Connection_TypePortUdpWebSocket()
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var page = new ConnectionPage(vm.Connection);
         Host(page);
 
-        Named<ComboBox>(page, "BaudCombo").SelectedIndex = 3;                 // Connection.Serial.BaudRate
         vm.Connection.ComPort = "COM9";                                        // Connection.Serial.ComPort (no real ports on CI)
         Named<RadioButton>(page, "UdpOption").IsChecked = true;                // Connection.Type
         Named<NumericUpDown>(page, "UdpPortBox").Value = 23456;                // Connection.Udp.ListenPort
@@ -73,7 +72,6 @@ public class SettingsCoverageTests
         var c = SaveAndReload(rig).Connection;
         Assert.Equal(ConnectionType.WebSocket, c.Type);
         Assert.Equal("COM9", c.Serial.ComPort);
-        Assert.Equal(57600, c.Serial.BaudRate);
         Assert.Equal(23456, c.Udp.ListenPort);
         Assert.Equal(9876, c.WebSocket.Port);
     }

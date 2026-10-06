@@ -28,6 +28,10 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\volco.ico" />
+    <AvaloniaResource Include="Assets\volco-update.ico" />
+    <AvaloniaResource Include="..\..\THIRD-PARTY-NOTICES.txt" Link="Assets\Notices\THIRD-PARTY-NOTICES.txt" />
+    <AvaloniaResource Include="..\..\firmware\assets\fonts\OFL.txt" Link="Assets\Notices\OFL.txt" />
+    <AvaloniaResource Include="Assets\volco-disconnected.ico" />
     <!-- The controller's own icons and font (firmware/assets is their single source), for the
          screen previews. -->
     <AvaloniaResource Include="..\..\firmware\assets\icons\*.png" Link="Assets\Icons\%(Filename)%(Extension)" />

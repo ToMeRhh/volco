@@ -37,5 +37,14 @@
 
   <ItemGroup>
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.36.2" />
+    <PackageReference Include="Grpc.Tools" Version="2.84.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- The controller config schema, shared with the firmware (spec §6.1), and the bundled presets
+       (spec §6.2). Generated code lands in Volco.Core.Controller.Proto. -->
+  <ItemGroup>
+    <Protobuf Include="../../proto/volco_config.proto" ProtoRoot="../../proto" GrpcServices="None" />
+    <EmbeddedResource Include="../../proto/presets/*.json" LogicalName="Volco.Core.Presets.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

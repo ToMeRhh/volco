@@ -13,11 +13,32 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <!-- The USB firmware flasher (spec 8.6); only this project may reference it. -->
+    <PackageReference Include="EspDotNet" Version="5.0.2" />
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.335">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+
+  <!-- The controller firmware (spec 9.3): CI downloads it into Firmware/esp32; local builds have none. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Firmware\esp32\*" LogicalName="Firmware/esp32/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- CI sets RequireFirmware: the build fails without the firmware, or with firmware from another build. -->
+  <Target Name="CheckFirmware" BeforeTargets="BeforeBuild" Condition="'$(RequireFirmware)' == 'true'">
+    <PropertyGroup>
+      <_VolcoFirmwareManifest>$(MSBuildProjectDirectory)\Firmware\esp32\firmware-manifest.json</_VolcoFirmwareManifest>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_VolcoFirmwareManifest)')" Text="RequireFirmware: $(_VolcoFirmwareManifest) is missing." />
+    <Error Condition="'$(VolcoFirmwareBuildId)' == ''" Text="RequireFirmware: VolcoFirmwareBuildId is not set." />
+    <PropertyGroup>
+      <_VolcoFirmwareManifestText>$([System.IO.File]::ReadAllText('$(_VolcoFirmwareManifest)'))</_VolcoFirmwareManifestText>
+    </PropertyGroup>
+    <Error Condition="!$(_VolcoFirmwareManifestText.Contains('&quot;version&quot;: &quot;$(VolcoFirmwareBuildId)&quot;'))"
+           Text="RequireFirmware: the embedded firmware isn't build $(VolcoFirmwareBuildId)." />
+  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\Volco.Core\Volco.Core.csproj" />

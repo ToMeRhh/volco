@@ -32,6 +32,13 @@ public class SliderProcessor : IDisposable
     private readonly Timer _coalesceTimer;
     private readonly object _lock = new();
 
+    // Sync (see BeginSync): which sliders already reported since the last Hello, which pending
+    // values are syncs, and until when (Environment.TickCount64) a first value still counts as one.
+    private readonly TimeSpan _syncWindow;
+    private readonly HashSet<int> _syncedSinceHello = new();
+    private readonly HashSet<int> _pendingSync = new();
+    private long _syncDeadlineMs = long.MinValue;
+
     /// <summary>Raised after a slider changes volume, so the UI can show an OSD flyout.</summary>
     public event EventHandler<VolumeChangeNotification>? VolumeChanged;
 
@@ -43,11 +50,32 @@ public class SliderProcessor : IDisposable
     public event EventHandler<SliderLevelEventArgs>? SliderLevelChanged;
 
     public SliderProcessor(IAudioEngine audio, ConfigManager configManager)
+        : this(audio, configManager, TimeSpan.FromSeconds(1))
+    {
+    }
+
+    internal SliderProcessor(IAudioEngine audio, ConfigManager configManager, TimeSpan syncWindow)
     {
         _audio = audio;
         _configManager = configManager;
+        _syncWindow = syncWindow;
         _audio.SessionsChanged += OnSessionsChanged;
         _coalesceTimer = new Timer(_ => ProcessPending(), null, 20, 20);
+    }
+
+    /// <summary>
+    /// A Hello arrived: the firmware follows it with every slider's position. Each slider's first
+    /// value within the sync window sets the volume as usual, but skips smoothing (it is a single
+    /// frame, not a movement) and raises no OSD. The window keeps a sync frame lost over UDP from
+    /// silencing a real movement later.
+    /// </summary>
+    public void BeginSync()
+    {
+        lock (_lock)
+        {
+            _syncedSinceHello.Clear();
+            _syncDeadlineMs = Environment.TickCount64 + (long)_syncWindow.TotalMilliseconds;
+        }
     }
 
     public static float MapAdcToVolume(ushort adcValue, bool invert)
@@ -162,14 +190,27 @@ public class SliderProcessor : IDisposable
         lock (_lock)
         {
             _pendingValues[sliderIndex] = adcValue;
+            if (Environment.TickCount64 < _syncDeadlineMs && _syncedSinceHello.Add(sliderIndex))
+                _pendingSync.Add(sliderIndex);
+        }
+    }
+
+    /// <summary>Forgets slider values not yet applied (spec §8.5: test mode starts with nothing
+    /// queued for audio).</summary>
+    public void DropPending()
+    {
+        lock (_lock)
+        {
+            _pendingValues.Clear();
+            _pendingSync.Clear();
         }
     }
 
     /// <summary>
     /// Fix D: the most recently processed (post-curve, post-smoothing) volume in [0,1] for a
     /// slider index, or null when the index is out of range or that slider has never reported a
-    /// value yet. The firmware only sends a slider's value when it changes, so right after app
-    /// start this is genuinely unknown for any slider that hasn't moved - callers (a settings
+    /// value yet. The firmware reports every slider right after its Hello, so this is null only
+    /// until the handshake (or for a slider the controller doesn't have) - callers (a settings
     /// page seeding its live-level display) must treat null as "no data yet", not zero. Read
     /// under <see cref="_lock"/>: ProcessPending (the coalescing timer) writes it from a
     /// different thread.
@@ -187,16 +228,20 @@ public class SliderProcessor : IDisposable
         var config = _configManager.Config;
 
         KeyValuePair<int, ushort>[] pending;
+        int[] syncs;
         lock (_lock)
         {
             if (_pendingValues.Count == 0) return;
             pending = _pendingValues.ToArray();
             _pendingValues.Clear();
+            syncs = _pendingSync.ToArray();
+            _pendingSync.Clear();
         }
 
         foreach (var (sliderIndex, rawValue) in pending)
         {
             ushort? value = rawValue;
+            var isSync = Array.IndexOf(syncs, sliderIndex) >= 0;
 
             if (sliderIndex >= config.Sliders.Count)
                 continue;
@@ -210,7 +255,8 @@ public class SliderProcessor : IDisposable
                 prevVolume = _lastVolume.TryGetValue(sliderIndex, out var p) ? p : null;
             }
 
-            if (sliderConfig.SmoothingFactor > 0 && prevVolume is { } prev)
+            // A sync is one frame, not a stream: a smoothed step would never reach the slider.
+            if (!isSync && sliderConfig.SmoothingFactor > 0 && prevVolume is { } prev)
                 volume = ApplySmoothing(prev, volume, sliderConfig.SmoothingFactor);
 
             lock (_lock)
@@ -264,7 +310,8 @@ public class SliderProcessor : IDisposable
             // slider position, not the (possibly absent) device it's mapped to.
             SliderLevelChanged?.Invoke(this, new SliderLevelEventArgs(sliderIndex, volume));
 
-            if (deviceResolved && VolumeChanged != null)
+            // A sync reports where the slider already is: no OSD on every connect.
+            if (!isSync && deviceResolved && VolumeChanged != null)
             {
                 // Display names (nickname, else the automatic short name) and icons, as everywhere
                 // else. The icon is the slider's own device, else the current output's (the device

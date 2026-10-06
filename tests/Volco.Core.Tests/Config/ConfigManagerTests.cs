@@ -14,7 +14,7 @@ public class ConfigManagerTests
             Connection = new ConnectionConfig
             {
                 Type = ConnectionType.Serial,
-                Serial = new SerialConfig { ComPort = "COM3", BaudRate = 9600 },
+                Serial = new SerialConfig { ComPort = "COM3" },
                 Udp = new UdpConfig { ListenPort = 12345 }
             },
             Sliders = new List<SliderConfig>
@@ -409,7 +409,7 @@ public class ConfigManagerLoadSaveTests : IDisposable
         cm.Load();
         var c = cm.Config;
 
-        Assert.Equal(4, c.SchemaVersion);
+        Assert.Equal(5, c.SchemaVersion);
         Assert.Empty(c.Devices);
         Assert.Null(c.Controller);
         Assert.Equal(2, c.Presets.Count);
@@ -417,10 +417,45 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal("dev-2", c.Buttons[1].Default().SinglePress.DeviceB!.Id);
         Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
 
-        Assert.Contains("\"schemaVersion\": 4", File.ReadAllText(_configPath));
+        Assert.Contains("\"schemaVersion\": 5", File.ReadAllText(_configPath));
         Assert.Equal(V3Json, File.ReadAllText(Path.Combine(_tempDir, "config.v3.bak")));
         Assert.False(File.Exists(Path.Combine(_tempDir, "config.v1.bak")));
         Assert.False(ConfigMigrator.NeedsMigration(c));
+    }
+
+    [Fact]
+    public void Load_V4_MigratesToV5_WritesBackup_RemovesBaudRate()
+    {
+        const string v4 = """
+        { "schemaVersion": 4, "connection": { "type": "Serial", "serial": { "comPort": "COM7", "baudRate": 9600 } },
+          "sliders": [], "buttons": [], "presets": [ { "id": "default", "name": "Default" } ] }
+        """;
+        File.WriteAllText(_configPath, v4);
+
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+
+        Assert.Equal(5, cm.Config.SchemaVersion);
+        Assert.Equal("COM7", cm.Config.Connection.Serial.ComPort);
+        Assert.Null(cm.Config.ControllerConfigBlob);
+        var onDisk = File.ReadAllText(_configPath);
+        Assert.Contains("\"schemaVersion\": 5", onDisk);
+        Assert.DoesNotContain("baudRate", onDisk);
+        Assert.Equal(v4, File.ReadAllText(Path.Combine(_tempDir, "config.v4.bak")));
+    }
+
+    [Fact]
+    public void ControllerConfigBlob_RoundTrips()
+    {
+        var cm = new ConfigManager(_configPath);
+        cm.Load();
+        cm.Config.ControllerConfigBlob = Convert.ToBase64String(new byte[] { 0x32, 0x02, 0x08, 0x64 });
+        cm.Save();
+
+        var again = new ConfigManager(_configPath);
+        again.Load();
+        Assert.Equal("MgIIZA==", again.Config.ControllerConfigBlob);
+        Assert.False(File.Exists(Path.Combine(_tempDir, "config.v4.bak")));
     }
 
     [Fact]
@@ -500,7 +535,7 @@ public class ConfigManagerLoadSaveTests : IDisposable
         new ConfigManager(_configPath).Load();
 
         var onDisk = File.ReadAllText(_configPath);
-        Assert.Contains("\"schemaVersion\": 4", onDisk);
+        Assert.Contains("\"schemaVersion\": 5", onDisk);
         Assert.DoesNotContain("outputDevices", onDisk);
         Assert.Contains("\"actions\"", onDisk);
 

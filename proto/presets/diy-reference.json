@@ -1,0 +1,11 @@
+{
+  "preset": "diy-reference",
+  "sliders": [ {"pin": 33}, {"pin": 35}, {"pin": 32}, {"pin": 36}, {"pin": 34} ],
+  "buttons": [
+    {"pin": 4,  "led": {"pin": 12, "activeLow": true}},
+    {"pin": 14, "led": {"pin": 21, "activeLow": true}},
+    {"pin": 5,  "ledPair": {"pinA": 18, "pinB": 19, "activeLow": false}}
+  ],
+  "i2c0": {"sda": 25, "scl": 26},
+  "i2c1": {"sda": 27, "scl": 13}
+}

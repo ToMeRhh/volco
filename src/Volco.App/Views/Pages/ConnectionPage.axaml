@@ -29,12 +29,19 @@
           <TextBlock Name="TransportDetails" Grid.Column="2" Classes="Secondary"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                      Text="{Binding TransportDetails}"/>
-          <Button Name="ReconnectButton" Grid.Column="3" Command="{Binding ReconnectCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <PathIcon Data="{StaticResource Icon.Refresh}" Width="12" Height="12"/>
-              <TextBlock Text="Reconnect"/>
-            </StackPanel>
-          </Button>
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
+            <Button Name="ReconnectButton" Command="{Binding ReconnectCommand}"
+                    IsVisible="{Binding !IsUserDisconnected}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource Icon.Refresh}" Width="12" Height="12"/>
+                <TextBlock Text="Reconnect"/>
+              </StackPanel>
+            </Button>
+            <Button Name="DisconnectButton" Content="Disconnect" Command="{Binding DisconnectCommand}"
+                    IsVisible="{Binding !IsUserDisconnected}"/>
+            <Button Name="ConnectButton" Classes="Primary" Content="Connect" Command="{Binding ConnectCommand}"
+                    IsVisible="{Binding IsUserDisconnected}"/>
+          </StackPanel>
           <StackPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="18,6,0,0" Spacing="2">
             <TextBlock Name="HardwareSummaryText" Classes="Caption" Text="{Binding HardwareSummary}"
                        IsVisible="{Binding HasHardwareSummary}"/>
@@ -71,17 +78,6 @@
                       Command="{Binding RefreshComPortsCommand}" ToolTip.Tip="Refresh the port list">
                 <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
               </Button>
-            </Grid>
-            <Grid ColumnDefinitions="150,Auto">
-              <TextBlock Text="Baud rate" Classes="Secondary" VerticalAlignment="Center"/>
-              <ComboBox Name="BaudCombo" Grid.Column="1" Width="160"
-                        SelectedIndex="{Binding BaudRateIndex, Mode=TwoWay}">
-                <ComboBoxItem Content="9600"/>
-                <ComboBoxItem Content="19200"/>
-                <ComboBoxItem Content="38400"/>
-                <ComboBoxItem Content="57600"/>
-                <ComboBoxItem Content="115200"/>
-              </ComboBox>
             </Grid>
           </StackPanel>
 

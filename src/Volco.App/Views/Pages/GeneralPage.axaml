@@ -45,6 +45,11 @@
             <TextBlock Name="BuildDetailsText" Classes="Caption" Text="{Binding BuildDetails}"
                        IsVisible="{Binding BuildDetails, Converter={x:Static ObjectConverters.IsNotNull}}"/>
           </StackPanel>
+          <!-- The controller firmware Volco carries is built from these components (spec 9.3). -->
+          <Expander Name="NoticesExpander" Header="Third-party notices (controller firmware)">
+            <TextBox Name="NoticesBox" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="320"
+                     FontFamily="Consolas, Menlo, monospace" FontSize="11"/>
+          </Expander>
         </StackPanel>
       </Border>
 

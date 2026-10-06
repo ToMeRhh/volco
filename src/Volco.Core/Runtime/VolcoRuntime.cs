@@ -1,6 +1,7 @@
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Controller;
 using Volco.Core.Devices;
 using Volco.Core.Diagnostics;
 using Volco.Core.Input;
@@ -22,7 +23,7 @@ namespace Volco.Core.Runtime;
 /// thread, the SliderProcessor coalescing timer, the ButtonPressDetector timers, or the
 /// controller link's keepalive timer. Subscribers marshal to their UI thread themselves.
 /// </remarks>
-public sealed class VolcoRuntime : IDisposable, IPresetController
+public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessionLink
 {
     /// <summary>The live preset's id as last set; null until the first set. Read through
     /// <see cref="ActivePresetId"/>, which falls back to the first preset when this one is gone
@@ -59,6 +60,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     /// unavoidable race the pre-runtime Shutdown() documented.
     /// </summary>
     private int _disposed;
+
+    /// <summary>0/1, see <see cref="IsUserDisconnected"/>. Written only with Interlocked.</summary>
+    private int _userDisconnected;
 
     private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
@@ -101,14 +105,141 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         _connectionFactory = connectionFactory
                              ?? new Func<ConnectionConfig, IControllerConnection?>(CreateDefaultConnection);
         _options = options ?? VolcoRuntimeOptions.Default;
+        // In test mode the same delegate shows the test state and ignores the announce step
+        // (spec §8.5), so no preset blink or flash appears during a test.
         _link = new ControllerLink(
-            step => ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step),
+            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step),
             ControllerDisplay.AnnounceSteps, _options.Link);
-        _link.StateChanged += (_, state) => { if (!IsDisposed) ControllerStateChanged?.Invoke(this, state); };
+        _link.StateChanged += (_, state) =>
+        {
+            AppLog.Info($"Controller state: {state}");
+            WatchForSilence(state);
+            if (!IsDisposed) ControllerStateChanged?.Invoke(this, state);
+        };
         _link.HelloReceived += OnHello;
+        ControllerConfig = new ControllerConfigService(Config, this, _options.Time, () => _options.Firmware.BundledVersion);
     }
 
     public IAudioEngine Audio { get; }
+
+    // ── Test mode (spec §8.5) ────────────────────────────────────────────────────────────────
+
+    private readonly object _testGate = new();
+    private int _testGeneration;                 // guarded by _testGate; 0 = not testing
+    private TestIndicator[] _testIndicators = Array.Empty<TestIndicator>();   // guarded by _testGate
+
+    /// <summary>A hardware test is running: Slider and Button messages raise <see cref="RawInput"/>
+    /// and reach neither audio nor actions.</summary>
+    public bool InTestMode { get { lock (_testGate) return _testGeneration != 0; } }
+
+    /// <summary>Test mode started (true) or ended (false), also when the runtime ended it itself
+    /// (Detach, connection replaced, dispose). Any thread.</summary>
+    public event EventHandler<bool>? InTestModeChanged;
+
+    /// <summary>Slider and Button messages, in test mode only. Any thread (the transport's).</summary>
+    public event EventHandler<RawInputEventArgs>? RawInput;
+
+    private int _nextTestGeneration;
+
+    /// <summary>Starts a hardware test, or joins the one running. Disposing the handle ends the
+    /// session it belongs to (never a later one); it is idempotent.</summary>
+    public IDisposable EnterTestMode()
+    {
+        int generation;
+        bool started = false;
+        lock (_testGate)
+        {
+            if (IsDisposed) return new TestHandle(this, -1);
+            if (_testGeneration == 0)
+            {
+                _testGeneration = ++_nextTestGeneration;
+                _testIndicators = Array.Empty<TestIndicator>();
+                started = true;
+            }
+            generation = _testGeneration;
+        }
+        if (started)
+        {
+            AppLog.Info("Test mode on");
+            _buttonPressDetector?.Reset();   // a gesture started before the test can't fire during it
+            _sliderProcessor?.DropPending();  // nor a slider value queued just before it
+            _link.PushAll();
+            InTestModeChanged?.Invoke(this, true);
+        }
+        return new TestHandle(this, generation);
+    }
+
+    /// <summary>What LED button <paramref name="button"/> shows during the test.</summary>
+    public void SetTestIndicator(int button, TestIndicator state)
+    {
+        if (button < 0) return;
+        lock (_testGate)
+        {
+            if (_testGeneration == 0) return;
+            if (_testIndicators.Length <= button) Array.Resize(ref _testIndicators, button + 1);
+            _testIndicators[button] = state;
+        }
+        _link.Push();
+    }
+
+    /// <summary>Ends the test (only <paramref name="generation"/>'s session; -1 for any).</summary>
+    private void ExitTestMode(int generation)
+    {
+        lock (_testGate)
+        {
+            if (_testGeneration == 0 || (generation != -1 && generation != _testGeneration)) return;
+            _testGeneration = 0;
+            _testIndicators = Array.Empty<TestIndicator>();
+        }
+        AppLog.Info("Test mode off");
+        _buttonPressDetector?.Reset();       // a button held across the exit fires nothing
+        _link.PushAll();                     // the real indicator state
+        if (!IsDisposed) InTestModeChanged?.Invoke(this, false);
+    }
+
+    private sealed class TestHandle(VolcoRuntime runtime, int generation) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (generation < 0 || Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            runtime.ExitTestMode(generation);
+        }
+    }
+
+    /// <summary>The test state of every button: LED buttons their <see cref="TestIndicator"/>,
+    /// screens "Test" / "Button N" with the generic icon.</summary>
+    private IReadOnlyList<ButtonDisplay?> TestDisplays()
+    {
+        var kinds = Config.Config.Controller?.Buttons ?? new List<IndicatorKind>();
+        TestIndicator[] indicators;
+        lock (_testGate) indicators = _testIndicators;
+        var result = new ButtonDisplay?[kinds.Count];
+        for (int i = 0; i < kinds.Count; i++)
+        {
+            var state = i < indicators.Length ? indicators[i] : TestIndicator.Off;
+            result[i] = kinds[i] switch
+            {
+                IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(state switch
+                {
+                    TestIndicator.On or TestIndicator.A => (byte)1,
+                    TestIndicator.B => (byte)2,
+                    _ => (byte)0,
+                }),
+                IndicatorKind.Screen => new ScreenDisplay(ScreenContent.Text("Test", ScreenIcon.Generic, false, $"Button {i}")),
+                _ => null,
+            };
+        }
+        return result;
+    }
+
+    /// <summary>The controller config session: reads, saves, the mirror and the banner (spec §8.2).</summary>
+    public ControllerConfigService ControllerConfig { get; }
+
+    bool IConfigSessionLink.SendRaw(byte[] burst) => !IsDisposed && _link.SendRaw(burst);
+
+    ConnectionType IConfigSessionLink.ConnectionType => Config.Config.Connection.Type;
     public ConfigManager Config { get; }
     public bool AudioEngineFailed => !_audioReady;
 
@@ -117,6 +248,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
 
     /// <summary>Where the controller session stands (spec §5.5).</summary>
     public ControllerState ControllerState => _link.State;
+
+    /// <summary>Every Hello from the current connection, version-only ones included, after the
+    /// link and the config session have it (the firmware service waits on it). Any thread.</summary>
+    public event EventHandler<HelloMessage>? HelloReceived;
 
     /// <summary>The controller session's state changed. Any thread.</summary>
     public event EventHandler<ControllerState>? ControllerStateChanged;
@@ -215,12 +350,55 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     }
 
     /// <summary>Drops the current transport and starts a fresh one from the current connection
-    /// config (the settings UI's Reconnect button).</summary>
+    /// config (the settings UI's Reconnect button). Also ends a <see cref="Disconnect"/>.</summary>
     public void Reconnect()
     {
         if (IsDisposed || !_started) return;
         AppLog.Info("Reconnect requested");
+        SetUserDisconnected(false);
         StartConnection();
+    }
+
+    /// <summary>
+    /// True after <see cref="Disconnect"/> until <see cref="Connect"/> or <see cref="Reconnect"/>:
+    /// there is no transport, and connection-config changes are saved but start none. Not
+    /// persisted; every launch connects.
+    /// </summary>
+    public bool IsUserDisconnected => Volatile.Read(ref _userDisconnected) != 0;
+
+    /// <summary><see cref="IsUserDisconnected"/> changed (argument: its new value). Any thread.</summary>
+    public event EventHandler<bool>? UserDisconnectedChanged;
+
+    /// <summary>Drops the current transport and starts none until <see cref="Connect"/> (the
+    /// settings UI's and the tray's Disconnect).</summary>
+    public void Disconnect()
+    {
+        if (IsDisposed || !_started) return;
+        AppLog.Info("Disconnect requested");
+        // Flag first, then take the transport: a StartConnection racing this one either sees the
+        // flag after publishing and retires its own transport, or published before the flag was
+        // set and so is taken out of _connection below (both are full fences, as with Dispose).
+        if (!SetUserDisconnected(true)) return;
+        StopConnection();
+    }
+
+    /// <summary>Ends a <see cref="Disconnect"/>: starts a transport from the current connection
+    /// config. Does nothing while connected normally.</summary>
+    public void Connect()
+    {
+        if (IsDisposed || !_started) return;
+        if (!SetUserDisconnected(false)) return;
+        AppLog.Info("Connect requested");
+        StartConnection();
+    }
+
+    /// <summary>Sets the flag and raises the event when it changed; returns whether it did.</summary>
+    private bool SetUserDisconnected(bool value)
+    {
+        var next = value ? 1 : 0;
+        if (Interlocked.Exchange(ref _userDisconnected, next) == next) return false;
+        if (!IsDisposed) UserDisconnectedChanged?.Invoke(this, value);
+        return true;
     }
 
     /// <summary>Runs one action now, as a button press would (the settings UI's Test button).
@@ -299,30 +477,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     /// <summary>
     /// Creates (or re-creates, on a connection-config change) the transport. Runs on the thread
     /// that called <see cref="Start"/>, or on the ConfigManager debounce-timer thread via
-    /// <see cref="OnConfigChanged"/> (Bug 1).
+    /// <see cref="OnConfigChanged"/> (Bug 1). Does nothing while <see cref="IsUserDisconnected"/>.
     /// </summary>
     private void StartConnection()
     {
-        if (IsDisposed) return;
+        // Spec §8.6: while a firmware probe or flash holds the port, nothing reopens it; nor after
+        // the user's Disconnect.
+        if (IsDisposed || IsSuspended || IsUserDisconnected) return;
 
-        // Take ownership of the old transport (see _connection): if Dispose() got to it first,
-        // this returns null and Dispose() retires it instead.
-        var old = Interlocked.Exchange(ref _connection, null);
-        if (old != null)
-        {
-            // Detached before Dispose() (Review Focus #2): the old transport can still raise
-            // events from its background threads, and those must never be reported as the
-            // status of the connection that replaces it. The Disconnected a real transport
-            // raises from its own Dispose() therefore no longer reaches subscribers by itself,
-            // so report it here, once, if they were last told something else - otherwise a
-            // settings page would keep showing the old transport's "Connected" while e.g. a new
-            // WebSocket listener sits Disconnected and raises nothing.
-            var lastStatus = old.Status;
-            RetireTransport(old);
-            _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
-            if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
-                ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
-        }
+        StopConnection();
 
         var config = Config.Config.Connection;
         AppLog.Info($"Starting connection: {config.Type}");
@@ -340,21 +503,22 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         {
             RetireTransport(displaced);
             _link.Detach();
+            ControllerConfig.OnConnectionReplaced();
+            ExitTestMode(-1);
         }
 
-        // Dispose() may have started after the IsDisposed check at the top. Both the publish
-        // above and Dispose()'s flag write are full fences, so if this read still sees 0, any
-        // Dispose() that starts later is guaranteed to find the transport in _connection and
-        // retire it itself. If it sees 1, exactly one of us gets it out of the field: retire
-        // it only if CompareExchange says it is still there, and never Connect() it.
-        // Closed at the source: a Dispose() landing between this check and Connect() below
-        // retires the transport, and Connect() then runs on (or concurrently with) its Dispose().
+        // Dispose() or SuspendConnection() may have started after the check at the top. Both the
+        // publish above and their flag writes are full fences, so if this read still sees neither,
+        // any that starts later is guaranteed to find the transport in _connection and retire it
+        // itself. If it sees one, exactly one of us gets it out of the field: retire it only if
+        // CompareExchange says it is still there, and never Connect() it.
         // Every transport (Serial, UDP, WebSocket) guards Connect() with its own disposed flag
         // under its own lock, so a Connect() that loses that race is a no-op and binds nothing -
         // no port or listener can outlive the Dispose(). No lock is needed here, and none is held
         // across Connect()/Dispose(), both of which raise StatusChanged synchronously into
         // subscribers (a deadlock risk for a UI that marshals synchronously).
-        if (IsDisposed)
+        // The same holds for a Disconnect() or a suspension racing this restart.
+        if (IsDisposed || IsSuspended || IsUserDisconnected)
         {
             if (Interlocked.CompareExchange(ref _connection, null, connection) == connection)
                 RetireTransport(connection);
@@ -362,6 +526,127 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         }
 
         connection.Connect();
+    }
+
+    /// <summary>Takes the current transport out of <see cref="_connection"/>, if any, and retires
+    /// it as a replacement does: subscribers are told it is Disconnected, the link detaches, a
+    /// config operation fails and test mode ends.</summary>
+    private void StopConnection()
+    {
+        // Take ownership of the old transport (see _connection): if Dispose() got to it first,
+        // this returns null and Dispose() retires it instead.
+        var old = Interlocked.Exchange(ref _connection, null);
+        if (old != null)
+        {
+            // Detached before Dispose() (Review Focus #2): the old transport can still raise
+            // events from its background threads, and those must never be reported as the
+            // status of the connection that replaces it. The Disconnected a real transport
+            // raises from its own Dispose() therefore no longer reaches subscribers by itself,
+            // so report it here, once, if they were last told something else - otherwise a
+            // settings page would keep showing the old transport's "Connected" while e.g. a new
+            // WebSocket listener sits Disconnected and raises nothing.
+            var lastStatus = old.Status;
+            RetireTransport(old);
+            _link.Detach(); // its Disconnected no longer reaches OnConnectionStatusChanged
+            ControllerConfig.OnConnectionReplaced();
+            ExitTestMode(-1);
+            if (lastStatus != ConnectionStatus.Disconnected && !IsDisposed)
+                ConnectionStatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
+        }
+    }
+
+    // ── A silent controller ──────────────────────────────────────────────────────────────────
+
+    private readonly object _silenceGate = new();
+    private ITimer? _silenceTimer;   // guarded by _silenceGate
+    private int _silent;
+
+    /// <summary>The USB port has been open for <see cref="VolcoRuntimeOptions.SilentAfter"/> with
+    /// no Hello: whatever is on it isn't answering as a Volco controller.</summary>
+    public bool ControllerSilent => Volatile.Read(ref _silent) != 0;
+
+    /// <summary><see cref="ControllerSilent"/> changed. Any thread.</summary>
+    public event EventHandler<bool>? ControllerSilentChanged;
+
+    private void WatchForSilence(ControllerState state)
+    {
+        lock (_silenceGate)
+        {
+            _silenceTimer?.Dispose();
+            _silenceTimer = null;
+            if (state == ControllerState.AwaitingHello && !IsDisposed)
+                _silenceTimer = _options.Time.CreateTimer(_ =>
+                {
+                    // Not while a firmware operation holds the port (it waits for the Hello itself).
+                    if (_link.State == ControllerState.AwaitingHello && !IsSuspended && Volatile.Read(ref _firmwareWaits) == 0
+                        && Config.Config.Connection.Type == ConnectionType.Serial) SetSilent(true);
+                }, null, _options.SilentAfter, Timeout.InfiniteTimeSpan);
+        }
+        if (state != ControllerState.AwaitingHello) SetSilent(false);
+    }
+
+    private void SetSilent(bool silent)
+    {
+        if (Interlocked.Exchange(ref _silent, silent ? 1 : 0) == (silent ? 1 : 0)) return;
+        if (silent) AppLog.Info($"No Hello on {Config.Config.Connection.Serial.ComPort} for {_options.SilentAfter.TotalSeconds:F0} s");
+        ControllerConfig.OnControllerSilent(silent);
+        if (!IsDisposed) ControllerSilentChanged?.Invoke(this, silent);
+    }
+
+    // ── Suspension (spec §8.6) ───────────────────────────────────────────────────────────────
+
+    private int _suspensions;
+
+    /// <summary>A firmware probe or flash holds the port: no connection is open or opened.</summary>
+    public bool IsSuspended => Volatile.Read(ref _suspensions) > 0;
+
+    private int _firmwareWaits;
+
+    /// <summary>The firmware service is waiting for the Hello after a probe or flash: the silence
+    /// timer stays quiet meanwhile (the service reports a silent board itself).</summary>
+    internal IDisposable HoldSilence()
+    {
+        Interlocked.Increment(ref _firmwareWaits);
+        return new SilenceHold(this);
+    }
+
+    private sealed class SilenceHold(VolcoRuntime runtime) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0) Interlocked.Decrement(ref runtime._firmwareWaits);
+        }
+    }
+
+    /// <summary>Releases the connection (and so the serial port) until the handle is disposed:
+    /// the link detaches, a config operation fails and test mode ends, as on a replacement, and
+    /// neither a connection config change nor <see cref="Reconnect"/> reopens it meanwhile.
+    /// Disposing the last handle restarts the connection from the current config.</summary>
+    public IDisposable SuspendConnection()
+    {
+        Interlocked.Increment(ref _suspensions);
+        AppLog.Info("Connection suspended");
+        StopConnection();
+        return new Suspension(this);
+    }
+
+    private void Resume()
+    {
+        if (Interlocked.Decrement(ref _suspensions) != 0 || IsDisposed || !_started) return;
+        AppLog.Info("Connection resumed");
+        StartConnection();
+    }
+
+    private sealed class Suspension(VolcoRuntime runtime) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0) runtime.Resume();
+        }
     }
 
     /// <summary>Detaches and disposes a transport this thread has taken ownership of by removing
@@ -383,7 +668,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         ConnectionStatusChanged?.Invoke(this, status);
 
         if (status == ConnectionStatus.Connected) _link.Attach((IControllerConnection)sender!);
-        else _link.Detach();
+        else
+        {
+            _link.Detach();
+            ControllerConfig.OnDetached();
+            ExitTestMode(-1);
+        }
     }
 
     private void OnMessageReceived(object? sender, ControllerMessage msg)
@@ -395,7 +685,26 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
             case HelloMessage or AliveMessage:
                 // Only the current transport's session: a Hello still in flight from a retired
                 // transport must not mark the new session Ready.
-                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) _link.OnMessage(msg);
+                if (!ReferenceEquals(sender, Volatile.Read(ref _connection))) break;
+                _link.OnMessage(msg);
+                ControllerConfig.OnMessage(msg);   // after the link: the controller info is stored
+                if (msg is HelloMessage hello)
+                {
+                    AppLog.Info($"Hello: v{hello.Version}, {hello.Chip}, firmware '{hello.FirmwareVersion}', config {hello.ConfigState} " +
+                                $"crc {hello.ConfigCrc:X8}, {hello.SliderCount} sliders, buttons [{string.Join(",", hello.Buttons)}]");
+                    HelloReceived?.Invoke(this, hello);
+                }
+                break;
+            case ConfigDataMessage or ConfigResultMessage:
+                // Same stale-sender filter as Hello (spec §8.2).
+                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) ControllerConfig.OnMessage(msg);
+                break;
+            case SliderMessage or ButtonMessage when InTestMode:
+                // Spec §8.5: raw input only; nothing reaches the slider processor or the detector.
+                RawInput?.Invoke(this, msg is SliderMessage s
+                    ? new RawInputEventArgs(RawInputKind.Slider, s.SliderIndex, s.Value)
+                    : new RawInputEventArgs(RawInputKind.Button, ((ButtonMessage)msg).ButtonIndex,
+                                            ((ButtonMessage)msg).State == ButtonState.Pressed ? 1 : 0));
                 break;
             case SliderMessage slider:
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
@@ -420,7 +729,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
 
     private void OnButtonPressDetected(object? sender, ButtonPressEventArgs e)
     {
-        if (IsDisposed) return;
+        if (IsDisposed || InTestMode) return;   // second guard (spec §8.5): no action during a test
 
         AppLog.Info($"Button press detected: Index={e.ButtonIndex}, Type={e.PressType}");
         var config = Config.Config;
@@ -691,12 +1000,17 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
     }
 
     /// <summary>Stores the controller's hardware before the link pushes (spec §3.4); saves only
-    /// when it changed.</summary>
+    /// when it changed. Also arms the slider sync: every slider's position follows the Hello.</summary>
     private void OnHello(object? sender, HelloMessage hello)
     {
+        // Raised on the receive path before the Slider frames that follow the Hello are routed.
+        _sliderProcessor?.BeginSync();
+        if (hello.Version != ProtocolVersion.Current) return;  // version-only: keep the last good summary
+
         var info = new ControllerInfoConfig
         {
-            ProtocolVersion = hello.Version, Sliders = hello.SliderCount, Buttons = hello.Buttons.ToList(),
+            ProtocolVersion = hello.Version, Chip = hello.Chip, FirmwareVersion = hello.FirmwareVersion,
+            Sliders = hello.SliderCount, Buttons = hello.Buttons.ToList(),
         };
         if (info.SameAs(Config.Config.Controller)) return;
         Config.Config.Controller = info;
@@ -722,8 +1036,13 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
 
     private void OnConfigChanged(object? sender, EventArgs e)
     {
-        AppLog.Info("Connection configuration changed, restarting connection");
         // Handler is invoked only when connection config changes
+        if (IsUserDisconnected)
+        {
+            AppLog.Info("Connection configuration changed while disconnected; used on Connect");
+            return;
+        }
+        AppLog.Info("Connection configuration changed, restarting connection");
         StartConnection();
     }
 
@@ -738,7 +1057,24 @@ public sealed class VolcoRuntime : IDisposable, IPresetController
         Config.ConnectionConfigChanged -= OnConfigChanged;
         Config.ConfigChanged -= OnSettingsChanged;
 
-        // Before the transport goes: nothing may be sent to it while it is being retired.
+        // Before the transport goes: nothing may be sent to it while it is being retired. An
+        // operation in flight ends as if the connection were replaced.
+        ControllerConfig.Dispose();
+        lock (_silenceGate)
+        {
+            _silenceTimer?.Dispose();
+            _silenceTimer = null;
+        }
+
+        bool wasTesting;
+        lock (_testGate)
+        {
+            wasTesting = _testGeneration != 0;
+            _testGeneration = 0;
+        }
+        // The one event raised after Dispose began (spec §8.5): a page holding a test handle learns
+        // that the test is over.
+        if (wasTesting) InTestModeChanged?.Invoke(this, false);
         _link.Dispose();
 
         // Take ownership of the current transport (see _connection): a concurrent restart that
