@@ -10,7 +10,7 @@
     sand:     { body: ['#e6e0d5', 0.0, 0.55], key: '#f4f1ea', cap: '#efebe3', line: '#e2602a', mark: 'rgba(80,60,30,0.30)' },
   };
   const PX_ON = '#e9f1ff', PX_OFF = '#07090c', CELL = 4;
-  const POSITION = { x: 30, z: 0, turn: -0.12 };   // on the desk, angled a little toward the chair
+  const POSITION = { x: 0, back: -13 };   // centred in front of the monitor; the back edge stays clear of its stand
 
   /**
    * @param {object} stage   stage.js
@@ -31,6 +31,15 @@
       glass: new THREE.MeshPhysicalMaterial({ color: '#000', roughness: 0.04, clearcoat: 1, transparent: true, opacity: 0.18, depthWrite: false, envMapIntensity: 2.2 }),
       tick: new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.8, transparent: true, opacity: 0.45 }),
     };
+    // An LED's glow is an additive halo, not a light: a new light would change the scene's light
+    // count, and three.js recompiles every material's shader when it does.
+    const haloTex = kit.canvasTex(64, 64, (g, w, h) => {
+      const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      gr.addColorStop(0, 'rgba(255,190,110,1)'); gr.addColorStop(0.35, 'rgba(255,150,60,.35)'); gr.addColorStop(1, 'rgba(255,140,50,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    });
+    haloTex.wrapS = haloTex.wrapT = THREE.ClampToEdgeWrapping;
+    const haloGeo = new THREE.PlaneGeometry(2.2, 2.2);
     let finish = 'silver', board = null, wordmark = null;
     const interactive = [];
     const faderValues = [];
@@ -93,7 +102,15 @@
 
     /** Builds the board for { sliders, kinds }; drop: animate it falling into place (a new preset). */
     function build(hw, { drop = false } = {}) {
-      if (board) { scene.remove(board.group); board.group.traverse(x => { if (x.isMesh) x.geometry.dispose(); }); }
+      if (board) {
+        scene.remove(board.group);
+        board.group.traverse(x => {
+          if (!x.isMesh) return;
+          if (x.geometry !== haloGeo) x.geometry.dispose();
+          // Textures only: disposing a material can free a shader program the next board needs again.
+          if (x.material.map && x.material.map !== haloTex) x.material.map.dispose();
+        });
+      }
       interactive.length = 0;
       const n = hw.sliders, kinds = hw.kinds, b = kinds.length;
       const cols = b <= 3 ? b : Math.min(4, Math.ceil(b / 2)), rows = b ? Math.ceil(b / cols) : 1;
@@ -167,8 +184,10 @@
             dome.scale.y = 0.7;
             add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 24), M.well), x + dx, 0.0, zInd, false);
             add(dome, x + dx, 0.02, zInd);
-            const glow = new THREE.PointLight('#ffa24a', 0, 2.6, 2);
-            add(glow, x + dx, 0.35, zInd, false);
+            const glow = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0,
+              blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+            glow.rotation.x = -Math.PI / 2; glow.renderOrder = 3; glow.visible = false;
+            add(glow, x + dx, 0.08, zInd, false);
             return { mat, glow };
           });
         }
@@ -188,8 +207,7 @@
       ao.rotation.x = -Math.PI / 2; ao.position.y = 0.012;
       group.add(ao);
 
-      group.position.set(POSITION.x, 0, POSITION.z);
-      group.rotation.y = POSITION.turn;
+      group.position.set(POSITION.x, 0, POSITION.back + D / 2);
       scene.add(group);
       board = { group, top, faders, keys, status, dropT0: drop ? performance.now() : -1e9 };
     }
@@ -202,7 +220,8 @@
         const on = k.kind === 2 ? value === j + 1 : value !== 0;
         led.mat.emissiveIntensity = on ? 3.2 : 0;
         led.mat.color.set(on ? '#ffcf8a' : '#4a2e14');
-        led.glow.intensity = on ? 0.6 : 0;
+        led.glow.material.opacity = on ? 0.55 : 0;
+        led.glow.visible = on;
       });
     }
     /** A screen button's frame (1024 bytes, page order) at brightness level 0..1 (0 = off). */
@@ -260,6 +279,8 @@
       build, setFinish, setLed, setScreen,
       /** A slider's position 0..1 (0.5 until moved). */
       faderValue: i => faderValues[i] ?? 0.5,
+      /** Plays the drop-in animation from now. */
+      drop() { if (board) board.dropT0 = performance.now(); },
       /** The status LED: lit while the controller runs, dark while it reboots. */
       setStatus(on) { if (board) board.status.material.color.set(on ? '#ffb35c' : '#2a1c10'); },
       update(now, dt) {

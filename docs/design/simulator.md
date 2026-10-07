@@ -59,7 +59,7 @@ The view re-centres the board in the space the panel and drawer leave free, usin
 
 ### 5.1 Room and lighting
 
-Units are centimetres. The desk top is at y = 0. Everything is procedural (geometry plus canvas textures) and nothing is loaded except three.js.
+Units are centimetres. The desk top is at y = 0. Everything is procedural (geometry plus canvas textures) and nothing is loaded except three.js. The scene is built over several tasks (the stage, each large texture, the rest of the room, the board), and its shaders compile with `compileAsync` before the render loop starts, so loading never holds the page for long. Specks and wood grain are written into one pixel layer per texture, not drawn rect by rect.
 
 - **Room:** plaster back and left walls, a skirting board, a dark wood floor and a terracotta rug.
 - **Window:** on the left wall, a frame with mullions and a sill, and a warm sky gradient with soft tree silhouettes.
@@ -70,7 +70,7 @@ Units are centimetres. The desk top is at y = 0. Everything is procedural (geome
   - a hemisphere fill;
   - `RoomEnvironment` at 0.32 intensity for reflections;
   - ACES tone mapping.
-- **Post-processing:** a `BokehPass` for depth of field (focus is the camera's distance to the board), then an `OutputPass`. The composer renders to a 4-sample half-float target.
+- **Post-processing:** a `RenderPass`, then an `OutputPass`; no depth of field, so the board stays sharp at every zoom. The composer renders to a 4-sample half-float target.
 - **Props:** as in D2. The monitor is about 70 × 39 cm, centred, lowered on a short aluminium stand. The speakers are scaled to 0.7 and toed in. The headphones hang on a walnut-and-metal stand to the right.
 - **Monitor content:** a warm dune wallpaper and a taskbar. While a fader moves, it shows a Volco-style volume overlay with the name and a bar. When an output or mute changes, it shows the device name for about 1.4 s and then fades.
 
@@ -89,13 +89,14 @@ Each output device has emitters: one on each speaker woofer and one on each head
   - **LED pair:** two LED domes.
   - **Screen:** a 128×64 OLED behind glass in a black bezel.
 - **Size:** the width follows the slider count and button columns, and the depth follows the number of button rows.
+- **Placement:** centred on the desk in front of the monitor, square to the viewer, with its back edge fixed just clear of the monitor stand so a deeper board grows toward the keyboard. The keyboard and mouse sit on the mat in front of it.
 - **Details:** the engraved "VOLCO" wordmark, a status LED, and a soft contact shadow.
 - **Rebuild:**
   - Choosing a preset rebuilds with a short drop-in animation.
   - A builder edit rebuilds in place.
   - Fader positions are kept by index.
 - **OLED rendering:** each screen draws its content at 128×64 with `oled.js` (§7.2), thresholds it to 1 bit, and paints it as a pixel grid into a canvas texture, unlit and not tone-mapped. The firmware's brightness, dimming, switch-off and pixel shift (§7.2) are applied there.
-- **LEDs:** an emissive dome plus a tiny warm point light that spills onto the case.
+- **LEDs:** an emissive dome plus an additive warm halo on the case. It is not a light: adding a light changes the scene's light count, which makes three.js recompile every material's shader (a 1.5 s stall on each new LED).
 
 ### 5.4 Pointer
 
@@ -111,13 +112,14 @@ Each output device has emitters: one on each speaker woofer and one on each head
 
 ### 6.1 Panel
 
-The panel has five sections, from top to bottom:
+The panel has six sections, from top to bottom:
 
 1. **Preset:** a select with *DIY reference*, *Screen controller* and *Mixed*. A disabled *Custom* entry shows after any edit.
 2. **Sliders:** a − n + stepper.
-3. **Buttons:** one row per button: a drag grip for native drag-and-drop reordering, the button number, a four-way kind picker (plain, LED, LED pair, screen, as icons with labels and tooltips), and a remove button. A dashed "+ Button" row adds an LED button.
-4. **Finish:** three swatches.
-5. **Footer:** Auto-save on the left; Revert and Apply on the right.
+3. **Buttons:** one row per button: a drag grip for native drag-and-drop reordering, the button number, a four-way kind picker (plain, LED, LED pair, screen, as icons with labels and tooltips), and a remove button. A dashed "+ Button" row adds an LED button, or a plain one when an LED no longer fits.
+4. **Pins:** a meter of the ESP32's I/O pins the draft uses ("13 of 20 I/O"), amber once no further button fits; its tooltip adds the input-only pins.
+5. **Finish:** three swatches.
+6. **Footer:** Auto-save on the left; Revert and Apply on the right.
 
 The panel takes its draft from the stored config at load and after every reboot. If Volco writes a config while a draft is unsaved, Volco's config replaces the draft and the panel shows a one-line note ("Volco saved a new layout; your draft was replaced") until the next edit.
 
@@ -143,7 +145,7 @@ The chip is the classic ESP32, with exactly the masks of `Volco.Core.Controller.
   - **LED and LED-pair indicators:** output-capable pins.
   - **Screens:** a bus and an address. Screens fill buses 0, 1, 2 and 3 in order, at 0x3C and then 0x3D. That gives at most 8 screens, matching the firmware's `kMaxScreens`. A bus receives SDA and SCL (output-capable) the first time a screen uses it.
 - **Prefers safe pins:** the strapping pins 0, 2, 12 and 15 are used only once nothing else is left.
-- **Disables what won't fit:** the builder greys out "+" for sliders and buttons, and individual kind choices, when allocation would fail, with a tooltip saying why ("No free ADC pin", "No free output pin", "8 screens maximum").
+- **Explains what won't fit:** the builder dims "+" for sliders and buttons, and individual kind choices, when allocation would fail. They stay focusable and clickable (`aria-disabled`, not `disabled`, so the tooltip shows): the tooltip names the reason ("No free ADC pin", "No free output pin", "8 screens maximum"), and a click shows `layout.explain`'s sentence (what ran out and what each item costs) under that row or stepper until the next edit. While no button fits, the same sentence stays under "+ Button".
 
 `layout.toConfig(layout, previousConfig)` returns a `ControllerConfig` object that keeps every non-hardware field of the previous config (UDP, screen behaviour, input tuning). `layout.fromConfig(config)` returns the builder's view of it: slider count and button kinds.
 
@@ -234,7 +236,7 @@ All files are in `tools/simulator/`, and `index.html` opens straight from disk.
 
 | File | Responsibility |
 |---|---|
-| `index.html` | Markup, styles, script tags, and the inline module that imports a pinned `three` (core plus `OrbitControls`, `RoomEnvironment`, `RoundedBoxGeometry`, `EffectComposer`, `RenderPass`, `BokehPass`, `OutputPass`) from jsDelivr, publishes it as `window.VolcoThree`, and dispatches `volco-three` (or `volco-three-failed`). |
+| `index.html` | Markup, styles, script tags, and the inline module that imports a pinned `three` (core plus `OrbitControls`, `RoomEnvironment`, `RoundedBoxGeometry`, `EffectComposer`, `RenderPass`, `OutputPass`) from jsDelivr, publishes it as `window.VolcoThree`, and dispatches `volco-three` (or `volco-three-failed`). |
 | `stage.js` | Renderer, composer, camera and controls (D4), view offset, render loop. |
 | `room.js` | §5.1–5.2 |
 | `device.js` | §5.3–5.4 |

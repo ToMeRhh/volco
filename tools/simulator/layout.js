@@ -85,7 +85,7 @@
 
   /**
    * Turns a layout into a ControllerConfig, keeping every valid pin and allocating the rest.
-   * Returns { config } or { error: { message, what: 'slider'|'button', index } }.
+   * Returns { config, pins } (pins: pinCount) or { error: { message, what: 'slider'|'button', index } }.
    */
   function toConfig(layout) {
     const base = layout.base || {};
@@ -173,7 +173,17 @@
     config.buttons = buttons;
     buses.forEach((d, n) => { if (d) config[`i2c${n}`] = d; });
     config.preset = layout.preset || 'custom';
-    return { config };
+    return { config, pins: pinCount(used) };
+  }
+  /** How many of each pin pool a layout uses: I/O (buttons, LEDs, I2C, and sliders once the
+   *  input-only pins run out) and input-only (sliders only). */
+  function pinCount(used) {
+    const pins = [...used];
+    const total = [...CHIP.usable];
+    return {
+      io: pins.filter(p => !CHIP.inputOnly.has(p)).length, ioTotal: total.filter(p => !CHIP.inputOnly.has(p)).length,
+      inputOnly: pins.filter(p => CHIP.inputOnly.has(p)).length, inputOnlyTotal: total.filter(p => CHIP.inputOnly.has(p)).length,
+    };
   }
   const firstScreenOn = (buttons, n) => buttons.findIndex(b => b.screen && b.screen.bus === n);
   const fail = (message, what, index) => ({ error: { message, what, index } });
@@ -184,7 +194,18 @@
     return r.error ? r.error.message : null;
   }
 
-  const api = { KIND, LIMITS, CHIP, PREFER, PRESETS, DIY_REFERENCE, kindOf, withKind, kinds, fromConfig, presetLayout, toConfig, check,
+  /** A toConfig error message, explained for the builder: what ran out and what costs pins. */
+  function explain(message) {
+    const io = [...CHIP.usable].filter(p => !CHIP.inputOnly.has(p)).length;
+    if (message === 'No free output pin' || message === 'No free input pin')
+      return `All ${io} I/O pins are in use. A button takes 1, its LED 1 more, an LED pair 2 more, and the screens 2 per I2C bus. ` +
+        'Remove a button or slider, or pick a lighter indicator.';
+    if (message === 'No free ADC pin')
+      return 'No analog pin is left for a slider. Sliders need ADC pins, and buttons and LEDs may hold some of them; with UDP on, only the 8 ADC1 pins work.';
+    return `The firmware supports ${message}.`;
+  }
+
+  const api = { KIND, LIMITS, CHIP, PREFER, PRESETS, DIY_REFERENCE, kindOf, withKind, kinds, fromConfig, presetLayout, toConfig, check, explain,
     usable, outputCapable, adcCapable };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.VolcoLayout = api;

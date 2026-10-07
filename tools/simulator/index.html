@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Volco Simulator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Crect width='18' height='18' rx='4' fill='%232a2826'/%3E%3Cpath d='M5 3v12M9 3v12M13 3v12' stroke='%23fbf9f5' stroke-width='1.4' stroke-linecap='round'/%3E%3Crect x='3.2' y='9' width='3.6' height='2.6' rx='.8' fill='%23e2602a'/%3E%3Crect x='7.2' y='5' width='3.6' height='2.6' rx='.8' fill='%23fbf9f5'/%3E%3Crect x='11.2' y='11' width='3.6' height='2.6' rx='.8' fill='%23fbf9f5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -47,8 +48,9 @@ body { background: var(--ground); color: var(--ink); font: 14px var(--ui); overf
 select { appearance: none; width: 100%; font: 500 14px var(--ui); color: var(--ink); background: var(--chip); border: 0; border-radius: 10px; padding: 9px 32px 9px 12px; box-shadow: 0 0 0 1px var(--hair); cursor: pointer; }
 .step { display: flex; align-items: center; gap: 2px; background: var(--chip); border-radius: 10px; box-shadow: 0 0 0 1px var(--hair); padding: 2px; }
 .step button { width: 32px; height: 30px; border: 0; background: transparent; font: 500 17px var(--ui); color: var(--ink); border-radius: 8px; cursor: pointer; }
-.step button:hover:not(:disabled) { background: rgba(40, 34, 26, .06); }
+.step button:hover:not(:disabled, [aria-disabled="true"]) { background: rgba(40, 34, 26, .06); }
 .step button:disabled { color: rgba(40, 34, 26, .25); cursor: default; }
+.step button[aria-disabled="true"] { color: rgba(40, 34, 26, .25); cursor: not-allowed; }
 .step output { min-width: 26px; text-align: center; font: 600 14px var(--ui); font-variant-numeric: tabular-nums; }
 .btns { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .btns li { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 6px; border-radius: 12px; background: var(--chip); box-shadow: 0 0 0 1px var(--hair); }
@@ -58,14 +60,25 @@ select { appearance: none; width: 100%; font: 500 14px var(--ui); color: var(--i
 .num { width: 16px; font: 600 12px var(--ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; text-align: center; flex: none; }
 .kinds { display: flex; gap: 2px; flex: 1; background: rgba(40, 34, 26, .05); border-radius: 9px; padding: 2px; }
 .kinds button { flex: 1; height: 28px; border: 0; background: transparent; border-radius: 7px; color: var(--ink-soft); cursor: pointer; display: grid; place-items: center; }
-.kinds button:hover:not(:disabled) { color: var(--ink); }
+.kinds button:hover:not([aria-disabled="true"]) { color: var(--ink); }
 .kinds button[aria-checked="true"] { background: var(--chip); color: var(--ink); box-shadow: 0 1px 2px rgba(40, 30, 20, .18); }
-.kinds button:disabled { opacity: .3; cursor: default; }
+.kinds button[aria-disabled="true"] { opacity: .3; cursor: not-allowed; }
 .rm { width: 28px; height: 28px; border: 0; background: transparent; color: var(--ink-soft); border-radius: 8px; cursor: pointer; display: grid; place-items: center; flex: none; }
 .rm:hover { background: rgba(40, 34, 26, .06); color: var(--ink); }
 .add { display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; border: 1px dashed rgba(40, 34, 26, .22); border-radius: 12px; background: transparent; font: 500 13px var(--ui); color: var(--ink-soft); cursor: pointer; }
-.add:hover:not(:disabled) { color: var(--ink); border-color: rgba(40, 34, 26, .4); }
-.add:disabled { opacity: .4; cursor: default; }
+.add:hover:not([aria-disabled="true"]) { color: var(--ink); border-color: rgba(40, 34, 26, .4); }
+.add[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+/* Pin budget: the ESP32's I/O pins the layout uses; amber once another button won't fit. */
+.pins { display: flex; flex-direction: column; gap: 6px; }
+.pins-row { display: flex; align-items: baseline; justify-content: space-between; }
+.pins-n { font: 500 12px var(--ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pins-track { height: 4px; border-radius: 2px; background: rgba(40, 34, 26, .08); overflow: hidden; }
+.pins-bar { height: 100%; border-radius: 2px; background: var(--ink-soft); transition: width .2s; }
+.pins.full .pins-bar { background: var(--wait); }
+.pins.full .pins-n { color: var(--wait); }
+.hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink); background: rgba(201, 138, 43, .12); border-radius: 8px; padding: 7px 10px; }
+.hint.below { margin: -4px 16px 12px; }
+.btns li.hint-row { display: block; padding: 0; background: none; box-shadow: none; }
 .sws { display: flex; gap: 8px; }
 .sw { width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer; padding: 0;
   box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .18), inset 0 1px 1px rgba(255, 255, 255, .6), 0 0 0 1px var(--hair); }
@@ -219,6 +232,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); ou
       <button id="sl-inc" aria-label="Add a slider">+</button>
     </div>
   </div>
+  <p class="hint below" id="sl-hint" role="status" hidden></p>
   <div class="sec">
     <div class="lbl">Buttons</div>
     <ol class="btns" id="btns"></ol>
@@ -226,6 +240,11 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); ou
       <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"></path></svg>
       Button
     </button>
+    <p class="hint" id="add-hint" role="status" hidden></p>
+  </div>
+  <div class="sec pins" id="pins">
+    <div class="pins-row"><span class="lbl">Pins</span><span class="pins-n" id="pins-n"></span></div>
+    <div class="pins-track"><div class="pins-bar" id="pins-bar"></div></div>
   </div>
   <div class="sec row">
     <span class="lbl">Finish</span>
@@ -254,17 +273,16 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); ou
 <script type="module">
 // Loads three.js and publishes it for the classic scripts below (spec §9).
 try {
-  const [THREE, { OrbitControls }, { RoomEnvironment }, { RoundedBoxGeometry }, { EffectComposer }, { RenderPass }, { BokehPass }, { OutputPass }] = await Promise.all([
+  const [THREE, { OrbitControls }, { RoomEnvironment }, { RoundedBoxGeometry }, { EffectComposer }, { RenderPass }, { OutputPass }] = await Promise.all([
     import('three'),
     import('three/addons/controls/OrbitControls.js'),
     import('three/addons/environments/RoomEnvironment.js'),
     import('three/addons/geometries/RoundedBoxGeometry.js'),
     import('three/addons/postprocessing/EffectComposer.js'),
     import('three/addons/postprocessing/RenderPass.js'),
-    import('three/addons/postprocessing/BokehPass.js'),
     import('three/addons/postprocessing/OutputPass.js'),
   ]);
-  window.VolcoThree = { THREE, OrbitControls, RoomEnvironment, RoundedBoxGeometry, EffectComposer, RenderPass, BokehPass, OutputPass };
+  window.VolcoThree = { THREE, OrbitControls, RoomEnvironment, RoundedBoxGeometry, EffectComposer, RenderPass, OutputPass };
   window.dispatchEvent(new Event('volco-three'));
 } catch {
   window.dispatchEvent(new Event('volco-three-failed'));
