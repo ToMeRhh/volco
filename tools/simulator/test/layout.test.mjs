@@ -160,3 +160,16 @@ test('a board with no sliders or no buttons is valid', () => {
   ok(withButtons({ preset: 'custom', sliders: [], buttons: [], base: {} }, [L.KIND.LED_PAIR]));
   ok({ preset: 'custom', sliders: [{}, {}], buttons: [], base: {} });
 });
+
+test('a defined bus that only a new screen uses keeps its pins', () => {
+  // DIY reference + 4 LED buttons, then button 1 becomes a screen: bus 0's defined pins (25, 26)
+  // must not go to the new LEDs, and the bus must not move onto strapping pins.
+  const diy = L.presetLayout('diy-reference');
+  const buttons = [...diy.buttons, ...Array.from({ length: 4 }, () => L.withKind({}, L.KIND.LED))];
+  buttons[0] = L.withKind(buttons[0], L.KIND.SCREEN);
+  const c = ok({ ...diy, buttons });
+  assert.deepEqual(c.buttons[0], { pin: 4, screen: { bus: 0, address: 0x3C } });
+  assert.deepEqual(c.i2c0, { sda: 25, scl: 26 });
+  const leds = c.buttons.filter(b => b.led).map(b => b.led.pin);
+  assert.ok(!leds.includes(25) && !leds.includes(26), `LEDs took bus pins: ${leds}`);
+});

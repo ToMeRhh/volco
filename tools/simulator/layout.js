@@ -123,6 +123,16 @@
       if (d && free(d.sda) && free(d.scl) && outputCapable(d.sda) && outputCapable(d.scl) && d.sda !== d.scl) { take(d.sda); take(d.scl); return true; }
       return false;
     };
+    // New screens get their (bus, address) slot now, so every bus a screen will use keeps its
+    // defined pins before sliders, buttons and LEDs are allocated.
+    for (let i = 0; i < buttons.length; i++) {
+      const b = buttons[i];
+      if (!b.screen || b.screen.bus !== undefined) continue;
+      const slot = SCREEN_SLOTS.find(([bus, a]) => !slots.has(`${bus}:${a}`));
+      if (!slot) return fail(`${LIMITS.screens} screens maximum`, 'button', i);
+      slots.add(`${slot[0]}:${slot[1]}`);
+      b.screen = { bus: slot[0], address: slot[1] };
+    }
     const kept = [0, 1, 2, 3].map(n => busUsed(n) && keepBus(n));
 
     // 2. Allocate what is missing.
@@ -148,16 +158,9 @@
         if (b.ledPair.pinB === undefined) b.ledPair.pinB = out();
         if (b.ledPair.pinA === undefined || b.ledPair.pinB === undefined) return fail('No free output pin', 'button', i);
       }
-      if (b.screen && b.screen.bus === undefined) {
-        const slot = SCREEN_SLOTS.find(([bus, a]) => !slots.has(`${bus}:${a}`));
-        if (!slot) return fail(`${LIMITS.screens} screens maximum`, 'button', i);
-        slots.add(`${slot[0]}:${slot[1]}`);
-        b.screen = { bus: slot[0], address: slot[1] };
-      }
     }
     for (let n = 0; n < 4; n++) {
       if (!busUsed(n) || kept[n]) continue;
-      if (keepBus(n)) continue;
       const sda = pick('output', outputCapable); if (sda === undefined) return fail('No free output pin', 'button', firstScreenOn(buttons, n));
       take(sda);
       const scl = pick('output', outputCapable); if (scl === undefined) return fail('No free output pin', 'button', firstScreenOn(buttons, n));
