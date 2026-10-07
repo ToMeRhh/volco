@@ -45,7 +45,7 @@ public class SliderProcessor : IDisposable
     /// <summary>
     /// Raised after each slider's final (post-curve, post-smoothing) volume is computed.
     /// Carries the slider index and level in [0,1]. Additive — does not replace VolumeChanged.
-    /// Task 14 wires this to SlidersViewModel.UpdateLiveLevel on the UI thread.
+    /// The app wires this to SlidersViewModel.UpdateLiveLevel on the UI thread.
     /// </summary>
     public event EventHandler<SliderLevelEventArgs>? SliderLevelChanged;
 

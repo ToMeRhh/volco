@@ -233,7 +233,7 @@ public sealed class AudioEngine : IAudioEngine
                 catch (Exception ex)
                 {
                     // This is a raw background Thread - an unhandled exception here terminates
-                    // the process by default, which is exactly the reliability regression Option D
+                    // the process by default, which is exactly the reliability regression this engine
                     // exists to remove. A dropped command that is logged is strictly better than a
                     // dead tray app, so every command is isolated: log and keep consuming the next
                     // one, whatever kind of exception a Do*/Process handler throws.

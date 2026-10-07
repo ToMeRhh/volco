@@ -1,6 +1,6 @@
 # Link state: what "Connected" means
 
-Date: 2026-10-06. Status: implemented on branch `link-state`.
+Date: 2026-10-06. Status: implemented.
 
 ## Rule
 

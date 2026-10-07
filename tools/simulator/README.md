@@ -32,7 +32,7 @@ The simulator speaks the same protocol as the firmware: it sends Hello (at conne
 
 ## Controller config
 
-The simulator keeps one controller config, like the firmware (spec §10 of `docs/superpowers/specs/2026-10-03-controller-config-design.md`):
+The simulator keeps one controller config, like the firmware (spec §10 of `docs/design/controller-config.md`):
 
 - **Hello** reports chip 1, firmware `sim`, and the stored config's state and CRC. Its sliders and buttons come from the stored config, or from the selected controller type when none is stored.
 - **ConfigRead** returns the stored bytes; a **config write** follows the firmware's receiver rules. Validation decodes the blob (with the schema's limits and NUL checks) and checks the counts and the screen rules (bus, address, duplicates); pins aren't checked. After OK the simulator "reboots": it drops the connection for a second and comes back with the new hardware.

@@ -2,7 +2,6 @@
 
 **Date:** 2026-10-01
 **Status:** Approved 2026-10-01; implemented.
-**Mockup:** `docs/superpowers/mockups/2026-10-01-ux-redesign-mockup.html`. Open it in a browser. It is the visual reference for this spec; where the two disagree, this spec wins.
 
 ## 0. Scope change from the Step 3 plan
 
@@ -276,11 +275,11 @@ The direction: quiet and neutral, letting the content carry the screen. Flat sur
 | `0x04` | host → controller | active device | **removed** |
 | `0x05` | host → controller | **ButtonFeedback**: button index, value (0 = off/unknown, 1..N = on / choice *n*) | **new** |
 
-**This table is superseded by `2026-10-02-oled-screens-design.md`.**
+**This table is superseded by `oled-screens.md`.**
 
 - The firmware ignores unknown message types.
-- **OLED is deferred.** Superseded by `2026-10-02-oled-screens-design.md`, which replaces this protocol.
-- **No Hello/capabilities handshake** and no per-button "indicator type" setting in the app for now. Superseded by `2026-10-02-oled-screens-design.md`, which adds the Hello handshake.
+- **OLED is deferred.** Superseded by `oled-screens.md`, which replaces this protocol.
+- **No Hello/capabilities handshake** and no per-button "indicator type" setting in the app for now. Superseded by `oled-screens.md`, which adds the Hello handshake.
 
 ### 4.4 Firmware
 
@@ -331,7 +330,7 @@ These are things the user may want later that need changes in `Volco.Windows` or
 
 ## 7. Future features this design leaves room for
 
-- **Per-button OLED screens:** Superseded by `2026-10-02-oled-screens-design.md`, which replaces this protocol. (Original text: `0x05` is keyed by button and carries a value the firmware renders per its own indicator table. Screens become another indicator type. The content format and an app-side indicator setting are designed with that feature.)
+- **Per-button OLED screens:** Superseded by `oled-screens.md`, which replaces this protocol. (Original text: `0x05` is keyed by button and carries a value the firmware renders per its own indicator table. Screens become another indicator type. The content format and an app-side indicator setting are designed with that feature.)
 - **Preset toggle button:** implemented in this PR (`NextPreset` / `GoToPreset`).
 - **Custom actions** (run a program, call a webhook): new action types in the grouped picker, where the disabled "Custom (coming later)" placeholder sits. Security and trust model to be designed separately.
 

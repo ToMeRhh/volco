@@ -1082,7 +1082,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     [Fact]
     public void Reconnect_WithoutControllerReboot_RequestsHelloAndPushesEverything()
     {
-        // Review Focus #3: a new session on a controller that never rebooted.
+        // A new session on a controller that never rebooted.
         var runtime = StartRuntime();
         ConnectAndGreet(Connection(0));
         runtime.Reconnect();
@@ -1325,7 +1325,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.True(newConnection.SentCount > 0, "state not pushed to the new transport");
     }
 
-    /// <summary>Pins Review Focus #2's user-visible case: restarting while the OLD transport is
+    /// <summary>Pins the user-visible case: restarting while the OLD transport is
     /// still Connected (a Serial → WebSocket/UDP switch mid-session), not merely Disconnected as
     /// in <see cref="Restart_ForwardsStatusFromNewTransportOnly"/>. This is the only path that
     /// exercises the runtime's own synthetic Disconnected raise in StartConnection — in

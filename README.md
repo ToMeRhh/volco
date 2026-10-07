@@ -345,7 +345,7 @@ firmware/
 tools/simulator/       Browser-based controller simulator (WebSocket)
 tests/Volco.Core.Tests xUnit: parser, press detection, sliders, config, actions, runtime
 tests/Volco.App.Tests  Avalonia headless: view models, pages, windows, OSD, architecture rules
-docs/                  Specs, plans, checklists and mockups
+docs/design/           Design documents (the "spec §" references in code comments)
 ```
 
 </details>

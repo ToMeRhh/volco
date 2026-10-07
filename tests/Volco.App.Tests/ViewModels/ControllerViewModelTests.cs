@@ -486,7 +486,7 @@ public sealed class ControllerViewModelTests : IDisposable
     public void TheNavDot_StartsFromTheBanner()
     {
         using var settings = _rig.CreateSettings(_ui);
-        Assert.False(settings.ControllerNavDot);   // no bundled firmware until stage 6
+        Assert.False(settings.ControllerNavDot);   // no bundled firmware
     }
 
     [Fact]

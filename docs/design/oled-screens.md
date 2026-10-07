@@ -2,11 +2,8 @@
 
 **Date:** 2026-10-02
 **Status:** Approved; implemented.
-**Mockups** (open in a browser; where a mockup and this spec disagree, this spec wins):
-- `docs/superpowers/mockups/2026-10-02-oled-screens-mockup.html`: screen layouts at real 128×64 resolution, and a pressable controller showing the preset-change slide. The chosen layout is "C nudged" with the synchronized "Slide".
-- `docs/superpowers/mockups/2026-10-02-devices-page-mockup.html`: the new Devices settings page.
 
-**Builds on:** `2026-10-01-volco-ux-redesign.md`. This spec settles what that spec deferred: how screen content is sent (§4.3, §7) and the Hello handshake (§4.3).
+**Builds on:** `ux.md`. This spec settles what that spec deferred: how screen content is sent (§4.3, §7) and the Hello handshake (§4.3).
 
 ## 0. Scope
 
@@ -390,7 +387,7 @@ The current hardware tables are unchanged. Hello derives each button's kind from
 | 10 | `presets` | Preset actions only; not offered on the Devices page |
 
 - **Format:** each icon is a 28×28 1-bit PNG.
-- **Drawings:** they start from the mockup's drawings.
+- **Drawings:** vector descriptions drawn by `firmware/tools/draw_icons.py`.
 - **Slash:** the "muted" slash is drawn by the firmware at render time, not stored per icon.
 
 ### 4.6 Main loop and input
@@ -533,7 +530,7 @@ The UI reads both: the transport status ("Connected · COM3") and the controller
 
 ### 6.1 Devices page (new)
 
-The page is mocked up in `2026-10-02-devices-page-mockup.html`.
+
 
 **Navigation:** Sliders, Buttons, **Devices**, Connection, General.
 
@@ -739,7 +736,7 @@ It still does not cover building, flashing or wiring diagrams.
 - the `0x05` / `ButtonFeedback` description is replaced with the §3 protocol and `ControllerDisplay`;
 - the new firmware test job is added to Build & Test.
 
-**`2026-10-01-volco-ux-redesign.md`:** §4.3 and §7 point to this spec.
+**`ux.md`:** §4.3 and §7 point to this spec.
 
 ## 10. Future (not in this work)
 

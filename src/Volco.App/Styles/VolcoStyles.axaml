@@ -22,7 +22,7 @@
 
   <StyleInclude Source="avares://Volco.App/Styles/Typography.axaml"/>
 
-  <!-- ── Layout helpers (Step 2 names) ─────────────────────────────────── -->
+  <!-- ── Layout helpers (older names) ─────────────────────────────────── -->
   <Style Selector="StackPanel.SectionContainer">
     <Setter Property="Orientation" Value="Vertical"/>
     <Setter Property="Spacing" Value="16"/>

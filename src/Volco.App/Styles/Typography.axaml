@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Typography.axaml - the type ramp (spec §3.7): Title 20, Subtitle 14, Body 13, Caption 12, one
-    family. TextBlock classes "Title", "Subtitle", "Caption", "Secondary". The Step 2 names
+    family. TextBlock classes "Title", "Subtitle", "Caption", "Secondary". The older names
     "SectionHeader" and "CardTitle" stay as aliases of Title and Subtitle.
 -->
 <Styles xmlns="https://github.com/avaloniaui"

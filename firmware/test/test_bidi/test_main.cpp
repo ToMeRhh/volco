@@ -32,7 +32,7 @@ void test_fraction_at_the_start_of_hebrew() { expectVisual("1/2 כוס", "סוכ
 void test_brackets_around_hebrew_are_mirrored() { expectVisual("(שלום)", "(םולש)", true); }
 
 void test_hebrew_with_time_and_brackets() {
-  // Review Focus #4: פגישה (10:30)
+  // פגישה (10:30)
   expectVisual("פגישה (10:30)", "(10:30) השיגפ", true);
 }
 

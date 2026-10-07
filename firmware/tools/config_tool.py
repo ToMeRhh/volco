@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reads or writes a Volco controller's config over USB serial or UDP (spec §5.3, §5.4).
 
-A dev and test tool until Volco's Controller page (stage 5). Layouts are preset JSON files: the
+For firmware work without the app (the app's Controller page does the same). Layouts are preset JSON files: the
 protobuf JSON mapping of ControllerConfig, like proto/presets/diy-reference.json.
 
     PY=~/.platformio/penv/bin/python
