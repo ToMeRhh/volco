@@ -26,6 +26,7 @@
     const $ = id => document.getElementById(id);
     const list = $('btns');
     let saved = o.stored(), draft = clone(saved), note = '', timer = 0;
+    let editedSinceApply = false;   // the draft changed after the last save started
     const prefs = { ...o.prefs };
 
     function clone(l) { return JSON.parse(JSON.stringify(l)); }
@@ -36,6 +37,7 @@
       draft = change(clone(draft));
       draft.preset = 'custom';
       note = '';
+      editedSinceApply = true;
       changed();
     }
     function changed() {
@@ -46,6 +48,7 @@
     }
     function apply() {
       clearTimeout(timer);
+      editedSinceApply = false;
       const error = o.onApply(draft);
       if (error) { note = error; render(); }
       // On success the controller reboots and calls reload() with the stored layout.
@@ -119,6 +122,7 @@
     $('preset').addEventListener('change', e => {
       draft = L.presetLayout(e.target.value, draft.base);
       note = '';
+      editedSinceApply = true;
       o.onPreview(draft, { drop: true });
       render();
       clearTimeout(timer);
@@ -147,6 +151,8 @@
       reload(byVolco = false) {
         const wasDirty = dirty();
         saved = o.stored();
+        if (!byVolco && editedSinceApply) { note = ''; changed(); return; }   // edited while it rebooted: keep it, save it next
+        editedSinceApply = false;
         draft = clone(saved);
         note = byVolco && wasDirty ? 'Volco saved a new layout; your draft was replaced.' : '';
         clearTimeout(timer);
