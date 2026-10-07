@@ -4,13 +4,36 @@
 (function (root) {
   'use strict';
 
-  /** Builds the room into stage.scene. The board goes at (30, 0, 0) on the desk (y = 0 is the desk top). */
-  function build(stage) {
+  /** Builds the room into stage.scene over several tasks, resolving to the room. The board goes in
+   *  front of the monitor, centred on x = 0 with its back edge at z = -13 (y = 0 is the desk top);
+   *  the keyboard and mouse sit in front of it. */
+  async function build(stage) {
     const { THREE, RoundedBoxGeometry, scene, kit } = stage;
     const { canvasTex, rnd, std, phys, put, box, cyl } = kit;
     const period = stage.reduceMotion ? 5100 : 1700;   // one wave cycle, ms
 
+    // Grain and specks are written into a pixel layer, then drawn over the texture in one call:
+    // tens of thousands of fillRect calls, each with its own colour string, kept the page busy
+    // for hundreds of ms at load (and reading the canvas back would cost as much).
+    function specks(g, W, H, n, colour, alpha, size) {
+      const img = new ImageData(W, H), d = img.data;
+      for (let i = 0; i < n; i++) {
+        const [r, gr, b] = colour(), a = rnd(alpha[0], alpha[1]);
+        const x0 = rnd(0, W) | 0, y0 = rnd(0, H) | 0, w = Math.round(rnd(size[0], size[1])), h = Math.round(rnd(size[2], size[3]));
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          const o = (((y0 + y) % H) * W + ((x0 + x) % W)) * 4;
+          const below = d[o + 3] / 255, out = a + below * (1 - a);   // "over", unpremultiplied
+          if (out <= 0) continue;
+          d[o] = (r * a + d[o] * below * (1 - a)) / out; d[o + 1] = (gr * a + d[o + 1] * below * (1 - a)) / out; d[o + 2] = (b * a + d[o + 2] * below * (1 - a)) / out;
+          d[o + 3] = out * 255;
+        }
+      }
+      const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+      layer.getContext('2d').putImageData(img, 0, 0);
+      g.drawImage(layer, 0, 0);
+    }
     function wood(base, grain, repeat) {
+      const rgb = grain.split(',').map(Number);
       return canvasTex(2048, 2048, (g, W, H) => {
         g.fillStyle = base; g.fillRect(0, 0, W, H);
         for (let i = 0; i < 1100; i++) {
@@ -18,6 +41,7 @@
           g.strokeStyle = `rgba(${grain},${rnd(0.05, 0.2)})`;
           g.lineWidth = rnd(0.5, 2.6);
           for (const off of [-H, 0, H]) {
+            if (y0 + off + amp * 1.22 + 2 < 0 || y0 + off - amp * 1.22 - 2 > H) continue;   // off the canvas: only the wrap copies that show
             g.beginPath();
             for (let x = 0; x <= W; x += 16) {
               const y = y0 + off + Math.sin(x / W * 6.283 * k1 + ph) * amp + Math.sin(x / W * 6.283 * k2 + ph * 2) * amp * 0.22;
@@ -26,15 +50,25 @@
             g.stroke();
           }
         }
-        for (let i = 0; i < 60000; i++) { g.fillStyle = `rgba(${grain},${rnd(0, 0.06)})`; g.fillRect(rnd(0, W), rnd(0, H), rnd(2, 7), 1); }
+        specks(g, W, H, 60000, () => rgb, [0, 0.06], [2, 7, 1, 1]);
       }, { repeat });
     }
     function speckle(base, size, n, lo, hi, a, repeat) {
       return canvasTex(size, size, (g, W, H) => {
         g.fillStyle = base; g.fillRect(0, 0, W, H);
-        for (let i = 0; i < n; i++) { const v = rnd(lo, hi) | 0; g.fillStyle = `rgba(${v},${v - 6},${v - 14},${rnd(a[0], a[1])})`; g.fillRect(rnd(0, W), rnd(0, H), rnd(1, 3), rnd(1, 3)); }
+        specks(g, W, H, n, () => { const v = rnd(lo, hi) | 0; return [v, v - 6, v - 14]; }, a, [1, 3, 1, 3]);
       }, { repeat });
     }
+
+
+    // The large textures first, one task each, so building the room never stalls the page for long.
+    const pause = () => new Promise(r => setTimeout(r, 0));
+    const tex = {};
+    tex.plaster = speckle('#cdb497', 1024, 90000, 150, 225, [0.03, 0.09], [5, 3]); await pause();
+    tex.floor = wood('#7a5134', '60,34,18', [3, 6]); await pause();
+    tex.rug = speckle('#a76f55', 512, 50000, 120, 200, [0.06, 0.2], [4, 3]); await pause();
+    tex.desk = wood('#c79a6b', '92,52,24', [1, 1]); await pause();
+    tex.mat = speckle('#4a4744', 512, 30000, 70, 110, [0.05, 0.2], [5, 2]); await pause();
 
 
     // ── Sound waves: rings that leave the selected output device ────────────────
@@ -70,13 +104,13 @@
 
 
     // ── Room: plaster walls, window, floor and rug ──────────────────────────────
-    const plaster = std({ map: speckle('#cdb497', 1024, 90000, 150, 225, [0.03, 0.09], [5, 3]), roughness: 0.96 });
+    const plaster = std({ map: tex.plaster, roughness: 0.96 });
     const back = put(scene, new THREE.Mesh(new THREE.PlaneGeometry(420, 320), plaster), 0, 85, -42, false);
     const left = new THREE.Mesh(new THREE.PlaneGeometry(260, 320), plaster);
     left.rotation.y = Math.PI / 2; put(scene, left, -125, 85, 70, false);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(420, 300), std({ map: wood('#7a5134', '60,34,18', [3, 6]), roughness: 0.55 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(420, 300), std({ map: tex.floor, roughness: 0.55 }));
     floor.rotation.x = -Math.PI / 2; put(scene, floor, 0, -75, 100, false);
-    const rug = box(170, 1, 120, std({ map: speckle('#a76f55', 512, 50000, 120, 200, [0.06, 0.2], [4, 3]), roughness: 1 }), 0.4);
+    const rug = box(170, 1, 120, std({ map: tex.rug, roughness: 1 }), 0.4);
     put(scene, rug, 10, -74.5, 60, false);
     // Skirting board along the back wall.
     put(scene, box(420, 9, 1.2, std({ color: '#efe6d8', roughness: 0.7 })), 0, -70.5, -41.4, false);
@@ -120,13 +154,13 @@
 
     // ── Desk ────────────────────────────────────────────────────────────────────
     const DESK_TOP = 0;
-    const deskTop = box(190, 3.2, 82, phys({ map: wood('#c79a6b', '92,52,24', [1, 1]), roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.45 }), 0.6);
+    const deskTop = box(190, 3.2, 82, phys({ map: tex.desk, roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.45 }), 0.6);
     put(scene, deskTop, 0, -1.6, -0.5);
     const legM = std({ color: '#2b2622', roughness: 0.5, metalness: 0.6 });
     for (const x of [-88, 88]) for (const z of [-36, 35]) put(scene, box(4, 72, 4, legM, 0.4), x, -38.6, z, false);
 
     // Desk mat under keyboard and mouse.
-    put(scene, box(74, 0.3, 32, std({ map: speckle('#4a4744', 512, 30000, 70, 110, [0.05, 0.2], [5, 2]), roughness: 1 }), 0.15), -24, 0.15, 10);
+    put(scene, box(74, 0.3, 30, std({ map: tex.mat, roughness: 1 }), 0.15), 8, 0.15, 21);
 
     // ── Monitor ─────────────────────────────────────────────────────────────────
     const MON = { x: 0, z: -25, w: 70, h: 39.4, y: 25.5 };
@@ -200,13 +234,13 @@
       inst.castShadow = true; inst.receiveShadow = true;
       g.add(inst);
       put(g, box(11, 0.7, 1.62, capM, 0.22), 0, 1.7, -4.6 + 5 * 1.95);
-      g.position.set(-24, 0.3, 11);
-      g.rotation.y = 0.04;
+      g.position.set(0, 0.3, 19);
+      g.rotation.y = 0.02;
       scene.add(g);
 
       const mouse = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), phys({ color: '#e9e7e2', roughness: 0.35, clearcoat: 0.5 }));
       mouse.scale.set(3.1, 1.7, 5.4);
-      put(scene, mouse, 5, 0.1, 13);
+      put(scene, mouse, 30, 0.1, 21);
       mouse.rotation.y = -0.15;
     })();
 
@@ -255,7 +289,7 @@
       lampLight = new THREE.SpotLight('#ffb86e', 5200, 0, 0.75, 0.85, 2);
       const lp = p2.clone().add(g.position); lp.y -= 3;
       lampLight.position.copy(lp);
-      lampLight.target.position.set(-36, 0, 2);
+      lampLight.target.position.set(-24, 0, 6);
       lampLight.castShadow = true;
       lampLight.shadow.mapSize.set(2048, 2048);
       lampLight.shadow.radius = 8;

@@ -10,7 +10,7 @@
   const DEFAULT_PREFS = { host: 'localhost', port: '8765', reconnect: true, autoConnect: false, autosave: false,
     finish: 'silver', panelOpen: true, drawerOpen: false, drawerTab: 'frames' };
   const SLIDER_NAMES = ['Master', 'Spotify', 'Discord', 'Firefox', 'Game', 'Chrome', 'Zoom', 'Steam'];
-  const BOARD = { x: 30, y: 3, z: 0 };   // where device.js puts the board; the camera's target
+  const BOARD = { x: 0, y: 3, z: -5 };   // where device.js puts the board; the camera's target
   const BLANK = new Uint8Array(1024);
   const SLIDER_MS = 20, REBOOT_MS = 1000, TICK_MS = 50;
 
@@ -252,7 +252,9 @@
   }, TICK_MS);
   if (prefs.autoConnect) connection.connect();
 
-  function startScene() {
+  // Built over several tasks (stage, room, board, shaders), so the page never stalls for long.
+  const nextTask = () => new Promise(r => setTimeout(r, 0));
+  async function startScene() {
     try {
       stage = root.VolcoStage.create($('stage'), {
         target: BOARD,
@@ -262,16 +264,21 @@
       showSceneFailure();
       return;
     }
-    room = root.VolcoRoom.build(stage);
+    await nextTask();
+    room = await root.VolcoRoom.build(stage);
+    room.setOutput(output.device, output.muted);
+    await nextTask();
     device = root.VolcoDevice.create(stage, { onSlider, onButton });
     device.setFinish(prefs.finish);
     if (builder.isDirty()) builder.reload();   // a draft started before the scene loaded: start from the stored board
     boardKinds = hw.kinds;
     device.build({ sliders: hw.sliders, kinds: hw.kinds }, { drop: true });
     applyLeds();
-    room.setOutput(output.device, output.muted);
     frameView();
     document.fonts.ready.then(() => device.setFinish(prefs.finish));   // the wordmark's font
+    await nextTask();
+    await stage.start();
+    device.drop();   // the board drops in on the first frame, not while the shaders compiled
   }
   function showSceneFailure() { $('scene-failed').hidden = false; }
   if (root.VolcoThree) startScene();

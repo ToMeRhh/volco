@@ -1,4 +1,4 @@
-// The 3D stage (spec §5, D4): renderer, scene, light, camera and controls, depth of field, the
+// The 3D stage (spec §5, D4): renderer, scene, light, camera and controls, post-processing, the
 // idle drift, re-centring beside the panels, and the mesh helpers room.js and device.js share.
 // Browser only; needs window.VolcoThree (the inline module in index.html). Units are cm.
 (function (root) {
@@ -8,10 +8,10 @@
    * @param {HTMLElement} container
    * @param {object} o
    * @param {THREE.Vector3Like} o.target   what the camera orbits and focuses on (the board)
-   * @param {(now:number, dt:number) => void} o.onFrame  called every frame before rendering
+   * @param {(now:number, dt:number) => void} o.onFrame  called every frame before rendering, from start() on
    */
   function create(container, o) {
-    const { THREE, OrbitControls, RoomEnvironment, RoundedBoxGeometry, EffectComposer, RenderPass, BokehPass, OutputPass } = root.VolcoThree;
+    const { THREE, OrbitControls, RoomEnvironment, RoundedBoxGeometry, EffectComposer, RenderPass, OutputPass } = root.VolcoThree;
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -29,7 +29,7 @@
     // Camera: orbit and zoom around the board; right button rotates, left is for the board.
     const target = new THREE.Vector3(o.target.x, o.target.y, o.target.z);
     const camera = new THREE.PerspectiveCamera(34, 1, 1, 1500);
-    camera.position.set(target.x - 26, target.y + 46, target.z + 94);
+    camera.position.set(target.x - 8, target.y + 56, target.z + 62);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(target);
     Object.assign(controls, { enableDamping: true, dampingFactor: 0.06, minDistance: 22, maxDistance: 190,
@@ -48,11 +48,10 @@
     Object.assign(sun.shadow, { radius: 6, bias: -0.0004, normalBias: 0.04 });
     scene.add(sun, sun.target, new THREE.HemisphereLight('#ffe6cc', '#5a4536', 0.42));
 
-    // Post: gentle depth of field focused on the board, like a product photo.
+    // Post: a multisampled half-float render, then tone mapping and sRGB output. No depth of field:
+    // it blurred the board whenever the camera zoomed out.
     const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType }));
     composer.addPass(new RenderPass(scene, camera));
-    const bokeh = new BokehPass(scene, camera, { focus: 90, aperture: 0.00009, maxblur: 0.007 });
-    composer.addPass(bokeh);
     composer.addPass(new OutputPass());
 
     // Re-centre the board in the space the floating panels leave free (spec §4).
@@ -79,7 +78,7 @@
     controls.addEventListener('end', wake);
 
     const clock = new THREE.Clock();
-    renderer.setAnimationLoop(() => {
+    function frame() {
       const now = performance.now(), dt = Math.min(clock.getDelta(), 0.05);
       const idle = !reduceMotion && !document.hidden && now - idleSince > 8000;
       if (idle) { const az = controls.getAzimuthalAngle() - AZ0; if (az > 0.3) swayDir = -1; else if (az < -0.3) swayDir = 1; }
@@ -88,9 +87,8 @@
       controls.autoRotateSpeed = swaySpeed;
       o.onFrame(now, dt);
       controls.update();
-      bokeh.uniforms.focus.value = camera.position.distanceTo(controls.target);
       composer.render();
-    });
+    }
 
     // ── Mesh helpers shared by room.js and device.js ──
     function canvasTex(w, h, draw, { repeat = [1, 1], srgb = true } = {}) {
@@ -124,6 +122,13 @@
       setOffset(x, y) { offset = { x, y }; resize(); },
       /** Restart the idle clock (e.g. when the board is touched). */
       wake,
+      /** Compiles the scene's shaders without blocking the page (where the GPU allows), then starts
+       *  rendering; the first frame would otherwise compile them all at once. */
+      async start() {
+        try { await renderer.compileAsync(scene, camera); } catch { /* the first frame compiles them */ }
+        clock.getDelta();
+        renderer.setAnimationLoop(frame);
+      },
     };
   }
 

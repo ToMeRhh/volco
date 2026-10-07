@@ -5,10 +5,10 @@
   const L = root.VolcoLayout;
 
   const KIND_UI = [
-    { kind: L.KIND.NONE, label: 'Plain', svg: '<rect x="3" y="3" width="10" height="10" rx="2.5"></rect>' },
-    { kind: L.KIND.LED, label: 'LED', svg: '<circle cx="8" cy="8" r="2.6" fill="currentColor"></circle>' },
-    { kind: L.KIND.LED_PAIR, label: 'LED pair', svg: '<circle cx="4.8" cy="8" r="2.3" fill="currentColor"></circle><circle cx="11.2" cy="8" r="2.3"></circle>' },
-    { kind: L.KIND.SCREEN, label: 'Screen', svg: '<rect x="1.8" y="4" width="12.4" height="8" rx="1.5"></rect><path d="M4.5 9.5h7"></path>' },
+    { kind: L.KIND.NONE, label: 'Plain', article: 'no indicator', svg: '<rect x="3" y="3" width="10" height="10" rx="2.5"></rect>' },
+    { kind: L.KIND.LED, label: 'LED', article: 'an LED', svg: '<circle cx="8" cy="8" r="2.6" fill="currentColor"></circle>' },
+    { kind: L.KIND.LED_PAIR, label: 'LED pair', article: 'an LED pair', svg: '<circle cx="4.8" cy="8" r="2.3" fill="currentColor"></circle><circle cx="11.2" cy="8" r="2.3"></circle>' },
+    { kind: L.KIND.SCREEN, label: 'Screen', article: 'a screen', svg: '<rect x="1.8" y="4" width="12.4" height="8" rx="1.5"></rect><path d="M4.5 9.5h7"></path>' },
   ];
   const AUTOSAVE_MS = 700;
 
@@ -26,6 +26,7 @@
     const $ = id => document.getElementById(id);
     const list = $('btns');
     let saved = o.stored(), draft = clone(saved), note = '', timer = 0;
+    let blocked = null;   // { where: 'row'|'add'|'sliders', index, text }: why the control just clicked can't be used; cleared by the next edit
     let editedSinceApply = false;   // the draft changed after the last save started
     const prefs = { ...o.prefs };
 
@@ -36,7 +37,7 @@
     function edit(change) {
       draft = change(clone(draft));
       draft.preset = 'custom';
-      note = '';
+      note = ''; blocked = null;
       editedSinceApply = true;
       changed();
     }
@@ -60,12 +61,11 @@
       $('sl-n').textContent = draft.sliders.length;
       $('sl-dec').disabled = draft.sliders.length === 0;
       const addSlider = L.check(draft, l => ({ ...l, sliders: [...l.sliders, {}] }));
-      $('sl-inc').disabled = !!addSlider;
-      $('sl-inc').title = addSlider || '';
-      const addButton = L.check(draft, l => ({ ...l, buttons: [...l.buttons, L.withKind({}, L.KIND.LED)] }));
-      $('add').disabled = !!addButton;
-      $('add').title = addButton || '';
-      list.replaceChildren(...draft.buttons.map((b, i) => row(b, i)));
+      block($('sl-inc'), addSlider, 'Add a slider', 'No room for another slider', { where: 'sliders' });
+      const addButton = L.check(draft, l => ({ ...l, buttons: [...l.buttons, L.withKind({}, newKind())] }));
+      block($('add'), addButton, newKind() === L.KIND.LED ? 'Add a button with an LED' : 'Add a plain button (no pins left for an LED)', 'No room for another button', { where: 'add' });
+      list.replaceChildren(...draft.buttons.flatMap((b, i) => (blocked?.where === 'row' && blocked.index === i ? [row(b, i), hintRow(blocked.text)] : [row(b, i)])));
+      renderPins(addSlider, addButton);
       $('apply').hidden = $('revert').hidden = prefs.autosave;
       $('apply').disabled = !dirty() || !!why;
       $('revert').disabled = !dirty();
@@ -73,6 +73,41 @@
       $('builder-note').textContent = why || note;
       $('builder-note').hidden = !(why || note);
       document.querySelectorAll('.sw').forEach(s => s.setAttribute('aria-pressed', String(s.dataset.finish === prefs.finish)));
+    }
+
+    /** The kind Add gives a new button: an LED when it fits, else a plain button. */
+    function newKind() {
+      return L.check(draft, l => ({ ...l, buttons: [...l.buttons, L.withKind({}, L.KIND.LED)] })) ? L.KIND.NONE : L.KIND.LED;
+    }
+    /** Marks a control unusable without disabling it, so its tooltip shows and a click says why. */
+    function block(el, why, label, what, at) {
+      el.setAttribute('aria-disabled', String(!!why));
+      el.title = why ? `${what}: ${why}` : label;
+      // Its own click listener checks aria-disabled; this one says why, next to the control.
+      el.onclick = why ? () => { blocked = { ...at, text: `${what}. ${L.explain(why)}` }; render(); } : null;
+    }
+    function hintRow(text) {
+      const li = Object.assign(document.createElement('li'), { className: 'hint-row' });
+      li.append(Object.assign(document.createElement('p'), { className: 'hint', textContent: text }));
+      li.setAttribute('role', 'status');
+      return li;
+    }
+    /** The pin meter, and why a button or slider can't be added. */
+    function renderPins(addSlider, addButton) {
+      const r = L.toConfig(draft);
+      const pins = r.pins;
+      $('pins').hidden = !pins;
+      if (pins) {
+        $('pins-n').textContent = `${pins.io} of ${pins.ioTotal} I/O`;
+        $('pins-bar').style.width = `${(100 * pins.io) / pins.ioTotal}%`;
+        $('pins').classList.toggle('full', !!addButton);
+        $('pins').title = `I/O pins: buttons, LEDs, I2C buses for screens, and sliders once the input-only pins are used.\n` +
+          `Input-only pins (sliders only): ${pins.inputOnly} of ${pins.inputOnlyTotal}.`;
+      }
+      const show = (id, text) => { $(id).textContent = text; $(id).hidden = !text; };
+      show('add-hint', (r.error ? `This layout doesn't fit. ${L.explain(r.error.message)}` : '')
+        || (addButton ? `No room for another button. ${L.explain(addButton)}` : ''));
+      show('sl-hint', blocked?.where === 'sliders' ? blocked.text : '');
     }
 
     function row(b, i) {
@@ -92,10 +127,9 @@
         btn.setAttribute('aria-checked', String(k.kind === kind));
         btn.setAttribute('aria-label', k.label);
         const why = k.kind === kind ? null : L.check(draft, l => ({ ...l, buttons: l.buttons.map((x, j) => (j === i ? L.withKind(x, k.kind) : x)) }));
-        btn.title = why || k.label;
-        btn.disabled = !!why;
+        block(btn, why, k.label, `Button ${i + 1} can't take ${k.article}`, { where: 'row', index: i });
         btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">${k.svg}</svg>`;
-        btn.addEventListener('click', () => { if (k.kind !== kind) edit(l => { l.buttons[i] = L.withKind(l.buttons[i], k.kind); return l; }); });
+        btn.addEventListener('click', () => { if (k.kind !== kind && !why) edit(l => { l.buttons[i] = L.withKind(l.buttons[i], k.kind); return l; }); });
         kinds.append(btn);
       }
       const rm = document.createElement('button');
@@ -121,7 +155,7 @@
     $('preset').replaceChildren(...L.PRESETS.map(p => new Option(p.name, p.id)), Object.assign(new Option('Custom', 'custom'), { disabled: true }));
     $('preset').addEventListener('change', e => {
       draft = L.presetLayout(e.target.value, draft.base);
-      note = '';
+      note = ''; blocked = null;
       editedSinceApply = true;
       o.onPreview(draft, { drop: true });
       render();
@@ -129,10 +163,11 @@
       if (prefs.autosave && dirty()) timer = setTimeout(apply, AUTOSAVE_MS);
     });
     $('sl-dec').addEventListener('click', () => edit(l => { l.sliders.pop(); return l; }));
-    $('sl-inc').addEventListener('click', () => edit(l => { l.sliders.push({}); return l; }));
-    $('add').addEventListener('click', () => edit(l => { l.buttons.push(L.withKind({}, L.KIND.LED)); return l; }));
+    const usable = el => el.getAttribute('aria-disabled') !== 'true';
+    $('sl-inc').addEventListener('click', () => { if (usable($('sl-inc'))) edit(l => { l.sliders.push({}); return l; }); });
+    $('add').addEventListener('click', () => { const k = newKind(); if (usable($('add'))) edit(l => { l.buttons.push(L.withKind({}, k)); return l; }); });
     $('apply').addEventListener('click', apply);
-    $('revert').addEventListener('click', () => { draft = clone(saved); note = ''; changed(); });
+    $('revert').addEventListener('click', () => { draft = clone(saved); note = ''; blocked = null; changed(); });
     $('autosave').addEventListener('change', e => {
       prefs.autosave = e.target.checked;
       o.onPrefs({ autosave: prefs.autosave });

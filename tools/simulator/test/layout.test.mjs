@@ -142,6 +142,19 @@ test('limits are where the pins run out', () => {
   assert.equal(L.check(saved(8), plus(L.KIND.LED_PAIR)), 'No free output pin');
 });
 
+test('toConfig counts the pins a layout uses, and explain says what ran out', () => {
+  const blank = n => ({ preset: 'custom', sliders: Array.from({ length: n }, () => ({})), buttons: [], base: {} });
+  // 6 sliders: 34, 35, 36, 39 (input-only) and 32, 33 (I/O); 9 LED buttons take the other 18 I/O pins.
+  const full = withButtons(blank(6), Array(9).fill(L.KIND.LED));
+  assert.deepEqual(L.toConfig(full).pins, { io: 20, ioTotal: 20, inputOnly: 4, inputOnlyTotal: 6 });
+  assert.deepEqual(L.toConfig(L.fromConfig(L.DIY_REFERENCE)).pins, { io: 9, ioTotal: 20, inputOnly: 3, inputOnlyTotal: 6 });
+  assert.equal(L.toConfig({ ...full, buttons: [...full.buttons, {}] }).pins, undefined);   // doesn't fit: no count
+  assert.match(L.explain('No free output pin'), /All 20 I\/O pins are in use/);
+  assert.match(L.explain('No free input pin'), /All 20 I\/O pins are in use/);
+  assert.match(L.explain('No free ADC pin'), /analog pin/);
+  assert.equal(L.explain('32 buttons maximum'), 'The firmware supports 32 buttons maximum.');
+});
+
 test('buttons never get the input-only pins 34-39', () => {
   const c = ok(withButtons({ preset: 'custom', sliders: [], buttons: [], base: {} }, Array(20).fill(L.KIND.NONE)));
   assert.ok(c.buttons.every(b => b.pin < 34));
