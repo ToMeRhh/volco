@@ -165,3 +165,37 @@ test('Hello: the controller type with no config, the stored hardware after a sav
 test('frames other than config frames are not handled', () => {
   assert.equal(harness().feed([0x82]), false);
 });
+
+test('fault: the next write is answered with the forced code and not stored', () => {
+  const h = harness();
+  h.session.forceNextResult(sim.CODE.BAD_CRC);
+  assert.deepEqual(write(h, 3, DIY), [0x06, 3, sim.CODE.BAD_CRC, 0xFF, 0xFF]);
+  assert.equal(h.stored, null);
+  assert.equal(h.reboots, 0);
+  assert.deepEqual(write(h, 4, DIY), [0x06, 4, sim.CODE.OK, 0xFF, 0xFF]);   // one-shot
+  assert.equal(h.reboots, 1);
+});
+
+test('fault: a forced OK stores even a blob that fails validation', () => {
+  const h = harness();
+  h.session.forceNextResult(sim.CODE.OK);
+  assert.deepEqual(write(h, 5, [0xFF, 0xFF]), [0x06, 5, sim.CODE.OK, 0xFF, 0xFF]);
+  assert.deepEqual([...h.stored], [0xFF, 0xFF]);
+  assert.equal(h.session.hello(LED_TYPE)[7], 2);   // Hello reports it damaged
+});
+
+test('current() reports the stored config', () => {
+  assert.deepEqual(harness().session.current(), { state: 0, crc: 0, config: null, reason: null });
+  const c = harness(DIY).session.current();
+  assert.equal(c.state, 1);
+  assert.equal(c.crc, sim.crc32(DIY));
+  assert.deepEqual(c.config.sliders.map(s => s.pin), [33, 35, 32, 36, 34]);
+  const damaged = harness(Uint8Array.from([0xFF, 0xFF])).session.current();
+  assert.equal(damaged.state, 2);
+  assert.equal(damaged.reason, 'It does not decode.');
+});
+
+test('encode() writes back the bytes current() read', () => {
+  const h = harness(DIY);
+  assert.deepEqual([...h.session.encode(h.session.current().config)], [...DIY]);
+});

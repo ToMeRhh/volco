@@ -123,6 +123,7 @@
   function createSession(o) {
     const type = o.protobuf.Root.fromJSON(o.descriptor).lookupType('volco.config.ControllerConfig');
     let t = null;   // the open transfer: { seq, total, crc, buf, received, last }
+    let forced = null;   // fault: the code the next complete write is answered with
 
     const reply = (seq, code, item = NO_ITEM, field = NO_ITEM) =>
       o.send([MSG.CONFIG_RESULT, seq, code, item, field]);
@@ -169,6 +170,12 @@
       const x = t;
       t = null;
       if (seq !== x.seq || x.received !== x.total) { reply(x.seq, CODE.BAD_SEQUENCE); return; }
+      if (forced !== null) {   // fault injection: answer with the chosen code; only OK stores
+        const code = forced;
+        forced = null;
+        if (code !== CODE.OK) { reply(seq, code); return; }
+        o.store(x.buf); reply(seq, CODE.OK); o.reboot(); return;
+      }
       if (crc32(x.buf) !== x.crc) { reply(seq, CODE.BAD_CRC); return; }
       const config = decode(type, x.buf);
       if (!config) { reply(seq, CODE.DECODE_FAILED); return; }
@@ -206,7 +213,27 @@
       return [MSG.HELLO, 1, 1, 3, 0x73, 0x69, 0x6D, state, ...u32(crc), sliders, kinds.length, ...kinds];
     }
 
-    return { onFrame, tick, hello, isOpen: () => t !== null };
+    /** The stored config: { state: 0 none, 1 valid, 2 damaged; crc; config (a plain object in
+     *  protobufjs's shape) or null; reason (why it is damaged) or null }. */
+    function current() {
+      const blob = o.stored();
+      if (!blob || !blob.length) return { state: 0, crc: 0, config: null, reason: null };
+      const crc = crc32(blob);
+      const config = decode(type, blob);
+      if (!config) return { state: 2, crc, config: null, reason: 'It does not decode.' };
+      const [code, item, field] = validate(config);
+      if (code !== CODE.OK)
+        return { state: 2, crc, config: null, reason: `Button ${item + 1}: the screen ${field === FIELD.SCREEN_BUS ? 'bus' : 'address'} is invalid.` };
+      return { state: 1, crc, config: type.toObject(config), reason: null };
+    }
+
+    /** A config object (layout.js toConfig) as the bytes to store. */
+    function encode(config) { return type.encode(type.fromObject(config)).finish(); }
+
+    /** Fault: answer the next complete config write with `code` (CODE.*), or null to stop. */
+    function forceNextResult(code) { forced = code; }
+
+    return { onFrame, tick, hello, current, encode, forceNextResult, isOpen: () => t !== null };
   }
 
   const api = { createSession, crc32, CODE };
