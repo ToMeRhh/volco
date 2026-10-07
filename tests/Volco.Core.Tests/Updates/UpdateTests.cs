@@ -1,3 +1,4 @@
+using System.Net;
 using Volco.Core.Updates;
 using Xunit;
 
@@ -75,12 +76,10 @@ public class UpdateTests
         var info = GitHubUpdater.ParseLatestRelease(json);
 
         Assert.NotNull(info);
-        Assert.Equal(UpdateSource.Release, info!.Source);
-        Assert.Equal("v1.5.0", info.DisplayName);
-        // Uses the asset API URL (works on private repos with octet-stream + token).
-        Assert.Equal("https://api/assets/123", info.DownloadUrl);
+        Assert.Equal("v1.5.0", info!.DisplayName);
+        // The public download URL, which needs no token.
+        Assert.Equal("https://example/Volco.exe", info.DownloadUrl);
         Assert.Equal(new Version(1, 5, 0), info.Version);
-        Assert.False(info.RequiresExtraction);
         Assert.Equal("Release notes here", info.Notes);
     }
 
@@ -93,45 +92,35 @@ public class UpdateTests
         Assert.Null(GitHubUpdater.ParseLatestRelease(json));
     }
 
-    [Fact]
-    public void ParseLatestRunId_ReturnsFirstRun()
+    private sealed class CapturingHandler(HttpStatusCode status, string body) : HttpMessageHandler
     {
-        var json = """
-        { "workflow_runs": [ { "id": 987654321 }, { "id": 1 } ] }
-        """;
-        Assert.Equal(987654321L, GitHubUpdater.ParseLatestRunId(json));
-    }
+        public HttpRequestMessage? Request { get; private set; }
 
-    [Fact]
-    public void ParseLatestRunId_ReturnsNull_WhenEmpty()
-        => Assert.Null(GitHubUpdater.ParseLatestRunId("""{ "workflow_runs": [] }"""));
-
-    [Fact]
-    public void ParseArtifact_FindsMatchingArtifact()
-    {
-        var json = """
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-          "artifacts": [
-            { "name": "other", "archive_download_url": "https://example/other.zip" },
-            { "name": "Volco-win-x64", "archive_download_url": "https://example/volco.zip" }
-          ]
+            Request = request;
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
         }
-        """;
-
-        var info = GitHubUpdater.ParseArtifact(json, 42);
-
-        Assert.NotNull(info);
-        Assert.Equal(UpdateSource.CiArtifact, info!.Source);
-        Assert.Equal("CI build #42", info.DisplayName);
-        Assert.Equal("https://example/volco.zip", info.DownloadUrl);
-        Assert.True(info.RequiresExtraction);
-        Assert.Null(info.Version);
     }
 
     [Fact]
-    public void ParseArtifact_ReturnsNull_WhenNoMatch()
+    public async Task GetLatestRelease_AsksThePublicApi_WithoutAToken()
     {
-        var json = """{ "artifacts": [ { "name": "nope", "archive_download_url": "u" } ] }""";
-        Assert.Null(GitHubUpdater.ParseArtifact(json, 42));
+        var handler = new CapturingHandler(HttpStatusCode.OK, """
+        { "tag_name": "v2.0.0", "assets": [ { "name": "Volco.exe", "browser_download_url": "https://example/Volco.exe" } ] }
+        """);
+
+        var info = await new GitHubUpdater(new HttpClient(handler), "owner", "repo").GetLatestReleaseAsync();
+
+        Assert.Equal("https://api.github.com/repos/owner/repo/releases/latest", handler.Request!.RequestUri!.ToString());
+        Assert.Null(handler.Request.Headers.Authorization);
+        Assert.Equal(new Version(2, 0, 0), info!.Version);
+    }
+
+    [Fact]
+    public async Task GetLatestRelease_ReturnsNull_WhenThereIsNoRelease()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.NotFound, """{ "message": "Not Found" }""");
+        Assert.Null(await new GitHubUpdater(new HttpClient(handler)).GetLatestReleaseAsync());
     }
 }

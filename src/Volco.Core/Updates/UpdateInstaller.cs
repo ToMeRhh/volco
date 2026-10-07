@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using System.IO.Compression;
 using System.Net.Http;
-using System.Net.Http.Headers;
 
 namespace Volco.Core.Updates;
 
@@ -24,26 +22,18 @@ public class UpdateInstaller
     }
 
     /// <summary>
-    /// Download <paramref name="info"/> and stage the new exe. Returns the path to the staged
-    /// Volco.exe, ready to be swapped in by <see cref="ApplyAndRestart"/>.
+    /// Download <paramref name="info"/>'s exe into the staging folder. Returns the path to the
+    /// staged Volco.exe, ready to be swapped in by <see cref="ApplyAndRestart"/>.
     /// </summary>
-    public async Task<string> DownloadAsync(UpdateInfo info, string? token,
+    public async Task<string> DownloadAsync(UpdateInfo info,
         IProgress<double>? progress = null, CancellationToken ct = default)
     {
         if (Directory.Exists(StagingDir)) Directory.Delete(StagingDir, recursive: true);
         Directory.CreateDirectory(StagingDir);
 
-        var downloadPath = Path.Combine(StagingDir, info.RequiresExtraction ? "payload.zip" : "Volco.exe");
+        var downloadPath = Path.Combine(StagingDir, "Volco.exe");
 
-        using var req = new HttpRequestMessage(HttpMethod.Get, info.DownloadUrl);
-        if (!string.IsNullOrWhiteSpace(token))
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        // Release downloads hit the asset API URL, which returns the binary only when asked for
-        // octet-stream (otherwise it returns JSON metadata). CI artifact URLs redirect to a zip.
-        if (info.Source == UpdateSource.Release)
-            req.Headers.Accept.TryParseAdd("application/octet-stream");
-
-        using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var resp = await _http.GetAsync(info.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
         resp.EnsureSuccessStatusCode();
 
         var total = resp.Content.Headers.ContentLength;
@@ -60,15 +50,7 @@ public class UpdateInstaller
                 if (total is > 0) progress?.Report((double)read / total.Value);
             }
         }
-
-        if (!info.RequiresExtraction)
-            return downloadPath;
-
-        // CI artifact zips wrap the published files; pull Volco.exe out of it.
-        var extractDir = Path.Combine(StagingDir, "extracted");
-        ZipFile.ExtractToDirectory(downloadPath, extractDir);
-        return Directory.EnumerateFiles(extractDir, "Volco.exe", SearchOption.AllDirectories).FirstOrDefault()
-               ?? throw new InvalidOperationException("Volco.exe not found in the downloaded artifact.");
+        return downloadPath;
     }
 
     /// <summary>

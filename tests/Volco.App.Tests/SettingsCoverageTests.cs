@@ -13,7 +13,6 @@ using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Tests.Audio;
-using Volco.Core.Updates;
 using Xunit;
 
 namespace Volco.App.Tests;
@@ -181,31 +180,6 @@ public class SettingsCoverageTests
             Assert.True(SaveAndReload(rig).DebugLogging);
         }
         finally { Volco.Core.Diagnostics.AppLog.IsDebugEnabled = false; }
-    }
-
-    private sealed class StubHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-            => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{}") });
-    }
-
-    [AvaloniaFact]
-    public void General_UpdatesTokenAndDevelopmentBuilds()
-    {
-        using var rig = new TestRig(Engine());
-        var panel = new UpdatesPanel(rig.Config, new GitHubUpdater(new HttpClient(new StubHandler())));
-        Host(panel);
-
-        Named<TextBox>(panel, "TokenBox").Text = "ghp_cover";                   // Updates.GitHubToken
-        Named<CheckBox>(panel, "UseCiCheckBox").IsChecked = true;              // Updates.UseCiArtifact
-        var check = Named<Button>(panel, "CheckButton");
-        check.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!check.IsEnabled && DateTime.UtcNow < deadline) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
-
-        var u = SaveAndReload(rig).Updates;
-        Assert.Equal("ghp_cover", u.GitHubToken);
-        Assert.True(u.UseCiArtifact);
     }
 
     [AvaloniaFact]

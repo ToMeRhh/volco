@@ -96,7 +96,7 @@ flowchart LR
 | 🏷️ **Device nicknames & icons** | "Sony WH-1000XM5 Hands-Free AG Audio" becomes **Headphones** 🎧, in the app and on the controller |
 | 🫧 **Volume OSD** | A small click-through on-screen volume pill |
 | 🧩 **Any hardware layout** | The controller describes itself on connect, and the settings window adapts |
-| 🔄 **Self-updating** | Built-in updater from GitHub Releases (or dev builds, if you like living on the edge) |
+| 🔄 **Self-updating** | Built-in updater that installs the latest GitHub Release |
 
 > [!NOTE]
 > 📸 **Screenshots and photos coming soon.**
@@ -280,9 +280,6 @@ Plug the ESP32 in over USB, open **Settings → Connection**, choose **USB cable
 
 On **Settings → Controller**, choose **Set up**, start from the **DIY reference** (or your own layout) and **Save to controller**. Then map the sliders and buttons on their pages, and you're done. 🎉 Wi-Fi (UDP) is in the Controller page's **Advanced** section.
 
-> [!IMPORTANT]
-> The repository is currently **private**, so the in-app updater needs a GitHub Personal Access Token (`repo` read scope, plus `actions:read` for dev builds). Enter it in **General → Updates**; it's stored only in your local `config.json`.
-
 ---
 
 ## 🧑‍💻 Development
@@ -397,7 +394,7 @@ Push a semver tag, or run the `release.yml` workflow from the Actions tab:
 git tag v1.2.3 && git push origin v1.2.3
 ```
 
-It builds a version-stamped `Volco.exe` and publishes a GitHub Release with generated notes. Release builds show **Check for Updates…** in the tray; the updater downloads the new exe and swaps it in place after the app exits.
+It builds a version-stamped `Volco.exe` and publishes a GitHub Release with generated notes. Release builds show **Check for Updates…** in the tray and an Updates panel on the General page; the updater reads the latest release from the public GitHub Releases API (no token), downloads its `Volco.exe` and swaps it in place after the app exits.
 
 </details>
 

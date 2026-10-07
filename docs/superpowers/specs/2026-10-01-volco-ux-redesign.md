@@ -41,8 +41,8 @@ Every setting the Step 2 UI edits, mapped to the `AppConfig` property and to whe
 | Buttons | Double-press window | `Buttons[i].DoublePressWindowMs` | Button card, Advanced |
 | Output Devices | Toggle device 1 / 2 | `OutputDevices.Device1/Device2` | Moves into the "Toggle between two outputs" action as its A and B devices. **The page is removed.** |
 | General | Debug logging | `DebugLogging` | General page, "Detailed logging" |
-| Update window | GitHub token | `Updates.GitHubToken` | General page, Updates panel (always visible: it is required, the repo is private) |
-| Update window | Update from CI build | `Updates.UseCiArtifact` | General page, Updates panel, Advanced |
+| Update window | GitHub token | `Updates.GitHubToken` | Removed (2026-10-07): the updater reads public GitHub Releases without a token |
+| Update window | Update from CI build | `Updates.UseCiArtifact` | Removed (2026-10-07): the updater offers releases only |
 | Update window | Check for updates / Update now | (commands) | General page, Updates panel. The tray item "Check for Updates…" opens Settings on General. |
 
 Not edited by any page today and still not edited: `SchemaVersion`, `Sliders[i].Index`, `Buttons[i].Index` (both become "always equal to list position", §4.1).
@@ -141,7 +141,7 @@ Four pages in a 200 px navigation column: **Sliders, Buttons, Connection, Genera
   - Then "Connect using" (USB cable / Wi-Fi (UDP) / WebSocket) and **that type's settings, always visible**: port + baud rate, listen port, or server port.
   - Hint: "These must match the values in your controller's firmware."
 - **General:**
-  - Updates panel: version, Check for updates, GitHub token (always visible, with the "required, private repo" explanation), and under Advanced "Update from development builds".
+  - Updates panel: version, Check for updates. (The GitHub token and "Update from development builds" were removed on 2026-10-07; the updater reads public releases.)
   - Troubleshooting panel: Detailed logging, Open log folder.
   - The separate Update window goes away; its progress and "Update now" appear inline in the Updates panel.
 

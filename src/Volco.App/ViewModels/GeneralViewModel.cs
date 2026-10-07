@@ -8,9 +8,8 @@ using Volco.Core.Updates;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The General page: updates (release builds only, as before), troubleshooting and the app's
-/// version. The update
-/// flow itself lives in <see cref="Controls.UpdatesPanel"/>, which needs the config it saves to.
+/// The General page: updates (release builds only), troubleshooting and the app's version. The
+/// update flow itself lives in <see cref="Controls.UpdatesPanel"/>.
 /// </summary>
 public partial class GeneralViewModel : ObservableObject
 {
@@ -32,8 +31,6 @@ public partial class GeneralViewModel : ObservableObject
 
     /// <summary>The in-app updater only makes sense for official release builds.</summary>
     public bool ShowUpdates { get; }
-
-    internal ConfigManager ConfigManager => _config;
 
     /// <summary>"Volco v1.2.3" on releases, "Volco dev a1b2c3d" on other builds.</summary>
     public string VersionText { get; }
