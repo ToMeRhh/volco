@@ -15,7 +15,7 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 ![.NET](https://img.shields.io/badge/.NET-8-512BD4?logo=dotnet&logoColor=white)
 ![Avalonia](https://img.shields.io/badge/UI-Avalonia%2012-8B44AC)
 ![ESP32](https://img.shields.io/badge/ESP32-PlatformIO-E7352C?logo=espressif&logoColor=white)
-<!-- TODO: add a license badge once a LICENSE file exists, e.g. ![License](https://img.shields.io/badge/license-MIT-green) -->
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 [**Overview**](#-what-is-volco) ·
 [**The controller**](#-the-controller) ·
@@ -430,8 +430,7 @@ It builds a version-stamped `Volco.exe` and publishes a GitHub Release with gene
 
 ## 📄 License
 
-<!-- TODO: choose a license (e.g. MIT) and add a LICENSE file. -->
-*License to be decided.*
+Volco (the app, the firmware and the tools) is licensed under the [GNU General Public License v3.0](LICENSE). You may use, modify and share it, including in forks, as long as what you distribute stays under the GPL with its source available. Third-party components keep their own licences; see [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
 
 <div align="center">
 <br>
