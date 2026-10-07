@@ -121,7 +121,7 @@
       slots[i] = O.createSlot(beh.transitionMs);
       slots[i].show(O.NOT_CONNECTED, P.TRANSITION.NONE, now(), false);
     });
-    panels = O.createPanels(beh.panels);
+    panels = O.createPanels(beh.panels, hw.kinds.includes(P.KIND.SCREEN));
     panels.activity(now());
     boardKinds = hw.kinds;
     device?.build({ sliders: hw.sliders, kinds: hw.kinds }, { drop });

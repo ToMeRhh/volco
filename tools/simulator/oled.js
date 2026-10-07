@@ -207,8 +207,10 @@
   }
   const POWER = { NORMAL: 0, DIM: 1, OFF: 2 };
   const SHIFT_CYCLE = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
-  /** cfg: { dim, off, shift, swallow, dimAfterMs, offAfterMs, shiftEveryMs } */
-  function createPanels(cfg) {
+  /** cfg: { dim, off, shift, swallow, dimAfterMs, offAfterMs, shiftEveryMs }. hasScreens false: a
+   *  board with no screens never dims, shifts or swallows a press (firmware/src/screens.cpp). */
+  function createPanels(cfg, hasScreens = true) {
+    if (!hasScreens) cfg = { ...cfg, dim: false, off: false, shift: false, swallow: false };
     let last = 0, swallowed = 0;
     const power = now => {
       const idle = now - last;

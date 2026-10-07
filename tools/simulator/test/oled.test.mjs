@@ -94,3 +94,13 @@ test('behaviour() reads ScreenBehaviour with the proto defaults', () => {
   assert.equal(O.behaviour({ transitionMs: 0, dimEnabled: false }).panels.dim, false);
   assert.equal(O.behaviour({ transitionMs: 0 }).transitionMs, 0);
 });
+
+test('a board without screens never dims, shifts or swallows a press', () => {
+  // As firmware/src/screens.cpp: with no screens the panels are never touched.
+  const panels = O.createPanels({ dim: true, off: true, shift: true, swallow: true, dimAfterMs: 1000, offAfterMs: 5000, shiftEveryMs: 100 }, false);
+  panels.activity(0);
+  assert.equal(panels.power(60000), O.POWER.NORMAL);
+  assert.deepEqual(panels.shift(150), [0, 0]);
+  assert.equal(panels.filterButton(0, true, 60000), true);
+  assert.equal(panels.filterButton(0, false, 60100), true);
+});
