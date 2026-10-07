@@ -12,3 +12,4 @@ the code has moved on since, the code and `CLAUDE.md` are the current reference.
 | [`oled-screens.md`](oled-screens.md) | Per-button OLED screens, the Hello handshake and the Screen message |
 | [`controller-config.md`](controller-config.md) | The controller config stored on the ESP32, its protocol, and installing firmware from the app |
 | [`link-state.md`](link-state.md) | What "Connected" means, and the other link states |
+| [`simulator.md`](simulator.md) | The web simulator: the 3D desk scene, the builder and pin allocation, demo mode, developer tools |

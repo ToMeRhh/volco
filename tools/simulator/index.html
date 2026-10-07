@@ -1,420 +1,290 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Volco Simulator</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="icons.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.4.0/dist/light/protobuf.min.js"></script>
-  <script src="volco_config_descriptor.js"></script>
-  <script src="config.js"></script>
-  <style>
-    .slider-vertical { appearance: slider-vertical; width: 8px; height: 200px; padding: 0 5px; }
-    .led { width: 12px; height: 12px; border-radius: 50%; background: #374151; }
-    .led.on { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-    canvas.oled { width: 256px; height: 128px; image-rendering: pixelated; background: #05070a; border-radius: 4px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Volco Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* One full-bleed 3D stage; four floating controls (connection, builder, developer tools). */
+:root {
+  --ground: #e8e5df;
+  --ink: #2a2826;
+  --ink-soft: #77726a;
+  --hair: rgba(40, 34, 26, .10);
+  --ui: 'Instrument Sans', 'Helvetica Neue', system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px var(--ui); overflow: hidden; }
+[hidden] { display: none !important; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.failed { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; font: 15px var(--ui); color: var(--ink-soft); }
+.tag { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); background: rgba(40, 34, 26, .07); border-radius: 6px; padding: 2px 6px; }
+.note { margin: 0; padding: 10px 16px; font-size: 12px; color: var(--ink-soft); border-top: 1px solid var(--hair); }
+.memo { margin: 0; padding: 0 16px 10px; font-size: 12px; color: var(--ink-soft); }
+/* Builder: a quiet paper-like panel floating at the right; the 3D view re-centres beside it. */
+:root { --paper: rgba(251, 249, 245, .86); --paper-solid: #fbf9f5; --chip: #ffffff; --focus: #2d6cdf; }
+.toggle { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 16px; width: 40px; height: 40px; border-radius: 12px; border: 0; cursor: pointer;
+  display: grid; place-items: center; color: var(--ink); background: var(--paper); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 0 0 1px var(--hair), 0 6px 18px -10px rgba(40, 30, 20, .4); z-index: 3; }
+.toggle[aria-expanded="true"] { background: var(--ink); color: var(--paper-solid); }
+.toggle[aria-expanded="true"] rect { fill: var(--ink); }
+.panel { position: fixed; top: calc(64px + env(safe-area-inset-top, 0px)); right: 16px; width: 292px; max-height: calc(100% - 80px); overflow: auto;
+  background: var(--paper); backdrop-filter: blur(22px) saturate(1.15); -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  border-radius: 18px; box-shadow: 0 0 0 1px var(--hair), 0 18px 40px -18px rgba(40, 30, 20, .45); z-index: 2;
+  transition: opacity .2s, transform .25s; }
+.panel[hidden] { display: block !important; opacity: 0; transform: translateX(16px); pointer-events: none; }
+.sec { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.sec + .sec { border-top: 1px solid var(--hair); }
+.sec.row { flex-direction: row; align-items: center; justify-content: space-between; }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.select { position: relative; }
+.select::after { content: ''; position: absolute; right: 12px; top: 50%; width: 7px; height: 7px; margin-top: -5px; border-right: 1.5px solid var(--ink-soft); border-bottom: 1.5px solid var(--ink-soft); transform: rotate(45deg); pointer-events: none; }
+select { appearance: none; width: 100%; font: 500 14px var(--ui); color: var(--ink); background: var(--chip); border: 0; border-radius: 10px; padding: 9px 32px 9px 12px; box-shadow: 0 0 0 1px var(--hair); cursor: pointer; }
+.step { display: flex; align-items: center; gap: 2px; background: var(--chip); border-radius: 10px; box-shadow: 0 0 0 1px var(--hair); padding: 2px; }
+.step button { width: 32px; height: 30px; border: 0; background: transparent; font: 500 17px var(--ui); color: var(--ink); border-radius: 8px; cursor: pointer; }
+.step button:hover:not(:disabled) { background: rgba(40, 34, 26, .06); }
+.step button:disabled { color: rgba(40, 34, 26, .25); cursor: default; }
+.step output { min-width: 26px; text-align: center; font: 600 14px var(--ui); font-variant-numeric: tabular-nums; }
+.btns { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.btns li { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 6px; border-radius: 12px; background: var(--chip); box-shadow: 0 0 0 1px var(--hair); }
+.btns li.dragging { opacity: .4; }
+.btns li.over { box-shadow: 0 0 0 1.5px var(--ink); }
+.grip { width: 10px; height: 16px; cursor: grab; background-image: radial-gradient(circle, rgba(40, 34, 26, .35) 1.2px, transparent 1.4px); background-size: 5px 5px; flex: none; }
+.num { width: 16px; font: 600 12px var(--ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; text-align: center; flex: none; }
+.kinds { display: flex; gap: 2px; flex: 1; background: rgba(40, 34, 26, .05); border-radius: 9px; padding: 2px; }
+.kinds button { flex: 1; height: 28px; border: 0; background: transparent; border-radius: 7px; color: var(--ink-soft); cursor: pointer; display: grid; place-items: center; }
+.kinds button:hover:not(:disabled) { color: var(--ink); }
+.kinds button[aria-checked="true"] { background: var(--chip); color: var(--ink); box-shadow: 0 1px 2px rgba(40, 30, 20, .18); }
+.kinds button:disabled { opacity: .3; cursor: default; }
+.rm { width: 28px; height: 28px; border: 0; background: transparent; color: var(--ink-soft); border-radius: 8px; cursor: pointer; display: grid; place-items: center; flex: none; }
+.rm:hover { background: rgba(40, 34, 26, .06); color: var(--ink); }
+.add { display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; border: 1px dashed rgba(40, 34, 26, .22); border-radius: 12px; background: transparent; font: 500 13px var(--ui); color: var(--ink-soft); cursor: pointer; }
+.add:hover:not(:disabled) { color: var(--ink); border-color: rgba(40, 34, 26, .4); }
+.add:disabled { opacity: .4; cursor: default; }
+.sws { display: flex; gap: 8px; }
+.sw { width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer; padding: 0;
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .18), inset 0 1px 1px rgba(255, 255, 255, .6), 0 0 0 1px var(--hair); }
+.sw[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 719px) {
+  .panel { top: auto; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: auto; max-height: 46%; }
+  .panel[hidden] { transform: translateY(16px); }
+}
+/* Connection pill (top left), Apply footer (panel), developer drawer (bottom left). */
+:root { --ok: #3f8f5a; --wait: #c98a2b; --off: #a39d94; --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace; --danger: #b2452c; }
+.conn { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 16px; z-index: 3; }
+.pill { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 16px 0 14px; border: 0; border-radius: 12px; cursor: pointer;
+  font: 500 13px var(--ui); color: var(--ink); background: var(--paper); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 0 0 1px var(--hair), 0 6px 18px -10px rgba(40, 30, 20, .4); font-variant-numeric: tabular-nums; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); box-shadow: 0 0 0 3px rgba(163, 157, 148, .2); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(63, 143, 90, .18); }
+.dot.wait { background: var(--wait); box-shadow: 0 0 0 3px rgba(201, 138, 43, .2); animation: blink 1s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+.pop { position: absolute; top: 48px; left: 0; width: 264px; padding: 14px; display: flex; flex-direction: column; gap: 12px; border-radius: 16px;
+  background: var(--paper-solid); box-shadow: 0 0 0 1px var(--hair), 0 18px 40px -18px rgba(40, 30, 20, .45); }
+.fields { display: flex; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field.grow { flex: 1; } .field.port { width: 72px; }
+.field span { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.field input { font: 500 14px var(--ui); color: var(--ink); background: #fff; border: 0; border-radius: 9px; padding: 8px 10px; box-shadow: 0 0 0 1px var(--hair); min-width: 0; font-variant-numeric: tabular-nums; }
+.field input:focus { outline: 2px solid var(--focus); outline-offset: 0; }
+.check { display: flex; align-items: center; gap: 8px; font: 500 13px var(--ui); color: var(--ink); cursor: pointer; user-select: none; }
+.check input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
+.check.small { font-size: 12px; color: var(--ink-soft); }
+.primary { height: 34px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--ink); color: var(--paper-solid); font: 600 13px var(--ui); cursor: pointer; }
+.primary:disabled { background: rgba(40, 34, 26, .14); color: rgba(40, 34, 26, .4); cursor: default; }
+.primary.wide { width: 100%; }
+.ghost { height: 34px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); font: 500 13px var(--ui); cursor: pointer; }
+.ghost:hover:not(:disabled) { background: rgba(40, 34, 26, .06); color: var(--ink); }
+.ghost:disabled { opacity: .35; cursor: default; }
+.ghost.small, .primary.small { height: 28px; font-size: 12px; padding: 0 10px; border-radius: 8px; }
+.ghost.danger { color: var(--danger); }
+.foot { position: sticky; bottom: 0; display: flex; align-items: center; gap: 6px; padding: 12px 12px 12px 16px; border-top: 1px solid var(--hair); background: var(--paper-solid); border-radius: 0 0 18px 18px; }
+.foot .check { margin-right: auto; font-size: 13px; color: var(--ink-soft); }
+.foot .pending { width: 6px; height: 6px; border-radius: 50%; background: var(--wait); margin-right: 2px; }
+.devbtn { position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 40px; height: 40px; border: 0; border-radius: 12px; cursor: pointer; z-index: 3;
+  display: grid; place-items: center; color: var(--ink); background: var(--paper); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 0 0 1px var(--hair), 0 6px 18px -10px rgba(40, 30, 20, .4); }
+.devbtn[aria-expanded="true"] { background: var(--ink); color: var(--paper-solid); }
+.drawer { position: fixed; left: 16px; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); width: min(600px, calc(100% - 32px - 308px)); height: 268px; z-index: 2;
+  display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: var(--paper); backdrop-filter: blur(22px) saturate(1.15); -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  box-shadow: 0 0 0 1px var(--hair), 0 18px 40px -18px rgba(40, 30, 20, .45); }
+.dhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px 8px 8px; border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
+.tabs { display: flex; gap: 2px; background: rgba(40, 34, 26, .05); border-radius: 10px; padding: 2px; }
+.tabs button { height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; font: 500 12px var(--ui); color: var(--ink-soft); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(40, 30, 20, .18); }
+.dtools { display: flex; align-items: center; gap: 4px; }
+.pane { flex: 1; overflow: auto; min-height: 0; }
+.log { font: 12px/1.75 var(--mono); padding: 6px 0; }
+.log .r { display: grid; grid-template-columns: 64px 16px 128px minmax(0, 1fr); gap: 8px; padding: 0 14px; white-space: nowrap; }
+.log .r:hover { background: rgba(40, 34, 26, .04); }
+.log .t { color: var(--off); font-variant-numeric: tabular-nums; }
+.log .in { color: #2f6f8f; } .log .out { color: #9a5b22; }
+.log .n { color: var(--ink); font-weight: 500; }
+.log .x { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; }
+.log .bad .n { color: var(--danger); }
+.log .empty { padding: 28px 14px; color: var(--ink-soft); font-family: var(--ui); font-size: 13px; }
+.kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; margin: 0; padding: 16px; font-size: 13px; }
+.kv dt { color: var(--ink-soft); } .kv dd { margin: 0; font: 500 13px var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.acts { display: flex; gap: 6px; padding: 0 10px 12px; }
+.faults { list-style: none; margin: 0; padding: 6px 0; }
+.faults li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 0 14px 0 16px; font-size: 13px; }
+.faults li + li { border-top: 1px solid var(--hair); }
+.faults .armed { background: var(--wait); color: #fff; }
+.select.small select { padding: 5px 28px 5px 10px; font-size: 12px; border-radius: 8px; }
+.switch { position: relative; width: 34px; height: 20px; flex: none; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.switch i { position: absolute; inset: 0; border-radius: 10px; background: rgba(40, 34, 26, .16); transition: background .15s; pointer-events: none; }
+.switch i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s; }
+.switch input:checked + i { background: var(--ink); }
+.switch input:checked + i::after { transform: translateX(14px); }
+.switch input:focus-visible + i { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 719px) {
+  .drawer { width: auto; right: 12px; left: 12px; height: 46%; z-index: 4; }
+  .pill { padding: 0 12px; }
+}
+</style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
-  <div class="max-w-5xl mx-auto bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-6">
-    <h1 class="text-2xl font-bold text-blue-400">Volco Simulator</h1>
-
-    <div class="flex flex-wrap gap-4 items-end">
-      <label class="text-xs text-gray-400">Host<br>
-        <input id="host" value="localhost" class="bg-gray-700 border border-gray-600 rounded px-3 py-2"></label>
-      <label class="text-xs text-gray-400">Port<br>
-        <input id="port" type="number" value="8765" class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-2"></label>
-      <label class="text-xs text-gray-400">Controller type<br>
-        <select id="type" class="bg-gray-700 border border-gray-600 rounded px-3 py-2">
-          <option value="led">LED controller (current hardware)</option>
-          <option value="screen">Screen controller</option>
-        </select></label>
-      <button id="connectBtn" class="bg-blue-600 hover:bg-blue-500 font-bold py-2 px-4 rounded">Connect</button>
-      <label class="flex items-center gap-1.5 text-xs text-gray-400"><input id="autoReconnect" type="checkbox"> Auto-reconnect</label>
+<body>
+<div id="stage"></div>
+<p class="failed" id="scene-failed" hidden>The 3D view needs a network connection and WebGL. The connection and developer tools still work.</p>
+<div class="conn">
+  <button class="pill" id="conn-btn" aria-expanded="false" aria-controls="conn-pop"><span class="dot" id="conn-dot"></span><span id="conn-text">Not connected</span><span class="tag" id="conn-demo">Demo</span></button>
+  <form class="pop" id="conn-pop" hidden>
+    <div class="fields">
+      <label class="field grow"><span>Host</span><input id="host" value="localhost" autocomplete="off" spellcheck="false"></label>
+      <label class="field port"><span>Port</span><input id="port" value="8765" inputmode="numeric"></label>
     </div>
-
-    <div class="flex items-center gap-2 text-sm">
-      <div id="statusDot" class="w-3 h-3 rounded-full bg-red-500"></div>
-      <span id="statusText" class="text-gray-300">Disconnected</span>
-      <span class="text-gray-500">·</span>
-      <span id="configText" class="font-mono text-xs text-gray-400">config: none</span>
-      <button id="clearConfigBtn" class="text-xs bg-gray-700 hover:bg-gray-600 rounded px-2 py-1">Clear config</button>
+    <label class="check"><input type="checkbox" id="reconnect" checked> Reconnect automatically</label>
+    <button class="primary wide" id="conn-go" type="submit">Connect</button>
+  </form>
+</div>
+<button class="devbtn" id="dev-btn" aria-label="Developer tools" aria-expanded="false" aria-controls="drawer">
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5L2 9l4 4M12 5l4 4-4 4"></path></svg>
+</button>
+<section class="drawer" id="drawer" aria-label="Developer tools" hidden>
+  <div class="dhead">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-frames" aria-selected="true" aria-controls="pane-frames">Frames</button>
+      <button role="tab" id="tab-config" aria-selected="false" aria-controls="pane-config">Config</button>
+      <button role="tab" id="tab-faults" aria-selected="false" aria-controls="pane-faults">Faults</button>
     </div>
-
-    <div class="flex flex-wrap gap-12 items-start">
-      <div id="sliders" class="flex gap-6"></div>
-      <div id="buttons" class="flex flex-col gap-4"></div>
-    </div>
-
-    <div>
-      <div class="text-xs text-gray-400 mb-1">Frames (newest first)</div>
-      <pre id="log" class="text-xs h-40 overflow-auto bg-gray-900 p-2 rounded"></pre>
+    <div class="dtools" id="frame-tools">
+      <label class="check small"><input type="checkbox" id="hide-ka" checked> Hide keepalive</label>
+      <button class="ghost small" id="pause">Pause</button>
+      <button class="ghost small" id="clear-log">Clear</button>
     </div>
   </div>
+  <div class="pane log" id="pane-frames" role="tabpanel" aria-labelledby="tab-frames"></div>
+  <div class="pane" id="pane-config" role="tabpanel" aria-labelledby="tab-config" hidden>
+    <dl class="kv">
+      <dt>State</dt><dd id="cfg-state">Valid</dd>
+      <dt>Size</dt><dd id="cfg-size">—</dd>
+      <dt>CRC</dt><dd id="cfg-crc">—</dd>
+      <dt>Preset</dt><dd id="cfg-preset">—</dd>
+      <dt>Hardware</dt><dd id="cfg-hw">—</dd>
+    </dl>
+    <p class="memo" id="cfg-memory-row" hidden>Kept in memory only: this browser blocks storage.</p>
+    <div class="acts"><button class="ghost small" id="cfg-copy">Copy as JSON</button><button class="ghost small danger" id="cfg-clear">Clear config</button></div>
+  </div>
+  <div class="pane" id="pane-faults" role="tabpanel" aria-labelledby="tab-faults" hidden>
+    <ul class="faults">
+      <li><span>Go silent (no Alive, ignore the PC)</span><label class="switch"><input type="checkbox" id="f-silent"><i></i></label></li>
+      <li><span>Corrupt the next frame's checksum</span><button class="ghost small" id="f-corrupt">Arm</button></li>
+      <li><span>Answer the next config write with</span>
+        <div class="select small"><select id="f-cfg" aria-label="Config write answer"></select></div></li>
+      <li><span>Ignore Commit (fall back after 500 ms)</span><label class="switch"><input type="checkbox" id="f-commit"><i></i></label></li>
+      <li><span>Reboot the controller</span><button class="ghost small" id="f-reboot">Reboot</button></li>
+    </ul>
+  </div>
+</section>
+<button class="toggle" id="toggle" aria-label="Builder" aria-expanded="true" aria-controls="panel">
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 2v14M9 2v14M14 2v14"></path><rect x="2" y="9" width="4" height="3" rx="1" fill="var(--paper)"></rect><rect x="7" y="4" width="4" height="3" rx="1" fill="var(--paper)"></rect><rect x="12" y="11" width="4" height="3" rx="1" fill="var(--paper)"></rect></svg>
+</button>
+<aside class="panel" id="panel" aria-label="Builder">
+  <div class="sec">
+    <label class="lbl" for="preset">Preset</label>
+    <div class="select"><select id="preset"></select></div>
+  </div>
+  <div class="sec row">
+    <span class="lbl" id="sl-lbl">Sliders</span>
+    <div class="step" role="group" aria-labelledby="sl-lbl">
+      <button id="sl-dec" aria-label="Remove a slider">−</button>
+      <output id="sl-n" aria-live="polite">5</output>
+      <button id="sl-inc" aria-label="Add a slider">+</button>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="lbl">Buttons</div>
+    <ol class="btns" id="btns"></ol>
+    <button class="add" id="add">
+      <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"></path></svg>
+      Button
+    </button>
+  </div>
+  <div class="sec row">
+    <span class="lbl">Finish</span>
+    <div class="sws">
+      <button class="sw" data-finish="silver" aria-label="Silver" aria-pressed="false" style="background:linear-gradient(145deg,#eceded,#a9abad)"></button>
+      <button class="sw" data-finish="graphite" aria-label="Graphite" aria-pressed="false" style="background:linear-gradient(145deg,#6b6e73,#2f3134)"></button>
+      <button class="sw" data-finish="sand" aria-label="Sand" aria-pressed="false" style="background:linear-gradient(145deg,#f4f0e8,#d5cdbf)"></button>
+    </div>
+  </div>
+  <p class="note" id="builder-note" hidden></p>
+  <div class="foot">
+    <label class="check"><input type="checkbox" id="autosave"> Auto-save</label>
+    <button class="ghost" id="revert" disabled>Revert</button>
+    <button class="primary" id="apply" disabled>Apply</button>
+  </div>
+</aside>
 
-<script>
-// Volco wire protocol, controller side (docs/design/oled-screens.md §3).
-const TYPES = {
-  led:    { sliders: 5, buttons: [1, 1, 2] },     // kinds: 1 LED, 2 LED pair, 3 screen
-  screen: { sliders: 5, buttons: [3, 3, 3, 3] },
-};
-const MSG = { HELLO: 0x01, ALIVE: 0x02, SLIDER: 0x03, BUTTON: 0x04, HELLO_REQUEST: 0x81,
-              HEARTBEAT: 0x82, LED: 0x83, SCREEN: 0x84, BEGIN: 0x85, COMMIT: 0x86 };
-const NAMES = Object.fromEntries(Object.entries(MSG).map(([k, v]) => [v, k]));
-const T = { hostTimeout: 3000, keepalive: 1000, commitFallback: 500, transition: 360,
-            scrollHold: 2000, scrollSpeed: 30, scrollEndHold: 1200 };
-const NOT_CONNECTED = { layout: 1, topKind: 1, top: 'NOT CONNECTED', icon: 255, flags: 0, main: 'Volco' };
-
-const $ = id => document.getElementById(id);
-let ws = null, reconnectTimer = null, type = 'led';
-let lastTx = 0, lastRx = 0, hostAlive = false, holding = false, holdStart = 0, held = [];
-let buttons = [];   // { kind, a, b, ctx, cur, prev, transition, start, settled }
-
-// ── Framing ────────────────────────────────────────────────────────────────
-function frameOf(payload) {
-  let cs = 0;
-  for (const b of payload) cs ^= b;
-  return new Uint8Array([0xAA, payload.length, ...payload, cs]);
-}
-function hex(bytes) { return [...bytes].map(b => b.toString(16).padStart(2, '0')).join(' '); }
-function log(dir, payload) {
-  const line = `${dir} ${(NAMES[payload[0]] || '0x' + payload[0].toString(16)).padEnd(13)} ${hex(payload)}`;
-  const el = $('log');
-  el.textContent = (line + '\n' + el.textContent).split('\n').slice(0, 40).join('\n');
-}
-function send(payload) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(frameOf(payload).buffer);
-  lastTx = performance.now();
-  if (payload[0] !== MSG.ALIVE) log('→', payload);
-}
-// ── Config (spec §10): one stored blob, kept in localStorage ─────────────────
-const CONFIG_KEY = 'volco-sim-config';
-function loadStored() {
-  try {
-    const text = localStorage.getItem(CONFIG_KEY);
-    return text ? Uint8Array.from(atob(text), c => c.charCodeAt(0)) : null;
-  } catch { return null; }
-}
-let storedConfig = loadStored();
-function saveStored(blob) {
-  storedConfig = blob;
-  try {
-    if (blob) localStorage.setItem(CONFIG_KEY, btoa(String.fromCharCode(...blob)));
-    else localStorage.removeItem(CONFIG_KEY);
-  } catch { /* private window: kept in memory only */ }
-  showConfig();
-}
-// null when protobufjs couldn't load (offline): config frames are then ignored.
-const session = window.protobuf && window.VolcoSimConfig ? VolcoSimConfig.createSession({
-  protobuf: window.protobuf, descriptor: VOLCO_CONFIG_DESCRIPTOR,
-  send: p => send(p),
-  store: blob => saveStored(Uint8Array.from(blob)),
-  stored: () => storedConfig,
-  reboot: () => setTimeout(simulateReboot, 50),   // after the OK has gone out
-}) : null;
-function helloPayload() {
-  const t = TYPES[type];
-  if (session) return session.hello(t);
-  return [MSG.HELLO, 1, 1, 3, 0x73, 0x69, 0x6D, 0, 0, 0, 0, 0, t.sliders, t.buttons.length, ...t.buttons];
-}
-/** The hardware the Hello reports: the stored config's, or the controller type's. */
-function layout() {
-  const h = helloPayload();
-  const i = 4 + h[3] + 5;   // past version, chip, fwLen, firmware, state and CRC
-  return { sliders: h[i], buttons: h.slice(i + 2) };
-}
-function showConfig() {
-  const text = !session ? 'config: unavailable (protobufjs not loaded)'
-    : storedConfig ? `config: ${storedConfig.length} bytes, crc ${VolcoSimConfig.crc32(storedConfig).toString(16).padStart(8, '0').toUpperCase()}`
-    : 'config: none';
-  $('configText').textContent = text;
-}
-/** Like the firmware after a save: drop the link for 1 s, come back with the new hardware. */
-function simulateReboot() {
-  const wasConnected = !!ws;
-  if (ws) { rebooting = true; ws.close(); }
-  build();
-  if (wasConnected) setTimeout(() => { rebooting = false; if (!ws) connect(); }, 1000);
-}
-let rebooting = false;
-
-function sendHello() {
-  send(helloPayload());
-  // Like the firmware: every Hello is followed by each slider's current position.
-  document.querySelectorAll('#sliders input').forEach((input, i) => {
-    const v = +input.value;
-    send([MSG.SLIDER, i, v >> 8, v & 255]);
-  });
-}
-
-let rx = { state: 0, len: 0, buf: [] };
-function feed(bytes) {
-  for (const b of bytes) {
-    if (rx.state === 0) { if (b === 0xAA) rx.state = 1; }
-    else if (rx.state === 1) { rx.len = b; rx.buf = []; rx.state = b === 0 ? 0 : 2; }
-    else if (rx.state === 2) { rx.buf.push(b); if (rx.buf.length >= rx.len) rx.state = 3; }
-    else {
-      rx.state = 0;
-      let cs = 0;
-      for (const x of rx.buf) cs ^= x;
-      if (cs === b) handle(rx.buf, performance.now());
-    }
-  }
-}
-
-// ── Session (mirrors firmware/lib/volco_protocol Link) ─────────────────────
-function decodeScreen(p) {
-  const td = new TextDecoder();
-  let i = 5;
-  const c = { layout: p[3], topKind: p[4], top: '', dotsSelected: 0, dotsCount: 0, icon: 255, flags: 0, main: '' };
-  const text = () => { const n = p[i++]; if (n === undefined || i + n > p.length) throw 0; const s = td.decode(new Uint8Array(p.slice(i, i + n))); i += n; return s; };
-  try {
-    if (c.topKind === 1) c.top = text();
-    else if (c.topKind === 2) { c.dotsSelected = p[i++]; c.dotsCount = p[i++]; }
-    if (i + 2 > p.length) return null;
-    c.icon = p[i++]; c.flags = p[i++];
-    c.main = text();
-  } catch { return null; }
-  return { button: p[1], transition: p[2] <= 2 ? p[2] : 0, content: c };
-}
-
-function handle(p, now) {
-  log('←', p);
-  lastRx = now;
-  if (!hostAlive) {
-    hostAlive = true;
-    if (p[0] !== MSG.HELLO_REQUEST) sendHello();
-  }
-  if (session && session.onFrame(p, now)) return;   // config frames (spec §5.3, §5.4)
-  const kind = i => buttons[i]?.kind;
-  switch (p[0]) {
-    case MSG.HELLO_REQUEST: sendHello(); break;
-    case MSG.LED:
-      if (kind(p[1]) === 1 || kind(p[1]) === 2) {
-        if (holding) held[p[1]] = { ...held[p[1]], led: p[2] }; else applyLed(p[1], p[2]);
-      }
-      break;
-    case MSG.SCREEN: {
-      const s = decodeScreen(p);
-      if (!s || kind(s.button) !== 3) break;
-      if (holding) {
-        const h = held[s.button] || {};
-        const transition = h.screen && s.transition === 0 ? h.transition : s.transition;
-        held[s.button] = { ...h, screen: s.content, transition };
-      } else applyScreen(s.button, s.transition, s.content, now);
-      break;
-    }
-    case MSG.BEGIN: holding = true; holdStart = now; break;
-    case MSG.COMMIT: if (holding) applyHeld(now); break;
-  }
-}
-
-function applyHeld(now) {
-  holding = false;
-  held.forEach((h, b) => {
-    if (!h) return;
-    if (h.led !== undefined) applyLed(b, h.led);
-    if (h.screen) applyScreen(b, h.transition, h.screen, now);
-  });
-  held = [];
-}
-
-function applyLed(b, v) {
-  const btn = buttons[b];
-  if (btn.kind === 1) btn.a.classList.toggle('on', v !== 0);
-  if (btn.kind === 2) { btn.a.classList.toggle('on', v === 1); btn.b.classList.toggle('on', v === 2); }
-}
-
-function applyScreen(b, transition, content, now) {
-  const s = buttons[b];
-  s.prev = s.cur;   // a running slide snaps: its target becomes the "from"
-  s.cur = content;
-  s.transition = transition;
-  s.start = now;
-  s.settled = transition ? now + T.transition : now;
-}
-
-function hostLost(now) {
-  hostAlive = false;
-  holding = false;
-  held = [];
-  buttons.forEach((btn, i) => {
-    if (btn.kind === 1 || btn.kind === 2) applyLed(i, 0);
-    if (btn.kind === 3) applyScreen(i, 0, NOT_CONNECTED, now);
-  });
-}
-
-setInterval(() => {
-  session?.tick(performance.now());
-  const now = performance.now();
-  if (holding && now - holdStart >= T.commitFallback) applyHeld(now);
-  if (hostAlive && now - lastRx >= T.hostTimeout) hostLost(now);
-  if (ws && ws.readyState === WebSocket.OPEN && now - lastTx >= T.keepalive) send([MSG.ALIVE]);
-}, 50);
-
-// ── Screen rendering (layout 1, spec §2.1; text uses the browser's fonts) ───
-function scrollOffset(dist, since) {
-  const scroll = dist * 1000 / T.scrollSpeed, cycle = T.scrollHold + scroll + T.scrollEndHold;
-  const k = since % cycle;
-  return k < T.scrollHold ? 0 : k < T.scrollHold + scroll ? Math.round((k - T.scrollHold) * T.scrollSpeed / 1000) : dist;
-}
-function drawLine(ctx, text, font, baseline, since) {
-  if (!text) return;
-  ctx.font = font;
-  const w = Math.ceil(ctx.measureText(text).width);
-  const firstStrong = text.match(/[A-Za-zÀ-ɏ֐-׿]/);
-  const rtl = firstStrong && /[֐-׿]/.test(firstStrong[0]);
-  if (w <= 124) { ctx.fillText(text, 2 + Math.floor((124 - w) / 2), baseline); return; }
-  const off = scrollOffset(w - 124 + 6, since);
-  ctx.save(); ctx.beginPath(); ctx.rect(2, 0, 124, 64); ctx.clip();
-  ctx.fillText(text, rtl ? 2 + 124 - w + off : 2 - off, baseline);
-  ctx.restore();
-}
-function drawContent(ctx, c, since, dx) {
-  ctx.save();
-  ctx.translate(dx, 0);
-  ctx.fillStyle = '#e8f0ff';
-  if (c.layout !== 1) { drawLine(ctx, c.main, 'bold 14px Arimo, Arial, sans-serif', 36, since); ctx.restore(); return; }
-  if (c.topKind === 1) drawLine(ctx, c.top, '10px Arimo, Arial, sans-serif', 11, since);
-  if (c.topKind === 2) {
-    const n = Math.min(c.dotsCount, 12), x0 = 64 - Math.floor((n * 10 - 4) / 2);
-    for (let i = 0; i < n; i++) {
-      if (i === c.dotsSelected) ctx.fillRect(x0 + i * 10, 5, 6, 6);
-      else { ctx.strokeStyle = '#e8f0ff'; ctx.lineWidth = 1; ctx.strokeRect(x0 + i * 10 + 0.5, 5.5, 5, 5); }
-    }
-  }
-  if (c.icon !== 255) {
-    const rows = (window.VOLCO_ICONS || [])[c.icon < (window.VOLCO_ICONS || []).length ? c.icon : 0] || [];
-    rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') ctx.fillRect(50 + x, 18 + y, 1, 1); });
-    if (c.flags & 1) {
-      ctx.lineCap = 'square';
-      ctx.strokeStyle = '#05070a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(51, 19); ctx.lineTo(76, 44); ctx.stroke();
-      ctx.strokeStyle = '#e8f0ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(51, 19); ctx.lineTo(76, 44); ctx.stroke();
-    }
-  }
-  drawLine(ctx, c.main, 'bold 14px Arimo, Arial, sans-serif', 60, since);
-  ctx.restore();
-}
-const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-function renderScreens() {
-  const now = performance.now();
-  for (const s of buttons) {
-    if (s.kind !== 3) continue;
-    const ctx = s.ctx;
-    ctx.fillStyle = '#05070a'; ctx.fillRect(0, 0, 128, 64);
-    const t = now - s.start;
-    if (s.transition && t < T.transition) {
-      const off = Math.round(ease(t / T.transition) * 128), left = s.transition !== 2;
-      drawContent(ctx, s.prev, 0, left ? -off : off);
-      drawContent(ctx, s.cur, 0, left ? 128 - off : off - 128);
-    } else {
-      drawContent(ctx, s.cur, Math.max(0, now - s.settled), 0);
-    }
-  }
-  requestAnimationFrame(renderScreens);
-}
-requestAnimationFrame(renderScreens);
-
-// ── UI ─────────────────────────────────────────────────────────────────────
-function throttle(fn, ms) {
-  let last = 0, pending = null;
-  return (...args) => {
-    const now = Date.now();
-    clearTimeout(pending);
-    if (now - last >= ms) { last = now; fn(...args); }
-    else pending = setTimeout(() => { last = Date.now(); fn(...args); }, ms - (now - last));
-  };
-}
-
-function build() {
-  const t = layout();
-  $('sliders').replaceChildren();
-  for (let i = 0; i < t.sliders; i++) {
-    const col = document.createElement('div');
-    col.className = 'flex flex-col items-center gap-2';
-    const input = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: 4095, value: 2048, className: 'slider-vertical' });
-    const label = Object.assign(document.createElement('span'), { className: 'text-xs font-mono text-gray-400', textContent: `S${i}` });
-    const value = Object.assign(document.createElement('span'), { className: 'text-xs font-mono text-blue-400', textContent: '2048' });
-    const sendSlider = throttle(v => send([MSG.SLIDER, i, v >> 8, v & 255]), 20);
-    input.addEventListener('input', e => { value.textContent = e.target.value; sendSlider(+e.target.value); });
-    col.append(input, label, value);
-    $('sliders').append(col);
-  }
-
-  $('buttons').replaceChildren();
-  buttons = t.buttons.map((kind, i) => {
-    const row = document.createElement('div');
-    row.className = 'flex items-center gap-3';
-    const btn = Object.assign(document.createElement('button'), {
-      className: 'w-28 h-12 bg-gray-700 hover:bg-gray-600 active:bg-blue-600 rounded-lg border border-gray-600 font-bold text-sm',
-      textContent: `Button ${i}` });
-    let down = false;
-    btn.addEventListener('pointerdown', () => { down = true; send([MSG.BUTTON, i, 1]); });
-    const up = () => { if (down) { down = false; send([MSG.BUTTON, i, 0]); } };
-    btn.addEventListener('pointerup', up);
-    btn.addEventListener('pointerleave', up);
-    row.append(btn);
-    const entry = { kind, cur: NOT_CONNECTED, prev: NOT_CONNECTED, transition: 0, start: 0, settled: 0 };
-    if (kind === 1 || kind === 2) {
-      entry.a = Object.assign(document.createElement('div'), { className: 'led', title: kind === 1 ? 'LED' : 'LED A' });
-      row.append(entry.a);
-      if (kind === 2) {
-        entry.b = Object.assign(document.createElement('div'), { className: 'led', title: 'LED B' });
-        row.append(entry.b);
-      }
-    }
-    if (kind === 3) {
-      const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 64, className: 'oled' });
-      entry.ctx = canvas.getContext('2d');
-      row.append(canvas);
-    }
-    $('buttons').append(row);
-    return entry;
-  });
-}
-
-function setStatus(text, color) {
-  $('statusText').textContent = text;
-  $('statusDot').className = `w-3 h-3 rounded-full ${color}`;
-}
-
-function connect() {
-  ws = new WebSocket(`ws://${$('host').value}:${$('port').value}/`);
-  ws.binaryType = 'arraybuffer';
-  ws.onopen = () => {
-    setStatus('Connected', 'bg-green-500');
-    $('connectBtn').textContent = 'Disconnect';
-    hostAlive = false;
-    lastRx = performance.now();
-    sendHello();    // as the firmware does at boot
-  };
-  ws.onmessage = e => feed(new Uint8Array(e.data));
-  ws.onclose = () => {
-    ws = null;
-    setStatus('Disconnected', 'bg-red-500');
-    $('connectBtn').textContent = 'Connect';
-    hostLost(performance.now());
-    if (!rebooting && $('autoReconnect').checked && !reconnectTimer)
-      reconnectTimer = setTimeout(() => { reconnectTimer = null; if (!ws) connect(); }, 3000);
-  };
-}
-
-$('connectBtn').addEventListener('click', () => {
-  if (ws) { clearTimeout(reconnectTimer); reconnectTimer = null; ws.close(); } else connect();
-});
-$('type').addEventListener('change', e => {
-  if (ws) ws.close();
-  type = e.target.value;
-  build();
-});
-$('clearConfigBtn').addEventListener('click', () => {
-  saveStored(null);
-  simulateReboot();
-});
-build();
-showConfig();
+<!-- protobufjs for the config session; offline, config frames are ignored (spec §12). -->
+<script src="https://cdn.jsdelivr.net/npm/protobufjs@7.4.0/dist/light/protobuf.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
 </script>
+<script type="module">
+// Loads three.js and publishes it for the classic scripts below (spec §9).
+try {
+  const [THREE, { OrbitControls }, { RoomEnvironment }, { RoundedBoxGeometry }, { EffectComposer }, { RenderPass }, { BokehPass }, { OutputPass }] = await Promise.all([
+    import('three'),
+    import('three/addons/controls/OrbitControls.js'),
+    import('three/addons/environments/RoomEnvironment.js'),
+    import('three/addons/geometries/RoundedBoxGeometry.js'),
+    import('three/addons/postprocessing/EffectComposer.js'),
+    import('three/addons/postprocessing/RenderPass.js'),
+    import('three/addons/postprocessing/BokehPass.js'),
+    import('three/addons/postprocessing/OutputPass.js'),
+  ]);
+  window.VolcoThree = { THREE, OrbitControls, RoomEnvironment, RoundedBoxGeometry, EffectComposer, RenderPass, BokehPass, OutputPass };
+  window.dispatchEvent(new Event('volco-three'));
+} catch {
+  window.dispatchEvent(new Event('volco-three-failed'));
+}
+</script>
+<script defer src="fonts.js"></script>
+<script defer src="icons.js"></script>
+<script defer src="protocol.js"></script>
+<script defer src="link.js"></script>
+<script defer src="oled.js"></script>
+<script defer src="layout.js"></script>
+<script defer src="volco_config_descriptor.js"></script>
+<script defer src="config.js"></script>
+<script defer src="demo.js"></script>
+<script defer src="stage.js"></script>
+<script defer src="room.js"></script>
+<script defer src="device.js"></script>
+<script defer src="connection.js"></script>
+<script defer src="builder.js"></script>
+<script defer src="devtools.js"></script>
+<script defer src="app.js"></script>
 </body>
 </html>

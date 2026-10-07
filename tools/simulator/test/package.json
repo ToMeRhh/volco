@@ -1,7 +1,7 @@
 {
   "name": "volco-simulator-test",
   "private": true,
-  "description": "Node tests of the simulator config session (tools/simulator/config.js)",
+  "description": "Node tests of the web simulator (tools/simulator)",
   "scripts": { "test": "node --test", "gen": "node gen_descriptor.mjs" },
   "devDependencies": { "protobufjs": "7.4.0" }
 }
