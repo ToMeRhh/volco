@@ -1,6 +1,6 @@
 # Volco Simulator
 
-A Volco controller on a desk, in 3D, that speaks the real protocol: test the app without hardware, try a hardware layout before building it, or just show Volco off. The design is in `docs/superpowers/specs/2026-10-07-simulator-redesign-design.md`.
+A Volco controller on a desk, in 3D, that speaks the real protocol: test the app without hardware, try a hardware layout before building it, or just show Volco off. The design is in `docs/design/simulator.md`.
 
 ## Use it
 

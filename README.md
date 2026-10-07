@@ -15,7 +15,7 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 ![.NET](https://img.shields.io/badge/.NET-8-512BD4?logo=dotnet&logoColor=white)
 ![Avalonia](https://img.shields.io/badge/UI-Avalonia%2012-8B44AC)
 ![ESP32](https://img.shields.io/badge/ESP32-PlatformIO-E7352C?logo=espressif&logoColor=white)
-<!-- TODO: add a license badge once a LICENSE file exists, e.g. ![License](https://img.shields.io/badge/license-MIT-green) -->
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 [**Overview**](#-what-is-volco) ·
 [**The controller**](#-the-controller) ·
@@ -96,7 +96,7 @@ flowchart LR
 | 🏷️ **Device nicknames & icons** | "Sony WH-1000XM5 Hands-Free AG Audio" becomes **Headphones** 🎧, in the app and on the controller |
 | 🫧 **Volume OSD** | A small click-through on-screen volume pill |
 | 🧩 **Any hardware layout** | The controller describes itself on connect, and the settings window adapts |
-| 🔄 **Self-updating** | Built-in updater from GitHub Releases (or dev builds, if you like living on the edge) |
+| 🔄 **Self-updating** | Built-in updater that installs the latest GitHub Release |
 
 > [!NOTE]
 > 📸 **Screenshots and photos coming soon.**
@@ -280,9 +280,6 @@ Plug the ESP32 in over USB, open **Settings → Connection**, choose **USB cable
 
 On **Settings → Controller**, choose **Set up**, start from the **DIY reference** (or your own layout) and **Save to controller**. Then map the sliders and buttons on their pages, and you're done. 🎉 Wi-Fi (UDP) is in the Controller page's **Advanced** section.
 
-> [!IMPORTANT]
-> The repository is currently **private**, so the in-app updater needs a GitHub Personal Access Token (`repo` read scope, plus `actions:read` for dev builds). Enter it in **General → Updates**; it's stored only in your local `config.json`.
-
 ---
 
 ## 🧑‍💻 Development
@@ -348,7 +345,7 @@ firmware/
 tools/simulator/       Browser-based controller simulator (WebSocket)
 tests/Volco.Core.Tests xUnit: parser, press detection, sliders, config, actions, runtime
 tests/Volco.App.Tests  Avalonia headless: view models, pages, windows, OSD, architecture rules
-docs/                  Specs, plans, checklists and mockups
+docs/design/           Design documents (the "spec §" references in code comments)
 ```
 
 </details>
@@ -382,7 +379,7 @@ pio test -e native       # host-side tests of lib/
 python3 tools/gen_assets.py   # regenerate icons & fonts (needs Pillow ≥ 10)
 ```
 
-**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu (plus a compile of the Windows project), the firmware's native tests and ESP32 build (uploaded as `firmware-esp32` with its build id), the simulator's tests, and, on `main`, a Windows single-file build with that firmware embedded, published as the `Volco-win-x64` artifact. Releases (`release.yml`) also attach `volco-firmware-esp32-<version>.zip` with the licence notices.
+**CI** (`build.yml`) runs on every push and PR: C# tests on Ubuntu (plus a compile of the Windows project), the firmware's native tests and ESP32 build (uploaded as `firmware-esp32` with its build id), and the simulator's tests. The Windows single-file build, with that firmware embedded and published as the `Volco-win-x64` artifact, runs only on request: `gh workflow run build.yml --ref <branch> --field run_build=true`, or **Run workflow** in the Actions tab with *Also run the Build and Publish job* ticked. Releases (`release.yml`) also attach `volco-firmware-esp32-<version>.zip` with the licence notices.
 
 </details>
 
@@ -397,7 +394,7 @@ Push a semver tag, or run the `release.yml` workflow from the Actions tab:
 git tag v1.2.3 && git push origin v1.2.3
 ```
 
-It builds a version-stamped `Volco.exe` and publishes a GitHub Release with generated notes. Release builds show **Check for Updates…** in the tray; the updater downloads the new exe and swaps it in place after the app exits.
+It builds a version-stamped `Volco.exe` and publishes a GitHub Release with generated notes. Release builds show **Check for Updates…** in the tray and an Updates panel on the General page; the updater reads the latest release from the public GitHub Releases API (no token), downloads its `Volco.exe` and swaps it in place after the app exits.
 
 </details>
 
@@ -433,8 +430,7 @@ It builds a version-stamped `Volco.exe` and publishes a GitHub Release with gene
 
 ## 📄 License
 
-<!-- TODO: choose a license (e.g. MIT) and add a LICENSE file. -->
-*License to be decided.*
+Volco (the app, the firmware and the tools) is licensed under the [GNU General Public License v3.0](LICENSE). You may use, modify and share it, including in forks, as long as what you distribute stays under the GPL with its source available. Third-party components keep their own licences; see [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
 
 <div align="center">
 <br>

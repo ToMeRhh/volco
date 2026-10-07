@@ -1,6 +1,6 @@
 // The home office around the controller (spec §5.1, §5.2): room, light, desk and props, the
 // monitor with its volume overlay, speakers and headphones with their sound waves. Browser only;
-// built on stage.js. Ported from the approved mock (see the spec, docs/superpowers/specs/2026-10-07-simulator-redesign-design.md).
+// built on stage.js. Ported from the approved mock (docs/design/simulator.md).
 (function (root) {
   'use strict';
 

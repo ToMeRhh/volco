@@ -367,7 +367,7 @@ public class ButtonsPageTests
     {
         var (page, rig, vm) = Show();
         using var _ = rig; using var __ = vm;
-        rig.Connection!.SetStatus(Volco.Core.Communication.ConnectionStatus.Connected);
+        rig.Connection!.SetStatus(Volco.Core.Communication.TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5,
             new[] { IndicatorKind.Screen, IndicatorKind.Led, IndicatorKind.Led }));
         Dispatcher.UIThread.RunJobs();

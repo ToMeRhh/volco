@@ -48,8 +48,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.OperationChanged += OnServiceChanged;
         _service.MirrorChanged += OnMirrorChanged;
         _runtime.ControllerStateChanged += OnControllerStateChanged;
-        _runtime.ControllerSilentChanged += OnControllerSilentChanged;
-        _runtime.UserDisconnectedChanged += OnControllerSilentChanged;
+        _runtime.LinkStatusChanged += OnLinkStatusChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _runtime.InTestModeChanged += OnInTestModeChanged;
         _runtime.RawInput += OnRawInput;
@@ -62,29 +61,33 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     // ── Status and banner ────────────────────────────────────────────────────────────────────
 
-    public string StatusText => _runtime.IsUserDisconnected ? "Disconnected" : _runtime.ControllerState switch
-    {
-        ControllerState.Ready => "Connected",
-        ControllerState.AwaitingHello when _runtime.ControllerSilent => "No controller answering",
-        ControllerState.AwaitingHello => "Waiting for the controller…",
-        ControllerState.VersionMismatch => "Firmware mismatch",
-        _ => "Not connected",
-    };
+    /// <summary>The same headline as the Connection page and the tray (<see cref="LinkText"/>).</summary>
+    public string StatusText => LinkText.Headline(_runtime.LinkStatus, _config.Config.Connection);
 
-    /// <summary>The port is open and the first seconds of waiting for a Hello are running.</summary>
-    public bool IsWaiting => _runtime.ControllerState == ControllerState.AwaitingHello && !_runtime.ControllerSilent;
+    /// <summary>An expected wait is running: connecting, a firmware operation or a restart.</summary>
+    public bool IsWaiting => _runtime.LinkStatus.State == LinkState.Waiting;
 
-    /// <summary>Hardware, Test, Screens and Advanced need a controller that answers.</summary>
+    /// <summary>Hardware, Test, Screens and Advanced need a connected controller.</summary>
     public bool ShowEditor => _runtime.ControllerState == ControllerState.Ready;
 
-    public string EditorPlaceholder => _runtime.IsUserDisconnected ? "Volco is disconnected. Connect first (the Connection page or the tray)."
-        : _runtime.ControllerState switch
+    public string EditorPlaceholder
     {
-        ControllerState.VersionMismatch => "Update the controller's firmware to set it up.",
-        ControllerState.AwaitingHello when _runtime.ControllerSilent => "Check the controller's firmware above, then set it up here.",
-        ControllerState.AwaitingHello => "Waiting for the controller…",
-        _ => "Connect the controller to set it up. Choose its port on the Connection page.",
-    };
+        get
+        {
+            var link = _runtime.LinkStatus;
+            var connection = _config.Config.Connection;
+            return link.State switch
+            {
+                LinkState.Disconnected => "Volco is disconnected. Connect first (the Connection page or the tray).",
+                LinkState.Incompatible => "Update the controller's firmware to set it up.",
+                LinkState.NoAnswer => "Check the controller's firmware above, then set it up here.",
+                LinkState.Waiting => LinkText.Activity(link.Activity),
+                LinkState.Searching when connection.Type == ConnectionType.Serial
+                    => "Plug the controller in with USB and choose its port on the Connection page.",
+                _ => LinkText.Explanation(link, connection),
+            };
+        }
+    }
 
     public string ChipText => _service.LastHello?.Chip == ChipFamily.Esp32 ? "ESP32" : _service.LastHello is null ? "" : "Unknown";
 
@@ -109,7 +112,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         BannerKind.NotSetUp => "Set up your controller.",
         BannerKind.Unusable => "The controller's saved setup can't be used.",
         BannerKind.BrokenWithFirmware => "Your saved setup doesn't work with this firmware.",
-        BannerKind.NoAnswer => $"No Volco controller answered on {_config.Config.Connection.Serial.ComPort}. " +
+        BannerKind.NoAnswer => $"The device on {_config.Config.Connection.Serial.ComPort} isn't answering as a Volco controller. " +
                                "It may not have Volco's firmware yet: check it, install it if needed, then set it up.",
         _ => null,
     };
@@ -125,7 +128,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public bool ShowFixIt => Has(BannerActions.FixIt);
     public bool ShowCheckFirmware => Has(BannerActions.CheckFirmware) && CanUseFirmware;
 
-    /// <summary>Drives the sidebar dot (and in stage 6 the tray).</summary>
+    /// <summary>Drives the sidebar dot and the tray.</summary>
     public bool FirmwareUpdateAvailable => Banner.FirmwareUpdateAvailable;
 
     [ObservableProperty] private string? _notice;
@@ -448,7 +451,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         }
         bool udpChanged = !UdpBytes(_draft).AsSpan().SequenceEqual(UdpBytes(BaselineConfig()));
         if (udpChanged && _config.Config.Connection.Type == ConnectionType.Udp)
-            Ask("Changing the Wi-Fi settings may disconnect the controller. If it doesn't come back, connect it with USB.",
+            Ask("Changing the Wi-Fi settings may disconnect the controller. If it doesn't come back, plug it in with USB.",
                 "Save", () => { if (CanSave) EncodeAndSave(udpChanged); });
         else EncodeAndSave(udpChanged);
     }
@@ -504,10 +507,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             SaveStatus.Rejected => "The controller couldn't read the setup. Update the firmware and try again.",
             SaveStatus.NotRunningNewSetup => "The controller restarted but isn't running the new setup.",
             SaveStatus.DidNotComeBack => _udpChangedInSave
-                ? "The controller didn't come back after restarting. If you changed the Wi-Fi settings, connect with USB to check them."
+                ? "The controller didn't come back after restarting. If you changed the Wi-Fi settings, plug it in with USB to check them."
                 : "The controller didn't come back after restarting.",
             SaveStatus.NoAnswer => "The controller didn't answer.",
-            SaveStatus.ConnectionLost => "Connection lost while saving. Reconnect to see which setup the controller has.",
+            SaveStatus.ConnectionLost => "The controller disconnected while saving. Once it's connected again, check which setup it has.",
             SaveStatus.Busy => "Another operation is running. Try again in a moment.",
             _ => null,
         };
@@ -548,6 +551,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     // ── Behaviour (ScreenBehaviour) ──────────────────────────────────────────────────────────
 
+    // A number box's value sets its field; an emptied box (null) clears it, so it shows and saves
+    // the proto default, which the firmware applies to an absent field too.
     private ScreenBehaviour S => _draft.EffectiveScreens();
     private void EditS(Action<ScreenBehaviour> edit, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
     {
@@ -558,19 +563,19 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnDraftEdited();
     }
 
-    public decimal Brightness { get => S.Brightness; set => EditS(s => s.Brightness = (uint)value); }
+    public decimal? Brightness { get => S.Brightness; set => EditS(s => { if (value is { } n) s.Brightness = (uint)n; else s.ClearBrightness(); }); }
     public bool DimEnabled { get => S.DimEnabled; set => EditS(s => s.DimEnabled = value); }
-    public decimal DimAfterS { get => S.DimAfterS; set => EditS(s => s.DimAfterS = (uint)value); }
-    public decimal DimBrightness { get => S.DimBrightness; set => EditS(s => s.DimBrightness = (uint)value); }
+    public decimal? DimAfterS { get => S.DimAfterS; set => EditS(s => { if (value is { } n) s.DimAfterS = (uint)n; else s.ClearDimAfterS(); }); }
+    public decimal? DimBrightness { get => S.DimBrightness; set => EditS(s => { if (value is { } n) s.DimBrightness = (uint)n; else s.ClearDimBrightness(); }); }
     public bool OffEnabled { get => S.OffEnabled; set => EditS(s => s.OffEnabled = value); }
-    public decimal OffAfterS { get => S.OffAfterS; set => EditS(s => s.OffAfterS = (uint)value); }
+    public decimal? OffAfterS { get => S.OffAfterS; set => EditS(s => { if (value is { } n) s.OffAfterS = (uint)n; else s.ClearOffAfterS(); }); }
     public bool PixelShiftEnabled { get => S.PixelShiftEnabled; set => EditS(s => s.PixelShiftEnabled = value); }
-    public decimal PixelShiftEveryS { get => S.PixelShiftEveryS; set => EditS(s => s.PixelShiftEveryS = (uint)value); }
+    public decimal? PixelShiftEveryS { get => S.PixelShiftEveryS; set => EditS(s => { if (value is { } n) s.PixelShiftEveryS = (uint)n; else s.ClearPixelShiftEveryS(); }); }
     public bool WakeSwallowsPress { get => S.WakeSwallowsPress; set => EditS(s => s.WakeSwallowsPress = value); }
-    public decimal ScrollHoldMs { get => S.ScrollHoldMs; set => EditS(s => s.ScrollHoldMs = (uint)value); }
-    public decimal ScrollSpeed { get => S.ScrollSpeedPxS; set => EditS(s => s.ScrollSpeedPxS = (uint)value); }
-    public decimal ScrollEndHoldMs { get => S.ScrollEndHoldMs; set => EditS(s => s.ScrollEndHoldMs = (uint)value); }
-    public decimal TransitionMs { get => S.TransitionMs; set => EditS(s => s.TransitionMs = (uint)value); }
+    public decimal? ScrollHoldMs { get => S.ScrollHoldMs; set => EditS(s => { if (value is { } n) s.ScrollHoldMs = (uint)n; else s.ClearScrollHoldMs(); }); }
+    public decimal? ScrollSpeed { get => S.ScrollSpeedPxS; set => EditS(s => { if (value is { } n) s.ScrollSpeedPxS = (uint)n; else s.ClearScrollSpeedPxS(); }); }
+    public decimal? ScrollEndHoldMs { get => S.ScrollEndHoldMs; set => EditS(s => { if (value is { } n) s.ScrollEndHoldMs = (uint)n; else s.ClearScrollEndHoldMs(); }); }
+    public decimal? TransitionMs { get => S.TransitionMs; set => EditS(s => { if (value is { } n) s.TransitionMs = (uint)n; else s.ClearTransitionMs(); }); }
 
     // ── Advanced: input tuning and Wi-Fi ─────────────────────────────────────────────────────
 
@@ -584,10 +589,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnDraftEdited();
     }
 
-    public decimal DebounceMs { get => In.DebounceMs; set => EditIn(i => i.DebounceMs = (uint)value); }
-    public decimal SliderIntervalMs { get => In.SliderIntervalMs; set => EditIn(i => i.SliderIntervalMs = (uint)value); }
-    public decimal SmoothingPct { get => In.FilterWeightPct; set => EditIn(i => i.FilterWeightPct = (uint)value); }
-    public decimal Deadband { get => In.SliderDeadband; set => EditIn(i => i.SliderDeadband = (uint)value); }
+    public decimal? DebounceMs { get => In.DebounceMs; set => EditIn(i => { if (value is { } n) i.DebounceMs = (uint)n; else i.ClearDebounceMs(); }); }
+    public decimal? SliderIntervalMs { get => In.SliderIntervalMs; set => EditIn(i => { if (value is { } n) i.SliderIntervalMs = (uint)n; else i.ClearSliderIntervalMs(); }); }
+    public decimal? SmoothingPct { get => In.FilterWeightPct; set => EditIn(i => { if (value is { } n) i.FilterWeightPct = (uint)n; else i.ClearFilterWeightPct(); }); }
+    public decimal? Deadband { get => In.SliderDeadband; set => EditIn(i => { if (value is { } n) i.SliderDeadband = (uint)n; else i.ClearSliderDeadband(); }); }
 
     private Udp U => _draft.EffectiveUdp();
     private void EditU(Action<Udp> edit, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
@@ -645,8 +650,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private static string FormatIp(uint ip) => $"{ip >> 24}.{(ip >> 16) & 255}.{(ip >> 8) & 255}.{ip & 255}";
 
-    public decimal PcPort { get => U.PcPort; set => EditU(u => u.PcPort = (uint)value); }
-    public decimal LocalPort { get => U.LocalPort; set => EditU(u => u.LocalPort = (uint)value); }
+    public decimal? PcPort { get => U.PcPort; set => EditU(u => { if (value is { } n) u.PcPort = (uint)n; else u.ClearPcPort(); }); }
+    public decimal? LocalPort { get => U.LocalPort; set => EditU(u => { if (value is { } n) u.LocalPort = (uint)n; else u.ClearLocalPort(); }); }
 
     // ── Test (spec §8.5) ─────────────────────────────────────────────────────────────────────
 
@@ -739,7 +744,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         RefreshAll();
     });
 
-    private void OnControllerSilentChanged(object? sender, bool silent) => _ui.Post(() =>
+    private void OnLinkStatusChanged(object? sender, LinkStatus link) => _ui.Post(() =>
     {
         if (!_disposed) RefreshAll();
     });
@@ -802,8 +807,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.OperationChanged -= OnServiceChanged;
         _service.MirrorChanged -= OnMirrorChanged;
         _runtime.ControllerStateChanged -= OnControllerStateChanged;
-        _runtime.ControllerSilentChanged -= OnControllerSilentChanged;
-        _runtime.UserDisconnectedChanged -= OnControllerSilentChanged;
+        _runtime.LinkStatusChanged -= OnLinkStatusChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.InTestModeChanged -= OnInTestModeChanged;
         _runtime.RawInput -= OnRawInput;

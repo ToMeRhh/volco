@@ -305,7 +305,7 @@ public sealed class ControllerLinkTests : IDisposable
     [Fact]
     public void RapidPresetChanges_EachBurstIsCompleteAndInOrder()
     {
-        // Review Focus #1: presses from several threads never interleave bursts.
+        // Presses from several threads never interleave bursts.
         var link = Ready();
         var baseline = _conn.SentCount;
         var threads = Enumerable.Range(0, 6).Select(_ => new Thread(() =>
@@ -379,8 +379,8 @@ public sealed class ControllerLinkTests : IDisposable
         public int Attempts => Volatile.Read(ref _attempts);
         public int SentCount { get { lock (_lock) return _sent.Count; } }
         public event EventHandler<ControllerMessage>? MessageReceived { add { } remove { } }
-        public event EventHandler<ConnectionStatus>? StatusChanged { add { } remove { } }
-        public ConnectionStatus Status => ConnectionStatus.Connected;
+        public event EventHandler<TransportStatus>? StatusChanged { add { } remove { } }
+        public TransportStatus Status => TransportStatus.Open;
         public void Connect() { }
         public void Disconnect() { }
         public void Dispose() { }

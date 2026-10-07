@@ -42,8 +42,8 @@ public class SerialConnection : IControllerConnection
     private bool _disposed;
 
     public event EventHandler<ControllerMessage>? MessageReceived;
-    public event EventHandler<ConnectionStatus>? StatusChanged;
-    public ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
+    public event EventHandler<TransportStatus>? StatusChanged;
+    public TransportStatus Status { get; private set; } = TransportStatus.Closed;
 
     /// <summary>True while the watchdog and/or reconnect timers are running. Internal test seam
     /// only — production code should never need to inspect this.</summary>
@@ -63,10 +63,10 @@ public class SerialConnection : IControllerConnection
             // ConnectionViewModel ignores/repairs null selections from the port-list refresh,
             // but if it ever does, fail cleanly instead of letting SerialPort's constructor
             // throw ArgumentNullException out of Connect(). This is the one genuine
-            // configuration failure — it gets Error, not Disconnected, and never schedules a
+            // configuration failure — it gets Failed, not Closed, and never schedules a
             // retry (a blank port will never spontaneously become valid).
             AppLog.Error("Failed to open serial port: no COM port configured (PortName is null or empty)");
-            SetStatus(ConnectionStatus.Error);
+            SetStatus(TransportStatus.Failed);
             return;
         }
 
@@ -81,8 +81,8 @@ public class SerialConnection : IControllerConnection
     /// clears any pending reconnect. Must be called with <see cref="_gate"/> held. Used both by
     /// the initial <see cref="Connect"/> and by <see cref="ReconnectTick"/>. A failure to open is
     /// never a configuration error here (that's the blank-port guard in <see cref="Connect"/>'s
-    /// job) — it just means the controller isn't present yet, so it lands on Disconnected and
-    /// schedules a retry.</summary>
+    /// job): the port isn't present yet (Closed) or another app holds it (Failed), and either way
+    /// a retry is scheduled.</summary>
     private bool TryOpenLocked(bool initialConnect)
     {
         SerialPort? port = null;
@@ -96,7 +96,7 @@ public class SerialConnection : IControllerConnection
             _serialPort = port;
             StopReconnectLocked();
             StartWatchdogLocked();
-            SetStatus(ConnectionStatus.Connected);
+            SetStatus(TransportStatus.Open);
             return true;
         }
         catch (Exception ex)
@@ -108,12 +108,13 @@ public class SerialConnection : IControllerConnection
                 try { port.Dispose(); } catch { /* already gone */ }
             }
 
-            if (initialConnect)
-            {
+            // Access denied is Windows' answer for a port another app holds open: Failed (the UI's
+            // "Can't use COM3"). Anything else means it isn't there (yet). Both keep retrying.
+            var busy = ex is UnauthorizedAccessException;
+            if (initialConnect || (busy && Status != TransportStatus.Failed))
                 AppLog.Error($"Failed to open serial port {_config.ComPort}: {ex.Message}");
-                SetStatus(ConnectionStatus.Disconnected);
-                StartReconnectLocked();
-            }
+            SetStatus(busy ? TransportStatus.Failed : TransportStatus.Closed);
+            if (initialConnect) StartReconnectLocked();
 
             return false;
         }
@@ -197,7 +198,7 @@ public class SerialConnection : IControllerConnection
             AppLog.Info($"Serial connection lost ({_config.ComPort}): {reason}");
             CleanupPortLocked();
             StopWatchdogLocked();
-            SetStatus(ConnectionStatus.Disconnected);
+            SetStatus(TransportStatus.Closed);
             AppLog.Info($"Retrying serial connection to {_config.ComPort} every {ReconnectIntervalMs}ms");
             StartReconnectLocked();
         }
@@ -250,7 +251,11 @@ public class SerialConnection : IControllerConnection
                 present = false;
             }
 
-            if (!present) return;
+            if (!present)
+            {
+                SetStatus(TransportStatus.Closed);   // unplugged while it was held by another app
+                return;
+            }
 
             if (TryOpenLocked(initialConnect: false))
                 AppLog.Info($"Serial port {_config.ComPort} reconnected");
@@ -293,7 +298,7 @@ public class SerialConnection : IControllerConnection
         try { port.Dispose(); } catch { /* already gone */ }
     }
 
-    private void SetStatus(ConnectionStatus status)
+    private void SetStatus(TransportStatus status)
     {
         if (Status == status) return;
         Status = status;
@@ -308,7 +313,7 @@ public class SerialConnection : IControllerConnection
             StopReconnectLocked();
             StopWatchdogLocked();
             CleanupPortLocked();
-            SetStatus(ConnectionStatus.Disconnected);
+            SetStatus(TransportStatus.Closed);
         }
     }
 
@@ -321,7 +326,7 @@ public class SerialConnection : IControllerConnection
             StopReconnectLocked();
             StopWatchdogLocked();
             CleanupPortLocked();
-            SetStatus(ConnectionStatus.Disconnected);
+            SetStatus(TransportStatus.Closed);
         }
     }
 }

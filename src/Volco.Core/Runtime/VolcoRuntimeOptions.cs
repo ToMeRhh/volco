@@ -28,6 +28,11 @@ public sealed record VolcoRuntimeOptions
     /// silent (the Controller page then suggests checking its firmware).</summary>
     public TimeSpan SilentAfter { get; init; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>How long a transport Volco just started counts as an expected wait ("Connecting…")
+    /// before what it finds is reported (no red tray for the first moments of a launch, a
+    /// Reconnect or a port change). Zero: none.</summary>
+    public TimeSpan ConnectGrace { get; init; } = TimeSpan.FromSeconds(3);
+
     /// <summary>HelloRequest retry, heartbeat and tick intervals.</summary>
     public ControllerLinkOptions Link { get; init; } = ControllerLinkOptions.Default;
 }

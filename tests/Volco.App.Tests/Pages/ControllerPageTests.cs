@@ -31,7 +31,7 @@ public class ControllerPageTests
 
     private static void Greet(TestRig rig, ControllerConfigState state, uint crc)
     {
-        rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", state, crc, 5,
             new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
         Dispatcher.UIThread.RunJobs();

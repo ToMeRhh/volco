@@ -1,6 +1,6 @@
 // The 3D controller (spec §5.3, §5.4): the wedge case built from a layout, fader caps you drag,
 // keys you press, LEDs, and OLEDs that show the 128×64 frames oled.js renders. Browser only;
-// built on stage.js. Ported from the approved mock (see the spec, docs/superpowers/specs/2026-10-07-simulator-redesign-design.md).
+// built on stage.js. Ported from the approved mock (docs/design/simulator.md).
 (function (root) {
   'use strict';
 

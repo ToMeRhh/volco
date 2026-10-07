@@ -16,6 +16,7 @@ public class ConfigManager
 
     private readonly object _saveLock = new();
     private Timer? _debounceTimer;
+    private bool _savePending;   // under _saveLock: a debounced save hasn't been written yet
     private bool _pendingConnectionChange;
     private const int DebounceMs = 400;
 
@@ -153,6 +154,7 @@ public class ConfigManager
         lock (_saveLock)
         {
             _pendingConnectionChange |= connectionChanged;
+            _savePending = true;
             _debounceTimer ??= new Timer(_ => FlushDebounced(), null, Timeout.Infinite, Timeout.Infinite);
             _debounceTimer.Change(DebounceMs, Timeout.Infinite);
         }
@@ -165,6 +167,7 @@ public class ConfigManager
         {
             connChanged = _pendingConnectionChange;
             _pendingConnectionChange = false;
+            _savePending = false;
         }
 
         try
@@ -183,6 +186,25 @@ public class ConfigManager
         // them would cause unnecessary connection restarts on unrelated config changes.
         if (connChanged) ConnectionConfigChanged?.Invoke(this, EventArgs.Empty);
         else ConfigChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Writes a pending debounced save now (shutdown): the 400 ms timer would never fire.
+    /// Raises the event the timer would have. Does nothing when no save is pending; never throws.</summary>
+    public void FlushPendingSave()
+    {
+        try
+        {
+            lock (_saveLock)
+            {
+                if (!_savePending) return;
+                _debounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+            FlushDebounced();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Config flush at exit failed: {ex}");
+        }
     }
 
     public Task SaveAsync() => Task.Run(WriteToDisk);

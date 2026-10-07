@@ -137,7 +137,6 @@ public class ControllerDisplayTests
     [Fact]
     public void UnpluggedDevice_ShowsStoredNameAndIcon()
     {
-        // Review Focus #2.
         var gone = new DeviceRefConfig { Id = "sony", FriendlyName = "Headphones (WH-1000XM4)" };
         var c = Config(new[] { IndicatorKind.Screen, IndicatorKind.Led },
             new ButtonActionConfig { Action = ButtonActionType.SetOutputDevice, Device = gone },
@@ -195,7 +194,6 @@ public class ControllerDisplayTests
     [Fact]
     public void MoreControllerButtonsThanCards_ExtraButtonsAreNotSetUp()
     {
-        // Review Focus #5.
         var c = Config(new[] { IndicatorKind.Screen, IndicatorKind.Screen, IndicatorKind.Led }, Act(ButtonActionType.MuteCurrentOutput));
         var all = ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio);
         Assert.Equal(3, all.Count);

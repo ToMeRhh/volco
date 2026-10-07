@@ -42,6 +42,10 @@ internal sealed class TestRig : IDisposable
     public FakeControllerConnection? Connection { get; private set; }
     public VolcoRuntime Runtime { get; }
 
+    /// <summary>The default options without the connect grace, so a test sees the link state the
+    /// fake transport implies at once.</summary>
+    public static readonly VolcoRuntimeOptions NoGrace = new() { ConnectGrace = TimeSpan.Zero };
+
     public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
@@ -50,7 +54,7 @@ internal sealed class TestRig : IDisposable
         Config.Load();
         Engine = engine ?? new FakeAudioEngine();
         Runtime = new VolcoRuntime(Config, Engine, audioReady: true, connectionFactory: cfg =>
-            Connection = new FakeControllerConnection(cfg), options: options);
+            Connection = new FakeControllerConnection(cfg), options: options ?? NoGrace);
         Runtime.Start();
     }
 

@@ -160,7 +160,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     /// <summary>Transport connected and the controller said hello.</summary>
     private static void ConnectAndGreet(FakeControllerConnection connection, HelloMessage? hello = null)
     {
-        connection.SetStatus(ConnectionStatus.Connected);
+        connection.SetStatus(TransportStatus.Open);
         connection.RaiseMessage(hello ?? LedHello);
     }
 
@@ -732,9 +732,9 @@ public sealed class VolcoRuntimeTests : IDisposable
     public void Hello_PushesStateForEveryButton()
     {
         var runtime = StartRuntime();
-        var statuses = new Recorder<ConnectionStatus>();
-        runtime.ConnectionStatusChanged += statuses.Handler;
-        Assert.Equal(ConnectionStatus.Disconnected, runtime.ConnectionStatus);
+        var statuses = new Recorder<TransportStatus>();
+        runtime.TransportStatusChanged += statuses.Handler;
+        Assert.Equal(TransportStatus.Closed, runtime.TransportStatus);
 
         ConnectAndGreet(Connection(0));
 
@@ -743,8 +743,8 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(0, 0)), "button 0 feedback frame missing");
         Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(1, 0)), "button 1 feedback frame missing");
         Assert.True(ContainsFrame(frames, ProtocolEncoder.EncodeLed(2, 0)), "button 2 feedback frame missing");
-        Assert.Equal(ConnectionStatus.Connected, runtime.ConnectionStatus);
-        Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
+        Assert.Equal(TransportStatus.Open, runtime.TransportStatus);
+        Assert.Equal(new[] { TransportStatus.Open }, statuses.Items);
     }
 
     [Fact]
@@ -789,7 +789,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         StartRuntime();
         var connection = Connection(0);
-        connection.SetStatus(ConnectionStatus.Connected);
+        connection.SetStatus(TransportStatus.Open);
         _engine.DeviceStates[Speakers] = (0.5f, true);
         _engine.RaiseDeviceVolumeChanged(Speakers, 0.5f, muted: true, isOwnChange: false);
 
@@ -950,10 +950,10 @@ public sealed class VolcoRuntimeTests : IDisposable
         runtime.InTestModeChanged += (_, on) => changes.Enqueue(on);
 
         runtime.EnterTestMode();
-        c.SetStatus(ConnectionStatus.Disconnected);
+        c.SetStatus(TransportStatus.Closed);
         Assert.False(runtime.InTestMode);
 
-        c.SetStatus(ConnectionStatus.Connected);
+        c.SetStatus(TransportStatus.Open);
         runtime.EnterTestMode();
         runtime.Reconnect();
         Assert.False(runtime.InTestMode);
@@ -1012,8 +1012,8 @@ public sealed class VolcoRuntimeTests : IDisposable
         c.RaiseMessage(new ConfigResultMessage(LastWriteSeq(c), ConfigResultCode.Ok, 0xFF, 0xFF));
         Assert.True(WaitUntil(() => runtime.ControllerConfig.Progress?.Phase == SavePhase.Confirming));
 
-        c.SetStatus(ConnectionStatus.Disconnected);   // the reboot drops the transport for a moment
-        c.SetStatus(ConnectionStatus.Connected);
+        c.SetStatus(TransportStatus.Closed);   // the reboot drops the transport for a moment
+        c.SetStatus(TransportStatus.Open);
         c.RaiseMessage(StoredHello(ControllerConfigCodec.Crc32(SmallBlob)));
 
         Assert.Equal(SaveStatus.Confirmed, (await Within(save)).Status);
@@ -1082,13 +1082,13 @@ public sealed class VolcoRuntimeTests : IDisposable
     [Fact]
     public void Reconnect_WithoutControllerReboot_RequestsHelloAndPushesEverything()
     {
-        // Review Focus #3: a new session on a controller that never rebooted.
+        // A new session on a controller that never rebooted.
         var runtime = StartRuntime();
         ConnectAndGreet(Connection(0));
         runtime.Reconnect();
         var fresh = Connection(1);
 
-        fresh.SetStatus(ConnectionStatus.Connected);
+        fresh.SetStatus(TransportStatus.Open);
         Assert.Equal(new[] { ProtocolEncoder.EncodeHelloRequest() }, fresh.SentFrames);
         fresh.RaiseMessage(LedHello);
 
@@ -1101,17 +1101,17 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var runtime = StartRuntime();
         ConnectAndGreet(Connection(0));
-        var statuses = new Recorder<ConnectionStatus>();
+        var statuses = new Recorder<TransportStatus>();
         var flags = new Recorder<bool>();
-        runtime.ConnectionStatusChanged += statuses.Handler;
+        runtime.TransportStatusChanged += statuses.Handler;
         runtime.UserDisconnectedChanged += flags.Handler;
 
         runtime.Disconnect();
 
         Assert.True(runtime.IsUserDisconnected);
         Assert.Equal(1, Connection(0).DisposeCount);
-        Assert.Equal(ConnectionStatus.Disconnected, runtime.ConnectionStatus);
-        Assert.Equal(new[] { ConnectionStatus.Disconnected }, statuses.Items);
+        Assert.Equal(TransportStatus.Closed, runtime.TransportStatus);
+        Assert.Equal(new[] { TransportStatus.Closed }, statuses.Items);
         Assert.Equal(new[] { true }, flags.Items);
         Assert.Equal(1, ConnectionCount);
 
@@ -1297,8 +1297,8 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig();
         var runtime = StartRuntime(config);
-        var statuses = new Recorder<ConnectionStatus>();
-        runtime.ConnectionStatusChanged += statuses.Handler;
+        var statuses = new Recorder<TransportStatus>();
+        runtime.TransportStatusChanged += statuses.Handler;
         var oldConnection = Connection(0);
         Assert.Equal(1, oldConnection.ConnectCount);
 
@@ -1315,17 +1315,17 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Equal(ConnectionType.WebSocket, newConnection.Config.Type);
         Assert.Equal(1, newConnection.ConnectCount);
 
-        oldConnection.SetStatus(ConnectionStatus.Connected);
+        oldConnection.SetStatus(TransportStatus.Open);
         Assert.Empty(statuses.Items);
         Assert.Equal(0, oldConnection.SentCount);
 
-        newConnection.SetStatus(ConnectionStatus.Connected);
-        Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
-        Assert.Equal(ConnectionStatus.Connected, runtime.ConnectionStatus);
+        newConnection.SetStatus(TransportStatus.Open);
+        Assert.Equal(new[] { TransportStatus.Open }, statuses.Items);
+        Assert.Equal(TransportStatus.Open, runtime.TransportStatus);
         Assert.True(newConnection.SentCount > 0, "state not pushed to the new transport");
     }
 
-    /// <summary>Pins Review Focus #2's user-visible case: restarting while the OLD transport is
+    /// <summary>Pins the user-visible case: restarting while the OLD transport is
     /// still Connected (a Serial → WebSocket/UDP switch mid-session), not merely Disconnected as
     /// in <see cref="Restart_ForwardsStatusFromNewTransportOnly"/>. This is the only path that
     /// exercises the runtime's own synthetic Disconnected raise in StartConnection — in
@@ -1337,12 +1337,12 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig();
         var runtime = StartRuntime(config);
-        var statuses = new Recorder<ConnectionStatus>();
-        runtime.ConnectionStatusChanged += statuses.Handler;
+        var statuses = new Recorder<TransportStatus>();
+        runtime.TransportStatusChanged += statuses.Handler;
         var oldConnection = Connection(0);
 
-        oldConnection.SetStatus(ConnectionStatus.Connected);
-        Assert.Equal(new[] { ConnectionStatus.Connected }, statuses.Items);
+        oldConnection.SetStatus(TransportStatus.Open);
+        Assert.Equal(new[] { TransportStatus.Open }, statuses.Items);
 
         config.Config.Connection.Type = ConnectionType.WebSocket;
         config.RequestSave(connectionChanged: true); // debounced, raises ConnectionConfigChanged
@@ -1351,13 +1351,13 @@ public sealed class VolcoRuntimeTests : IDisposable
                     "transport was not restarted");
         var newConnection = Connection(1);
 
-        Assert.Equal(new[] { ConnectionStatus.Connected, ConnectionStatus.Disconnected }, statuses.Items);
-        Assert.Equal(ConnectionStatus.Disconnected, runtime.ConnectionStatus);
+        Assert.Equal(new[] { TransportStatus.Open, TransportStatus.Closed }, statuses.Items);
+        Assert.Equal(TransportStatus.Closed, runtime.TransportStatus);
 
-        newConnection.SetStatus(ConnectionStatus.Connected);
+        newConnection.SetStatus(TransportStatus.Open);
         Assert.Equal(new[]
         {
-            ConnectionStatus.Connected, ConnectionStatus.Disconnected, ConnectionStatus.Connected,
+            TransportStatus.Open, TransportStatus.Closed, TransportStatus.Open,
         }, statuses.Items);
     }
 
@@ -1523,12 +1523,12 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var runtime = StartRuntime(options: Quiet);
         var connection = Connection(0);
-        connection.SetStatus(ConnectionStatus.Connected);
+        connection.SetStatus(TransportStatus.Open);
 
         var events = 0;
         runtime.VolumeChanged += (_, _) => Interlocked.Increment(ref events);
         runtime.SliderLevelChanged += (_, _) => Interlocked.Increment(ref events);
-        runtime.ConnectionStatusChanged += (_, _) => Interlocked.Increment(ref events);
+        runtime.TransportStatusChanged += (_, _) => Interlocked.Increment(ref events);
         runtime.DevicesChanged += (_, _) => Interlocked.Increment(ref events);
 
         runtime.Dispose();
@@ -1541,7 +1541,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         _engine.DeviceStates[Speakers] = (0.5f, true);
         _engine.RaiseDeviceVolumeChanged(Speakers, 0.5f, muted: true, isOwnChange: true);
         _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, _engine.Devices[1]);
-        connection.SetStatus(ConnectionStatus.Disconnected);
+        connection.SetStatus(TransportStatus.Closed);
         connection.RaiseMessage(new SliderMessage(0, 1000));
 
         // Covers the slider coalescing tick.
@@ -1708,5 +1708,18 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Assert.True(WaitUntil(() => levels.Items.Any(e => e.SliderIndex == 19)), "slider 19 never processed");
         Assert.Equal(1f, runtime.GetSliderLevel(19)!.Value);
+    }
+
+    // The race through the runtime. The old connection's handler is detached on retirement, so
+    // deliver through the service the way a message already past the runtime's sender check would.
+    [Fact]
+    public void AHelloAlreadyPastTheSenderCheck_WhenTheConnectionIsReplaced_IsDropped()
+    {
+        var runtime = StartRuntime();
+        var old = Connection(0);
+        ConnectAndGreet(old);
+        runtime.Reconnect();
+        runtime.ControllerConfig.OnMessage(old, LedHello);
+        Assert.Null(runtime.ControllerConfig.LastHello);
     }
 }

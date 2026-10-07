@@ -71,7 +71,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.Null(vm.FirmwareHint);
         _rig.Config.Config.Connection.Type = ConnectionType.WebSocket;   // not saved: no restart
         Assert.False(vm.CanUseFirmware);
-        Assert.Equal("Connect the controller with USB and set the connection to Serial.", vm.FirmwareHint);
+        Assert.Equal(FirmwareService.SerialOnlyMessage, vm.FirmwareHint);
     }
 
     [Fact]
@@ -96,8 +96,8 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.Empty(_flasher.Calls);
         vm.ConfirmInstallCommand.Execute(null);
         Until(() => _flasher.Calls.Count == 1 && !_rig.Runtime.IsSuspended && _rig.Connection!.ConnectCount == 1
-                    && _rig.Connection.Status == ConnectionStatus.Disconnected);
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+                    && _rig.Connection.Status == TransportStatus.Closed);
+        _rig.Connection!.SetStatus(TransportStatus.Open);
         _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
         Until(() => vm.FirmwareMessage is not null);
         Assert.Equal("Installed. The controller is running firmware 3f9c2a1b5d07.", vm.FirmwareMessage);
@@ -110,7 +110,7 @@ public sealed class ControllerFirmwareTests : IDisposable
     public void ASilentController_GetsTheNoAnswerBanner_WithCheckFirmware_AndTheCurrentPort()
     {
         var vm = Vm();
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);   // HelloRequest sent, no Hello
+        _rig.Connection!.SetStatus(TransportStatus.Open);   // HelloRequest sent, no Hello
         _ui.RunAll();
         Assert.True(vm.IsWaiting);
         Assert.False(vm.ShowEditor);
@@ -118,22 +118,22 @@ public sealed class ControllerFirmwareTests : IDisposable
         _ui.RunAll();
         Assert.True(_rig.Runtime.ControllerSilent);
         Assert.False(vm.IsWaiting);
-        Assert.Equal("No controller answering", vm.StatusText);
-        Assert.StartsWith("No Volco controller answered on COM3.", vm.BannerText);
+        Assert.Equal("Controller not responding", vm.StatusText);
+        Assert.StartsWith("The device on COM3 isn't answering as a Volco controller.", vm.BannerText);
         Assert.True(vm.ShowCheckFirmware);
 
         // Another port, then an unplug and replug: the text follows, and the wait starts over.
         _rig.Config.Config.Connection.Serial.ComPort = "COM5";
         _rig.Config.Save();
-        _rig.Connection!.SetStatus(ConnectionStatus.Disconnected);
+        _rig.Connection!.SetStatus(TransportStatus.Closed);
         _ui.RunAll();
         Assert.Null(vm.BannerText);
-        _rig.Connection.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection.SetStatus(TransportStatus.Open);
         _ui.RunAll();
         Assert.False(_rig.Runtime.ControllerSilent);
         _time.Advance(TimeSpan.FromSeconds(5));
         _ui.RunAll();
-        Assert.StartsWith("No Volco controller answered on COM5.", vm.BannerText);
+        Assert.StartsWith("The device on COM5 isn't answering as a Volco controller.", vm.BannerText);
 
         _rig.Connection.RaiseMessage(Hello("dev"));
         _ui.RunAll();
@@ -148,7 +148,7 @@ public sealed class ControllerFirmwareTests : IDisposable
     {
         _rig.Config.Config.Connection.Type = ConnectionType.WebSocket;
         var vm = Vm();
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection!.SetStatus(TransportStatus.Open);
         _time.Advance(TimeSpan.FromSeconds(6));
         _ui.RunAll();
         Assert.False(_rig.Runtime.ControllerSilent);
@@ -159,11 +159,11 @@ public sealed class ControllerFirmwareTests : IDisposable
     public void ADetach_ForgetsTheLastHello()
     {
         var vm = Vm();
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection!.SetStatus(TransportStatus.Open);
         _rig.Connection.RaiseMessage(Hello("dev"));
         _ui.RunAll();
         Assert.Equal("Development firmware", vm.FirmwareText);
-        _rig.Connection.SetStatus(ConnectionStatus.Disconnected);
+        _rig.Connection.SetStatus(TransportStatus.Closed);
         _ui.RunAll();
         Assert.Equal("", vm.FirmwareText);
         Assert.Null(_rig.Runtime.ControllerConfig.LastHello);
@@ -173,7 +173,7 @@ public sealed class ControllerFirmwareTests : IDisposable
     public void Update_IsShownWhenTheControllerRunsAnotherBuild()
     {
         var vm = Vm();
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+        _rig.Connection!.SetStatus(TransportStatus.Open);
         _rig.Connection.RaiseMessage(Hello("0000aaaa1111"));
         _ui.RunAll();
         Assert.True(vm.ShowUpdateFirmware);
@@ -188,8 +188,8 @@ public sealed class ControllerFirmwareTests : IDisposable
         var vm = Vm();
         vm.UpdateFirmwareCommand.Execute(null);
         Until(() => _flasher.Calls.Count == 1 && !_rig.Runtime.IsSuspended && _rig.Connection!.ConnectCount == 1
-                    && _rig.Connection.Status == ConnectionStatus.Disconnected);
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+                    && _rig.Connection.Status == TransportStatus.Closed);
+        _rig.Connection!.SetStatus(TransportStatus.Open);
         _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
         Until(() => vm.FirmwareMessage is not null);
         Assert.Equal("Updated. The controller is running firmware 3f9c2a1b5d07.", vm.FirmwareMessage);
@@ -204,13 +204,13 @@ public sealed class ControllerFirmwareTests : IDisposable
         vm.InstallFirmwareCommand.Execute(null);
         vm.ConfirmInstallCommand.Execute(null);
         Until(() => _flasher.Calls.Count == 1 && !_rig.Runtime.IsSuspended && _rig.Connection!.ConnectCount == 1
-                    && _rig.Connection.Status == ConnectionStatus.Disconnected);
-        _rig.Connection!.SetStatus(ConnectionStatus.Connected);
+                    && _rig.Connection.Status == TransportStatus.Closed);
+        _rig.Connection!.SetStatus(TransportStatus.Open);
         _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
         Until(() => vm.FirmwareMessage is not null);
 
         // The board is unplugged: the result no longer applies.
-        _rig.Connection.SetStatus(ConnectionStatus.Disconnected);
+        _rig.Connection.SetStatus(TransportStatus.Closed);
         Until(() => vm.FirmwareMessage is null);
         Assert.False(vm.OfferTest);
     }

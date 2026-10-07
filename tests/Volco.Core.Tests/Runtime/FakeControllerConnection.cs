@@ -22,9 +22,9 @@ public sealed class FakeControllerConnection : IControllerConnection
     public ConnectionConfig Config { get; }
 
     public event EventHandler<ControllerMessage>? MessageReceived;
-    public event EventHandler<ConnectionStatus>? StatusChanged;
+    public event EventHandler<TransportStatus>? StatusChanged;
 
-    public ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
+    public TransportStatus Status { get; private set; } = TransportStatus.Closed;
 
     public int ConnectCount => Volatile.Read(ref _connectCount);
     public int DisposeCount => Volatile.Read(ref _disposeCount);
@@ -53,7 +53,7 @@ public sealed class FakeControllerConnection : IControllerConnection
 
     public void RaiseMessage(ControllerMessage message) => MessageReceived?.Invoke(this, message);
 
-    public void SetStatus(ConnectionStatus status)
+    public void SetStatus(TransportStatus status)
     {
         Status = status;
         StatusChanged?.Invoke(this, status);

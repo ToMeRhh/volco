@@ -68,7 +68,7 @@ public sealed partial class DeviceItemViewModel : ObservableObject
             ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
     public string StatusText => IsDefault ? (Flow == AudioFlow.Render ? "Default output" : "Default input")
-                              : !IsConnected ? "Not connected" : "";
+                              : !IsConnected ? "Unplugged" : "";
     public bool HasStatus => StatusText.Length > 0;
 
     /// <summary>The device as a "Switch output" button's screen would show it.</summary>

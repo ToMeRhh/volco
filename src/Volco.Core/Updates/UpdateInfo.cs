@@ -1,28 +1,14 @@
 namespace Volco.Core.Updates;
 
-/// <summary>Where an available update originates from.</summary>
-public enum UpdateSource
-{
-    /// <summary>A published GitHub Release asset (no authentication required).</summary>
-    Release,
-
-    /// <summary>An artifact from the latest successful CI run (requires a GitHub token).</summary>
-    CiArtifact
-}
-
 /// <summary>
-/// Describes a downloadable update and how to apply it.
+/// The latest published GitHub Release and where to download its <c>Volco.exe</c>.
 /// </summary>
-/// <param name="Source">Origin of the payload.</param>
-/// <param name="DisplayName">Label shown to the user (e.g. "v1.3.0" or "CI build #1234").</param>
-/// <param name="DownloadUrl">URL to fetch the payload from.</param>
-/// <param name="Version">Parsed semantic version, when known (releases only).</param>
-/// <param name="RequiresExtraction">True when the download is a zip that wraps the exe (CI artifacts).</param>
-/// <param name="Notes">Optional release notes / description.</param>
+/// <param name="DisplayName">The release's tag, shown to the user (e.g. "v1.3.0").</param>
+/// <param name="DownloadUrl">The asset's public download URL.</param>
+/// <param name="Version">The version parsed from the tag, when it has one.</param>
+/// <param name="Notes">The release notes, if any.</param>
 public record UpdateInfo(
-    UpdateSource Source,
     string DisplayName,
     string DownloadUrl,
     Version? Version,
-    bool RequiresExtraction,
     string? Notes = null);

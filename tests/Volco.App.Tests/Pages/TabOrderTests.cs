@@ -9,7 +9,7 @@ using Xunit;
 namespace Volco.App.Tests.Pages;
 
 /// <summary>
-/// Review Focus #3: keyboard-only use. Tab walks each page in reading order: the header's add
+/// Keyboard-only use. Tab walks each page in reading order: the header's add
 /// button, then each card's drag handle (reorder with Alt+Up/Down), its header (open/close) and
 /// its ⋯ menu, card by card.
 /// </summary>

@@ -7,7 +7,7 @@ namespace Volco.Core.Communication;
 
 /// <summary>
 /// Listen-only UDP transport: binds a local port and treats the sender of the latest packet as
-/// the controller. "Connected" means a packet arrived within the inactivity timeout.
+/// the controller. "Open" means a packet arrived within the inactivity timeout.
 ///
 /// Mirrors <see cref="SerialConnection"/>'s hardening: all mutable state lives under
 /// <see cref="_gate"/>; no lock is held while raising <see cref="StatusChanged"/>, calling into
@@ -39,8 +39,14 @@ public class UdpConnection : IControllerConnection
     private int _generation;
 
     public event EventHandler<ControllerMessage>? MessageReceived;
-    public event EventHandler<ConnectionStatus>? StatusChanged;
-    public ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
+    public event EventHandler<TransportStatus>? StatusChanged;
+    public TransportStatus Status { get; private set; } = TransportStatus.Closed;
+
+    /// <summary>The IP the last packet came from, while Open.</summary>
+    public string? PeerAddress
+    {
+        get { lock (_gate) return _remoteEndPoint?.Address.ToString(); }
+    }
 
     public UdpConnection(UdpConfig config) : this(config, DefaultInactivityTimeoutMs)
     {
@@ -77,18 +83,18 @@ public class UdpConnection : IControllerConnection
                 client?.Dispose();
                 client = null;
                 _udpClient = null;
-                raiseError = Status != ConnectionStatus.Error;
-                Status = ConnectionStatus.Error;
+                raiseError = Status != TransportStatus.Failed;
+                Status = TransportStatus.Failed;
             }
         }
 
         if (client == null)
         {
-            if (raiseError) StatusChanged?.Invoke(this, ConnectionStatus.Error);
+            if (raiseError) StatusChanged?.Invoke(this, TransportStatus.Failed);
             return;
         }
 
-        // Socket is bound but no client has sent data yet - remain Disconnected
+        // Socket is bound but no client has sent data yet - remain Closed
         _ = ReceiveLoopAsync(client, token, generation);
     }
 
@@ -120,7 +126,7 @@ public class UdpConnection : IControllerConnection
                 if (IsCurrent(generation))
                 {
                     AppLog.Error($"Error in UDP receive loop: {ex.Message}");
-                    Teardown(ConnectionStatus.Error, generation);
+                    Teardown(TransportStatus.Failed, generation);
                 }
                 break;
             }
@@ -133,7 +139,7 @@ public class UdpConnection : IControllerConnection
     }
 
     /// <summary>Records the sender, re-arms the inactivity timer and, on the first packet,
-    /// raises Connected. Returns false if this loop's generation is stale.</summary>
+    /// raises Open. Returns false if this loop's generation is stale.</summary>
     private bool OnPacketReceived(IPEndPoint remote, int generation)
     {
         var raise = false;
@@ -141,9 +147,9 @@ public class UdpConnection : IControllerConnection
         {
             if (_disposed || generation != _generation) return false;
             _remoteEndPoint = remote;
-            if (Status != ConnectionStatus.Connected)
+            if (Status != TransportStatus.Open)
             {
-                Status = ConnectionStatus.Connected;
+                Status = TransportStatus.Open;
                 raise = true;
             }
 
@@ -153,7 +159,7 @@ public class UdpConnection : IControllerConnection
                 _inactivityTimer.Change(_inactivityTimeoutMs, Timeout.Infinite);
         }
 
-        if (raise) StatusChanged?.Invoke(this, ConnectionStatus.Connected);
+        if (raise) StatusChanged?.Invoke(this, TransportStatus.Open);
         return true;
     }
 
@@ -168,11 +174,11 @@ public class UdpConnection : IControllerConnection
         {
             // A callback already queued when Disconnect() disposed the timer still runs; the
             // generation check is what discards it.
-            if (_disposed || generation != _generation || Status != ConnectionStatus.Connected) return;
-            Status = ConnectionStatus.Disconnected;
+            if (_disposed || generation != _generation || Status != TransportStatus.Open) return;
+            Status = TransportStatus.Closed;
         }
 
-        StatusChanged?.Invoke(this, ConnectionStatus.Disconnected);
+        StatusChanged?.Invoke(this, TransportStatus.Closed);
     }
 
     public void Send(byte[] data)
@@ -205,9 +211,9 @@ public class UdpConnection : IControllerConnection
     /// the lock and announces <paramref name="finalStatus"/>. With <paramref name="onlyGeneration"/>
     /// set, does nothing unless that generation is still current (used by the loop's own failure
     /// path). Announces when something was running or the status actually changes, so the first
-    /// teardown always reports once and repeated ones report nothing; an Error is always announced
+    /// teardown always reports once and repeated ones report nothing; a Failed is always announced
     /// once per transition.</summary>
-    private void Teardown(ConnectionStatus finalStatus, int? onlyGeneration = null)
+    private void Teardown(TransportStatus finalStatus, int? onlyGeneration = null)
     {
         UdpClient? client;
         CancellationTokenSource? cts;
@@ -227,9 +233,9 @@ public class UdpConnection : IControllerConnection
             _remoteEndPoint = null;
             _generation++;
 
-            announce = finalStatus == ConnectionStatus.Error
-                ? Status != ConnectionStatus.Error
-                : wasRunning || Status != ConnectionStatus.Disconnected;
+            announce = finalStatus == TransportStatus.Failed
+                ? Status != TransportStatus.Failed
+                : wasRunning || Status != TransportStatus.Closed;
             if (announce) Status = finalStatus;
         }
 
@@ -241,7 +247,7 @@ public class UdpConnection : IControllerConnection
         if (announce) StatusChanged?.Invoke(this, finalStatus);
     }
 
-    public void Disconnect() => Teardown(ConnectionStatus.Disconnected);
+    public void Disconnect() => Teardown(TransportStatus.Closed);
 
     public void Dispose()
     {
@@ -251,6 +257,6 @@ public class UdpConnection : IControllerConnection
             _disposed = true;
         }
 
-        Teardown(ConnectionStatus.Disconnected);
+        Teardown(TransportStatus.Closed);
     }
 }

@@ -2,37 +2,31 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using Volco.Core.Config;
 using Volco.Core.Diagnostics;
 using Volco.Core.Updates;
 
 namespace Volco.App.Controls;
 
 /// <summary>
-/// The General page's Updates panel (it was the separate update window): checks GitHub for a
-/// newer release (or the latest CI artifact when the advanced option is enabled), downloads it,
-/// and relaunches into the new build. Shown on release builds only (see
-/// <see cref="BuildInfo.IsRelease"/>). It does not check on open; the user presses "Check for updates".
+/// The General page's Updates panel: checks GitHub Releases for a newer Volco, downloads its
+/// exe, and relaunches into it. Shown on release builds only (see <see cref="BuildInfo.IsRelease"/>).
+/// It does not check on open; the user presses "Check for updates".
 /// </summary>
 public partial class UpdatesPanel : UserControl
 {
-    private readonly ConfigManager _configManager;
     private readonly GitHubUpdater _updater;
     private readonly UpdateInstaller _installer;
     private readonly TextBlock _currentVersionText;
     private readonly TextBlock _statusText;
     private readonly ProgressBar _progress;
     private readonly TextBlock _notesText;
-    private readonly TextBox _tokenBox;
-    private readonly CheckBox _useCiCheckBox;
     private readonly Button _checkButton;
     private readonly Button _updateButton;
     private UpdateInfo? _available;
 
     // Updater and installer are injectable so tests never touch the network.
-    public UpdatesPanel(ConfigManager configManager, GitHubUpdater? updater = null, UpdateInstaller? installer = null)
+    public UpdatesPanel(GitHubUpdater? updater = null, UpdateInstaller? installer = null)
     {
-        _configManager = configManager;
         _updater = updater ?? new GitHubUpdater();
         _installer = installer ?? new UpdateInstaller();
 
@@ -41,63 +35,28 @@ public partial class UpdatesPanel : UserControl
         _statusText = this.FindControl<TextBlock>("StatusText")!;
         _progress = this.FindControl<ProgressBar>("Progress")!;
         _notesText = this.FindControl<TextBlock>("NotesText")!;
-        _tokenBox = this.FindControl<TextBox>("TokenBox")!;
-        _useCiCheckBox = this.FindControl<CheckBox>("UseCiCheckBox")!;
         _checkButton = this.FindControl<Button>("CheckButton")!;
         _updateButton = this.FindControl<Button>("UpdateButton")!;
 
         _currentVersionText.Text = $"Current version: {BuildInfo.DisplayVersion}";
 
-        var cfg = _configManager.Config.Updates;
-        _useCiCheckBox.IsChecked = cfg.UseCiArtifact;
-        _tokenBox.Text = cfg.GitHubToken ?? "";
-
-        var advanced = this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("AdvancedToggle")!;
-        var advancedSection = this.FindControl<Border>("AdvancedSection")!;
-        advanced.IsCheckedChanged += (_, _) => advancedSection.IsVisible = advanced.IsChecked == true;
-        // Already using development builds: show where that is set.
-        advanced.IsChecked = cfg.UseCiArtifact;
-
-        // Subscribe after seeding so the initial IsChecked does not look like a user change.
-        _useCiCheckBox.IsCheckedChanged += OnUseCiChanged;
         _checkButton.Click += OnCheckClicked;
         _updateButton.Click += OnUpdateClicked;
     }
 
-    private string Token => _tokenBox.Text ?? "";
-
-    private void OnUseCiChanged(object? sender, RoutedEventArgs e)
-    {
-        // A previously-found update no longer matches the selected source.
-        _available = null;
-        _updateButton.IsEnabled = false;
-    }
-
     private async void OnCheckClicked(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(Token))
-        {
-            _statusText.Text = "Enter a GitHub token to check for updates.";
-            return;
-        }
-
-        PersistPreferences();
         SetBusy(true, "Checking for updates…");
         _notesText.IsVisible = false;
-        _updateButton.IsEnabled = false;
         _available = null;
 
         try
         {
-            var useCi = _useCiCheckBox.IsChecked == true;
-            var token = Token;
-            UpdateInfo? info = useCi
-                ? await _updater.GetLatestCiArtifactAsync(token)
-                : await _updater.GetLatestReleaseAsync(token);
+            var info = await _updater.GetLatestReleaseAsync();
 
             // Continuations normally resume on the UI thread; marshal anyway so a detached
             // context can never touch controls off-thread.
-            await RunOnUiAsync(() => ShowCheckResult(info, useCi));
+            await RunOnUiAsync(() => ShowCheckResult(info));
         }
         catch (Exception ex)
         {
@@ -110,18 +69,15 @@ public partial class UpdatesPanel : UserControl
         }
     }
 
-    private void ShowCheckResult(UpdateInfo? info, bool useCi)
+    private void ShowCheckResult(UpdateInfo? info)
     {
         if (info == null)
         {
-            _statusText.Text = useCi
-                ? "No CI build artifact was found."
-                : "No published release was found.";
+            _statusText.Text = "No published release was found.";
             return;
         }
 
-        // For releases we can compare versions; CI artifacts are unversioned, so always offer them.
-        if (info.Source == UpdateSource.Release && info.Version != null && info.Version <= BuildInfo.Version)
+        if (info.Version != null && info.Version <= BuildInfo.Version)
         {
             _statusText.Text = $"You're up to date ({BuildInfo.DisplayVersion}).";
             return;
@@ -141,7 +97,6 @@ public partial class UpdatesPanel : UserControl
     {
         if (_available == null) return;
 
-        PersistPreferences();
         SetBusy(true, "Downloading update…");
         _progress.IsVisible = true;
         _progress.IsIndeterminate = false;
@@ -149,11 +104,10 @@ public partial class UpdatesPanel : UserControl
 
         try
         {
-            var token = Token;
             var progress = new Progress<double>(p =>
                 Dispatcher.UIThread.Post(() => _progress.Value = p));
 
-            var stagedExe = await _installer.DownloadAsync(_available, token, progress);
+            var stagedExe = await _installer.DownloadAsync(_available, progress);
 
             await RunOnUiAsync(() => _statusText.Text = "Update downloaded. Restarting Volco…");
             AppLog.Info($"Update downloaded to {stagedExe}; handing off to installer.");
@@ -180,14 +134,6 @@ public partial class UpdatesPanel : UserControl
             return Task.CompletedTask;
         }
         return Dispatcher.UIThread.InvokeAsync(action).GetTask();
-    }
-
-    private void PersistPreferences()
-    {
-        var cfg = _configManager.Config.Updates;
-        cfg.UseCiArtifact = _useCiCheckBox.IsChecked == true;
-        cfg.GitHubToken = string.IsNullOrWhiteSpace(Token) ? null : Token;
-        _configManager.RequestSave();
     }
 
     private void SetBusy(bool busy, string? status = null)

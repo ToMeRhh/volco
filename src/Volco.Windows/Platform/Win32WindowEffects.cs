@@ -7,7 +7,7 @@ namespace Volco.Windows.Platform;
 
 /// <summary>
 /// Win32 implementation of <see cref="IWindowEffects"/>. The only UI P/Invoke in the repo; the
-/// style combination is the one proven on Windows by the Task 1 spike.
+/// style combination is the one proven to work on Windows.
 /// </summary>
 internal sealed class Win32WindowEffects : IWindowEffects
 {
@@ -42,7 +42,7 @@ internal sealed class Win32WindowEffects : IWindowEffects
         var updated = style | (nint)(WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, updated);
 
-        // Fully opaque, but it commits the layered state; the spike showed corners stay
+        // Fully opaque, but it commits the layered state; testing showed corners stay
         // transparent and click-through works only with this call.
         var ok = SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
         AppLog.Info($"MakeClickThrough: exstyle 0x{style:X} -> 0x{updated:X}, SetLayeredWindowAttributes={ok}");

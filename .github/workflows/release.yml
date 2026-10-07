@@ -78,7 +78,9 @@ jobs:
         mkdir -p zip
         cp firmware/.pio/build/esp32/dist/* zip/
         cp THIRD-PARTY-NOTICES.txt firmware/assets/fonts/OFL.txt zip/
-        (cd zip && zip -q "../volco-firmware-esp32-${{ needs.version.outputs.version }}.zip" *)
+        # LGPL 2.1 (spec §14, point 3): the objects and link command to relink with a modified core.
+        cp -r firmware/.pio/build/esp32/relink zip/relink
+        (cd zip && zip -qr "../volco-firmware-esp32-${{ needs.version.outputs.version }}.zip" .)
 
     - name: Upload firmware
       uses: actions/upload-artifact@v7

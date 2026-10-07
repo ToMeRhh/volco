@@ -12,8 +12,8 @@ namespace Volco.Windows.Audio;
 /// <c>IPolicyConfig</c> is not in the CsWin32-consumed Win32 metadata, so it cannot be generated
 /// the way every other COM interface in this codebase is - it is hand-written here with
 /// <see cref="ComImportAttribute"/> and an explicit vtable slot order (see the interface's own
-/// doc comment for the ordering and its confidence level; this is the single highest runtime
-/// risk item in Task 13 and cannot be caught by a compile).
+/// doc comment for the ordering and its confidence level; this is the audio engine's highest runtime
+/// risk and cannot be caught by a compile).
 ///
 /// Because the interface is undocumented and may change or disappear on a future Windows
 /// release, every failure here is caught, logged, and swallowed - this must never take the app

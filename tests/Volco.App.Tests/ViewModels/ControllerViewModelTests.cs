@@ -43,7 +43,7 @@ public sealed class ControllerViewModelTests : IDisposable
 
     private void Greet(HelloMessage hello)
     {
-        Conn.SetStatus(ConnectionStatus.Connected);
+        Conn.SetStatus(TransportStatus.Open);
         Conn.RaiseMessage(hello);
         _ui.RunAll();
     }
@@ -476,7 +476,7 @@ public sealed class ControllerViewModelTests : IDisposable
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
         vm.StartTestCommand.Execute(null);
-        Conn.SetStatus(ConnectionStatus.Disconnected);
+        Conn.SetStatus(TransportStatus.Closed);
         _ui.RunAll();
         Assert.False(vm.IsTesting);
         Assert.False(_rig.Runtime.InTestMode);
@@ -486,6 +486,22 @@ public sealed class ControllerViewModelTests : IDisposable
     public void TheNavDot_StartsFromTheBanner()
     {
         using var settings = _rig.CreateSettings(_ui);
-        Assert.False(settings.ControllerNavDot);   // no bundled firmware until stage 6
+        Assert.False(settings.ControllerNavDot);   // no bundled firmware
+    }
+
+    [Fact]
+    public void ClearingANumberBox_RestoresTheDefault_AndSavesTheFieldAsAbsent()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Brightness = 40;
+        Assert.True(vm.Draft.Screens.HasBrightness);
+        vm.Brightness = null;                       // the user empties the box
+        Assert.Equal(255m, vm.Brightness);          // the proto default shows again
+        Assert.False(vm.Draft.Screens.HasBrightness);
+        vm.DebounceMs = null;
+        Assert.Equal(30m, vm.DebounceMs);
+        vm.PcPort = null;
+        Assert.Equal(12345m, vm.PcPort);
     }
 }

@@ -3,7 +3,6 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Volco.App.Controls;
-using Volco.Core.Config;
 using Volco.Core.Updates;
 using Xunit;
 
@@ -18,53 +17,17 @@ public class UpdatesPanelTests
         return panel;
     }
 
-    private static ConfigManager NewConfig()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        var config = new ConfigManager(Path.Combine(dir, "config.json"));
-        config.Load();
-        return config;
-    }
-
     [AvaloniaFact]
     public void UpdatesPanel_Renders_WithCurrentDisplayVersion()
     {
-        // The default constructor builds a GitHubUpdater but never calls it: like the WinUI
-        // window, nothing is checked until the user presses the button, so no network here.
-        var window = Host(new UpdatesPanel(NewConfig()));
+        // The default constructor builds a GitHubUpdater but never calls it: nothing is checked
+        // until the user presses the button, so no network here.
+        var window = Host(new UpdatesPanel());
 
         Assert.Equal($"Current version: {BuildInfo.DisplayVersion}",
             window.FindControl<TextBlock>("CurrentVersionText")!.Text);
         Assert.False(window.FindControl<Button>("UpdateButton")!.IsEnabled);
         Assert.False(window.FindControl<ProgressBar>("Progress")!.IsVisible);
-    }
-
-    [AvaloniaFact]
-    public void UpdatesPanel_CheckWithoutToken_PromptsForTokenWithoutNetwork()
-    {
-        var window = Host(new UpdatesPanel(NewConfig()));
-
-        window.FindControl<Button>("CheckButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-        Assert.Equal("Enter a GitHub token to check for updates.",
-            window.FindControl<TextBlock>("StatusText")!.Text);
-        Assert.True(window.FindControl<Button>("CheckButton")!.IsEnabled);
-    }
-
-    [AvaloniaFact]
-    public void UpdatesPanel_SeedsTokenAndCiFlagFromConfig()
-    {
-        var config = NewConfig();
-        config.Config.Updates.GitHubToken = "ghp_abc";
-        config.Config.Updates.UseCiArtifact = true;
-
-        var window = Host(new UpdatesPanel(config));
-
-        var token = window.FindControl<TextBox>("TokenBox")!;
-        Assert.Equal("ghp_abc", token.Text);
-        Assert.NotEqual('\0', token.PasswordChar);
-        Assert.True(window.FindControl<CheckBox>("UseCiCheckBox")!.IsChecked);
     }
 
     // ---- Check flow, driven against a stubbed GitHub API (no network) ----
@@ -83,15 +46,13 @@ public class UpdatesPanelTests
         {
             tag_name = tag,
             body = notes,
-            assets = new[] { new { name = "Volco.exe", url = "https://api.github.com/assets/1" } },
+            assets = new[] { new { name = "Volco.exe", browser_download_url = "https://github.com/x/Volco.exe" } },
         });
 
     private static UpdatesPanel Open(Func<HttpResponseMessage> respond)
     {
         var updater = new GitHubUpdater(new HttpClient(new StubHandler(respond)));
-        var window = Host(new UpdatesPanel(NewConfig(), updater));
-        window.FindControl<TextBox>("TokenBox")!.Text = "ghp_test";
-        return window;
+        return Host(new UpdatesPanel(updater));
     }
 
     /// <summary>Clicks Check and pumps the UI thread until the check finishes (bounded to 5s).</summary>
@@ -152,6 +113,18 @@ public class UpdatesPanelTests
     }
 
     [AvaloniaFact]
+    public void UpdatesPanel_Check_NotFound_ReportsNoneFound()
+    {
+        // GitHub answers 404 when the repository has no published release.
+        var window = Open(() => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+
+        ClickCheckAndWait(window);
+
+        Assert.Equal("No published release was found.", Status(window));
+        Assert.False(UpdateEnabled(window));
+    }
+
+    [AvaloniaFact]
     public void UpdatesPanel_Check_ServerError_ShowsFailureAndReenablesCheck()
     {
         var window = Open(() => new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError));
@@ -161,17 +134,5 @@ public class UpdatesPanelTests
         Assert.StartsWith("Update check failed:", Status(window));
         Assert.False(UpdateEnabled(window));
         Assert.True(window.FindControl<Button>("CheckButton")!.IsEnabled);
-    }
-
-    [AvaloniaFact]
-    public void UpdatesPanel_TogglingCiAfterAvailable_DisablesUpdate()
-    {
-        var window = Open(() => Json(ReleaseJson("v99.0.0", null)));
-        ClickCheckAndWait(window);
-        Assert.True(UpdateEnabled(window));
-
-        window.FindControl<CheckBox>("UseCiCheckBox")!.IsChecked = true;
-
-        Assert.False(UpdateEnabled(window));
     }
 }

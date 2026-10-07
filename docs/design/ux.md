@@ -1,8 +1,7 @@
 # Volco UX Redesign — Design Spec
 
 **Date:** 2026-10-01
-**Status:** Approved 2026-10-01 (Step 3, Task 1 of `docs/superpowers/plans/2026-09-29-step3-ux-redesign.md`)
-**Mockup:** `docs/superpowers/mockups/2026-10-01-ux-redesign-mockup.html`. Open it in a browser. It is the visual reference for this spec; where the two disagree, this spec wins.
+**Status:** Approved 2026-10-01; implemented.
 
 ## 0. Scope change from the Step 3 plan
 
@@ -41,8 +40,8 @@ Every setting the Step 2 UI edits, mapped to the `AppConfig` property and to whe
 | Buttons | Double-press window | `Buttons[i].DoublePressWindowMs` | Button card, Advanced |
 | Output Devices | Toggle device 1 / 2 | `OutputDevices.Device1/Device2` | Moves into the "Toggle between two outputs" action as its A and B devices. **The page is removed.** |
 | General | Debug logging | `DebugLogging` | General page, "Detailed logging" |
-| Update window | GitHub token | `Updates.GitHubToken` | General page, Updates panel (always visible: it is required, the repo is private) |
-| Update window | Update from CI build | `Updates.UseCiArtifact` | General page, Updates panel, Advanced |
+| Update window | GitHub token | `Updates.GitHubToken` | Removed (2026-10-07): the updater reads public GitHub Releases without a token |
+| Update window | Update from CI build | `Updates.UseCiArtifact` | Removed (2026-10-07): the updater offers releases only |
 | Update window | Check for updates / Update now | (commands) | General page, Updates panel. The tray item "Check for Updates…" opens Settings on General. |
 
 Not edited by any page today and still not edited: `SchemaVersion`, `Sliders[i].Index`, `Buttons[i].Index` (both become "always equal to list position", §4.1).
@@ -141,7 +140,7 @@ Four pages in a 200 px navigation column: **Sliders, Buttons, Connection, Genera
   - Then "Connect using" (USB cable / Wi-Fi (UDP) / WebSocket) and **that type's settings, always visible**: port + baud rate, listen port, or server port.
   - Hint: "These must match the values in your controller's firmware."
 - **General:**
-  - Updates panel: version, Check for updates, GitHub token (always visible, with the "required, private repo" explanation), and under Advanced "Update from development builds".
+  - Updates panel: version, Check for updates. (The GitHub token and "Update from development builds" were removed on 2026-10-07; the updater reads public releases.)
   - Troubleshooting panel: Detailed logging, Open log folder.
   - The separate Update window goes away; its progress and "Update now" appear inline in the Updates panel.
 
@@ -276,11 +275,11 @@ The direction: quiet and neutral, letting the content carry the screen. Flat sur
 | `0x04` | host → controller | active device | **removed** |
 | `0x05` | host → controller | **ButtonFeedback**: button index, value (0 = off/unknown, 1..N = on / choice *n*) | **new** |
 
-**This table is superseded by `2026-10-02-oled-screens-design.md`.**
+**This table is superseded by `oled-screens.md`.**
 
 - The firmware ignores unknown message types.
-- **OLED is deferred.** Superseded by `2026-10-02-oled-screens-design.md`, which replaces this protocol.
-- **No Hello/capabilities handshake** and no per-button "indicator type" setting in the app for now. Superseded by `2026-10-02-oled-screens-design.md`, which adds the Hello handshake.
+- **OLED is deferred.** Superseded by `oled-screens.md`, which replaces this protocol.
+- **No Hello/capabilities handshake** and no per-button "indicator type" setting in the app for now. Superseded by `oled-screens.md`, which adds the Hello handshake.
 
 ### 4.4 Firmware
 
@@ -331,7 +330,7 @@ These are things the user may want later that need changes in `Volco.Windows` or
 
 ## 7. Future features this design leaves room for
 
-- **Per-button OLED screens:** Superseded by `2026-10-02-oled-screens-design.md`, which replaces this protocol. (Original text: `0x05` is keyed by button and carries a value the firmware renders per its own indicator table. Screens become another indicator type. The content format and an app-side indicator setting are designed with that feature.)
+- **Per-button OLED screens:** Superseded by `oled-screens.md`, which replaces this protocol. (Original text: `0x05` is keyed by button and carries a value the firmware renders per its own indicator table. Screens become another indicator type. The content format and an app-side indicator setting are designed with that feature.)
 - **Preset toggle button:** implemented in this PR (`NextPreset` / `GoToPreset`).
 - **Custom actions** (run a program, call a webhook): new action types in the grouped picker, where the disabled "Custom (coming later)" placeholder sits. Security and trust model to be designed separately.
 

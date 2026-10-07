@@ -1,8 +1,8 @@
-# Volco simulator redesign
+# Volco simulator
 
-Date: 2026-10-07. Status: design approved in brainstorming, awaiting spec review.
+Date: 2026-10-07. Status: implemented.
 
-Mocks the user approved:
+Approved mocks:
 - 3D desk scene with the builder, connection and developer drawer: https://claude.ai/artifact/3TYSN1q43FShoyfNBNNRth
 - Earlier flat device directions (stashed, not used): https://claude.ai/artifact/RRsz6WZD3n63TpEwRYvvtk
 
@@ -319,7 +319,7 @@ Everything is wrapped in try/catch; when storage is unavailable, values are kept
   - transition easing and timing, marquee offsets, and the power-state timeline;
   - **golden bitmaps:** a new `firmware/test/golden/render.txt` holds 128×64 bitmaps for a set of layout-1 cases (Latin, Hebrew, long marquee at fixed offsets, dots, mute slash, unknown layout). It is written by a small host-side generator built from `firmware/lib/volco_render` (run like the other golden generators). `pio test -e native` checks the firmware renderer against it, and `oled.test.mjs` checks `oled.js` against it.
 
-**CI checks** that `fonts.js` and `icons.js` are current: regenerate them with `gen_assets.py` and diff. The descriptor check stays.
+**CI checks** that `fonts.js` and `icons.js` hold the same data as the firmware's committed `volco_fonts.cpp` and `volco_icons.cpp` (`assets.test.mjs`; no Pillow in CI, whose font rendering varies between versions). The descriptor check stays.
 
 **Scene.** No automated tests. The README carries a short manual checklist:
 - the page loads with no console errors;
@@ -337,7 +337,8 @@ Everything is wrapped in try/catch; when storage is unavailable, values are kept
 - The "Web Simulator" section of `CLAUDE.md` is updated to the new file list and behaviour.
 - `firmware/README.md` gets one line about `fonts.js` and `render.txt` where the generated outputs are listed.
 
-## 15. Open items for the implementation plan
+## 15. Settled during implementation
 
-- The exact preference order of pins within each class, with a test that pins the result for each preset.
-- The shape of the golden render generator: a native-only PlatformIO test that writes the file under an environment flag, or a small standalone host program.
+- Pin preference within each class is `PREFER` in `layout.js`: sliders take the input-only pins first (34, 35, 36, 39), then 32, 33, 37, 38 and ADC2; buttons and outputs avoid the strapping pins until nothing else is left. New screens get their bus and address before any pin is allocated, so a defined bus keeps its pins. `layout.test.mjs` pins the result for each preset.
+- The golden render generator is the native test itself: `VOLCO_WRITE_GOLDEN=1 pio test -e native -f test_render` rewrites `render.txt` from the firmware renderer; without the variable the test checks it.
+- With no screens, the panels never dim, shift or swallow a press, as on the firmware.

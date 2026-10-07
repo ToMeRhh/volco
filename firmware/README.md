@@ -47,7 +47,7 @@ The firmware is generic: nothing about a build's hardware is compiled in. At boo
 
 The schema, with every default and range, is `proto/volco_config.proto`. A config that is missing, oversized, or fails decoding or validation leaves the firmware on built-in defaults (no inputs, serial only), still answering Hello.
 
-**Until Volco's Controller page (stage 5),** set a config with `config_tool.py`. A layout is a preset JSON (the protobuf JSON mapping of `ControllerConfig`, like `proto/presets/diy-reference.json`):
+Volco's Controller page sets the config. For firmware work without the app, use `config_tool.py`. A layout is a preset JSON (the protobuf JSON mapping of `ControllerConfig`, like `proto/presets/diy-reference.json`):
 
 ```
 ~/.platformio/penv/bin/python firmware/tools/config_tool.py --port <port> write my-layout.json   # stores it; the board reboots into it
@@ -66,7 +66,7 @@ The schema, with every default and range, is `proto/volco_config.proto`. A confi
 
 ### Migrating a button from LED to screen
 
-Change the button's indicator in its config from `led` to `screen` (bus and address), and make sure that bus has `sda`/`scl`. Until stage 5 that is a `config_tool.py write` (see Configuration); from stage 5, Volco's Controller page. The app picks the change up from Hello; there is nothing to change in Volco's actions.
+Change the button's indicator in its config from `led` to `screen` (bus and address), and make sure that bus has `sda`/`scl`. Do it in Volco's Controller page (or with `config_tool.py write`, see Configuration). The app picks the change up from Hello; there is nothing to change in Volco's actions.
 
 ## Wire protocol
 

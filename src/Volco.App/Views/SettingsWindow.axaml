@@ -12,7 +12,7 @@
         WindowDecorations="Full"
         WindowDecorationsTheme="{DynamicResource SettingsWindowDecorations}">
   <Window.Resources>
-    <conv:ConnectionStatusToBrushConverter x:Key="StatusToBrush"/>
+    <conv:LinkToneToBrushConverter x:Key="ToneToBrush"/>
     <!-- Avalonia draws the caption buttons itself. Fluent's decorations also draw the window
          title (over our brand) and a fullscreen button (with no way back out), so hide both.
          The title panel's IsVisible is template-bound, which beats a style, so hide its text. -->
@@ -51,7 +51,7 @@
       <StackPanel Name="ConnectionFooter" DockPanel.Dock="Bottom" Orientation="Horizontal"
                   Spacing="8" Margin="12,8">
         <Ellipse Name="FooterDot" Width="8" Height="8" VerticalAlignment="Center"
-                 Fill="{Binding Connection.Status, Converter={StaticResource StatusToBrush}}"/>
+                 Fill="{Binding Connection.StatusTone, Converter={StaticResource ToneToBrush}}"/>
         <TextBlock Name="FooterText" Classes="Caption" VerticalAlignment="Center"
                    Text="{Binding Connection.FooterText}"/>
       </StackPanel>

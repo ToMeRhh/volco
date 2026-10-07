@@ -35,9 +35,9 @@ internal sealed class SessionRegistry : IDisposable
 {
     /// <summary>
     /// Process-wide event-context GUID passed to every session volume write via
-    /// <see cref="ISimpleAudioVolume.SetMasterVolume"/> (spec §2.3 invariant 6, task requirement
-    /// 9). Task 13's <c>AudioEngine</c> should reuse this exact value for
-    /// <c>IAudioEndpointVolume::SetMasterVolumeLevelScalar</c> device-level writes too, and compare
+    /// <see cref="ISimpleAudioVolume.SetMasterVolume"/> (spec §2.3 invariant 6). <c>AudioEngine</c>
+    /// reuses this exact value for <c>IAudioEndpointVolume::SetMasterVolumeLevelScalar</c>
+    /// device-level writes too, and compares
     /// an incoming callback's own EventContext against it to distinguish "we caused this change"
     /// from "the user changed it elsewhere" (avoiding OSD/controller-LED feedback loops).
     /// </summary>
@@ -207,7 +207,7 @@ internal sealed class SessionRegistry : IDisposable
 
     /// <summary>Invoked by a callback every time it enqueues a <see cref="PendingChange"/>. May be
     /// called from an arbitrary RPC thread - like the callbacks themselves, it must be
-    /// non-blocking and must not touch COM or take a lock. Task 13 wires this to a queue post that
+    /// non-blocking and must not touch COM or take a lock. AudioEngine wires this to a queue post that
     /// wakes the audio thread.</summary>
     private readonly Action _onPendingWork;
 
@@ -215,7 +215,7 @@ internal sealed class SessionRegistry : IDisposable
 
     // Protects both dictionaries. Unlike DeviceRegistry's GetDevices/GetDefault/Resolve, every
     // member of this class is documented as audio-thread-only, so today there is no real cross-
-    // thread race - but IAudioEngine.GetSessions() (Task 13's public surface, spec §2.2) is a
+    // thread race - but IAudioEngine.GetSessions() (spec §2.2) is a
     // "served from the in-memory registry" query in the same family as DeviceRegistry.GetDevices,
     // which IS called from other threads. Keeping the same locking discipline here costs nothing
     // uncontended and avoids a second race to rediscover if that changes. Callbacks never take

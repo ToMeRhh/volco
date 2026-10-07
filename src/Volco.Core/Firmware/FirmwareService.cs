@@ -18,21 +18,26 @@ public sealed record FlashOutcome(bool Succeeded, string Message);
 public sealed class FirmwareService
 {
     public static readonly TimeSpan HelloWait = TimeSpan.FromSeconds(10);
-    public const string SerialOnlyMessage = "Connect the controller with USB and set the connection to Serial.";
+    public const string SerialOnlyMessage = "Plug the controller in with USB and choose \"USB cable\" on the Connection page.";
     public const string DisconnectedMessage = "Volco is disconnected. Connect first (the Connection page or the tray).";
 
     private readonly VolcoRuntime _runtime;
     private readonly IFirmwareFlasher? _flasher;
     private readonly FirmwareCatalog _catalog;
     private readonly TimeProvider _time;
+    private readonly Func<Action, Task> _configThread;
     private int _busy;
 
-    public FirmwareService(VolcoRuntime runtime, IFirmwareFlasher? flasher, FirmwareCatalog catalog, TimeProvider? time = null)
+    /// <param name="configThread">Runs a config edit on the thread that owns the config (the UI
+    /// thread in the app); by default the edit runs inline.</param>
+    public FirmwareService(VolcoRuntime runtime, IFirmwareFlasher? flasher, FirmwareCatalog catalog, TimeProvider? time = null,
+                           Func<Action, Task>? configThread = null)
     {
         _runtime = runtime;
         _flasher = flasher;
         _catalog = catalog;
         _time = time ?? TimeProvider.System;
+        _configThread = configThread ?? (a => { a(); return Task.CompletedTask; });
     }
 
     /// <summary>This build can flash: it has a flasher and bundled firmware.</summary>
@@ -51,7 +56,7 @@ public sealed class FirmwareService
         if (!IsSerial) return new(null, SerialOnlyMessage, false);
         if (_runtime.IsUserDisconnected) return new(null, DisconnectedMessage, false);
         if (!TryEnter()) return new(null, "Another firmware operation is running.", false);
-        using var quiet = _runtime.HoldSilence();
+        using var expected = _runtime.ExpectInterruption(LinkActivity.CheckingFirmware);
         try
         {
             ProbeResult result;
@@ -73,7 +78,7 @@ public sealed class FirmwareService
                     return new(null, $"Couldn't check the board on {port}: {e.Message}", false);
                 }
                 AppLog.Info($"Firmware probe on {port}: {result}");
-                if (result.Kind is ProbeKind.VolcoMatches or ProbeKind.DifferentFirmware) SavePort(port);
+                if (result.Kind is ProbeKind.VolcoMatches or ProbeKind.DifferentFirmware) await SavePortAsync(port).ConfigureAwait(false);
                 if (result.Kind == ProbeKind.VolcoMatches) _runtime.HelloReceived += OnHello;   // before the resume
             }
             if (result.Kind == ProbeKind.VolcoMatches)
@@ -107,7 +112,7 @@ public sealed class FirmwareService
         // After a manual Disconnect the resume wouldn't reconnect, so the Hello could never come.
         if (_runtime.IsUserDisconnected) return new(false, DisconnectedMessage);
         if (!TryEnter()) return new(false, "Another firmware operation is running.");
-        using var quiet = _runtime.HoldSilence();
+        using var expected = _runtime.ExpectInterruption(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware);
         var verb = mode == FlashMode.Install ? "Install" : "Update";
         try
         {
@@ -135,7 +140,7 @@ public sealed class FirmwareService
                         : $"{verb} failed: {e.Message}. The controller won't work until the {verb.ToLowerInvariant()} succeeds. Try again.");
                 }
                 AppLog.Info($"Firmware {verb.ToLowerInvariant()} of {version} on {port} took {_time.GetElapsedTime(started).TotalSeconds:F1} s");
-                SavePort(port);   // still suspended: the change can't restart the connection mid-flash
+                await SavePortAsync(port).ConfigureAwait(false);   // still suspended: the change can't restart the connection mid-flash
                 _runtime.HelloReceived += OnHello;
             }
 
@@ -163,12 +168,18 @@ public sealed class FirmwareService
 
     /// <summary>The dialog's port becomes the configured one (spec §8.6 step 3), saved while the
     /// connection is suspended; the resume then opens it.</summary>
-    private void SavePort(string port)
+    private async Task SavePortAsync(string port)
     {
         var serial = _runtime.Config.Config.Connection.Serial;
         if (serial.ComPort == port) return;
-        serial.ComPort = port;
-        try { _runtime.Config.Save(); }
+        try
+        {
+            await _configThread(() =>
+            {
+                serial.ComPort = port;
+                _runtime.Config.Save();
+            }).ConfigureAwait(false);
+        }
         catch (Exception e) { AppLog.Error($"Couldn't save the port {port}: {e.Message}"); }
     }
 

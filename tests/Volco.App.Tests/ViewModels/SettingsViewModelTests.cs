@@ -2,6 +2,7 @@ using Volco.App.ViewModels;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Communication;
+using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
 using Xunit;
 
@@ -84,14 +85,14 @@ public class SettingsViewModelTests
         var ui = new RecordingDispatcher();
         using var vm = rig.CreateSettings(ui);
         var connection = vm.Connection;
-        Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+        Assert.Equal(LinkState.Searching, connection.Link.State);
 
-        await Task.Run(() => rig.Connection!.SetStatus(ConnectionStatus.Connected), TestContext.Current.CancellationToken);
+        await Task.Run(() => rig.Connection!.SetStatus(TransportStatus.Open), TestContext.Current.CancellationToken);
 
-        Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+        Assert.Equal(LinkState.Searching, connection.Link.State);
         ui.RunAll();
-        Assert.Equal(ConnectionStatus.Connected, connection.Status);
-        Assert.Equal("Waiting for the controller…", connection.StatusText);   // the port is open; no Hello yet
+        Assert.Equal(LinkState.Waiting, connection.Link.State);
+        Assert.Equal("Connecting…", connection.StatusText);   // the port is open; no Hello yet
 
         rig.Connection!.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Led }));
         ui.RunAll();
@@ -111,11 +112,11 @@ public class SettingsViewModelTests
         await Task.Run(() =>
         {
             engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones);
-            rig.Connection!.SetStatus(ConnectionStatus.Connected);
+            rig.Connection!.SetStatus(TransportStatus.Open);
         }, TestContext.Current.CancellationToken);
 
         Assert.Equal(0, ui.Pending);
-        Assert.Equal(ConnectionStatus.Disconnected, vm.Connection.Status);
+        Assert.Equal(LinkState.Searching, vm.Connection.Link.State);
     }
 
     [Fact]
@@ -132,7 +133,7 @@ public class SettingsViewModelTests
         await Task.Run(() =>
         {
             engine.RaiseDeviceChanged(DeviceChangeKind.Added, Headphones);
-            rig.Connection!.SetStatus(ConnectionStatus.Connected);
+            rig.Connection!.SetStatus(TransportStatus.Open);
         }, TestContext.Current.CancellationToken);
         Assert.True(ui.Pending > 0);
 
@@ -145,7 +146,7 @@ public class SettingsViewModelTests
 
         Assert.Null(ex);
         Assert.DoesNotContain("Headphones", slider.DeviceChoices);
-        Assert.Equal(ConnectionStatus.Disconnected, connection.Status);
+        Assert.Equal(LinkState.Searching, connection.Link.State);
     }
 
     [Fact]

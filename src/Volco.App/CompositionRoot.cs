@@ -73,7 +73,20 @@ internal sealed class CompositionRoot : IDisposable
         var catalog = FirmwareCatalog.Load(_platform.Firmware ?? EmptyFirmwareSource.Instance);
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
                                     new VolcoRuntimeOptions { Firmware = catalog });
-        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog);
+        // The port a flash or probe settles on is saved on the UI thread, which owns the config.
+        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThread: a =>
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() =>
+            {
+                try { a(); done.SetResult(); }
+                catch (Exception e) { done.SetException(e); }
+            });
+            return done.Task;
+        });
+        var firmware = _firmware;
+        VolcoApplication.Gate = new ExitGate(() => firmware.IsBusy);
+        firmware.BusyChanged += (_, _) => Dispatcher.UIThread.Post(() => VolcoApplication.Gate?.OnBusyChanged());
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
@@ -166,8 +179,7 @@ internal sealed class CompositionRoot : IDisposable
             TrayIcon.SetIcons(app, new TrayIcons { tray });
             _trayIcon = tray;
 
-            _runtime!.ConnectionStatusChanged += OnTrayConnectionChanged;
-            _runtime.UserDisconnectedChanged += OnTrayConnectionChanged;
+            _runtime!.LinkStatusChanged += OnTrayConnectionChanged;
             UpdateTray();
             AppLog.Info("Tray icon created");
         }
@@ -193,8 +205,9 @@ internal sealed class CompositionRoot : IDisposable
 
     private void OnBannerChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(UpdateTray);
 
-    /// <summary>One place decides the tray: red while not connected (manual Disconnect included),
-    /// else the attention icon while the controller needs the user, else the normal icon.</summary>
+    /// <summary>One place decides the tray: red while the controller isn't connected (manual
+    /// Disconnect included, an expected wait not), else the attention icon while the controller
+    /// needs the user, else the normal icon. The attention line and menu item show either way.</summary>
     private void UpdateTray()
     {
         if (_runtime is not { } runtime || _shutDown) return;
@@ -203,12 +216,13 @@ internal sealed class CompositionRoot : IDisposable
         _trayShowsAttention = banner.NeedsAttention;
         if (_trayIcon is not { } tray) return;
 
-        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.ConnectionStatus, runtime.IsUserDisconnected);
-        var attention = _trayShowsAttention && !status.Disconnected;
-        tray.Icon = status.Disconnected ? _disconnectedIcon : attention ? _attentionIcon : _connectedIcon;
-        tray.ToolTipText = !attention ? status.ToolTip
+        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection);
+        var attention = _trayShowsAttention;
+        tray.Icon = status.Down ? _disconnectedIcon : attention ? _attentionIcon : _connectedIcon;
+        // No second line where the headline already says it ("Controller not responding",
+        // "Firmware update needed").
+        tray.ToolTipText = !attention || banner.Kind is BannerKind.NoAnswer or BannerKind.Incompatible ? status.ToolTip
             : _trayShowsUpdate ? $"{status.ToolTip}\nController firmware update available"
-            : banner.Kind == BannerKind.NoAnswer ? $"{status.ToolTip}\nNo controller answering"
             : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? $"{status.ToolTip}\nThe controller needs setting up"
             : $"{status.ToolTip}\nThe controller needs attention";
         if (_trayConnectionItem is not null) _trayConnectionItem.Header = status.ConnectionMenuText;
@@ -275,6 +289,8 @@ internal sealed class CompositionRoot : IDisposable
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.
         _runtime?.Dispose();
+        // After the runtime, so a mirror written while it disposed is saved too.
+        _config?.FlushPendingSave();
         _platform?.Audio.Dispose();
 
         if (_osd is { } osdWindow)
@@ -292,8 +308,7 @@ internal sealed class CompositionRoot : IDisposable
 
         if (_runtime is not null)
         {
-            _runtime.ConnectionStatusChanged -= OnTrayConnectionChanged;
-            _runtime.UserDisconnectedChanged -= OnTrayConnectionChanged;
+            _runtime.LinkStatusChanged -= OnTrayConnectionChanged;
         }
 
         if (_trayIcon is { } tray)
