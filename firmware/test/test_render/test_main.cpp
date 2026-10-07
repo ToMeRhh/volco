@@ -1,5 +1,7 @@
 #include <unity.h>
 #include <string.h>
+#include <stdlib.h>
+#include "../golden_render.h"
 #include "volco_render.h"
 
 using namespace volco;
@@ -128,6 +130,27 @@ void test_not_connected_screen() {
   TEST_ASSERT_EQUAL(kNoIcon, s.icon);
 }
 
+// The renders shared with the web simulator (firmware/test/golden/render.txt). With
+// VOLCO_WRITE_GOLDEN set, the canvases are rewritten from this renderer instead of checked.
+void test_golden_renders() {
+  std::vector<std::string> header;
+  std::vector<GoldenRender> cases;
+  TEST_ASSERT_TRUE_MESSAGE(loadGoldenRenders(header, cases), "golden/render.txt not found");
+  TEST_ASSERT_TRUE(cases.size() >= 16);
+  const bool write = getenv("VOLCO_WRITE_GOLDEN") != nullptr;
+  for (GoldenRender& g : cases) {
+    uint8_t button, transition;
+    ScreenContent s;
+    TEST_ASSERT_TRUE_MESSAGE(decodeScreen(g.payload.data(), (uint8_t)g.payload.size(), button, transition, s), g.name.c_str());
+    Canvas c;
+    renderScreen(c, s, g.since, T);
+    if (write) { g.canvas.assign(c.buf, c.buf + sizeof c.buf); continue; }
+    TEST_ASSERT_EQUAL_MESSAGE(sizeof c.buf, g.canvas.size(), g.name.c_str());
+    TEST_ASSERT_EQUAL_HEX8_ARRAY_MESSAGE(g.canvas.data(), c.buf, sizeof c.buf, g.name.c_str());
+  }
+  if (write) TEST_ASSERT_TRUE(writeGoldenRenders(header, cases));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_canvas_page_layout);
@@ -141,5 +164,6 @@ int main(int, char**) {
   RUN_TEST(test_slide_composition);
   RUN_TEST(test_shift_moves_pixels);
   RUN_TEST(test_not_connected_screen);
+  RUN_TEST(test_golden_renders);
   return UNITY_END();
 }
