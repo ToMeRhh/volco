@@ -1,6 +1,6 @@
 # Controller configuration and firmware installation: design
 
-Date: 2026-10-03. Status: revision 3, waiting for the user's review. Revision 2 applied two independent first-round reviews (firmware and protocol; app, UX and CI). Revision 3 applies a second-round review of revision 2.
+Date: 2026-10-03. Status: implemented.
 
 ## 1. Goal
 
@@ -1124,7 +1124,7 @@ cd firmware && pio device monitor           # DEBUG_LOG output
 
 ### 12.6 Spikes (done in stage 1)
 
-All answered: results and decisions are in `docs/superpowers/spikes/2026-10-03-controller-config-spikes.md`, and the spec above includes the approved amendments. The list below is kept as the record of what was asked.
+All answered, and the spec above includes the approved amendments. The list below is kept as the record of what was asked.
 
 - **S1, EspDotNet on the real DIY board:**
   - target framework compatibility with `net8.0-windows`
@@ -1145,7 +1145,7 @@ All answered: results and decisions are in `docs/superpowers/spikes/2026-10-03-c
   - the manifest script finding all four parts
 - **S3, Grpc.Tools:** generation in the Linux test job and in the Windows single-file publish.
 
-### 12.7 Manual hardware checklist (`docs/superpowers/checklists/`)
+### 12.7 Manual hardware checklist
 
 1. Install on a blank ESP32 → Hello, "Set up your controller".
 2. Apply the DIY reference → save → reboot confirmed → test mode shows all 5 sliders and 3 buttons; LEDs toggle; volume doesn't change during the test.

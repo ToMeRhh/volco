@@ -137,7 +137,7 @@ decode_ok("brightness_only", bytes.fromhex("32020864"), screens__brightness=100,
           screens__dim_enabled=1, screens__transition_ms=360)
 decode_ok("unknown_field", bytes.fromhex("98060132020864"), screens__brightness=100)
 mx = blob(maximal())
-assert len(mx) == 683, len(mx)  # 663 bytes measured in stage 1 with two buses; buses 2 and 3 add 20
+assert len(mx) == 683, len(mx)  # 663 bytes with two buses; buses 2 and 3 add 20
 decode_ok("maximal", mx, size=683, sliders=16, buttons=32)
 
 # ---- decode-fail -----------------------------------------------------------------------------

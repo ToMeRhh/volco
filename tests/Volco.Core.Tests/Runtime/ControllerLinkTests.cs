@@ -305,7 +305,7 @@ public sealed class ControllerLinkTests : IDisposable
     [Fact]
     public void RapidPresetChanges_EachBurstIsCompleteAndInOrder()
     {
-        // Review Focus #1: presses from several threads never interleave bursts.
+        // Presses from several threads never interleave bursts.
         var link = Ready();
         var baseline = _conn.SentCount;
         var threads = Enumerable.Range(0, 6).Select(_ => new Thread(() =>

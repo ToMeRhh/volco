@@ -45,7 +45,6 @@ public class ScreenTextTests
     [Fact]
     public void ToWireBytes_LongMixedHebrewName_CutsOnACharacterBoundary()
     {
-        // Review Focus #4.
         var name = "רמקולים בחדר העבודה (Realtek High Definition Audio) 10:30";
         var bytes = ScreenText.ToWireBytes(name);
         Assert.True(bytes.Length <= 60);

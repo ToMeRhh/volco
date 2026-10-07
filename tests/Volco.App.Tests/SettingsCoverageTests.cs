@@ -18,7 +18,7 @@ using Xunit;
 namespace Volco.App.Tests;
 
 /// <summary>
-/// Review Focus #1: every setting the Step 2 pages edited (the UX spec's §1 inventory) is still
+/// Every setting the earlier pages edited (the UX spec's §1 inventory) is still
 /// editable through the redesigned UI, and what the UI writes survives a save and a fresh load.
 /// Each test edits through the controls, saves, reloads config.json with a new ConfigManager and
 /// checks the property.

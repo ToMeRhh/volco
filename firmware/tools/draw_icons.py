@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws Volco's 28x28 1-bit screen icons from vector descriptions (the mockup's drawings, on a
+"""Draws Volco's 28x28 1-bit screen icons from vector descriptions (on a
 24-unit grid). Run once, inspect, commit the PNGs: after that the PNGs are the source of truth and
 can be hand-edited. Usage: python3 firmware/tools/draw_icons.py [--preview out.png]"""
 import math, sys

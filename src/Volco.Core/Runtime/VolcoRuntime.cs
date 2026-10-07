@@ -288,7 +288,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     public event EventHandler<SliderLevelEventArgs>? SliderLevelChanged;
 
     /// <summary>
-    /// Status of whichever transport is current. Survives transport restarts (Review Focus #2):
+    /// Status of whichever transport is current. Survives transport restarts:
     /// the runtime attaches its handler to each transport it creates and detaches it from the old
     /// one on restart, so a subscriber never has to re-subscribe to a new IControllerConnection.
     /// </summary>
@@ -666,7 +666,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         var old = Interlocked.Exchange(ref _connection, null);
         if (old != null)
         {
-            // Detached before Dispose() (Review Focus #2): the old transport can still raise
+            // Detached before Dispose(): the old transport can still raise
             // events from its background threads, and those must never be reported as the
             // status of the connection that replaces it. The Disconnected a real transport
             // raises from its own Dispose() therefore no longer reaches subscribers by itself,

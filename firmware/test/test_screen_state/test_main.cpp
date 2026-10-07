@@ -31,7 +31,7 @@ void test_slide_runs_for_its_duration_then_settles() {
 }
 
 void test_new_content_mid_slide_snaps() {
-  // Review Focus #1: rapid presses never queue animations.
+  // Rapid presses never queue animations.
   ScreenSlot s(360);
   s.show(screenText("", 1, "A"), TRANSITION_NONE, 0, false);
   s.show(screenText("", 1, "B"), TRANSITION_SLIDE_LEFT, 1000, false);

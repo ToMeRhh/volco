@@ -89,7 +89,7 @@ public sealed class ControllerConfigService : IDisposable
 
     private int _waits;
 
-    /// <param name="bundledFirmwareVersion">The build id Volco carries (stage 6); null → none.</param>
+    /// <param name="bundledFirmwareVersion">The build id of the firmware Volco carries; null → none.</param>
     public ControllerConfigService(ConfigManager config, IConfigSessionLink link, TimeProvider? time = null,
                                    Func<string?>? bundledFirmwareVersion = null)
     {

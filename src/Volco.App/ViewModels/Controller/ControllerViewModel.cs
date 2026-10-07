@@ -128,7 +128,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public bool ShowFixIt => Has(BannerActions.FixIt);
     public bool ShowCheckFirmware => Has(BannerActions.CheckFirmware) && CanUseFirmware;
 
-    /// <summary>Drives the sidebar dot (and in stage 6 the tray).</summary>
+    /// <summary>Drives the sidebar dot and the tray.</summary>
     public bool FirmwareUpdateAvailable => Banner.FirmwareUpdateAvailable;
 
     [ObservableProperty] private string? _notice;

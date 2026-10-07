@@ -1,14 +1,10 @@
 # Volco Audio Core Redesign — Shared Foundation
 
 **Date:** 2026-09-26
-**Status:** Approved (design only — not implemented)
-**Applies to:** Option A (`2026-09-26-volco-option-a-avalonia-design.md`) **and**
-Option D (`2026-09-26-volco-option-d-winui-remediation-design.md`)
+**Status:** Implemented (`src/Volco.Windows/Audio`).
 
-> **Read this first.** Both option specs depend on this document and neither
-> repeats its content. The audio layer is where the CPU goes, and its redesign is
-> identical whether the UI is Avalonia or WinUI 3. An agent implementing either
-> option implements this too.
+> The audio layer is where the CPU goes, and its redesign is the same whatever the
+> UI framework.
 
 ---
 
@@ -437,7 +433,7 @@ Windows machine with the controller attached.
 6. **OSD latency** — subjective but recorded: does the pill appear within one
    frame of a slider move, and does it ever flicker or steal focus?
 
-Put the results in a `MEASUREMENTS.md` on each branch. Reference targets: idle CPU
+Reference targets: idle CPU
 under 0.1 % average, idle GPU at 0, flat handle count, cold start under 1 s.
 
 ---

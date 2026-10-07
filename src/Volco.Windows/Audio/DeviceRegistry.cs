@@ -54,7 +54,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         /// <summary>Render devices only; null for capture endpoints.</summary>
         public IAudioSessionManager2? SessionManager { get; init; }
 
-        /// <summary>Last known state, so TryGetDeviceState (Task 13) never blocks the audio thread on a COM call.</summary>
+        /// <summary>Last known state, so TryGetDeviceState never blocks the audio thread on a COM call.</summary>
         public float CachedLevel { get; set; }
         public bool CachedMuted { get; set; }
 
@@ -189,7 +189,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     /// <summary>
     /// Invoked by an IMMNotificationClient/IAudioEndpointVolumeCallback callback every time it
     /// enqueues a <see cref="PendingChange"/>. May be called from an arbitrary RPC thread, so -
-    /// like the callbacks themselves - it must be non-blocking. Task 13 wires this to a queue post
+    /// like the callbacks themselves - it must be non-blocking. AudioEngine wires this to a queue post
     /// that wakes the audio thread; it must never itself do COM work or take a lock.
     /// </summary>
     private readonly Action _onPendingWork;
@@ -228,7 +228,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     ///
     /// Threading contract: this method must run on an MTA thread (CoInitializeEx(COINIT_MULTITHREADED)
     /// already called on it). Registering IMMNotificationClient from an STA thread is a documented
-    /// deadlock source (spec §2.1). DeviceRegistry does not create or own that thread - Task 13's
+    /// deadlock source (spec §2.1). DeviceRegistry does not create or own that thread -
     /// AudioEngine does, and it must call Start() from its dedicated audio thread before any other
     /// member of this class is used, and must call <see cref="DrainPendingChanges"/> from that same
     /// thread thereafter (e.g. once per work-queue iteration) to apply queued notifications.
