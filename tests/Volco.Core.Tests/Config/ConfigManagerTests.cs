@@ -501,8 +501,6 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(ConnectionType.Serial, c.Connection.Type);
         Assert.Equal("COM3", c.Connection.Serial.ComPort);
         Assert.True(c.DebugLogging);
-        Assert.Equal("ghp_x", c.Updates.GitHubToken);
-        Assert.True(c.Updates.UseCiArtifact);
 
         Assert.Equal(5, c.Sliders.Count);
         Assert.Equal(SliderMappingType.Unmapped, c.Sliders[2].Type);

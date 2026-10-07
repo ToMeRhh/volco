@@ -142,18 +142,6 @@ public class ButtonConfig
     }
 }
 
-public class UpdateConfig
-{
-    /// <summary>
-    /// Optional GitHub Personal Access Token (needs <c>actions:read</c>) used to download CI
-    /// build artifacts. Not required for updating from published releases.
-    /// </summary>
-    public string? GitHubToken { get; set; }
-
-    /// <summary>Remembers whether the user prefers updating from the latest CI artifact.</summary>
-    public bool UseCiArtifact { get; set; }
-}
-
 public class AppConfig
 {
     public const int CurrentSchemaVersion = 5;
@@ -191,7 +179,6 @@ public class AppConfig
     public DeviceSettingsConfig? FindDevice(string? id)
         => string.IsNullOrEmpty(id) ? null
            : Devices.Find(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase));
-    public UpdateConfig Updates { get; set; } = new();
     public bool DebugLogging { get; set; } = false;
 
     public static AppConfig CreateDefault()

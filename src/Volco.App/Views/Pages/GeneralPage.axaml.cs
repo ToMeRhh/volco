@@ -37,7 +37,7 @@ public partial class GeneralPage : UserControl
         DataContext = viewModel;
         if (viewModel.ShowUpdates)
         {
-            Updates = new UpdatesPanel(viewModel.ConfigManager);
+            Updates = new UpdatesPanel();
             this.FindControl<ContentControl>("UpdatesHost")!.Content = Updates;
         }
     }
