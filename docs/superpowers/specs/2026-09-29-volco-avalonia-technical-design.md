@@ -171,9 +171,7 @@ It owns everything today's `App.xaml.cs` owns that is not a window:
 Every type in the signature above is a `Volco.Core` type. **The UI never names a
 platform type.** `audioReady` is what the platform engine's start-up returned (false →
 no config migration, `AudioEngineFailed`); the connection factory and options exist so
-tests can inject fake transports and short re-push delays. The exact contract, with
-per-member semantics, is in `docs/superpowers/plans/2026-09-29-step1-decompose.md`
-Task 4.
+tests can inject fake transports and short re-push delays.
 
 Two consequences:
 

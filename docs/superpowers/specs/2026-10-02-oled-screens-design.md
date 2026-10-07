@@ -1,7 +1,7 @@
 # Volco Per-Button OLED Screens — Design Spec
 
 **Date:** 2026-10-02
-**Status:** Approved; implemented by `docs/superpowers/plans/2026-10-02-oled-screens.md`
+**Status:** Approved; implemented.
 **Mockups** (open in a browser; where a mockup and this spec disagree, this spec wins):
 - `docs/superpowers/mockups/2026-10-02-oled-screens-mockup.html`: screen layouts at real 128×64 resolution, and a pressable controller showing the preset-change slide. The chosen layout is "C nudged" with the synchronized "Slide".
 - `docs/superpowers/mockups/2026-10-02-devices-page-mockup.html`: the new Devices settings page.

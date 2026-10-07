@@ -1124,7 +1124,7 @@ cd firmware && pio device monitor           # DEBUG_LOG output
 
 ### 12.6 Spikes (done in stage 1)
 
-All answered: results and decisions are in `docs/superpowers/spikes/2026-10-03-controller-config-spikes.md`, and the spec above includes the approved amendments. The list below is kept as the record of what was asked.
+All answered, and the spec above includes the approved amendments. The list below is kept as the record of what was asked.
 
 - **S1, EspDotNet on the real DIY board:**
   - target framework compatibility with `net8.0-windows`
