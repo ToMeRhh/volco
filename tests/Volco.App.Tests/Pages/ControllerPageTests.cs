@@ -123,7 +123,7 @@ public class ControllerPageTests
         page.FindControl<Button>("StartTestButton")!.Command!.Execute(null);
         Dispatcher.UIThread.RunJobs();
         Assert.True(rig.Runtime.InTestMode);
-        var window = (Window)page.GetVisualRoot()!;
+        var window = (Window)TopLevel.GetTopLevel(page)!;
         window.MouseDown(new Avalonia.Point(5, 5), MouseButton.Left);   // on the scrim, outside the card
         Dispatcher.UIThread.RunJobs();
         Assert.False(rig.Runtime.InTestMode);
