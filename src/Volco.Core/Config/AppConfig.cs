@@ -29,7 +29,54 @@ public enum ButtonActionType
     ToggleOutputDevice,
     SetOutputDevice,
     NextPreset,
-    GoToPreset
+    GoToPreset,
+    MediaPlayPause,
+    MediaNext,
+    MediaPrevious,
+    MediaStop,
+    OpenProgram,
+    RunScript
+}
+
+/// <summary>Groups of <see cref="ButtonActionType"/> that share settings or rules.</summary>
+public static class ButtonActionTypes
+{
+    /// <summary>Play/Pause, Next, Previous, Stop: they take a <see cref="ButtonActionConfig.MediaApp"/>.</summary>
+    public static bool IsMedia(ButtonActionType t) => t is ButtonActionType.MediaPlayPause or ButtonActionType.MediaNext
+        or ButtonActionType.MediaPrevious or ButtonActionType.MediaStop;
+
+    /// <summary>Open a program, Run a script: they run code on this PC, so a press runs them only
+    /// when it came over USB serial (custom-actions spec §7). They take a <see cref="ButtonActionConfig.Command"/>.</summary>
+    public static bool RunsCode(ButtonActionType t) => t is ButtonActionType.OpenProgram or ButtonActionType.RunScript;
+}
+
+/// <summary>What a script button does when pressed while its script still runs.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum WhileRunningPolicy
+{
+    Ignore,
+    StartAnother
+}
+
+/// <summary>The app a media action controls: its Windows app id (AppUserModelId) and display name.</summary>
+public class MediaAppConfig
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+}
+
+/// <summary>A program or script to run: a file path or URL, its arguments and working folder,
+/// and an optional name for the screen.</summary>
+public class CommandConfig
+{
+    public string Path { get; set; } = "";
+    public string Arguments { get; set; } = "";
+
+    /// <summary>Empty: the file's own folder.</summary>
+    public string WorkingDirectory { get; set; } = "";
+
+    /// <summary>Empty: the file name without its extension.</summary>
+    public string Name { get; set; } = "";
 }
 
 public class SerialConfig
@@ -86,6 +133,15 @@ public class ButtonActionConfig
 
     /// <summary>The target <see cref="PresetConfig.Id"/> for GoToPreset.</summary>
     public string? PresetId { get; set; }
+
+    /// <summary>The app a media action controls; null = whatever Windows considers current.</summary>
+    public MediaAppConfig? MediaApp { get; set; }
+
+    /// <summary>The program for OpenProgram, the script for RunScript.</summary>
+    public CommandConfig? Command { get; set; }
+
+    /// <summary>RunScript: what a press does while a run of this action is still going.</summary>
+    public WhileRunningPolicy WhileRunning { get; set; } = WhileRunningPolicy.Ignore;
 }
 
 /// <summary>What one button does in one preset.</summary>
@@ -144,7 +200,7 @@ public class ButtonConfig
 
 public class AppConfig
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     /// <summary>Id of the preset every migrated or new config starts with.</summary>
     public const string DefaultPresetId = "default";
