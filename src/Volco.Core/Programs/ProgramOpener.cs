@@ -48,18 +48,17 @@ public sealed class ProgramOpener
     public string? TrackedPath(CommandConfig? command)
     {
         var path = command?.Path.Trim() ?? "";
-        if (path.Length == 0 || path.Contains("://", StringComparison.Ordinal)) return null;
-        var ext = Path.GetExtension(path);
-        if (ext.Equals(".exe", StringComparison.OrdinalIgnoreCase)) return path;
-        if (!ext.Equals(".lnk", StringComparison.OrdinalIgnoreCase)) return null;
+        if (path.Length == 0 || CommandPath.IsUrl(path)) return null;
+        var ext = CommandPath.Extension(path);
+        if (ext == ".exe") return path;
+        if (ext != ".lnk") return null;
         string? target;
         lock (_gate)
         {
             if (!_lnkTargets.TryGetValue(path, out target))
                 _lnkTargets[path] = target = _resolveLnk(path);
         }
-        return target is not null && Path.GetExtension(target).Equals(".exe", StringComparison.OrdinalIgnoreCase)
-            ? target : null;
+        return target is not null && CommandPath.Extension(target) == ".exe" ? target : null;
     }
 
     public ProgramState State(CommandConfig? command)
