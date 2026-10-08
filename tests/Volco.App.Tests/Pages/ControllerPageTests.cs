@@ -150,7 +150,7 @@ public class ControllerPageTests
     }
 
     [AvaloniaFact]
-    public void TheFirmwareLine_HasAnIcon()
+    public void TheFirmwareLine_HasNoIcon_WhenNothingIsWrong()
     {
         var (page, rig, vm) = Show(DiyBlob);
         using var _ = rig;
@@ -158,7 +158,19 @@ public class ControllerPageTests
         Greet(rig, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
         var line = page.FindControl<StatusLine>("FirmwareText")!;
         Assert.Equal("Development firmware", line.Text);
-        Assert.Equal(LinkTone.Neutral, line.Tone);
+        Assert.False(line.ShowIcon);
+        Assert.False(line.GetVisualDescendants().OfType<PathIcon>().Single().IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void TheConnectionCard_ComesBeforeTheStatusCard()
+    {
+        var (page, rig, vm) = Show(DiyBlob);
+        using var _ = rig;
+        using var __ = vm;
+        var cards = page.GetVisualDescendants().OfType<Border>().Where(b => b.Name is "ConnectionPanel" or "StatusPanel")
+                        .Select(b => b.Name).ToArray();
+        Assert.Equal(new[] { "ConnectionPanel", "StatusPanel" }, cards);
     }
 
     [AvaloniaFact]

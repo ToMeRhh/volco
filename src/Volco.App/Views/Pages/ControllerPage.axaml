@@ -22,7 +22,62 @@
           <TextBlock Classes="Secondary" Text="How Volco talks to your controller, and the hardware and behaviour stored on it."/>
         </StackPanel>
 
-        <!-- 1. Status: the link, the controller and its firmware -->
+        <!-- 1. Connection: how Volco reaches the controller (saved in Volco, not on the controller) -->
+        <Border Name="ConnectionPanel" Classes="Panel">
+          <StackPanel Spacing="16">
+            <TextBlock Text="Connection" Classes="Subtitle"/>
+            <Grid ColumnDefinitions="150,*">
+              <TextBlock Text="Connect using" Classes="Secondary" VerticalAlignment="Center"/>
+              <Border Grid.Column="1" Classes="SegmentTrack" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <RadioButton Name="SerialOption" Classes="Segment" Content="USB cable"
+                               IsChecked="{Binding Connection.IsSerial, Mode=TwoWay}"/>
+                  <RadioButton Name="UdpOption" Classes="Segment" Content="Wi-Fi (UDP)"
+                               IsChecked="{Binding Connection.IsUdp, Mode=TwoWay}"/>
+                  <RadioButton Name="WebSocketOption" Classes="Segment" Content="WebSocket"
+                               IsChecked="{Binding Connection.IsWebSocket, Mode=TwoWay}"/>
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <StackPanel Name="SerialSection" Spacing="12" IsVisible="{Binding Connection.IsSerial}">
+              <Grid ColumnDefinitions="150,Auto,Auto">
+                <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
+                <ComboBox Name="PortCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
+                          PlaceholderText="Select port…"
+                          ItemsSource="{Binding Connection.ComPorts}"
+                          SelectedItem="{Binding Connection.ComPort, Mode=TwoWay}"/>
+                <Button Name="RefreshPortsButton" Grid.Column="2" Classes="Icon" Margin="4,0,0,0"
+                        Command="{Binding Connection.RefreshComPortsCommand}" ToolTip.Tip="Refresh the port list">
+                  <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
+                </Button>
+              </Grid>
+            </StackPanel>
+
+            <StackPanel Name="UdpSection" Spacing="12" IsVisible="{Binding Connection.IsUdp}">
+              <Grid ColumnDefinitions="150,Auto">
+                <TextBlock Text="Listen port" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="UdpPortBox" Grid.Column="1" Width="160"
+                               Minimum="1024" Maximum="65535" FormatString="0"
+                               Value="{Binding Connection.UdpListenPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+              </Grid>
+            </StackPanel>
+
+            <StackPanel Name="WebSocketSection" Spacing="12" IsVisible="{Binding Connection.IsWebSocket}">
+              <Grid ColumnDefinitions="150,Auto">
+                <TextBlock Text="Server port" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="WebSocketPortBox" Grid.Column="1" Width="160"
+                               Minimum="1024" Maximum="65535" FormatString="0"
+                               Value="{Binding Connection.WebSocketPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+              </Grid>
+            </StackPanel>
+
+            <TextBlock Classes="Caption" TextWrapping="Wrap"
+                       Text="For Wi-Fi, this must match the controller's Wi-Fi settings (Advanced, below)."/>
+          </StackPanel>
+        </Border>
+
+        <!-- 2. Status: the link, the controller and its firmware -->
         <Border Name="StatusPanel" Classes="Panel">
           <StackPanel Spacing="10">
             <Grid ColumnDefinitions="Auto,*,Auto">
@@ -54,7 +109,8 @@
                                    IsVisible="{Binding Connection.HasStatusExplanation}"/>
               <StackPanel Orientation="Horizontal" Spacing="12" IsVisible="{Binding HasFirmwareText}">
                 <TextBlock Name="ChipText" Classes="Secondary" VerticalAlignment="Center" Text="{Binding ChipText}"/>
-                <controls:StatusLine Name="FirmwareText" VerticalAlignment="Center"
+                <!-- An icon only when the firmware needs something: Volco's own build is plain text -->
+                <controls:StatusLine Name="FirmwareText" VerticalAlignment="Center" ShowIcon="{Binding FirmwareNeedsAttention}"
                                      Text="{Binding FirmwareText}" Tone="{Binding FirmwareTone}"/>
               </StackPanel>
             </StackPanel>
@@ -121,61 +177,6 @@
           </StackPanel>
         </Border>
 
-        <!-- 2. Connection: how Volco reaches the controller (saved in Volco, not on the controller) -->
-        <Border Name="ConnectionPanel" Classes="Panel">
-          <StackPanel Spacing="16">
-            <TextBlock Text="Connection" Classes="Subtitle"/>
-            <Grid ColumnDefinitions="150,*">
-              <TextBlock Text="Connect using" Classes="Secondary" VerticalAlignment="Center"/>
-              <Border Grid.Column="1" Classes="SegmentTrack" HorizontalAlignment="Left">
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                  <RadioButton Name="SerialOption" Classes="Segment" Content="USB cable"
-                               IsChecked="{Binding Connection.IsSerial, Mode=TwoWay}"/>
-                  <RadioButton Name="UdpOption" Classes="Segment" Content="Wi-Fi (UDP)"
-                               IsChecked="{Binding Connection.IsUdp, Mode=TwoWay}"/>
-                  <RadioButton Name="WebSocketOption" Classes="Segment" Content="WebSocket"
-                               IsChecked="{Binding Connection.IsWebSocket, Mode=TwoWay}"/>
-                </StackPanel>
-              </Border>
-            </Grid>
-
-            <StackPanel Name="SerialSection" Spacing="12" IsVisible="{Binding Connection.IsSerial}">
-              <Grid ColumnDefinitions="150,Auto,Auto">
-                <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
-                <ComboBox Name="PortCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
-                          PlaceholderText="Select port…"
-                          ItemsSource="{Binding Connection.ComPorts}"
-                          SelectedItem="{Binding Connection.ComPort, Mode=TwoWay}"/>
-                <Button Name="RefreshPortsButton" Grid.Column="2" Classes="Icon" Margin="4,0,0,0"
-                        Command="{Binding Connection.RefreshComPortsCommand}" ToolTip.Tip="Refresh the port list">
-                  <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
-                </Button>
-              </Grid>
-            </StackPanel>
-
-            <StackPanel Name="UdpSection" Spacing="12" IsVisible="{Binding Connection.IsUdp}">
-              <Grid ColumnDefinitions="150,Auto">
-                <TextBlock Text="Listen port" Classes="Secondary" VerticalAlignment="Center"/>
-                <NumericUpDown Name="UdpPortBox" Grid.Column="1" Width="160"
-                               Minimum="1024" Maximum="65535" FormatString="0"
-                               Value="{Binding Connection.UdpListenPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
-              </Grid>
-            </StackPanel>
-
-            <StackPanel Name="WebSocketSection" Spacing="12" IsVisible="{Binding Connection.IsWebSocket}">
-              <Grid ColumnDefinitions="150,Auto">
-                <TextBlock Text="Server port" Classes="Secondary" VerticalAlignment="Center"/>
-                <NumericUpDown Name="WebSocketPortBox" Grid.Column="1" Width="160"
-                               Minimum="1024" Maximum="65535" FormatString="0"
-                               Value="{Binding Connection.WebSocketPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
-              </Grid>
-            </StackPanel>
-
-            <TextBlock Classes="Caption" TextWrapping="Wrap"
-                       Text="For Wi-Fi, this must match the controller's Wi-Fi settings (Advanced, below)."/>
-          </StackPanel>
-        </Border>
-
         <TextBlock Name="EditorPlaceholderText" Classes="Secondary" TextWrapping="Wrap" Margin="4,0"
                    Text="{Binding EditorPlaceholder}" IsVisible="{Binding !ShowEditor}"/>
 
@@ -183,7 +184,7 @@
         <Border Name="SetupGuidePanel" Classes="Indent" BorderBrush="{DynamicResource AccentBrush}" IsVisible="{Binding IsSettingUp}">
           <TextBlock Name="SetupGuideText" TextWrapping="Wrap" Text="{Binding SetupGuideText}"/>
         </Border>
-        <!-- 2. Hardware -->
+        <!-- 3. Hardware -->
         <Border Name="HardwarePanel" Classes="Panel">
           <StackPanel Spacing="14">
             <Grid ColumnDefinitions="*,Auto">
