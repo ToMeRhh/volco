@@ -159,7 +159,7 @@ public sealed class ControllerViewModelTests : IDisposable
         var vm = Vm();
         Greet(Hello(ControllerConfigState.None, 0));
         Assert.Equal(Diy, vm.SetupPreset);
-        vm.SetupFromPresetCommand.Execute(null);
+        vm.StartFromPresetCommand.Execute(null);
         Assert.False(vm.IsSetupDialogOpen);
         Assert.True(vm.CanEdit);
         Assert.Equal(5, vm.Sliders.Count);
@@ -177,7 +177,7 @@ public sealed class ControllerViewModelTests : IDisposable
         Greet(Hello(ControllerConfigState.None, 0));
         Assert.Equal(BannerKind.NotSetUpHasMirror, vm.Banner.Kind);
         Assert.True(vm.SetupHasSavedSetup);
-        vm.SetupFromPresetCommand.Execute(null);
+        vm.StartFromPresetCommand.Execute(null);
         Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(vm.Draft));
         Assert.True(vm.IsDirty);
         Assert.True(vm.CanSave);

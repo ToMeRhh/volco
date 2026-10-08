@@ -76,7 +76,7 @@ public sealed partial class ControllerViewModel
     }
 
     [RelayCommand]
-    private void SetupFromPreset()
+    private void StartFromPreset()
     {
         if (SetupPreset is not { IsAvailable: true } preset) return;
         CloseSetup();
@@ -84,7 +84,7 @@ public sealed partial class ControllerViewModel
     }
 
     [RelayCommand]
-    private void SetupFromScratch()
+    private void StartFromScratch()
     {
         CloseSetup();
         SetUp();

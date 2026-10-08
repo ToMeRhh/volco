@@ -492,10 +492,10 @@
                 </ComboBox.ItemTemplate>
               </ComboBox>
               <Button Name="SetupFromPresetButton" Grid.Column="1" Margin="8,0,0,0" Content="Start"
-                      Classes.Primary="{Binding !SetupHasSavedSetup}" Command="{Binding SetupFromPresetCommand}"/>
+                      Classes.Primary="{Binding !SetupHasSavedSetup}" Command="{Binding StartFromPresetCommand}"/>
             </Grid>
             <Button Name="SetupFromScratchButton" Classes="Ghost" Content="Start from scratch (no inputs)"
-                    Command="{Binding SetupFromScratchCommand}"/>
+                    Command="{Binding StartFromScratchCommand}"/>
           </StackPanel>
           <Button Name="CloseSetupButton" HorizontalAlignment="Right" Content="Not now" Command="{Binding CloseSetupCommand}"/>
         </StackPanel>
