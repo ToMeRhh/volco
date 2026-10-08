@@ -17,7 +17,8 @@
     New: Icon.Muted (OSD), Icon.Sliders / Icon.Buttons / Icon.Settings (nav items).
     Icon.Device.* (one per ScreenIcon, see the comment above them).
     Drawn for Volco (not Fluent): Icon.Speaker (a loudspeaker, for output-device switches, so it
-    no longer duplicates Icon.Volume), Icon.Grip, Icon.More, Icon.Plus, Icon.Preset.
+    no longer duplicates Icon.Volume), Icon.Grip, Icon.More, Icon.Plus, Icon.Preset,
+    Icon.Status.* (StatusLine), Icon.Close (the snackbar).
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -37,6 +38,12 @@
     <StreamGeometry x:Key="Icon.Grip">M5.75 5a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M11.75 5a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M5.75 10a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M11.75 10a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M5.75 15a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M11.75 15a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.More">M3.5 10a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z M8.5 10a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z M13.5 10a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Plus">M9.25 4h1.5v5.25H16v1.5h-5.25V16h-1.5v-5.25H4v-1.5h5.25Z</StreamGeometry>
+    <!-- Status icons (drawn for Volco): a filled shape with the glyph cut out (even-odd). -->
+    <StreamGeometry x:Key="Icon.Status.Good">F0 M10 2a8 8 0 1 1 0 16a8 8 0 1 1 0-16Z M8.6 11.8 6.2 9.4 5.1 10.5 8.6 14 14.9 7.7 13.8 6.6Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Status.Danger">F0 M10 2a8 8 0 1 1 0 16a8 8 0 1 1 0-16Z M6.6 7.6 7.6 6.6 10 9 12.4 6.6 13.4 7.6 11 10 13.4 12.4 12.4 13.4 10 11 7.6 13.4 6.6 12.4 9 10Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Status.Warning">F0 M10 2.2 18.6 17.6H1.4Z M9.25 7.5h1.5v4.8h-1.5Z M9.25 13.6h1.5v1.5h-1.5Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Status.Info">F0 M10 2a8 8 0 1 1 0 16a8 8 0 1 1 0-16Z M9.25 8.75h1.5v5.5h-1.5Z M9.25 5.75h1.5v1.5h-1.5Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Close">M4.5 5.5 5.5 4.5 10 9 14.5 4.5 15.5 5.5 11 10 15.5 14.5 14.5 15.5 10 11 5.5 15.5 4.5 14.5 9 10Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Preset">M10 2 18 6.5 10 11 2 6.5Z M2 9.6l1.6-0.9L10 12.3l6.4-3.6 1.6 0.9L10 14.1Z M2 12.9l1.6-0.9L10 15.6l6.4-3.6 1.6 0.9L10 17.4Z</StreamGeometry>
 
     <!-- Device icons: the desktop counterparts of the controller's 1-bit ScreenIcon art, keyed

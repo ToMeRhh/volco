@@ -907,19 +907,25 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void TestMode_Indicators_ThenExitRestoresTheRealState()
+    public void TestMode_PressesToggleTheLeds_ThenExitRestoresTheRealState()
     {
         var runtime = StartRuntime();
         var c = Connection(0);
-        ConnectAndGreet(c);
+        ConnectAndGreet(c);   // LED, LED, LED pair
         var real0 = LastLed(c, 0)!;
         var real2 = LastLed(c, 2)!;
 
         var test = runtime.EnterTestMode();
-        runtime.SetTestIndicator(0, TestIndicator.On);
-        runtime.SetTestIndicator(2, TestIndicator.B);
+        Press(c, 0);
         Assert.Equal(ProtocolEncoder.EncodeLed(0, 1), LastLed(c, 0));
-        Assert.Equal(ProtocolEncoder.EncodeLed(2, 2), LastLed(c, 2));
+        Press(c, 0);
+        Assert.Equal(ProtocolEncoder.EncodeLed(0, 0), LastLed(c, 0));   // a single LED toggles
+        Press(c, 2);
+        Assert.Equal(ProtocolEncoder.EncodeLed(2, 1), LastLed(c, 2));   // a pair: A …
+        Press(c, 2);
+        Assert.Equal(ProtocolEncoder.EncodeLed(2, 2), LastLed(c, 2));   // … then B …
+        Press(c, 2);
+        Assert.Equal(ProtocolEncoder.EncodeLed(2, 1), LastLed(c, 2));   // … then A again
 
         test.Dispose();
         Assert.Equal(real0, LastLed(c, 0));
@@ -927,7 +933,28 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void TestMode_ScreenButtons_ShowTheTestScreen()
+    public void TestMode_RawInput_CarriesThePressCount_AndANewTestStartsAgain()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var raw = new ConcurrentQueue<RawInputEventArgs>();
+        runtime.RawInput += (_, e) => raw.Enqueue(e);
+
+        using (runtime.EnterTestMode())
+        {
+            Press(c, 1);
+            Press(c, 1);
+        }
+        Assert.Equal(new[] { (1, 1), (0, 1), (1, 2), (0, 2) }, raw.Select(e => (e.Value, e.Presses)).ToArray());
+
+        raw.Clear();
+        using (runtime.EnterTestMode()) Press(c, 1);
+        Assert.Equal(1, raw.First().Presses);
+    }
+
+    [Fact]
+    public void TestMode_ScreenButtons_ShowTheTestScreen_ThenCountPresses()
     {
         var runtime = StartRuntime();
         var c = Connection(0);
@@ -937,6 +964,11 @@ public sealed class VolcoRuntimeTests : IDisposable
             var expected = ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
                 ScreenContent.Text("Test", ScreenIcon.Generic, false, "Button 1"));   // the app numbers inputs from 0
             Assert.True(ContainsFrame(c.SentFrames, expected));
+
+            Press(c, 1);
+            Press(c, 1);
+            Assert.True(ContainsFrame(c.SentFrames, ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
+                ScreenContent.Text("Button 1", ScreenIcon.Generic, false, "2 presses"))));
         }
     }
 

@@ -18,6 +18,7 @@ public sealed class ChipInfo
         Span(32, 39),
         Bit(0) | Bit(2) | Bit(4) | Span(12, 15) | Span(25, 27));
 
+    public bool Exists(uint pin) => Has(_exists, pin);
     public bool Usable(uint pin) => Has(_exists, pin) && !Has(_reserved, pin);
     public bool OutputCapable(uint pin) => Usable(pin) && !Has(_inputOnly, pin);
     public bool AdcCapable(uint pin) => Usable(pin) && (Has(_adc1, pin) || Has(_adc2, pin));

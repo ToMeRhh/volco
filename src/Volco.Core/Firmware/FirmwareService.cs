@@ -18,8 +18,8 @@ public sealed record FlashOutcome(bool Succeeded, string Message);
 public sealed class FirmwareService
 {
     public static readonly TimeSpan HelloWait = TimeSpan.FromSeconds(10);
-    public const string SerialOnlyMessage = "Plug the controller in with USB and choose \"USB cable\" on the Connection page.";
-    public const string DisconnectedMessage = "Volco is disconnected. Connect first (the Connection page or the tray).";
+    public const string SerialOnlyMessage = "Plug the controller in with USB and choose \"USB cable\" under Connection.";
+    public const string DisconnectedMessage = "Volco is disconnected. Press Connect first.";
 
     private readonly VolcoRuntime _runtime;
     private readonly IFirmwareFlasher? _flasher;

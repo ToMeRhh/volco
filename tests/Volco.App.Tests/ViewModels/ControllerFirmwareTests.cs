@@ -255,7 +255,7 @@ public sealed class ControllerFirmwareTests : IDisposable
     }
 
     [Fact]
-    public void LeavingThePage_DropsTheResult_AndThePortFollowsTheConfig()
+    public void LeavingThePage_DropsTheResult_AndFirmwareUsesTheConfiguredPort()
     {
         var vm = Vm();
         _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
@@ -266,6 +266,8 @@ public sealed class ControllerFirmwareTests : IDisposable
 
         _rig.Config.Config.Connection.Serial.ComPort = "COM8";
         _rig.Config.Save();
-        Until(() => vm.FirmwarePort == "COM8");
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.Equal("probe COM8", _flasher.Calls.Last());
     }
 }

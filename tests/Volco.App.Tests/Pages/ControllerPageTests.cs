@@ -3,10 +3,14 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
 using Volco.Core.Communication;
+using Volco.Core.Config;
 using Volco.Core.Controller;
 using ControllerConfig = Volco.Core.Controller.Proto.ControllerConfig;
 using Xunit;
@@ -67,11 +71,94 @@ public class ControllerPageTests
         vm.Controller.Sliders[0].Pin = 39;
         Dispatcher.UIThread.RunJobs();
         Assert.True(footer.IsVisible);
+        Assert.Equal("Unsaved changes", page.FindControl<StatusLine>("ProgressText")!.Text);
+        Assert.True(footer.Bounds.Width < 700);   // a snackbar that fits its text, not a full-width bar
         Assert.True(page.FindControl<Button>("SaveButton")!.IsEffectivelyEnabled);
 
         page.FindControl<Button>("RevertButton")!.Command!.Execute(null);
         Dispatcher.UIThread.RunJobs();
         Assert.False(footer.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void APinConflict_MarksBothRows_WithTheErrorLineAndARedBox()
+    {
+        var (page, rig, vm) = Show(DiyBlob);
+        using var _ = rig;
+        using var __ = vm;
+        Greet(rig, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+        vm.Controller.Sliders[0].Pin = 39;
+        vm.Controller.Sliders[1].Pin = 39;
+        Dispatcher.UIThread.RunJobs();
+
+        var rows = page.FindControl<ItemsControl>("SliderRows")!;
+        var errors = rows.GetVisualDescendants().OfType<StatusLine>().Where(l => l.Name == "RowError" && l.IsVisible).ToList();
+        Assert.Equal(2, errors.Count);
+        Assert.All(errors, e => Assert.Equal(LinkTone.Danger, e.Tone));
+        var boxes = rows.GetVisualDescendants().OfType<NumericUpDown>().Where(n => n.Name == "PinBox").ToList();
+        Assert.Equal(new[] { true, true, false, false, false }, boxes.Select(b => b.Classes.Contains("Invalid")).ToArray());
+    }
+
+    [AvaloniaFact]
+    public void TheTest_RunsInADialog_EscapeOrAClickOutsideEndsIt()
+    {
+        var (page, rig, vm) = Show(DiyBlob);
+        using var _ = rig;
+        using var __ = vm;
+        Greet(rig, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+        var overlay = page.FindControl<Border>("DialogOverlay")!;
+        var dialog = page.FindControl<StackPanel>("TestDialog")!;
+
+        page.FindControl<Button>("StartTestButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(overlay.IsVisible);
+        Assert.True(dialog.IsVisible);
+        Assert.Null(page.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.Name is "TestLedCombo" or "TestPairCombo"));
+
+        page.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(rig.Runtime.InTestMode);
+        Assert.False(overlay.IsVisible);
+
+        page.FindControl<Button>("StartTestButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(rig.Runtime.InTestMode);
+        var window = (Window)TopLevel.GetTopLevel(page)!;
+        window.MouseDown(new Avalonia.Point(5, 5), MouseButton.Left);   // on the scrim, outside the card
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(rig.Runtime.InTestMode);
+
+        page.FindControl<Button>("StartTestButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        page.FindControl<Button>("StopTestButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(rig.Runtime.InTestMode);
+        Assert.False(dialog.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void TheConnectionSection_IsOnThePage()
+    {
+        var (page, rig, vm) = Show(DiyBlob);
+        using var _ = rig;
+        using var __ = vm;
+        Assert.NotNull(page.FindControl<ComboBox>("PortCombo"));
+        Assert.Null(page.FindControl<ComboBox>("FirmwarePortCombo"));   // one port picker for both
+        page.FindControl<RadioButton>("UdpOption")!.IsChecked = true;
+        Assert.Equal(ConnectionType.Udp, rig.Config.Config.Connection.Type);
+        Assert.False(page.FindControl<WrapPanel>("FirmwareButtons")!.IsVisible);   // firmware is USB only
+    }
+
+    [AvaloniaFact]
+    public void TheFirmwareLine_HasAnIcon()
+    {
+        var (page, rig, vm) = Show(DiyBlob);
+        using var _ = rig;
+        using var __ = vm;
+        Greet(rig, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+        var line = page.FindControl<StatusLine>("FirmwareText")!;
+        Assert.Equal("Development firmware", line.Text);
+        Assert.Equal(LinkTone.Neutral, line.Tone);
     }
 
     [AvaloniaFact]
@@ -82,7 +169,7 @@ public class ControllerPageTests
         using var __ = vm;
         Greet(rig, ControllerConfigState.None, 0);
         Assert.True(page.FindControl<Border>("BannerPanel")!.IsVisible);
-        Assert.Equal("This controller isn't set up yet.", page.FindControl<TextBlock>("BannerText")!.Text);
+        Assert.Equal("This controller isn't set up yet.", page.FindControl<StatusLine>("BannerText")!.Text);
         Assert.False(page.FindControl<Button>("SetUpButton")!.IsVisible);   // in the setup dialog instead
         Assert.False(page.FindControl<Button>("ApplyMineButton")!.IsVisible);
         Assert.False(page.FindControl<Button>("FixItButton")!.IsVisible);
@@ -114,7 +201,7 @@ public class ControllerPageTests
         Assert.True(page.FindControl<Border>("SetupGuidePanel")!.IsVisible);
         Assert.True(page.FindControl<Border>("Footer")!.IsVisible);
         Assert.True(page.FindControl<Button>("SaveButton")!.IsEffectivelyEnabled);
-        Assert.Equal("This setup isn't on the controller yet.", page.FindControl<TextBlock>("ProgressText")!.Text);
+        Assert.Equal("This setup isn't on the controller yet.", page.FindControl<StatusLine>("ProgressText")!.Text);
     }
 
     [AvaloniaFact]

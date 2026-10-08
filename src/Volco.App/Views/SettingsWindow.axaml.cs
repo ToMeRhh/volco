@@ -62,7 +62,6 @@ public partial class SettingsWindow : Window
             Nav("Sliders", "sliders", "Icon.Sliders", () => new SlidersPage(vm.Sliders)),
             Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage(vm.Buttons)),
             Nav("Devices", "devices", "Icon.Speaker", () => new DevicesPage(vm.Devices)),
-            Nav("Connection", "connection", "Icon.Connection", () => new ConnectionPage(vm.Connection)),
             _controllerNav = Nav("Controller", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
             Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
         };
@@ -85,7 +84,7 @@ public partial class SettingsWindow : Window
         return new NavItem(label, tag, icon, create);
     }
 
-    /// <summary>Switches to the page with this tag ("sliders", "buttons", "devices", "connection", "controller", "general").</summary>
+    /// <summary>Switches to the page with this tag ("sliders", "buttons", "devices", "controller", "general").</summary>
     public void ShowPage(string tag)
     {
         var items = _navList.ItemsSource?.Cast<NavItem>().ToList() ?? new List<NavItem>();

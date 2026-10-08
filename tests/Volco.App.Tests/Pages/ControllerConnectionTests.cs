@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
+using Avalonia.VisualTree;
+using Volco.App.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -12,14 +13,15 @@ using Xunit;
 
 namespace Volco.App.Tests.Pages;
 
-public class ConnectionPageTests
+/// <summary>The Controller page's link status and Connection section (the old Connection page).</summary>
+public class ControllerConnectionTests
 {
-    private static (ConnectionPage Page, Window Window, TestRig Rig, SettingsViewModel Vm) Show()
+    private static (ControllerPage Page, Window Window, TestRig Rig, SettingsViewModel Vm) Show()
     {
         var rig = new TestRig();
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ConnectionPage(vm.Connection);
-        var window = new Window { Content = page };
+        var page = new ControllerPage(vm.Controller);
+        var window = new Window { Content = page, Width = 900, Height = 1200 };
         window.Show();
         return (page, window, rig, vm);
     }
@@ -31,13 +33,20 @@ public class ConnectionPageTests
         return Assert.IsAssignableFrom<ISolidColorBrush>(value).Color;
     }
 
+    /// <summary>The colour of the status headline's icon.</summary>
+    private static Color IconColor(ControllerPage page)
+    {
+        var icon = page.FindControl<StatusLine>("StatusLabel")!.GetVisualDescendants().OfType<PathIcon>().Single();
+        return Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color;
+    }
+
     [AvaloniaFact]
     public void HardwareSummary_AndVersionMismatch()
     {
         using var rig = new TestRig();
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ConnectionPage(vm.Connection);
-        new Window { Content = page }.Show();
+        var page = new ControllerPage(vm.Controller);
+        new Window { Content = page, Width = 900, Height = 1200 }.Show();
 
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5,
@@ -55,7 +64,7 @@ public class ConnectionPageTests
         Assert.Equal(LinkTone.Warning, vm.Connection.StatusTone);
         Assert.False(vm.Connection.HasHardwareSummary);
         Assert.Equal(ThemeColor("WarningBrush"),
-            Assert.IsAssignableFrom<ISolidColorBrush>(page.FindControl<Ellipse>("StatusDot")!.Fill).Color);
+            IconColor(page));
     }
 
     [AvaloniaFact]
@@ -93,17 +102,16 @@ public class ConnectionPageTests
         Assert.StartsWith("Another app is using COM3", vm.Connection.StatusExplanation);
         Assert.Equal(LinkTone.Danger, vm.Connection.StatusTone);
         Assert.Equal(ThemeColor("DangerBrush"),
-            Assert.IsAssignableFrom<ISolidColorBrush>(page.FindControl<Ellipse>("StatusDot")!.Fill).Color);
+            IconColor(page));
     }
 
     [AvaloniaFact]
-    public void ConnectionPage_StatusComesFirst_AndFollowsTheRuntime()
+    public void Connection_StatusComesFirst_AndFollowsTheRuntime()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
         using var __ = vm;
-        var dot = page.FindControl<Ellipse>("StatusDot")!;
-        var label = page.FindControl<TextBlock>("StatusLabel")!;
+        var label = page.FindControl<StatusLine>("StatusLabel")!;
         Assert.Equal("Looking for your controller", label.Text);
 
         rig.Connection!.SetStatus(TransportStatus.Open);
@@ -114,12 +122,12 @@ public class ConnectionPageTests
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Led }));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Connected", label.Text);
-        Assert.Equal(ThemeColor("SuccessBrush"), Assert.IsAssignableFrom<ISolidColorBrush>(dot.Fill).Color);
+        Assert.Equal(ThemeColor("SuccessBrush"), IconColor(page));
         Assert.StartsWith(rig.Config.Config.Connection.Serial.ComPort, page.FindControl<TextBlock>("TransportDetails")!.Text);
     }
 
     [AvaloniaFact]
-    public void ConnectionPage_EachTypeShowsItsOwnSettings_Visibly()
+    public void Connection_EachTypeShowsItsOwnSettings_Visibly()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
@@ -148,7 +156,7 @@ public class ConnectionPageTests
     }
 
     [AvaloniaFact]
-    public void ConnectionPage_Ports_WriteThrough()
+    public void Connection_Ports_WriteThrough()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
@@ -163,7 +171,7 @@ public class ConnectionPageTests
     }
 
     [AvaloniaFact]
-    public void ConnectionPage_Reconnect_StartsAFreshTransport()
+    public void Connection_Reconnect_StartsAFreshTransport()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
@@ -176,7 +184,7 @@ public class ConnectionPageTests
     }
 
     [AvaloniaFact]
-    public void ConnectionPage_Disconnect_OffersConnect()
+    public void Connection_Disconnect_OffersConnect()
     {
         var (page, _, rig, vm) = Show();
         using var _ = rig;
@@ -193,7 +201,7 @@ public class ConnectionPageTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(1, rig.Connection.DisposeCount);
-        Assert.Equal("Disconnected", page.FindControl<TextBlock>("StatusLabel")!.Text);
+        Assert.Equal("Disconnected", page.FindControl<StatusLine>("StatusLabel")!.Text);
         Assert.Equal("Disconnected", vm.Connection.FooterText);
         Assert.StartsWith("You disconnected Volco.", vm.Connection.StatusExplanation);
         Assert.False(reconnect.IsVisible);
@@ -205,7 +213,7 @@ public class ConnectionPageTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.NotSame(old, rig.Connection);
-        Assert.Equal("Looking for your controller", page.FindControl<TextBlock>("StatusLabel")!.Text);
+        Assert.Equal("Looking for your controller", page.FindControl<StatusLine>("StatusLabel")!.Text);
         Assert.True(disconnect.IsEffectivelyVisible);
         Assert.False(connect.IsVisible);
     }

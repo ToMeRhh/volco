@@ -137,5 +137,5 @@ public static class ControllerConfigValidator
         return ValidationResult.Ok;
     }
 
-    private static bool BadIp(uint ip) => ip == 0 || ip == 0xFFFFFFFF || ip >> 24 == 127 || ip >> 28 == 0xE;
+    internal static bool BadIp(uint ip) => ip == 0 || ip == 0xFFFFFFFF || ip >> 24 == 127 || ip >> 28 == 0xE;
 }

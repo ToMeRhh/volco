@@ -34,6 +34,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>The window's one "… · Undo" message.</summary>
     public UndoToastViewModel Toast { get; } = new();
 
+    /// <summary>The link status and connection settings: the sidebar footer and the Controller
+    /// page's Connection section share it.</summary>
     public ConnectionViewModel Connection =>
         _connectionViewModel ??= new ConnectionViewModel(_config, _runtime, _ui);
 
@@ -60,7 +62,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _generalViewModel ??= new GeneralViewModel(_config);
 
     public ControllerViewModel Controller =>
-        _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware);
+        _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware, Connection);
 
     /// <summary>The Controller page's view model if the page was ever opened; null otherwise.</summary>
     public ControllerViewModel? ControllerIfCreated => _controllerViewModel;

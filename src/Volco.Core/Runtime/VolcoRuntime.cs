@@ -128,7 +128,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
     private readonly object _testGate = new();
     private int _testGeneration;                 // guarded by _testGate; 0 = not testing
-    private TestIndicator[] _testIndicators = Array.Empty<TestIndicator>();   // guarded by _testGate
+    private int[] _testPresses = Array.Empty<int>();   // guarded by _testGate; presses per button this test
 
     /// <summary>A hardware test is running: Slider and Button messages raise <see cref="RawInput"/>
     /// and reach neither audio nor actions.</summary>
@@ -155,7 +155,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             if (_testGeneration == 0)
             {
                 _testGeneration = ++_nextTestGeneration;
-                _testIndicators = Array.Empty<TestIndicator>();
+                _testPresses = Array.Empty<int>();
                 started = true;
             }
             generation = _testGeneration;
@@ -171,17 +171,24 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         return new TestHandle(this, generation);
     }
 
-    /// <summary>What LED button <paramref name="button"/> shows during the test.</summary>
-    public void SetTestIndicator(int button, TestIndicator state)
+    /// <summary>A button was pressed during the test: its indicator moves on (spec §8.5). Returns
+    /// the button's presses so far in this test, 0 when no test is running.</summary>
+    private int CountTestPress(int button)
     {
-        if (button < 0) return;
+        int presses;
         lock (_testGate)
         {
-            if (_testGeneration == 0) return;
-            if (_testIndicators.Length <= button) Array.Resize(ref _testIndicators, button + 1);
-            _testIndicators[button] = state;
+            if (_testGeneration == 0 || button < 0) return 0;
+            if (_testPresses.Length <= button) Array.Resize(ref _testPresses, button + 1);
+            presses = ++_testPresses[button];
         }
         _link.Push();
+        return presses;
+    }
+
+    private int TestPresses(int button)
+    {
+        lock (_testGate) return button >= 0 && button < _testPresses.Length ? _testPresses[button] : 0;
     }
 
     /// <summary>Ends the test (only <paramref name="generation"/>'s session; -1 for any).</summary>
@@ -191,7 +198,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         {
             if (_testGeneration == 0 || (generation != -1 && generation != _testGeneration)) return;
             _testGeneration = 0;
-            _testIndicators = Array.Empty<TestIndicator>();
+            _testPresses = Array.Empty<int>();
         }
         AppLog.Info("Test mode off");
         _buttonPressDetector?.Reset();       // a button held across the exit fires nothing
@@ -210,26 +217,25 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
     }
 
-    /// <summary>The test state of every button: LED buttons their <see cref="TestIndicator"/>,
-    /// screens "Test" / "Button N" with the generic icon.</summary>
+    /// <summary>The test state of every button, from its presses so far (<see cref="TestMode"/>).</summary>
     private IReadOnlyList<ButtonDisplay?> TestDisplays()
     {
         var kinds = Config.Config.Controller?.Buttons ?? new List<IndicatorKind>();
-        TestIndicator[] indicators;
-        lock (_testGate) indicators = _testIndicators;
+        int[] presses;
+        lock (_testGate) presses = (int[])_testPresses.Clone();
         var result = new ButtonDisplay?[kinds.Count];
         for (int i = 0; i < kinds.Count; i++)
         {
-            var state = i < indicators.Length ? indicators[i] : TestIndicator.Off;
+            var n = i < presses.Length ? presses[i] : 0;
             result[i] = kinds[i] switch
             {
-                IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(state switch
+                IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(TestMode.Indicator(kinds[i], n) switch
                 {
                     TestIndicator.On or TestIndicator.A => (byte)1,
                     TestIndicator.B => (byte)2,
                     _ => (byte)0,
                 }),
-                IndicatorKind.Screen => new ScreenDisplay(ScreenContent.Text("Test", ScreenIcon.Generic, false, $"Button {i}")),
+                IndicatorKind.Screen => new ScreenDisplay(TestMode.Screen(i, n)),
                 _ => null,
             };
         }
@@ -824,13 +830,18 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
                 // Same stale-sender filter as Hello (spec §8.2).
                 if (ReferenceEquals(sender, Volatile.Read(ref _connection))) ControllerConfig.OnMessage(sender!, msg);
                 break;
-            case SliderMessage or ButtonMessage when InTestMode:
+            case SliderMessage testSlider when InTestMode:
                 // Spec §8.5: raw input only; nothing reaches the slider processor or the detector.
-                RawInput?.Invoke(this, msg is SliderMessage s
-                    ? new RawInputEventArgs(RawInputKind.Slider, s.SliderIndex, s.Value)
-                    : new RawInputEventArgs(RawInputKind.Button, ((ButtonMessage)msg).ButtonIndex,
-                                            ((ButtonMessage)msg).State == ButtonState.Pressed ? 1 : 0));
+                RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Slider, testSlider.SliderIndex, testSlider.Value));
                 break;
+            case ButtonMessage testButton when InTestMode:
+            {
+                // A press moves the button's test indicator on (an LED toggles, a screen counts).
+                var pressed = testButton.State == ButtonState.Pressed;
+                var presses = pressed ? CountTestPress(testButton.ButtonIndex) : TestPresses(testButton.ButtonIndex);
+                RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, testButton.ButtonIndex, pressed ? 1 : 0, presses));
+                break;
+            }
             case SliderMessage slider:
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
                 _sliderProcessor?.HandleSliderEvent(slider.SliderIndex, slider.Value);
