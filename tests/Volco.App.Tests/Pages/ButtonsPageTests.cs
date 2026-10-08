@@ -111,8 +111,10 @@ public class ButtonsPageTests
         var picker = InRow<ComboBox>(page, "PressRow", "ActionCombo");
 
         var items = Assert.IsAssignableFrom<IEnumerable<ActionChoice>>(picker.ItemsSource).ToList();
-        Assert.Equal(new[] { "Audio", "Presets", "Custom" }, items.Where(i => i.IsHeader).Select(i => i.Name));
-        Assert.False(items.Single(i => i.Name.StartsWith("Run a program")).IsSelectable);
+        Assert.Equal(new[] { "Audio", "Presets", "Media", "Programs and scripts" }, items.Where(i => i.IsHeader).Select(i => i.Name));
+        // The test rig has no media, program or script services: their actions cannot be chosen.
+        Assert.False(items.Single(i => i.Name == "Run a script").IsSelectable);
+        Assert.False(items.Single(i => i.Name == "Play / pause").IsSelectable);
 
         picker.SelectedItem = items.First(i => i.IsHeader);
         Dispatcher.UIThread.RunJobs();

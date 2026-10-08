@@ -1186,8 +1186,16 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         VolumeChanged?.Invoke(this, n);
     }
 
+    /// <summary>A media session, a watched program or a script run changed (any thread).</summary>
+    public event EventHandler? ActionStateChanged;
+
     /// <summary>A media session, a watched program or a script run changed: the controller follows.</summary>
-    private void OnActionStateChanged(object? sender, EventArgs e) => PushControllerState();
+    private void OnActionStateChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed) return;
+        PushControllerState();
+        ActionStateChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>Polls the programs that Open a program actions in the live preset name.</summary>
     private void WatchPrograms()

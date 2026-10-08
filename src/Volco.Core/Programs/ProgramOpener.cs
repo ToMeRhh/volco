@@ -43,6 +43,14 @@ public sealed class ProgramOpener
     /// <summary>A watched program started or exited. Any thread.</summary>
     public event EventHandler? Changed;
 
+    /// <summary>Whether <paramref name="command"/> names an exe or a shortcut, whose running
+    /// state can be known (without reading the shortcut).</summary>
+    public static bool IsTrackable(CommandConfig? command)
+    {
+        var path = command?.Path.Trim() ?? "";
+        return path.Length > 0 && !CommandPath.IsUrl(path) && CommandPath.Extension(path) is ".exe" or ".lnk";
+    }
+
     /// <summary>The executable <paramref name="command"/> runs as: an exe path itself, a
     /// shortcut's target when that is an exe, else null (URLs, documents).</summary>
     public string? TrackedPath(CommandConfig? command)

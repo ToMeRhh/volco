@@ -46,7 +46,9 @@ internal sealed class TestRig : IDisposable
     /// fake transport implies at once.</summary>
     public static readonly VolcoRuntimeOptions NoGrace = new() { ConnectGrace = TimeSpan.Zero };
 
-    public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null)
+    /// <param name="custom">Media, program and script services; null: none (those actions are
+    /// unavailable, as on a platform without them).</param>
+    public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null, CustomActionServices? custom = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -54,7 +56,7 @@ internal sealed class TestRig : IDisposable
         Config.Load();
         Engine = engine ?? new FakeAudioEngine();
         Runtime = new VolcoRuntime(Config, Engine, audioReady: true, connectionFactory: cfg =>
-            Connection = new FakeControllerConnection(cfg), options: options ?? NoGrace);
+            Connection = new FakeControllerConnection(cfg), options: options ?? NoGrace, custom: custom);
         Runtime.Start();
     }
 
