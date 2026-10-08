@@ -1,5 +1,6 @@
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Media;
 using Volco.Core.Runtime;
 
 namespace Volco.Core.Input.Actions;
@@ -9,15 +10,27 @@ public static class ActionFactory
     /// <summary>Builds the action for <paramref name="config"/>, or null for None. Preset actions
     /// need <paramref name="presets"/>; without one they are null too.</summary>
     public static IButtonAction? Create(ButtonActionConfig config, IAudioEngine audio, IPresetController? presets)
+        => Create(config, new ActionServices(audio, presets));
+
+    /// <summary>Builds the action for <paramref name="config"/>, or null for None and for an
+    /// action whose service <paramref name="services"/> lacks. <paramref name="origin"/> is the
+    /// press, for a script's environment.</summary>
+    public static IButtonAction? Create(ButtonActionConfig config, ActionServices services, ActionOrigin? origin = null)
         => config.Action switch
         {
-            ButtonActionType.MuteCurrentOutput  => new MuteCurrentOutputAction(audio),
-            ButtonActionType.MuteCurrentInput   => new MuteCurrentInputAction(audio),
-            ButtonActionType.MuteSpecificDevice => new MuteSpecificDeviceAction(audio, config.Device),
-            ButtonActionType.ToggleOutputDevice => new ToggleOutputDeviceAction(audio, config.Device, config.DeviceB),
-            ButtonActionType.SetOutputDevice    => new SetOutputDeviceAction(audio, config.Device),
-            ButtonActionType.NextPreset when presets != null => new NextPresetAction(presets),
-            ButtonActionType.GoToPreset when presets != null => new GoToPresetAction(presets, config.PresetId),
+            ButtonActionType.MuteCurrentOutput  => new MuteCurrentOutputAction(services.Audio),
+            ButtonActionType.MuteCurrentInput   => new MuteCurrentInputAction(services.Audio),
+            ButtonActionType.MuteSpecificDevice => new MuteSpecificDeviceAction(services.Audio, config.Device),
+            ButtonActionType.ToggleOutputDevice => new ToggleOutputDeviceAction(services.Audio, config.Device, config.DeviceB),
+            ButtonActionType.SetOutputDevice    => new SetOutputDeviceAction(services.Audio, config.Device),
+            ButtonActionType.NextPreset when services.Presets is { } p => new NextPresetAction(p),
+            ButtonActionType.GoToPreset when services.Presets is { } p => new GoToPresetAction(p, config.PresetId),
+            ButtonActionType.MediaPlayPause when services.Media is { } m => new MediaAction(m, config.MediaApp, MediaCommand.PlayPause),
+            ButtonActionType.MediaNext when services.Media is { } m      => new MediaAction(m, config.MediaApp, MediaCommand.Next),
+            ButtonActionType.MediaPrevious when services.Media is { } m  => new MediaAction(m, config.MediaApp, MediaCommand.Previous),
+            ButtonActionType.MediaStop when services.Media is { } m      => new MediaAction(m, config.MediaApp, MediaCommand.Stop),
+            ButtonActionType.OpenProgram when services.Programs is { } o => new OpenProgramAction(o, config.Command),
+            ButtonActionType.RunScript when services.Scripts is { } s    => new RunScriptAction(s, config, origin),
             _                                   => null
         };
 
