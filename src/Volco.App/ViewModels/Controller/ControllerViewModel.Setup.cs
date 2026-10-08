@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.Core.Communication;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
 
