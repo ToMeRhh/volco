@@ -427,11 +427,11 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.Sliders[0].Pin = 32;
-        vm.Sliders[1].Pin = 32;
+        vm.Sliders[0].Pin = 39;
+        vm.Sliders[1].Pin = 39;
 
-        Assert.Equal("Pin 32 is also used by Slider 1. Each pin can only do one thing.", vm.Sliders[0].ErrorText);
-        Assert.Equal("Pin 32 is also used by Slider 0. Each pin can only do one thing.", vm.Sliders[1].ErrorText);
+        Assert.Equal("Pin 39 is also used by Slider 1. Each pin can only do one thing.", vm.Sliders[0].ErrorText);
+        Assert.Equal("Pin 39 is also used by Slider 0. Each pin can only do one thing.", vm.Sliders[1].ErrorText);
         Assert.True(vm.Sliders[0].PinInvalid);
         Assert.True(vm.Sliders[1].PinInvalid);
         Assert.All(vm.Sliders.Skip(2), r => Assert.False(r.HasError));

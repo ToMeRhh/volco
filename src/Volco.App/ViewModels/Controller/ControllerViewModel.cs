@@ -49,6 +49,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _ui = ui;
         _ownsConnection = connection is null;
         Connection = connection ?? new ConnectionViewModel(config, runtime, ui);
+        Connection.PropertyChanged += OnConnectionEdited;
 
         _service.BannerChanged += OnServiceChanged;
         _service.OperationChanged += OnServiceChanged;
@@ -70,6 +71,14 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The page's connection section: the link status, Connect/Disconnect and how Volco
     /// talks to the controller.</summary>
     public ConnectionViewModel Connection { get; }
+
+    /// <summary>The Connection section changed the type or port: the firmware panel follows at
+    /// once, before the (debounced) save reaches the config's events.</summary>
+    private void OnConnectionEdited(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_disposed || e.PropertyName is not (nameof(ConnectionViewModel.ConnectionType) or nameof(ConnectionViewModel.ComPort))) return;
+        RefreshAll();
+    }
 
     /// <summary>The same headline as the sidebar and the tray (<see cref="LinkText"/>).</summary>
     public string StatusText => LinkText.Headline(_runtime.LinkStatus, _config.Config.Connection);
@@ -957,6 +966,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.InTestModeChanged -= OnInTestModeChanged;
         _runtime.RawInput -= OnRawInput;
+        Connection.PropertyChanged -= OnConnectionEdited;
         if (_ownsConnection) Connection.Dispose();
     }
 }

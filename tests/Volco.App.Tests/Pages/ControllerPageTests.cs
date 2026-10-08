@@ -87,8 +87,8 @@ public class ControllerPageTests
         using var _ = rig;
         using var __ = vm;
         Greet(rig, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
-        vm.Controller.Sliders[0].Pin = 32;
-        vm.Controller.Sliders[1].Pin = 32;
+        vm.Controller.Sliders[0].Pin = 39;
+        vm.Controller.Sliders[1].Pin = 39;
         Dispatcher.UIThread.RunJobs();
 
         var rows = page.FindControl<ItemsControl>("SliderRows")!;
@@ -169,7 +169,7 @@ public class ControllerPageTests
         using var __ = vm;
         Greet(rig, ControllerConfigState.None, 0);
         Assert.True(page.FindControl<Border>("BannerPanel")!.IsVisible);
-        Assert.Equal("This controller isn't set up yet.", page.FindControl<TextBlock>("BannerText")!.Text);
+        Assert.Equal("This controller isn't set up yet.", page.FindControl<StatusLine>("BannerText")!.Text);
         Assert.False(page.FindControl<Button>("SetUpButton")!.IsVisible);   // in the setup dialog instead
         Assert.False(page.FindControl<Button>("ApplyMineButton")!.IsVisible);
         Assert.False(page.FindControl<Button>("FixItButton")!.IsVisible);
