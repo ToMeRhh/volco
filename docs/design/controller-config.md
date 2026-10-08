@@ -642,14 +642,15 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
 | 1, CRC = mirror CRC | present | none (in sync) | — |
 | 1, CRC ≠ mirror CRC | present | "This controller has a different setup." If "Use the controller's" fails (read error or undecodable bytes): "Couldn't read the controller's setup." | **Use the controller's** (read, adopt as mirror) · **Apply mine** (save the mirror bytes) · after a failed read also **Retry** |
 | 1 | absent | none; an automatic read adopts it as the mirror. If the read fails, or returns bytes the app can't `Decode`: "Couldn't read the controller's setup." | **Retry** · **Set up from scratch** |
-| 0 | present | "This controller isn't set up." | **Apply my saved setup** · **Set up from scratch** |
-| 0 | absent | "Set up your controller." | **Set up** (opens Hardware, blank draft) |
+| 0 | present | "This controller isn't set up yet." and the **setup dialog** (below) | **Apply my saved setup** · **Start from a preset** · **Start from scratch**, in the dialog |
+| 0 | absent | "This controller isn't set up yet." and the **setup dialog** (below) | **Start from a preset** · **Start from scratch**, in the dialog |
 | 2, CRC ≠ mirror CRC (or no mirror) | any | "The controller's saved setup can't be used." | **Apply my saved setup** (if mirror) · **Set up from scratch** |
 | 2, CRC = mirror CRC | present | "Your saved setup doesn't work with this firmware." | **Fix it** (loads the mirror into the draft and shows the local validator's errors). There is no Apply, because it would just fail again. |
 | version-only Hello (`version` ≠ 1) | any | "This controller's firmware is incompatible. Update it to use it." | **Update** (see below) |
 
 **Rules:**
 
+- **The setup dialog (configState 0).** Changed on 2026-10-08: the "isn't set up" actions were easy to miss inline, so they moved into a modal dialog over the page. It opens by itself once per not-set-up Hello (version, configState, configCrc) while nothing else runs, and again after an unplug or a successful Install (its text then starts "The firmware is installed."). **Not now** closes it, and the banner's **Set up…** reopens it. It offers **Apply my saved setup** (with a mirror), a preset picker with **Start**, and **Start from scratch**. Starting a draft closes it and grants the "new draft" permission (§8.4); the editor then shows "Setting up this controller: set each pin to match your wiring, then Save to controller. After that, try it in the Test section." until the controller holds the setup.
 - **The version check comes first.** A version-only Hello has the default `ConfigState` (None), so the banner function tests `version` before any configState row.
 - **A mirror that fails `Decode`** (for example, written by a newer app) is treated as **absent** for the table, and the page offers **Set up from scratch**.
 - **During a write,** the banner shows the operation's progress instead, and Hellos go to the operation (§5.4).
@@ -685,6 +686,7 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
 - **How long a "new draft" permission lasts:** until the mirror changes, or a Hello arrives with a different (configState, configCrc).
 - **Dirty:** `baseline = Encode(Decode(mirror))` is computed whenever the mirror changes, and **dirty** = `Encode(draft) ≠ baseline`. Both encodings use the same codec in the same process, so the comparison is deterministic, even when the mirror holds fields this app version doesn't know. "Apply mine" sends the original mirror bytes, never re-encoded.
   - With no mirror, or a mirror that fails `Decode`, the baseline is empty bytes. Any draft, even Blank (which encodes `preset` = `"blank"`), is then dirty.
+  - **A draft being set up always counts as dirty** while the controller doesn't hold it (a "new draft" permission and not in sync). The baseline is Volco's copy, not the controller's: after the controller's NVS is erased, a draft equal to the mirror must still offer Save. The footer says "This setup isn't on the controller yet." (Fixed 2026-10-08.)
   - **A "Fix it" draft always counts as dirty**, so Save is available. If it passes the local validator, the app and firmware disagree, so the page also shows the firmware-update notice when its conditions hold.
 - **When the mirror changes** (adopt, confirmed save):
   - a **clean** draft is rebased onto the new mirror
@@ -692,7 +694,7 @@ The banner is a **pure function** `Banner = f(lastHello, mirror, operation)`. It
 - **Save:**
   - validate locally; on failure, highlight and don't send
   - otherwise encode and call `SaveAsync`
-  - on confirmation the page shows "Saved. The controller restarted with the new setup."
+  - on confirmation the page shows "Saved. The controller restarted with the new setup." (or, when it set up a controller that had none, "Saved. The controller is set up: try it in the Test section.")
   - Save is disabled while test mode is on and while an operation runs.
 - **Revert** resets the draft to the mirror.
 - **UDP warning:** saving changes to `udp` while the app is connected over UDP asks first: "Changing the Wi-Fi settings may disconnect the controller. If it doesn't come back, connect it with USB." When the user enables UDP, **PC port** is pre-filled from Volco's own UDP listen port.
@@ -816,7 +818,7 @@ A sixth settings page, **Controller**, after Connection. The sections, top to bo
 
 **1. Status and firmware**
 - Connection state, chip, firmware version, bundled version.
-- Buttons: Install firmware…, Update firmware (under the §8.3 conditions), Check firmware.
+- Buttons: Install firmware… (asks first in a modal dialog: Install erases the stored setup; Cancel changes nothing on the page), Update firmware (under the §8.3 conditions), Check firmware.
 - The §8.3 banner appears here.
 
 **2. Hardware**
@@ -1147,7 +1149,7 @@ All answered, and the spec above includes the approved amendments. The list belo
 
 ### 12.7 Manual hardware checklist
 
-1. Install on a blank ESP32 → Hello, "Set up your controller".
+1. Install on a blank ESP32 → Hello, the setup dialog ("The firmware is installed. …").
 2. Apply the DIY reference → save → reboot confirmed → test mode shows all 5 sliders and 3 buttons; LEDs toggle; volume doesn't change during the test.
 3. Normal mode: volume and mute work; the actions are unchanged.
 4. Change a pin → save → the old pin no longer reacts and the new one does.
@@ -1159,7 +1161,7 @@ All answered, and the spec above includes the approved amendments. The list belo
 8. Unplug during a save → the old config, or the new one, is reported correctly after reconnecting.
 9. Unplug during a flash → Install again succeeds.
 10. Probe: a blank board → "doesn't have this version of Volco's firmware"; another Volco build → the same; a board with no ESP32 on the port → "No ESP32 found".
-11. Install over a configured board (NVS wiped) → "This controller isn't set up" (mirror kept) → Apply my saved setup.
+11. Install over a configured board (NVS wiped) → the setup dialog (mirror kept) → Apply my saved setup.
 12. Screens: a layout with screens from the form → screens render; behaviour settings take effect after save.
 13. Reboot with the COM port open (save over serial) → no "Connection lost"; confirmed.
 

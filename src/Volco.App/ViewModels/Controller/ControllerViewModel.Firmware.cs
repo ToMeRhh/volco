@@ -119,15 +119,16 @@ public sealed partial class ControllerViewModel
     [RelayCommand]
     private void RefreshFirmwarePorts() => RefreshPorts();
 
-    /// <summary>Install wipes the controller's setup, so it asks first (Volco keeps its copy).</summary>
+    /// <summary>Install wipes the controller's setup, so it asks first in a dialog (Volco keeps its
+    /// copy). Nothing on the page changes until it is confirmed: Cancel leaves the page as it was.</summary>
     [ObservableProperty] private bool _confirmInstallPending;
+
+    partial void OnConfirmInstallPendingChanged(bool value) => OnPropertyChanged(nameof(HasDialog));
 
     [RelayCommand]
     private void InstallFirmware()
     {
         if (!CanUseFirmware) return;
-        FirmwareMessage = null;
-        OfferInstall = false;
         ConfirmInstallPending = true;
     }
 
@@ -225,8 +226,9 @@ public sealed partial class ControllerViewModel
         _ui.Post(() =>
         {
             if (_disposed) return;
+            // After an Install the controller has no setup yet: the setup dialog comes next.
+            if (outcome.Succeeded && mode == FlashMode.Install) OnInstalled();
             EndFirmware(outcome.Message);
-            // After an Install the controller has no setup yet: the banner's "Set up" comes first.
             OfferTest = outcome.Succeeded && mode == FlashMode.Update;
         });
     }

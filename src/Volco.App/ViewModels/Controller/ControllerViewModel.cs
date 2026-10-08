@@ -108,8 +108,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         BannerKind.Reading => "Reading the controller's setup…",
         BannerKind.DifferentSetup => "This controller has a different setup.",
         BannerKind.ReadFailed => "Couldn't read the controller's setup.",
-        BannerKind.NotSetUpHasMirror => "This controller isn't set up.",
-        BannerKind.NotSetUp => "Set up your controller.",
+        BannerKind.NotSetUpHasMirror or BannerKind.NotSetUp => "This controller isn't set up yet.",
         BannerKind.Unusable => "The controller's saved setup can't be used.",
         BannerKind.BrokenWithFirmware => "Your saved setup doesn't work with this firmware.",
         BannerKind.NoAnswer => $"The device on {_config.Config.Connection.Serial.ComPort} isn't answering as a Volco controller. " +
@@ -122,9 +121,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public bool ShowUseControllers => Has(BannerActions.UseControllers);
     public bool ShowApplyMine => Has(BannerActions.ApplyMine);
     public bool ShowRetry => Has(BannerActions.Retry);
-    public bool ShowSetUpFromScratch => Has(BannerActions.SetUpFromScratch);
-    public bool ShowApplySaved => Has(BannerActions.ApplySaved);
-    public bool ShowSetUp => Has(BannerActions.SetUp);
+    // A controller that isn't set up gets the setup dialog instead (ShowOpenSetup reopens it).
+    public bool ShowSetUpFromScratch => Has(BannerActions.SetUpFromScratch) && !IsNotSetUp;
+    public bool ShowApplySaved => Has(BannerActions.ApplySaved) && !IsNotSetUp;
+    public bool ShowSetUp => Has(BannerActions.SetUp) && !IsNotSetUp;
     public bool ShowFixIt => Has(BannerActions.FixIt);
     public bool ShowCheckFirmware => Has(BannerActions.CheckFirmware) && CanUseFirmware;
 
@@ -184,7 +184,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     public bool CanEdit => _runtime.ControllerState == ControllerState.Ready && (InSync || _hasPermission);
 
-    public bool IsDirty => _fixIt || !_draft.ToByteArray().AsSpan().SequenceEqual(_baseline);
+    /// <summary>The baseline is Volco's saved copy, not what the controller holds: while setting up
+    /// a controller that doesn't hold the draft, it is always unsaved.</summary>
+    public bool IsDirty => _fixIt || IsSettingUp || !_draft.ToByteArray().AsSpan().SequenceEqual(_baseline);
 
     public bool CanSave => CanEdit && IsDirty && !Busy;
 
@@ -308,6 +310,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         else ClearErrors();
         ShowHints();
         OnPropertyChanged(nameof(IsDirty));
+        OnPropertyChanged(nameof(IsSettingUp));
+        OnPropertyChanged(nameof(FooterText));
         OnPropertyChanged(nameof(CanSave));
         OnPropertyChanged(nameof(ShowFooter));
         OnPropertyChanged(nameof(BasedOnText));
@@ -435,7 +439,14 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private string? _progressText;
     [ObservableProperty] private bool _isSaving;
-    partial void OnProgressTextChanged(string? value) => OnPropertyChanged(nameof(ShowFooter));
+    partial void OnProgressTextChanged(string? value)
+    {
+        OnPropertyChanged(nameof(ShowFooter));
+        OnPropertyChanged(nameof(FooterText));
+    }
+
+    /// <summary>The last save's message, else what is pending while setting up.</summary>
+    public string? FooterText => ProgressText ?? (IsSettingUp ? "This setup isn't on the controller yet." : null);
     partial void OnIsSavingChanged(bool value) => OnPropertyChanged(nameof(ShowFooter));
 
     [RelayCommand(CanExecute = nameof(CanSave))]
@@ -478,9 +489,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private static byte[] UdpBytes(ControllerConfig c) => c.Udp?.ToByteArray() ?? Array.Empty<byte>();
 
+    private bool _savingSetup;
+
     private void SaveBytes(byte[] blob, bool udpChanged)
     {
         _udpChangedInSave = udpChanged;
+        _savingSetup = IsSettingUp || IsNotSetUp;
         IsSaving = true;
         ProgressText = "Sending…";
         var save = _service.SaveAsync(blob);
@@ -499,6 +513,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         IsSaving = false;
         ProgressText = r.Status switch
         {
+            SaveStatus.Confirmed when _savingSetup => "Saved. The controller is set up: try it in the Test section.",
             SaveStatus.Confirmed => "Saved. The controller restarted with the new setup.",
             SaveStatus.Rejected when r.Code == ConfigResultCode.Invalid
                 => $"The controller rejected the setup: {ControllerDraft.Describe(r.Item, r.Field)}.",
@@ -548,6 +563,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             () => { if (ReferenceEquals(askedAbout, _draft)) onConfirm(); },
             () => Confirmation = null);
     }
+
+    /// <summary>A modal dialog covers the page: the setup dialog or the Install confirmation.</summary>
+    public bool HasDialog => IsSetupDialogOpen || ConfirmInstallPending;
 
     // ── Behaviour (ScreenBehaviour) ──────────────────────────────────────────────────────────
 
@@ -779,7 +797,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasBanner));
         foreach (var n in new[] { nameof(ShowUseControllers), nameof(ShowApplyMine), nameof(ShowRetry), nameof(ShowSetUpFromScratch),
                                   nameof(ShowApplySaved), nameof(ShowSetUp), nameof(ShowFixIt), nameof(FirmwareUpdateAvailable),
-                                  nameof(ShowCheckFirmware), nameof(IsWaiting), nameof(ShowEditor), nameof(EditorPlaceholder) })
+                                  nameof(ShowCheckFirmware), nameof(IsWaiting), nameof(ShowEditor), nameof(EditorPlaceholder),
+                                  nameof(IsNotSetUp), nameof(ShowOpenSetup), nameof(SetupHasSavedSetup), nameof(SetupIntro) })
             OnPropertyChanged(n);
     }
 
@@ -795,6 +814,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         Recompute();
         RefreshFirmware();
         StartTestCommand.NotifyCanExecuteChanged();
+        UpdateSetupDialog();
     }
 
     public void Dispose()

@@ -109,7 +109,7 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm();
         Greet(Hello(ControllerConfigState.None, 0));
-        Assert.Equal("Set up your controller.", vm.BannerText);
+        Assert.Equal("This controller isn't set up yet.", vm.BannerText);
         Assert.False(vm.CanEdit);
         vm.SetUpCommand.Execute(null);
         Assert.True(vm.CanEdit);
@@ -121,6 +121,85 @@ public sealed class ControllerViewModelTests : IDisposable
         Conn.RaiseMessage(Hello(ControllerConfigState.Damaged, 0x77));
         _ui.RunAll();
         Assert.False(vm.CanEdit);
+    }
+
+    // ── Onboarding ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ANotSetUpController_OpensTheSetupDialogOnce_TheBannerReopensIt()
+    {
+        var vm = Vm();
+        Greet(Hello(ControllerConfigState.None, 0));
+        Assert.True(vm.IsSetupDialogOpen);
+        Assert.True(vm.HasDialog);
+        Assert.False(vm.SetupHasSavedSetup);
+        Assert.False(vm.ShowSetUp);                   // the banner's own buttons moved into the dialog
+        Assert.False(vm.ShowOpenSetup);
+
+        vm.CloseSetupCommand.Execute(null);
+        Assert.False(vm.HasDialog);
+        Assert.True(vm.ShowOpenSetup);
+        Conn.RaiseMessage(Hello(ControllerConfigState.None, 0));   // the same Hello: not asked again
+        _ui.RunAll();
+        Assert.False(vm.IsSetupDialogOpen);
+
+        vm.OpenSetupCommand.Execute(null);
+        Assert.True(vm.IsSetupDialogOpen);
+
+        Conn.SetStatus(TransportStatus.Closed);       // unplugged: the dialog goes, a replug asks again
+        _ui.RunAll();
+        Assert.False(vm.IsSetupDialogOpen);
+        Greet(Hello(ControllerConfigState.None, 0));
+        Assert.True(vm.IsSetupDialogOpen);
+    }
+
+    [Fact]
+    public void SetupFromAPreset_StartsADraftThatMustBeSaved()
+    {
+        var vm = Vm();
+        Greet(Hello(ControllerConfigState.None, 0));
+        Assert.Equal(Diy, vm.SetupPreset);
+        vm.SetupFromPresetCommand.Execute(null);
+        Assert.False(vm.IsSetupDialogOpen);
+        Assert.True(vm.CanEdit);
+        Assert.Equal(5, vm.Sliders.Count);
+        Assert.True(vm.IsSettingUp);
+        Assert.True(vm.CanSave);
+        Assert.Equal("This setup isn't on the controller yet.", vm.FooterText);
+    }
+
+    [Fact]
+    public void SettingUp_ADraftEqualToVolcosSavedCopy_IsStillUnsaved_UntilTheControllerHasIt()
+    {
+        // An erased controller, and Volco still has the same setup saved: the draft equals the
+        // mirror, but the controller doesn't hold it, so Save to controller must stay.
+        var vm = Vm(DiyBlob);
+        Greet(Hello(ControllerConfigState.None, 0));
+        Assert.Equal(BannerKind.NotSetUpHasMirror, vm.Banner.Kind);
+        Assert.True(vm.SetupHasSavedSetup);
+        vm.SetupFromPresetCommand.Execute(null);
+        Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(vm.Draft));
+        Assert.True(vm.IsDirty);
+        Assert.True(vm.CanSave);
+
+        vm.SaveCommand.Execute(null);
+        ConfirmLastWrite(DiyBlob);
+        Until(() => !vm.IsSaving);
+        Assert.Equal("Saved. The controller is set up: try it in the Test section.", vm.ProgressText);
+        Assert.True(vm.InSync);
+        Assert.False(vm.IsSettingUp);
+        Assert.False(vm.IsDirty);
+        Assert.False(vm.IsSetupDialogOpen);
+    }
+
+    [Fact]
+    public void SetupApplySaved_SendsTheMirror()
+    {
+        var vm = Vm(DiyBlob);
+        Greet(Hello(ControllerConfigState.None, 0));
+        vm.SetupApplySavedCommand.Execute(null);
+        Assert.False(vm.IsSetupDialogOpen);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
     }
 
     // ── Dirty ──────────────────────────────────────────────────────────────────────────────
