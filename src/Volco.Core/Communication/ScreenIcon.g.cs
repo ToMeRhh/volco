@@ -20,4 +20,29 @@ public enum ScreenIcon : byte
     StudioMic = 8,
     Webcam = 9,
     Presets = 10,
+    Play = 11,
+    Pause = 12,
+    Next = 13,
+    Previous = 14,
+    App = 15,
+    Script = 16,
+}
+
+/// <summary>Sets of <see cref="ScreenIcon"/> from the manifest.</summary>
+public static class ScreenIconSets
+{
+    /// <summary>The icons a device can be given on the Devices page (the manifest's last column).</summary>
+    public static IReadOnlyList<ScreenIcon> OfferedOnDevicesPage { get; } = new[]
+    {
+        ScreenIcon.Generic,
+        ScreenIcon.Speaker,
+        ScreenIcon.Speakers,
+        ScreenIcon.Headphones,
+        ScreenIcon.Headset,
+        ScreenIcon.Earbuds,
+        ScreenIcon.Display,
+        ScreenIcon.Mic,
+        ScreenIcon.StudioMic,
+        ScreenIcon.Webcam,
+    };
 }
