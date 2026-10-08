@@ -19,13 +19,33 @@ public abstract partial class HardwareRowViewModel : ObservableObject
     public int Index { get; }
     public bool CanEdit => Owner.CanEdit;
 
-    [ObservableProperty] private string? _errorText;
     [ObservableProperty] private string? _hintText;
 
-    public bool HasError => ErrorText is not null;
     public bool HasHint => HintText is not null;
-    partial void OnErrorTextChanged(string? value) => OnPropertyChanged(nameof(HasError));
     partial void OnHintTextChanged(string? value) => OnPropertyChanged(nameof(HasHint));
+
+    private readonly List<(ConfigField Field, string Message)> _errors = new();
+
+    /// <summary>Every problem on the row, one per line; null when there is none.</summary>
+    public string? ErrorText => _errors.Count == 0 ? null : string.Join("\n", _errors.Select(e => e.Message));
+    public bool HasError => _errors.Count > 0;
+
+    /// <summary>A problem is on <paramref name="field"/>: its box is marked.</summary>
+    public bool IsInvalid(ConfigField field) => _errors.Any(e => e.Field == field);
+
+    internal void ClearErrors()
+    {
+        if (_errors.Count == 0) return;
+        _errors.Clear();
+        OnPropertyChanged(string.Empty);
+    }
+
+    internal void AddError(ConfigField field, string message)
+    {
+        if (_errors.Contains((field, message))) return;
+        _errors.Add((field, message));
+        OnPropertyChanged(string.Empty);
+    }
 
     internal void RefreshCanEdit() => OnPropertyChanged(nameof(CanEdit));
 
@@ -53,6 +73,7 @@ public sealed partial class HwSliderRowViewModel : HardwareRowViewModel
 
     public string Title => $"Slider {Index}";
     public IRelayCommand RemoveCommand { get; }
+    public bool PinInvalid => IsInvalid(ConfigField.SliderPin);
 
     public decimal? Pin
     {
@@ -73,6 +94,12 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
 
     public string Title => $"Button {Index}";
     public IRelayCommand RemoveCommand { get; }
+    public bool PinInvalid => IsInvalid(ConfigField.ButtonPin);
+    public bool LedPinInvalid => IsInvalid(ConfigField.LedPin);
+    public bool PairPinAInvalid => IsInvalid(ConfigField.PairPinA);
+    public bool PairPinBInvalid => IsInvalid(ConfigField.PairPinB);
+    public bool ScreenBusInvalid => IsInvalid(ConfigField.ScreenBus);
+    public bool ScreenAddressInvalid => IsInvalid(ConfigField.ScreenAddress);
 
     public static IReadOnlyList<string> IndicatorChoices { get; } = new[] { "None", "LED", "LED pair", "Screen" };
     public static IReadOnlyList<string> PolarityChoices { get; } = new[] { "High", "Low" };
@@ -171,6 +198,8 @@ public sealed partial class I2cBusRowViewModel : HardwareRowViewModel
     public I2cBusRowViewModel(ControllerViewModel owner, int bus) : base(owner, bus) => _owner = owner;
 
     public string Title => Index >= 2 ? $"I2C bus {Index} (software)" : $"I2C bus {Index}";
+    public bool PinsInvalid => IsInvalid(ConfigField.I2cPins) || IsInvalid(ConfigField.I2cMissing);
+    public bool ClockInvalid => IsInvalid(ConfigField.I2cClock);
 
     private I2cBus? Message => ControllerDraft.Bus(_owner.Draft, Index);
 

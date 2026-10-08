@@ -4,7 +4,7 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>A slider in the Test section: its raw value and a bar.</summary>
+/// <summary>A slider in the test dialog: its raw value and a bar.</summary>
 public sealed partial class TestSliderViewModel(int index) : ObservableObject
 {
     public int Index { get; } = index;
@@ -18,55 +18,45 @@ public sealed partial class TestSliderViewModel(int index) : ObservableObject
     partial void OnValueChanged(int value) => OnPropertyChanged(nameof(Level));
 }
 
-/// <summary>A button in the Test section: a lamp while pressed, and for LED buttons the test
-/// indicator (Off/On, or Off/A/B for a pair).</summary>
-public sealed partial class TestButtonViewModel : ObservableObject
+/// <summary>A button in the test dialog: a lamp while pressed, and what its indicator shows now.
+/// The runtime moves the indicator on with each press (<see cref="TestMode"/>).</summary>
+public sealed partial class TestButtonViewModel(int index, IndicatorKind kind) : ObservableObject
 {
-    private readonly Action<int, TestIndicator> _setIndicator;
-
-    public TestButtonViewModel(int index, IndicatorKind kind, Action<int, TestIndicator> setIndicator)
-    {
-        Index = index;
-        Kind = kind;
-        _setIndicator = setIndicator;
-    }
-
-    public int Index { get; }
-    public IndicatorKind Kind { get; }
+    public int Index { get; } = index;
+    public IndicatorKind Kind { get; } = kind;
     public string Title => $"Button {Index}";
-
-    public bool IsLed => Kind == IndicatorKind.Led;
-    public bool IsPair => Kind == IndicatorKind.LedPair;
-    public bool IsScreen => Kind == IndicatorKind.Screen;
 
     [ObservableProperty] private bool _isPressed;
 
-    public static IReadOnlyList<string> LedChoices { get; } = new[] { "Off", "On" };
-    public static IReadOnlyList<string> PairChoices { get; } = new[] { "Off", "A", "B" };
+    /// <summary>Presses so far in this test.</summary>
+    [ObservableProperty] private int _presses;
 
-    private int _indicatorIndex;
-
-    /// <summary>LED: 0 Off, 1 On. Pair: 0 Off, 1 A, 2 B.</summary>
-    public int IndicatorIndex
+    partial void OnPressesChanged(int value)
     {
-        get => _indicatorIndex;
-        set
-        {
-            if (!SetProperty(ref _indicatorIndex, value)) return;
-            _setIndicator(Index, (IsPair, value) switch
-            {
-                (_, 0) => TestIndicator.Off,
-                (false, _) => TestIndicator.On,
-                (true, 1) => TestIndicator.A,
-                _ => TestIndicator.B,
-            });
-        }
+        OnPropertyChanged(nameof(StateText));
+        OnPropertyChanged(nameof(IsLit));
     }
 
-    internal void ResetIndicator()
+    /// <summary>"LED off" / "LED on", "LED A" / "LED B", "Test screen" / "Screen: 3 presses".</summary>
+    public string StateText => Kind switch
     {
-        _indicatorIndex = 0;
-        OnPropertyChanged(nameof(IndicatorIndex));
+        IndicatorKind.Led => TestMode.Indicator(Kind, Presses) == TestIndicator.On ? "LED on" : "LED off",
+        IndicatorKind.LedPair => TestMode.Indicator(Kind, Presses) switch
+        {
+            TestIndicator.A => "LED A",
+            TestIndicator.B => "LED B",
+            _ => "LEDs off",
+        },
+        IndicatorKind.Screen => Presses == 0 ? "Test screen" : $"Screen: {TestMode.PressText(Presses)}",
+        _ => Presses == 0 ? "No light" : TestMode.PressText(Presses),
+    };
+
+    /// <summary>An LED is lit on the controller now.</summary>
+    public bool IsLit => TestMode.Indicator(Kind, Presses) != TestIndicator.Off;
+
+    internal void Reset()
+    {
+        Presses = 0;
         IsPressed = false;
     }
 }

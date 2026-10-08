@@ -185,7 +185,7 @@ public sealed class ControllerViewModelTests : IDisposable
         vm.SaveCommand.Execute(null);
         ConfirmLastWrite(DiyBlob);
         Until(() => !vm.IsSaving);
-        Assert.Equal("Saved. The controller is set up: try it in the Test section.", vm.ProgressText);
+        Assert.Equal("Saved. The controller is set up: press Test controller to try it.", vm.ProgressText);
         Assert.True(vm.InSync);
         Assert.False(vm.IsSettingUp);
         Assert.False(vm.IsDirty);
@@ -299,8 +299,12 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.NotNull(vm.Sliders[0].ErrorText);
         Assert.All(vm.Sliders.Skip(1), r => Assert.Null(r.ErrorText));
 
+        Assert.Equal("Pin 6 is reserved on the ESP32 (USB serial or flash).", vm.Sliders[0].ErrorText);
+        Assert.True(vm.Sliders[0].PinInvalid);
+
         vm.SaveCommand.Execute(null);
-        Assert.Equal("Fix the slider pin on Slider 0 first.", vm.ProgressText);
+        Assert.Equal("Fix the problem marked in red first.", vm.ProgressText);
+        Assert.Equal(LinkTone.Danger, vm.FooterTone);
         Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
     }
 
@@ -315,7 +319,8 @@ public sealed class ControllerViewModelTests : IDisposable
         Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Invalid, 0, 2));
         Until(() => !vm.IsSaving);
         Assert.Equal("The controller rejected the setup: the button pin on Button 0.", vm.ProgressText);
-        Assert.NotNull(vm.Buttons[0].ErrorText);
+        Assert.Equal("The controller didn't accept the button pin.", vm.Buttons[0].ErrorText);
+        Assert.True(vm.CanDismissFooter);   // a failure stays until closed
     }
 
     [Fact]
@@ -378,7 +383,59 @@ public sealed class ControllerViewModelTests : IDisposable
         ConfirmLastWrite(expected);
         Until(() => !vm.IsSaving);
         Assert.Equal("Saved. The controller restarted with the new setup.", vm.ProgressText);
+        Assert.Equal(LinkTone.Good, vm.FooterTone);
         Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public void ASavedMessage_GoesByItself_AFailureStaysUntilClosed()
+    {
+        var vm = Vm(DiyBlob);
+        vm.ResultTimeout = TimeSpan.FromMilliseconds(50);
+        GreetInSync(DiyBlob);
+        vm.Sliders[0].Pin = 39;
+        vm.SaveCommand.Execute(null);
+        ConfirmLastWrite(ControllerConfigCodec.Encode(vm.Draft));
+        Until(() => vm.ProgressText == "Saved. The controller restarted with the new setup.");
+        Until(() => vm.ProgressText is null);
+        Assert.False(vm.ShowFooter);
+
+        vm.Sliders[0].Pin = 6;
+        vm.SaveCommand.Execute(null);
+        Thread.Sleep(150);
+        _ui.RunAll();
+        Assert.Equal("Fix the problem marked in red first.", vm.ProgressText);
+        vm.DismissFooterCommand.Execute(null);
+        Assert.Null(vm.ProgressText);
+        Assert.Equal("Unsaved changes", vm.FooterText);   // the draft is still unsaved
+        Assert.True(vm.ShowFooter);
+    }
+
+    [Fact]
+    public void AnEdit_SaysUnsavedChanges()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        Assert.Null(vm.FooterText);
+        vm.Sliders[0].Pin = 39;
+        Assert.Equal("Unsaved changes", vm.FooterText);
+        Assert.False(vm.CanDismissFooter);
+    }
+
+    [Fact]
+    public void APinConflict_MarksBothRows()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.Sliders[0].Pin = 32;
+        vm.Sliders[1].Pin = 32;
+
+        Assert.Equal("Pin 32 is also used by Slider 1. Each pin can only do one thing.", vm.Sliders[0].ErrorText);
+        Assert.Equal("Pin 32 is also used by Slider 0. Each pin can only do one thing.", vm.Sliders[1].ErrorText);
+        Assert.True(vm.Sliders[0].PinInvalid);
+        Assert.True(vm.Sliders[1].PinInvalid);
+        Assert.All(vm.Sliders.Skip(2), r => Assert.False(r.HasError));
+        Assert.All(vm.Buttons, r => Assert.False(r.HasError));
     }
 
     [Fact]
@@ -539,10 +596,25 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.Equal(2000, vm.TestSliders[1].Value);
         Assert.True(vm.TestButtons[2].IsPressed);
 
-        vm.TestButtons[0].IndicatorIndex = 1;
+        Assert.Equal("LED A", vm.TestButtons[2].StateText);   // a press moved the pair to A
+        Assert.True(vm.HasDialog);
+
+        Conn.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        _ui.RunAll();
+        Assert.Equal(1, vm.TestButtons[0].Presses);
+        Assert.Equal("LED on", vm.TestButtons[0].StateText);
         Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(0, 1)));
-        vm.TestButtons[2].IndicatorIndex = 2;   // pair: B
+        Conn.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+        Conn.RaiseMessage(new ButtonMessage(2, ButtonState.Released));
+        Conn.RaiseMessage(new ButtonMessage(2, ButtonState.Pressed));
+        _ui.RunAll();
+        Assert.Equal("LED B", vm.TestButtons[2].StateText);
         Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(2, 2)));
+
+        vm.CloseDialogCommand.Execute(null);   // Escape or a click outside the dialog
+        Assert.False(_rig.Runtime.InTestMode);
+        Assert.Equal(0, vm.TestButtons[0].Presses);
+        vm.StartTestCommand.Execute(null);
 
         vm.OnPageLeft();
         Assert.False(_rig.Runtime.InTestMode);

@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Config;
@@ -25,11 +24,11 @@ public sealed partial class ControllerViewModel
         _config.ConnectionConfigChanged += OnConnectionSettingsSaved;
         _config.ConfigChanged += OnConnectionSettingsSaved;
         _wasSerial = IsSerialConnection;
-        RefreshPorts();
+        _configuredPort = _config.Config.Connection.Serial.ComPort;
     }
 
-    /// <summary>The connection type or port changed (the Connection page, or a firmware install):
-    /// the panel follows the configured port and drops a result that described the old connection.</summary>
+    /// <summary>The connection type or port changed (the page's Connection section, or a firmware
+    /// install): a result that described the old connection goes.</summary>
     private void OnConnectionSettingsSaved(object? sender, EventArgs e) => _ui.Post(() =>
     {
         if (_disposed) return;
@@ -37,8 +36,8 @@ public sealed partial class ControllerViewModel
         var port = _config.Config.Connection.Serial.ComPort;
         if (serial == _wasSerial && port == _configuredPort) return;
         _wasSerial = serial;
+        _configuredPort = port;
         ClearFirmwareResult();
-        RefreshPorts();
         RefreshAll();
     });
 
@@ -88,8 +87,8 @@ public sealed partial class ControllerViewModel
 
     // ── The panel ──
 
-    public ObservableCollection<string> FirmwarePorts { get; } = new();
-    [ObservableProperty] private string? _firmwarePort;
+    /// <summary>Install, Update and Check use the port the Connection section picked.</summary>
+    private string FirmwarePort => _config.Config.Connection.Serial.ComPort;
     [ObservableProperty] private bool _isFirmwareRunning;
     [ObservableProperty] private string? _firmwareStage;
     [ObservableProperty] private double _firmwareProgress;
@@ -99,25 +98,11 @@ public sealed partial class ControllerViewModel
     [ObservableProperty] private bool _canCancelFirmware;
 
     public bool HasFirmwareMessage => FirmwareMessage is not null;
+
+    /// <summary>The result's icon: Volco's firmware found or written is good, other firmware a
+    /// warning, a failure a danger.</summary>
+    [ObservableProperty] private LinkTone _firmwareMessageTone;
     partial void OnFirmwareMessageChanged(string? value) => OnPropertyChanged(nameof(HasFirmwareMessage));
-
-    private void RefreshPorts()
-    {
-        string[] names;
-        try { names = System.IO.Ports.SerialPort.GetPortNames(); }
-        catch (Exception) { names = Array.Empty<string>(); }
-        var configured = _config.Config.Connection.Serial.ComPort;
-        var keep = FirmwarePort;
-        FirmwarePorts.Clear();
-        foreach (var n in names.Append(configured).Where(n => !string.IsNullOrEmpty(n)).Distinct().Order())
-            FirmwarePorts.Add(n);
-        // Follows the configured port; a port picked here stays until the configured one changes.
-        FirmwarePort = keep is not null && FirmwarePorts.Contains(keep) && configured == _configuredPort ? keep : configured;
-        _configuredPort = configured;
-    }
-
-    [RelayCommand]
-    private void RefreshFirmwarePorts() => RefreshPorts();
 
     /// <summary>Install wipes the controller's setup, so it asks first in a dialog (Volco keeps its
     /// copy). Nothing on the page changes until it is confirmed: Cancel leaves the page as it was.</summary>
@@ -197,11 +182,12 @@ public sealed partial class ControllerViewModel
         return true;
     }
 
-    private void EndFirmware(string message)
+    private void EndFirmware(string message, LinkTone tone)
     {
         IsFirmwareRunning = false;
         CanCancelFirmware = false;
         FirmwareStage = null;
+        FirmwareMessageTone = tone;
         FirmwareMessage = message;
         RefreshAll();
     }
@@ -209,11 +195,16 @@ public sealed partial class ControllerViewModel
     private async Task RunProbe()
     {
         if (!BeginFirmware()) return;
-        var outcome = await _firmware!.ProbeAsync(FirmwarePort!, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
+        var outcome = await _firmware!.ProbeAsync(FirmwarePort, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {
             if (_disposed) return;
-            EndFirmware(outcome.Message);
+            EndFirmware(outcome.Message, outcome.Result?.Kind switch
+            {
+                ProbeKind.VolcoMatches => LinkTone.Good,
+                ProbeKind.DifferentFirmware => LinkTone.Warning,
+                _ => LinkTone.Danger,
+            });
             OfferInstall = outcome.OfferInstall;
         });
     }
@@ -222,13 +213,13 @@ public sealed partial class ControllerViewModel
     {
         ConfirmInstallPending = false;
         if (!BeginFirmware()) return;
-        var outcome = await _firmware!.FlashAsync(FirmwarePort!, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
+        var outcome = await _firmware!.FlashAsync(FirmwarePort, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {
             if (_disposed) return;
             // After an Install the controller has no setup yet: the setup dialog comes next.
             if (outcome.Succeeded && mode == FlashMode.Install) OnInstalled();
-            EndFirmware(outcome.Message);
+            EndFirmware(outcome.Message, outcome.Succeeded ? LinkTone.Good : LinkTone.Danger);
             OfferTest = outcome.Succeeded && mode == FlashMode.Update;
         });
     }
@@ -242,8 +233,6 @@ public sealed partial class ControllerViewModel
     [RelayCommand]
     private void CheckWhatsConnected()
     {
-        RefreshPorts();
-        FirmwarePort = _config.Config.Connection.Serial.ComPort;
         CheckFirmware();
     }
 

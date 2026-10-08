@@ -76,6 +76,19 @@ public class ConfigGoldenTests
         Assert.Equal($"{c.Rest[0]} {c.Rest[1]} {c.Rest[2]}", $"{(byte)r.Code} {r.Item} {r.Field}");
     }
 
+    /// <summary>The page's problem list fails exactly when the validator does, and always
+    /// contains the validator's first violation.</summary>
+    [Theory]
+    [MemberData(nameof(Of), "validate")]
+    public void DraftProblems_AgreeWithTheValidator(string name)
+    {
+        var config = ControllerConfigCodec.Decode(Get("validate", name).Blob);
+        var r = ControllerConfigValidator.Validate(config, ChipInfo.Esp32);
+        var problems = DraftProblems.Find(config, ChipInfo.Esp32);
+        Assert.Equal(r.IsOk, problems.Count == 0);
+        if (!r.IsOk) Assert.Contains(problems, p => p.Item == r.Item && (byte)p.Field == r.Field);
+    }
+
     private static string ValueOf(ControllerConfig c, int size, string key)
     {
         var b0 = c.Buttons.FirstOrDefault();

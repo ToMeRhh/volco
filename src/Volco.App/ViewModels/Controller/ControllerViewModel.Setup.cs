@@ -43,7 +43,7 @@ public sealed partial class ControllerViewModel
     public bool ShowOpenSetup => IsNotSetUp && !IsSetupDialogOpen && !_hasPermission && !Busy;
 
     public string SetupGuideText => "Setting up this controller: set each pin to match your wiring, then Save to controller. "
-                                    + "After that, try it in the Test section.";
+                                    + "After that, try it with Test controller.";
 
     partial void OnIsSetupDialogOpenChanged(bool value)
     {

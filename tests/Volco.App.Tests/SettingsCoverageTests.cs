@@ -59,7 +59,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ConnectionPage(vm.Connection);
+        var page = new ControllerPage(vm.Controller);   // the Controller page's Connection section
         Host(page);
 
         vm.Connection.ComPort = "COM9";                                        // Connection.Serial.ComPort (no real ports on CI)

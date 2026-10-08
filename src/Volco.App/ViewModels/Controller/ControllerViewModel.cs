@@ -36,13 +36,19 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private IDisposable? _testHandle;
     private bool _udpChangedInSave;
 
+    private readonly bool _ownsConnection;
+
+    /// <param name="connection">The window's connection view model, shared with the sidebar's
+    /// status; the page makes (and disposes) its own when none is given.</param>
     public ControllerViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui,
-                               FirmwareService? firmware = null)
+                               FirmwareService? firmware = null, ConnectionViewModel? connection = null)
     {
         _config = config;
         _runtime = runtime;
         _service = runtime.ControllerConfig;
         _ui = ui;
+        _ownsConnection = connection is null;
+        Connection = connection ?? new ConnectionViewModel(config, runtime, ui);
 
         _service.BannerChanged += OnServiceChanged;
         _service.OperationChanged += OnServiceChanged;
@@ -61,7 +67,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     // ── Status and banner ────────────────────────────────────────────────────────────────────
 
-    /// <summary>The same headline as the Connection page and the tray (<see cref="LinkText"/>).</summary>
+    /// <summary>The page's connection section: the link status, Connect/Disconnect and how Volco
+    /// talks to the controller.</summary>
+    public ConnectionViewModel Connection { get; }
+
+    /// <summary>The same headline as the sidebar and the tray (<see cref="LinkText"/>).</summary>
     public string StatusText => LinkText.Headline(_runtime.LinkStatus, _config.Config.Connection);
 
     /// <summary>An expected wait is running: connecting, a firmware operation or a restart.</summary>
@@ -78,12 +88,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             var connection = _config.Config.Connection;
             return link.State switch
             {
-                LinkState.Disconnected => "Volco is disconnected. Connect first (the Connection page or the tray).",
+                LinkState.Disconnected => "Volco is disconnected. Press Connect above.",
                 LinkState.Incompatible => "Update the controller's firmware to set it up.",
                 LinkState.NoAnswer => "Check the controller's firmware above, then set it up here.",
                 LinkState.Waiting => LinkText.Activity(link.Activity),
                 LinkState.Searching when connection.Type == ConnectionType.Serial
-                    => "Plug the controller in with USB and choose its port on the Connection page.",
+                    => "Plug the controller in with USB and choose its port above.",
                 _ => LinkText.Explanation(link, connection),
             };
         }
@@ -99,7 +109,31 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         var h => FirmwareVersionText(h.FirmwareVersion),
     };
 
+    /// <summary>The firmware line's icon: Volco's own build is good, an update or another build
+    /// is a warning, firmware this app can't talk to is a danger, a development build is neutral.</summary>
+    public LinkTone FirmwareTone => _service.LastHello switch
+    {
+        null => LinkTone.Neutral,
+        { Version: not ProtocolVersion.Current } => LinkTone.Danger,
+        { FirmwareVersion: ControllerBannerLogic.DevFirmware } => LinkTone.Neutral,
+        _ when Banner.FirmwareUpdateAvailable => LinkTone.Warning,
+        { FirmwareVersion: "" } => LinkTone.Warning,
+        var h when _firmware?.Catalog.BundledVersion == h.FirmwareVersion => LinkTone.Good,
+        _ => LinkTone.Neutral,
+    };
+
+    public bool HasFirmwareText => FirmwareText.Length > 0;
+
     public ControllerBanner Banner => _service.Banner;
+
+    /// <summary>The banner's icon: reading is neutral, a setup to choose is a warning, a broken or
+    /// unreadable one (or firmware that can't be used) is a danger.</summary>
+    public LinkTone BannerTone => Banner.Kind switch
+    {
+        BannerKind.Reading => LinkTone.Neutral,
+        BannerKind.DifferentSetup or BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror => LinkTone.Warning,
+        _ => LinkTone.Danger,
+    };
 
     /// <summary>The §8.3 banner text; null when there is none.</summary>
     public string? BannerText => Banner.Kind switch
@@ -190,6 +224,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     public bool CanSave => CanEdit && IsDirty && !Busy;
 
+    /// <summary>The snackbar shows: a question, a save running or its result, or unsaved changes.</summary>
     public bool ShowFooter => IsDirty || IsSaving || ProgressText is not null || HasConfirmation;
 
     public ObservableCollection<HwSliderRowViewModel> Sliders { get; } = new();
@@ -294,7 +329,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>After every user edit: the last save's message goes, then everything is recomputed.</summary>
     internal void OnDraftEdited(bool structural = false)
     {
-        ProgressText = null;
+        if (!IsSaving) SetProgress(null);
         _remoteError = null;
         Recompute(structural);
     }
@@ -371,50 +406,74 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private void ClearErrors()
     {
-        foreach (var r in AllRows()) r.ErrorText = null;
+        foreach (var r in AllRows()) r.ClearErrors();
         BehaviourError = null;
         WifiError = null;
         InputError = null;
         PageError = null;
+        _wifiFields.Clear();
+        OnWifiFieldsChanged();
     }
 
     private IEnumerable<HardwareRowViewModel> AllRows()
         => Sliders.Cast<HardwareRowViewModel>().Concat(Buttons).Concat(Buses);
 
+    /// <summary>The problems the save would stop on, shown on their rows (all of them, so both ends
+    /// of a pin conflict are marked).</summary>
+    private IReadOnlyList<DraftProblem> _problems = Array.Empty<DraftProblem>();
+
     private void ShowLocalErrors()
     {
         ClearErrors();
-        var v = ControllerConfigValidator.Validate(_draft, ChipInfo.Esp32);
-        if (!v.IsOk) ShowError(v.Item, v.Field);
-        else if (_remoteError is { } r) ShowError(r.Item, r.Field);
+        var problems = DraftProblems.Find(_draft, ChipInfo.Esp32).ToList();
+        if (problems.Count == 0 && _remoteError is { } r)
+            problems.Add(new DraftProblem((ConfigField)r.Field, r.Item,
+                $"The controller didn't accept {ControllerDraft.FieldDescription((ConfigField)r.Field)}."));
+        _problems = problems;
+        foreach (var p in problems) ShowError(p);
     }
 
-    /// <summary>Puts "&lt;field&gt; isn't valid" on the row (item, field) points at.</summary>
-    private void ShowError(byte item, byte field)
+    /// <summary>Puts a problem on the row or section its (item, field) points at.</summary>
+    private void ShowError(DraftProblem p)
     {
-        var text = $"Check {ControllerDraft.FieldDescription((ConfigField)field)}.";
-        HardwareRowViewModel? row = (ConfigField)field switch
+        HardwareRowViewModel? row = p.Field switch
         {
-            ConfigField.SliderPin => Sliders.ElementAtOrDefault(item),
+            ConfigField.SliderPin => Sliders.ElementAtOrDefault(p.Item),
             ConfigField.ButtonPin or ConfigField.LedPin or ConfigField.PairPinA or ConfigField.PairPinB
-                or ConfigField.ScreenBus or ConfigField.ScreenAddress => Buttons.ElementAtOrDefault(item),
-            ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock => Buses.FirstOrDefault(b => b.Index == item),
+                or ConfigField.ScreenBus or ConfigField.ScreenAddress => Buttons.ElementAtOrDefault(p.Item),
+            ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock => Buses.FirstOrDefault(b => b.Index == p.Item),
             _ => null,
         };
-        var described = $"Check {ControllerDraft.Describe(item, field)}.";
-        if (row is not null) row.ErrorText = text;
-        else if ((ConfigField)field is ConfigField.UdpSsid or ConfigField.UdpPassword or ConfigField.UdpPcIp or ConfigField.UdpPort)
+        static string? Append(string? text, string line) => text is null ? line : text + "\n" + line;
+        if (row is not null) row.AddError(p.Field, p.Message);
+        else if (p.Field is ConfigField.UdpSsid or ConfigField.UdpPassword or ConfigField.UdpPcIp or ConfigField.UdpPort)
         {
-            WifiError = text;
+            WifiError = Append(WifiError, p.Message);
+            _wifiFields.Add(p.Field);
+            OnWifiFieldsChanged();
             IsAdvancedOpen = true;   // the error must be visible
         }
-        else if ((ConfigField)field == ConfigField.InputValue)
+        else if (p.Field == ConfigField.InputValue)
         {
-            InputError = described;
+            InputError = Append(InputError, p.Message);
             IsAdvancedOpen = true;
         }
-        else if ((ConfigField)field == ConfigField.ScreenValue && ShowBehaviour) BehaviourError = described;
-        else PageError = described;   // counts, a row that isn't there, screen values with no screen shown
+        else if (p.Field == ConfigField.ScreenValue && ShowBehaviour) BehaviourError = Append(BehaviourError, p.Message);
+        else PageError = Append(PageError, p.Message);   // counts, a row that isn't there, screen values with no screen shown
+    }
+
+    private readonly HashSet<ConfigField> _wifiFields = new();
+    public bool SsidInvalid => _wifiFields.Contains(ConfigField.UdpSsid);
+    public bool PasswordInvalid => _wifiFields.Contains(ConfigField.UdpPassword);
+    public bool PcIpInvalid => _wifiFields.Contains(ConfigField.UdpPcIp);
+    public bool PortsInvalid => _wifiFields.Contains(ConfigField.UdpPort);
+
+    private void OnWifiFieldsChanged()
+    {
+        OnPropertyChanged(nameof(SsidInvalid));
+        OnPropertyChanged(nameof(PasswordInvalid));
+        OnPropertyChanged(nameof(PcIpInvalid));
+        OnPropertyChanged(nameof(PortsInvalid));
     }
 
     [ObservableProperty] private string? _behaviourError;
@@ -443,11 +502,54 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(ShowFooter));
         OnPropertyChanged(nameof(FooterText));
+        OnPropertyChanged(nameof(FooterTone));
+        OnPropertyChanged(nameof(CanDismissFooter));
     }
 
-    /// <summary>The last save's message, else what is pending while setting up.</summary>
-    public string? FooterText => ProgressText ?? (IsSettingUp ? "This setup isn't on the controller yet." : null);
-    partial void OnIsSavingChanged(bool value) => OnPropertyChanged(nameof(ShowFooter));
+    /// <summary>The snackbar's text: the save's progress or result, else what is unsaved.</summary>
+    public string? FooterText => ProgressText
+        ?? (IsSettingUp ? "This setup isn't on the controller yet." : IsDirty ? "Unsaved changes" : null);
+
+    private LinkTone _progressTone = LinkTone.Neutral;
+
+    /// <summary>The snackbar's icon: a confirmed save is good, a failed one a danger.</summary>
+    public LinkTone FooterTone => ProgressText is null ? LinkTone.Neutral : _progressTone;
+
+    /// <summary>A save's result can be closed (×); progress and unsaved changes can't.</summary>
+    public bool CanDismissFooter => ProgressText is not null && !IsSaving;
+
+    /// <summary>How long a successful save's message stays; failures stay until closed.</summary>
+    internal TimeSpan ResultTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    partial void OnIsSavingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowFooter));
+        OnPropertyChanged(nameof(CanDismissFooter));
+    }
+
+    /// <summary>Shows a save's progress or result. A good result goes by itself after
+    /// <see cref="ResultTimeout"/>, unless something replaced it meanwhile.</summary>
+    private void SetProgress(string? text, LinkTone tone = LinkTone.Neutral, bool autoDismiss = false)
+    {
+        _progressTone = tone;
+        ProgressText = text;
+        OnPropertyChanged(nameof(FooterTone));
+        if (!autoDismiss || text is null) return;
+        var shown = ++_progressVersion;
+        _ = Task.Delay(ResultTimeout).ContinueWith(_ => _ui.Post(() =>
+        {
+            if (!_disposed && shown == _progressVersion) DismissFooter();
+        }), TaskScheduler.Default);
+    }
+
+    private int _progressVersion;
+
+    [RelayCommand]
+    private void DismissFooter()
+    {
+        if (IsSaving) return;
+        SetProgress(null);
+    }
 
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save()
@@ -457,7 +559,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (!v.IsOk)
         {
             ShowLocalErrors();
-            ProgressText = $"Fix {ControllerDraft.Describe(v.Item, v.Field)} first.";
+            SetProgress(_problems.Count == 1 ? "Fix the problem marked in red first."
+                                             : $"Fix the {_problems.Count} problems marked in red first.", LinkTone.Danger);
             return;
         }
         bool udpChanged = !UdpBytes(_draft).AsSpan().SequenceEqual(UdpBytes(BaselineConfig()));
@@ -475,7 +578,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         try { blob = ControllerConfigCodec.Encode(_draft); }
         catch (ControllerConfigFormatException ex)
         {
-            ProgressText = $"This setup can't be saved: {ex.Message}";
+            SetProgress($"This setup can't be saved: {ex.Message}", LinkTone.Danger);
             return;
         }
         SaveBytes(blob, udpChanged);
@@ -496,7 +599,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _udpChangedInSave = udpChanged;
         _savingSetup = IsSettingUp || IsNotSetUp;
         IsSaving = true;
-        ProgressText = "Sending…";
+        SetProgress("Sending…");
         var save = _service.SaveAsync(blob);
         _ = Finish();
 
@@ -511,9 +614,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         IsSaving = false;
-        ProgressText = r.Status switch
+        var text = r.Status switch
         {
-            SaveStatus.Confirmed when _savingSetup => "Saved. The controller is set up: try it in the Test section.",
+            SaveStatus.Confirmed when _savingSetup => "Saved. The controller is set up: press Test controller to try it.",
             SaveStatus.Confirmed => "Saved. The controller restarted with the new setup.",
             SaveStatus.Rejected when r.Code == ConfigResultCode.Invalid
                 => $"The controller rejected the setup: {ControllerDraft.Describe(r.Item, r.Field)}.",
@@ -529,6 +632,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             SaveStatus.Busy => "Another operation is running. Try again in a moment.",
             _ => null,
         };
+        var confirmed = r.Status == SaveStatus.Confirmed;
+        SetProgress(text, confirmed ? LinkTone.Good : LinkTone.Danger, autoDismiss: confirmed);
         if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid) _remoteError = (r.Item, r.Field);
         if (r.Status == SaveStatus.Confirmed) _fixIt = false;
         RefreshAll();
@@ -538,7 +643,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private void Revert()
     {
         Notice = null;
-        ProgressText = null;
+        SetProgress(null);
         _hasPermission = false;
         LoadDraftFromMirror();
         RefreshAll();
@@ -564,8 +669,17 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             () => Confirmation = null);
     }
 
-    /// <summary>A modal dialog covers the page: the setup dialog or the Install confirmation.</summary>
-    public bool HasDialog => IsSetupDialogOpen || ConfirmInstallPending;
+    /// <summary>A modal dialog covers the page: the setup dialog, the Install confirmation or the test.</summary>
+    public bool HasDialog => IsSetupDialogOpen || ConfirmInstallPending || IsTesting;
+
+    /// <summary>Escape or a click outside the card: the dialog closes as its Cancel would.</summary>
+    [RelayCommand]
+    private void CloseDialog()
+    {
+        if (IsTesting) StopTest();
+        else if (ConfirmInstallPending) ConfirmInstallPending = false;
+        else if (IsSetupDialogOpen) CloseSetupCommand.Execute(null);
+    }
 
     // ── Behaviour (ScreenBehaviour) ──────────────────────────────────────────────────────────
 
@@ -671,17 +785,22 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public decimal? PcPort { get => U.PcPort; set => EditU(u => { if (value is { } n) u.PcPort = (uint)n; else u.ClearPcPort(); }); }
     public decimal? LocalPort { get => U.LocalPort; set => EditU(u => { if (value is { } n) u.LocalPort = (uint)n; else u.ClearLocalPort(); }); }
 
-    // ── Test (spec §8.5) ─────────────────────────────────────────────────────────────────────
+    // ── Test (spec §8.5): a dialog over the page ─────────────────────────────────────────────
 
     public ObservableCollection<TestSliderViewModel> TestSliders { get; } = new();
     public ObservableCollection<TestButtonViewModel> TestButtons { get; } = new();
 
+    /// <summary>The test runs, and its dialog is open: closing the dialog ends it.</summary>
     [ObservableProperty] private bool _isTesting;
 
     public bool CanStartTest => !IsTesting && !IsFirmwareRunning && _runtime.ControllerState == ControllerState.Ready
                                 && _service.Operation == ConfigOperation.Idle;
 
-    partial void OnIsTestingChanged(bool value) => RefreshAll();
+    partial void OnIsTestingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasDialog));
+        RefreshAll();
+    }
 
     partial void OnIsFirmwareRunningChanged(bool value) => RefreshAll();
 
@@ -701,7 +820,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _testHandle = null;
         handle?.Dispose();
         IsTesting = false;
-        foreach (var b in TestButtons) b.ResetIndicator();
+        foreach (var b in TestButtons) b.Reset();
     }
 
     /// <summary>The page was left or the window hidden: the test ends (spec §8.5).</summary>
@@ -719,7 +838,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         for (int i = 0; i < (info?.Sliders ?? 0); i++) TestSliders.Add(new TestSliderViewModel(i));
         TestButtons.Clear();
         var kinds = info?.Buttons ?? new List<IndicatorKind>();
-        for (int i = 0; i < kinds.Count; i++) TestButtons.Add(new TestButtonViewModel(i, kinds[i], _runtime.SetTestIndicator));
+        for (int i = 0; i < kinds.Count; i++) TestButtons.Add(new TestButtonViewModel(i, kinds[i]));
     }
 
     // ── Runtime and service events (any thread → posted) ─────────────────────────────────────
@@ -730,7 +849,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         var h = _service.LastHello;
         if (_hasPermission && (h is null ? _permission is not null : _permission != (h.Version, h.ConfigState, h.ConfigCrc)))
             _hasPermission = false;   // a different Hello ends a "new draft" permission
-        if (_service.Progress is { Phase: SavePhase.Confirming } && IsSaving) ProgressText = "Restarting…";
+        if (_service.Progress is { Phase: SavePhase.Confirming } && IsSaving) SetProgress("Restarting…");
         RefreshAll();
     });
 
@@ -777,14 +896,18 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (_disposed || on || _runtime.InTestMode) return;   // stale: a newer session is running
         _testHandle = null;   // the runtime ended it (Detach, replacement)
         IsTesting = false;
-        foreach (var b in TestButtons) b.ResetIndicator();
+        foreach (var b in TestButtons) b.Reset();
     });
 
     private void OnRawInput(object? sender, RawInputEventArgs e) => _ui.Post(() =>
     {
         if (_disposed || !IsTesting) return;
         if (e.Kind == RawInputKind.Slider && TestSliders.ElementAtOrDefault(e.Index) is { } s) s.Value = e.Value;
-        if (e.Kind == RawInputKind.Button && TestButtons.ElementAtOrDefault(e.Index) is { } b) b.IsPressed = e.Value != 0;
+        if (e.Kind == RawInputKind.Button && TestButtons.ElementAtOrDefault(e.Index) is { } b)
+        {
+            b.IsPressed = e.Value != 0;
+            b.Presses = e.Presses;
+        }
     });
 
     private void RefreshStatus()
@@ -792,6 +915,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(ChipText));
         OnPropertyChanged(nameof(FirmwareText));
+        OnPropertyChanged(nameof(HasFirmwareText));
+        OnPropertyChanged(nameof(FirmwareTone));
+        OnPropertyChanged(nameof(BannerTone));
         OnPropertyChanged(nameof(Banner));
         OnPropertyChanged(nameof(BannerText));
         OnPropertyChanged(nameof(HasBanner));
@@ -831,5 +957,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.InTestModeChanged -= OnInTestModeChanged;
         _runtime.RawInput -= OnRawInput;
+        if (_ownsConnection) Connection.Dispose();
     }
 }

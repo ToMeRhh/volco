@@ -2,58 +2,65 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:ctl="using:Volco.Core.Controller"
+             xmlns:controls="using:Volco.App.Controls"
+             xmlns:conv="using:Volco.App.Converters"
              x:Class="Volco.App.Views.Pages.ControllerPage"
              x:DataType="vm:ControllerViewModel">
+  <UserControl.Resources>
+    <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
+  </UserControl.Resources>
 
   <Grid>
   <DockPanel IsEnabled="{Binding !HasDialog}">
-    <!-- Footer: sticky while there is something to save, a save runs, or its result shows -->
-    <Border Name="Footer" DockPanel.Dock="Bottom" Classes="Panel" Margin="24,0,24,16"
-            IsVisible="{Binding ShowFooter}">
-      <StackPanel Spacing="10">
-        <Border Name="ConfirmPanel" Classes="Indent" IsVisible="{Binding HasConfirmation}">
-          <Grid ColumnDefinitions="*,Auto,Auto">
-            <TextBlock Name="ConfirmText" TextWrapping="Wrap" VerticalAlignment="Center"
-                       Text="{Binding Confirmation.Message, FallbackValue=''}"/>
-            <Button Name="ConfirmButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0"
-                    Content="{Binding Confirmation.ConfirmLabel, FallbackValue=''}"
-                    Command="{Binding Confirmation.ConfirmCommand, FallbackValue={x:Null}}"/>
-            <Button Name="CancelConfirmButton" Grid.Column="2" Margin="8,0,0,0" Content="Cancel"
-                    Command="{Binding Confirmation.CancelCommand, FallbackValue={x:Null}}"/>
-          </Grid>
-        </Border>
-        <Grid ColumnDefinitions="*,Auto,Auto">
-          <TextBlock Name="ProgressText" Classes="Secondary" TextWrapping="Wrap" VerticalAlignment="Center"
-                     Text="{Binding FooterText}"/>
-          <Button Name="RevertButton" Grid.Column="1" Content="Revert" Margin="12,0,0,0"
-                  Command="{Binding RevertCommand}" IsVisible="{Binding IsDirty}"/>
-          <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save to controller" Margin="8,0,0,0"
-                  Command="{Binding SaveCommand}" IsVisible="{Binding IsDirty}"/>
-        </Grid>
-      </StackPanel>
-    </Border>
-
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Margin="{StaticResource PagePadding}" Spacing="{StaticResource SpaceM}"
+      <!-- The bottom margin keeps the last section clear of the snackbar -->
+      <StackPanel Margin="24,8,24,96" Spacing="{StaticResource SpaceM}"
                   MaxWidth="{StaticResource PageMaxWidth}">
 
         <StackPanel Spacing="2" Margin="0,8,0,4">
           <TextBlock Text="Controller" Classes="Title"/>
-          <TextBlock Classes="Secondary" Text="The controller's hardware and behaviour, stored on the controller."/>
+          <TextBlock Classes="Secondary" Text="How Volco talks to your controller, and the hardware and behaviour stored on it."/>
         </StackPanel>
 
-        <!-- 1. Status -->
+        <!-- 1. Status: the link, the controller and its firmware -->
         <Border Name="StatusPanel" Classes="Panel">
           <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <controls:StatusLine Name="StatusLabel" Classes="Subtitle" VerticalAlignment="Center"
+                                   Text="{Binding Connection.StatusText}" Tone="{Binding Connection.StatusTone}"/>
+              <TextBlock Name="TransportDetails" Grid.Column="1" Classes="Secondary" Margin="12,0,12,0"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                         Text="{Binding Connection.TransportDetails}"/>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button Name="ReconnectButton" Command="{Binding Connection.ReconnectCommand}"
+                        IsVisible="{Binding !Connection.IsUserDisconnected}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource Icon.Refresh}" Width="12" Height="12"/>
+                    <TextBlock Text="Reconnect"/>
+                  </StackPanel>
+                </Button>
+                <Button Name="DisconnectButton" Content="Disconnect" Command="{Binding Connection.DisconnectCommand}"
+                        IsVisible="{Binding !Connection.IsUserDisconnected}"/>
+                <Button Name="ConnectButton" Classes="Primary" Content="Connect" Command="{Binding Connection.ConnectCommand}"
+                        IsVisible="{Binding Connection.IsUserDisconnected}"/>
+              </StackPanel>
+            </Grid>
             <ProgressBar Name="WaitingBar" IsIndeterminate="True" IsVisible="{Binding IsWaiting}" Height="3" MinHeight="3"/>
-            <StackPanel Orientation="Horizontal" Spacing="12">
-              <TextBlock Name="StatusText" Classes="Subtitle" Text="{Binding StatusText}"/>
-              <TextBlock Name="ChipText" Classes="Secondary" VerticalAlignment="Center" Text="{Binding ChipText}"/>
-              <TextBlock Name="FirmwareText" Classes="Secondary" VerticalAlignment="Center" Text="{Binding FirmwareText}"/>
+            <StackPanel Spacing="4" Margin="24,0,0,0">
+              <TextBlock Name="HardwareSummaryText" Classes="Caption" Text="{Binding Connection.HardwareSummary}"
+                         IsVisible="{Binding Connection.HasHardwareSummary}"/>
+              <controls:StatusLine Name="StatusExplanationText" Classes="Caption"
+                                   Text="{Binding Connection.StatusExplanation}" Tone="{Binding Connection.StatusTone}"
+                                   IsVisible="{Binding Connection.HasStatusExplanation}"/>
+              <StackPanel Orientation="Horizontal" Spacing="12" IsVisible="{Binding HasFirmwareText}">
+                <TextBlock Name="ChipText" Classes="Secondary" VerticalAlignment="Center" Text="{Binding ChipText}"/>
+                <controls:StatusLine Name="FirmwareText" VerticalAlignment="Center"
+                                     Text="{Binding FirmwareText}" Tone="{Binding FirmwareTone}"/>
+              </StackPanel>
             </StackPanel>
             <Border Name="BannerPanel" Classes="Indent" IsVisible="{Binding HasBanner}">
               <StackPanel Spacing="8">
-                <TextBlock Name="BannerText" TextWrapping="Wrap" Text="{Binding BannerText}"/>
+                <controls:StatusLine Name="BannerText" Text="{Binding BannerText}" Tone="{Binding BannerTone}"/>
                 <WrapPanel Orientation="Horizontal">
                   <Button Name="CheckFirmwareBannerButton" Classes="Primary" Content="Check firmware" Margin="0,0,8,0"
                           Command="{Binding CheckWhatsConnectedCommand}" IsVisible="{Binding ShowCheckFirmware}"/>
@@ -76,19 +83,12 @@
                 </WrapPanel>
               </StackPanel>
             </Border>
-            <TextBlock Name="NoticeText" Classes="Caption" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
-                       Text="{Binding Notice}" IsVisible="{Binding HasNotice}"/>
+            <controls:StatusLine Name="NoticeText" Classes="Caption" Tone="Warning"
+                                 Text="{Binding Notice}" IsVisible="{Binding HasNotice}"/>
 
-            <!-- Firmware: install, update, check (spec 8.6) -->
+            <!-- Firmware: install, update, check (spec 8.6), on the port the Connection section picks -->
             <StackPanel Name="FirmwarePanel" Spacing="8">
               <WrapPanel Name="FirmwareButtons" Orientation="Horizontal" IsVisible="{Binding IsSerial}">
-                <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <ComboBox Name="FirmwarePortCombo" Width="140" Margin="0,0,4,0" ItemsSource="{Binding FirmwarePorts}"
-                          SelectedItem="{Binding FirmwarePort, Mode=TwoWay}" IsEnabled="{Binding CanUseFirmware}"/>
-                <Button Name="RefreshFirmwarePortsButton" Classes="Icon" Margin="0,0,12,0" ToolTip.Tip="Refresh the port list"
-                        Command="{Binding RefreshFirmwarePortsCommand}">
-                  <PathIcon Data="{StaticResource Icon.Refresh}" Width="12" Height="12"/>
-                </Button>
                 <Button Name="UpdateFirmwareButton" Classes="Primary" Content="Update firmware" Margin="0,0,8,0"
                         Command="{Binding UpdateFirmwareCommand}" IsVisible="{Binding ShowUpdateFirmware}"
                         IsEnabled="{Binding CanUseFirmware}"/>
@@ -97,8 +97,8 @@
                 <Button Name="CheckFirmwareButton" Content="Check firmware" Margin="0,0,8,0"
                         Command="{Binding CheckFirmwareCommand}" IsEnabled="{Binding CanUseFirmware}"/>
               </WrapPanel>
-              <TextBlock Name="FirmwareHintText" Classes="Caption" TextWrapping="Wrap" Text="{Binding FirmwareHint}"
-                         IsVisible="{Binding FirmwareHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+              <controls:StatusLine Name="FirmwareHintText" Classes="Caption" Tone="Neutral" Text="{Binding FirmwareHint}"
+                                   IsVisible="{Binding FirmwareHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
               <StackPanel Name="FirmwareProgressPanel" Spacing="4" IsVisible="{Binding IsFirmwareRunning}">
                 <TextBlock Name="FirmwareStageText" Text="{Binding FirmwareStage}"/>
                 <Grid ColumnDefinitions="*,Auto">
@@ -110,13 +110,69 @@
                 <TextBlock Classes="Caption" Text="Don't unplug the controller until this finishes."/>
               </StackPanel>
               <Grid ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding HasFirmwareMessage}">
-                <TextBlock Name="FirmwareMessageText" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding FirmwareMessage}"/>
+                <controls:StatusLine Name="FirmwareMessageText" VerticalAlignment="Center"
+                                     Text="{Binding FirmwareMessage}" Tone="{Binding FirmwareMessageTone}"/>
                 <Button Name="OfferInstallButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0" Content="Install"
                         Command="{Binding InstallFirmwareCommand}" IsVisible="{Binding OfferInstall}"/>
                 <Button Name="TestNowButton" Grid.Column="2" Classes="Primary" Margin="12,0,0,0" Content="Test your controller now"
                         Command="{Binding TestNowCommand}" IsVisible="{Binding OfferTest}"/>
               </Grid>
             </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- 2. Connection: how Volco reaches the controller (saved in Volco, not on the controller) -->
+        <Border Name="ConnectionPanel" Classes="Panel">
+          <StackPanel Spacing="16">
+            <TextBlock Text="Connection" Classes="Subtitle"/>
+            <Grid ColumnDefinitions="150,*">
+              <TextBlock Text="Connect using" Classes="Secondary" VerticalAlignment="Center"/>
+              <Border Grid.Column="1" Classes="SegmentTrack" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <RadioButton Name="SerialOption" Classes="Segment" Content="USB cable"
+                               IsChecked="{Binding Connection.IsSerial, Mode=TwoWay}"/>
+                  <RadioButton Name="UdpOption" Classes="Segment" Content="Wi-Fi (UDP)"
+                               IsChecked="{Binding Connection.IsUdp, Mode=TwoWay}"/>
+                  <RadioButton Name="WebSocketOption" Classes="Segment" Content="WebSocket"
+                               IsChecked="{Binding Connection.IsWebSocket, Mode=TwoWay}"/>
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <StackPanel Name="SerialSection" Spacing="12" IsVisible="{Binding Connection.IsSerial}">
+              <Grid ColumnDefinitions="150,Auto,Auto">
+                <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
+                <ComboBox Name="PortCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
+                          PlaceholderText="Select port…"
+                          ItemsSource="{Binding Connection.ComPorts}"
+                          SelectedItem="{Binding Connection.ComPort, Mode=TwoWay}"/>
+                <Button Name="RefreshPortsButton" Grid.Column="2" Classes="Icon" Margin="4,0,0,0"
+                        Command="{Binding Connection.RefreshComPortsCommand}" ToolTip.Tip="Refresh the port list">
+                  <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
+                </Button>
+              </Grid>
+            </StackPanel>
+
+            <StackPanel Name="UdpSection" Spacing="12" IsVisible="{Binding Connection.IsUdp}">
+              <Grid ColumnDefinitions="150,Auto">
+                <TextBlock Text="Listen port" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="UdpPortBox" Grid.Column="1" Width="160"
+                               Minimum="1024" Maximum="65535" FormatString="0"
+                               Value="{Binding Connection.UdpListenPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+              </Grid>
+            </StackPanel>
+
+            <StackPanel Name="WebSocketSection" Spacing="12" IsVisible="{Binding Connection.IsWebSocket}">
+              <Grid ColumnDefinitions="150,Auto">
+                <TextBlock Text="Server port" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="WebSocketPortBox" Grid.Column="1" Width="160"
+                               Minimum="1024" Maximum="65535" FormatString="0"
+                               Value="{Binding Connection.WebSocketPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+              </Grid>
+            </StackPanel>
+
+            <TextBlock Classes="Caption" TextWrapping="Wrap"
+                       Text="For Wi-Fi, this must match the controller's Wi-Fi settings (Advanced, below)."/>
           </StackPanel>
         </Border>
 
@@ -130,9 +186,14 @@
         <!-- 2. Hardware -->
         <Border Name="HardwarePanel" Classes="Panel">
           <StackPanel Spacing="14">
-            <TextBlock Text="Hardware" Classes="Subtitle"/>
-            <TextBlock Name="PageErrorText" Classes="Caption" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}"
-                       Text="{Binding PageError}" IsVisible="{Binding PageError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Hardware" Classes="Subtitle" VerticalAlignment="Center"/>
+              <Button Name="StartTestButton" Grid.Column="1" Content="Test controller…" Command="{Binding StartTestCommand}"
+                      IsEnabled="{Binding CanStartTest}"
+                      ToolTip.Tip="Try the sliders, buttons and lights. The controller doesn't change volume or run actions meanwhile."/>
+            </Grid>
+            <controls:StatusLine Name="PageErrorText" Classes="Caption" Tone="Danger"
+                                 Text="{Binding PageError}" IsVisible="{Binding PageError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
             <Grid ColumnDefinitions="150,Auto,*">
               <TextBlock Text="Start from" Classes="Secondary" VerticalAlignment="Center"/>
               <ComboBox Name="PresetCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
@@ -157,15 +218,16 @@
                     <StackPanel Spacing="2" Margin="0,2">
                       <Grid ColumnDefinitions="150,Auto,Auto">
                         <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="PinBox" Grid.Column="1" Width="140" Minimum="0" Maximum="63"
+                        <NumericUpDown Name="PinBox" Classes.Invalid="{Binding PinInvalid}" Grid.Column="1" Width="140" Minimum="0" Maximum="63"
                                        FormatString="0" Value="{Binding Pin, Mode=TwoWay}"
                                        IsEnabled="{Binding CanEdit}"/>
                         <Button Name="RemoveSliderButton" Grid.Column="2" Classes="Ghost" Margin="6,0,0,0" Content="Remove"
                                 Command="{Binding RemoveCommand}" IsEnabled="{Binding CanEdit}"/>
                       </Grid>
-                      <TextBlock Classes="Caption" Margin="150,0,0,0" Foreground="{DynamicResource DangerBrush}"
-                                 Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
-                      <TextBlock Classes="Caption" Margin="150,0,0,0" Text="{Binding HintText}" IsVisible="{Binding HasHint}"/>
+                      <controls:StatusLine Name="RowError" Classes="Caption" Margin="150,0,0,0" Tone="Danger"
+                                           Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
+                      <controls:StatusLine Classes="Caption" Margin="150,0,0,0" Tone="Neutral"
+                                           Text="{Binding HintText}" IsVisible="{Binding HasHint}"/>
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -182,7 +244,7 @@
                     <StackPanel Spacing="4" Margin="0,4">
                       <Grid ColumnDefinitions="150,Auto,Auto,Auto">
                         <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="PinBox" Grid.Column="1" Width="140" Minimum="0" Maximum="63"
+                        <NumericUpDown Name="PinBox" Classes.Invalid="{Binding PinInvalid}" Grid.Column="1" Width="140" Minimum="0" Maximum="63"
                                        FormatString="0" Value="{Binding Pin, Mode=TwoWay}"
                                        IsEnabled="{Binding CanEdit}"/>
                         <ComboBox Name="IndicatorCombo" Grid.Column="2" Width="130" Margin="8,0,0,0"
@@ -193,7 +255,7 @@
                       </Grid>
                       <StackPanel Orientation="Horizontal" Spacing="8" Margin="150,0,0,0" IsVisible="{Binding IsLed}">
                         <TextBlock Text="LED pin" Classes="Secondary" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="LedPinBox" Width="140" Minimum="0" Maximum="63" FormatString="0"
+                        <NumericUpDown Name="LedPinBox" Classes.Invalid="{Binding LedPinInvalid}" Width="140" Minimum="0" Maximum="63" FormatString="0"
                                        Value="{Binding LedPin, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
                         <TextBlock Text="Lights when the pin is" Classes="Secondary" VerticalAlignment="Center"/>
                         <ComboBox Name="LedPolarityCombo" Width="90"
@@ -202,26 +264,27 @@
                       </StackPanel>
                       <StackPanel Orientation="Horizontal" Spacing="8" Margin="150,0,0,0" IsVisible="{Binding IsPair}">
                         <TextBlock Text="Pin A" Classes="Secondary" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="PairPinABox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                        <NumericUpDown Name="PairPinABox" Classes.Invalid="{Binding PairPinAInvalid}" Width="120" Minimum="0" Maximum="63" FormatString="0"
                                        Value="{Binding PairPinA, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
                         <TextBlock Text="Pin B" Classes="Secondary" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="PairPinBBox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                        <NumericUpDown Name="PairPinBBox" Classes.Invalid="{Binding PairPinBInvalid}" Width="120" Minimum="0" Maximum="63" FormatString="0"
                                        Value="{Binding PairPinB, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
                         <ComboBox Name="PairPolarityCombo" Width="90"
                                   ItemsSource="{x:Static vm:HwButtonRowViewModel.PolarityChoices}"
                                   SelectedIndex="{Binding PairPolarityIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
                       </StackPanel>
                       <StackPanel Orientation="Horizontal" Spacing="8" Margin="150,0,0,0" IsVisible="{Binding IsScreen}">
-                        <ComboBox Name="ScreenBusCombo" Width="160"
+                        <ComboBox Name="ScreenBusCombo" Classes.Invalid="{Binding ScreenBusInvalid}" Width="160"
                                   ItemsSource="{x:Static vm:HwButtonRowViewModel.BusChoices}"
                                   SelectedIndex="{Binding ScreenBusIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
-                        <ComboBox Name="ScreenAddressCombo" Width="100"
+                        <ComboBox Name="ScreenAddressCombo" Classes.Invalid="{Binding ScreenAddressInvalid}" Width="100"
                                   ItemsSource="{x:Static vm:HwButtonRowViewModel.AddressChoices}"
                                   SelectedIndex="{Binding ScreenAddressIndex, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
                       </StackPanel>
-                      <TextBlock Classes="Caption" Margin="150,0,0,0" Foreground="{DynamicResource DangerBrush}"
-                                 Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
-                      <TextBlock Classes="Caption" Margin="150,0,0,0" Text="{Binding HintText}" IsVisible="{Binding HasHint}"/>
+                      <controls:StatusLine Name="RowError" Classes="Caption" Margin="150,0,0,0" Tone="Danger"
+                                           Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
+                      <controls:StatusLine Classes="Caption" Margin="150,0,0,0" Tone="Neutral"
+                                           Text="{Binding HintText}" IsVisible="{Binding HasHint}"/>
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -239,67 +302,15 @@
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="{Binding Title}" Width="150" VerticalAlignment="Center"/>
                         <TextBlock Text="SDA" Classes="Secondary" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="SdaBox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                        <NumericUpDown Name="SdaBox" Classes.Invalid="{Binding PinsInvalid}" Width="120" Minimum="0" Maximum="63" FormatString="0"
                                        Value="{Binding Sda, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
                         <TextBlock Text="SCL" Classes="Secondary" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="SclBox" Width="120" Minimum="0" Maximum="63" FormatString="0"
+                        <NumericUpDown Name="SclBox" Classes.Invalid="{Binding PinsInvalid}" Width="120" Minimum="0" Maximum="63" FormatString="0"
                                        Value="{Binding Scl, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"/>
                       </StackPanel>
-                      <TextBlock Classes="Caption" Margin="150,0,0,0" Foreground="{DynamicResource DangerBrush}"
-                                 Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
+                      <controls:StatusLine Name="RowError" Classes="Caption" Margin="150,0,0,0" Tone="Danger"
+                                           Text="{Binding ErrorText}" IsVisible="{Binding HasError}"/>
                     </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-
-        <!-- 3. Test -->
-        <Border Name="TestPanel" Classes="Panel">
-          <StackPanel Spacing="10">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="Test" Classes="Subtitle" VerticalAlignment="Center"/>
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <Button Name="StartTestButton" Content="Start test" Command="{Binding StartTestCommand}"
-                        IsVisible="{Binding !IsTesting}" IsEnabled="{Binding CanStartTest}"/>
-                <Button Name="StopTestButton" Classes="Primary" Content="Stop test" Command="{Binding StopTestCommand}"
-                        IsVisible="{Binding IsTesting}"/>
-              </StackPanel>
-            </Grid>
-            <TextBlock Classes="Caption" TextWrapping="Wrap"
-                       Text="While testing, the controller doesn't change volume or run actions."/>
-            <StackPanel Name="TestBody" Spacing="8" IsVisible="{Binding IsTesting}">
-              <ItemsControl Name="TestSliderRows" ItemsSource="{Binding TestSliders}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TestSliderViewModel">
-                    <Grid ColumnDefinitions="150,200,Auto" Margin="0,2">
-                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-                      <ProgressBar Grid.Column="1" Classes="Level" Minimum="0" Maximum="1" Value="{Binding Level}"
-                                   VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="2" Classes="Caption" Margin="10,0,0,0" VerticalAlignment="Center"
-                                 Text="{Binding Value}"/>
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <ItemsControl Name="TestButtonRows" ItemsSource="{Binding TestButtons}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TestButtonViewModel">
-                    <Grid ColumnDefinitions="150,Auto,Auto" Margin="0,2">
-                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-                      <Ellipse Grid.Column="1" Classes="Led" Classes.on="{Binding IsPressed}" VerticalAlignment="Center"/>
-                      <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
-                        <ComboBox Name="TestLedCombo" Width="90" IsVisible="{Binding IsLed}"
-                                  ItemsSource="{x:Static vm:TestButtonViewModel.LedChoices}"
-                                  SelectedIndex="{Binding IndicatorIndex, Mode=TwoWay}"/>
-                        <ComboBox Name="TestPairCombo" Width="90" IsVisible="{Binding IsPair}"
-                                  ItemsSource="{x:Static vm:TestButtonViewModel.PairChoices}"
-                                  SelectedIndex="{Binding IndicatorIndex, Mode=TwoWay}"/>
-                        <TextBlock Classes="Caption" Text="Shows the test screen" IsVisible="{Binding IsScreen}"
-                                   VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Grid>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -359,8 +370,8 @@
                 <NumericUpDown Name="TransitionBox" Grid.Column="1" Width="120" Minimum="0" Maximum="2000" FormatString="0 ms"
                                Value="{Binding TransitionMs, Mode=TwoWay}"/>
               </Grid>
-              <TextBlock Classes="Caption" Foreground="{DynamicResource DangerBrush}" Text="{Binding BehaviourError}"
-                         IsVisible="{Binding BehaviourError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+              <controls:StatusLine Name="BehaviourErrorText" Classes="Caption" Tone="Danger" Text="{Binding BehaviourError}"
+                                   IsVisible="{Binding BehaviourError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
             </StackPanel>
           </StackPanel>
         </Border>
@@ -396,8 +407,8 @@
                 <NumericUpDown Name="DeadbandBox" Grid.Column="1" Width="120" Minimum="0" Maximum="500" FormatString="0"
                                Value="{Binding Deadband, Mode=TwoWay}"/>
               </Grid>
-              <TextBlock Name="InputErrorText" Classes="Caption" Foreground="{DynamicResource DangerBrush}" Text="{Binding InputError}"
-                         IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+              <controls:StatusLine Name="InputErrorText" Classes="Caption" Tone="Danger" Text="{Binding InputError}"
+                                   IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
 
               <TextBlock Text="Screen bus clock" Classes="Secondary" IsVisible="{Binding HasBuses}"/>
               <ItemsControl Name="BusClockRows" ItemsSource="{Binding Buses}">
@@ -405,7 +416,7 @@
                   <DataTemplate x:DataType="vm:I2cBusRowViewModel">
                     <Grid ColumnDefinitions="200,Auto" Margin="0,2">
                       <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-                      <NumericUpDown Name="ClockBox" Grid.Column="1" Width="120" Minimum="100" Maximum="1000"
+                      <NumericUpDown Name="ClockBox" Classes.Invalid="{Binding ClockInvalid}" Grid.Column="1" Width="120" Minimum="100" Maximum="1000"
                                      FormatString="0 kHz" Value="{Binding ClockKhz, Mode=TwoWay}"/>
                     </Grid>
                   </DataTemplate>
@@ -420,35 +431,35 @@
               <StackPanel Spacing="10" IsVisible="{Binding UdpEnabled}">
                 <Grid ColumnDefinitions="200,Auto">
                   <TextBlock Text="Network name (SSID)" VerticalAlignment="Center"/>
-                  <TextBox Name="SsidBox" Grid.Column="1" Width="220" MaxLength="32" Text="{Binding Ssid, Mode=TwoWay}"/>
+                  <TextBox Name="SsidBox" Classes.Invalid="{Binding SsidInvalid}" Grid.Column="1" Width="220" MaxLength="32" Text="{Binding Ssid, Mode=TwoWay}"/>
                 </Grid>
                 <Grid ColumnDefinitions="200,Auto,Auto">
                   <TextBlock Text="Password" VerticalAlignment="Center"/>
-                  <TextBox Name="PasswordBox" Grid.Column="1" Width="220" MaxLength="64" PasswordChar="{Binding PasswordChar}"
+                  <TextBox Name="PasswordBox" Classes.Invalid="{Binding PasswordInvalid}" Grid.Column="1" Width="220" MaxLength="64" PasswordChar="{Binding PasswordChar}"
                            Text="{Binding Password, Mode=TwoWay}"/>
                   <CheckBox Name="ShowPasswordBox" Grid.Column="2" Content="Show" Margin="8,0,0,0"
                             IsChecked="{Binding ShowPassword, Mode=TwoWay}"/>
                 </Grid>
                 <Grid ColumnDefinitions="200,Auto">
                   <TextBlock Text="PC IP address" VerticalAlignment="Center"/>
-                  <TextBox Name="PcIpBox" Grid.Column="1" Width="220" PlaceholderText="192.168.1.10"
+                  <TextBox Name="PcIpBox" Classes.Invalid="{Binding PcIpInvalid}" Grid.Column="1" Width="220" PlaceholderText="192.168.1.10"
                            Text="{Binding PcIp, Mode=TwoWay}"/>
                 </Grid>
                 <Grid ColumnDefinitions="200,Auto">
                   <TextBlock Text="PC port" VerticalAlignment="Center"/>
-                  <NumericUpDown Name="PcPortBox" Grid.Column="1" Width="140" Minimum="1" Maximum="65535" FormatString="0"
+                  <NumericUpDown Name="PcPortBox" Classes.Invalid="{Binding PortsInvalid}" Grid.Column="1" Width="140" Minimum="1" Maximum="65535" FormatString="0"
                                  Value="{Binding PcPort, Mode=TwoWay}"/>
                 </Grid>
                 <Grid ColumnDefinitions="200,Auto">
                   <TextBlock Text="Controller port" VerticalAlignment="Center"/>
-                  <NumericUpDown Name="LocalPortBox" Grid.Column="1" Width="140" Minimum="1" Maximum="65535" FormatString="0"
+                  <NumericUpDown Name="LocalPortBox" Classes.Invalid="{Binding PortsInvalid}" Grid.Column="1" Width="140" Minimum="1" Maximum="65535" FormatString="0"
                                  Value="{Binding LocalPort, Mode=TwoWay}"/>
                 </Grid>
                 <TextBlock Classes="Caption" TextWrapping="Wrap"
                            Text="USB keeps working. If the Wi-Fi settings are wrong, fix them over USB."/>
               </StackPanel>
-              <TextBlock Classes="Caption" Foreground="{DynamicResource DangerBrush}" Text="{Binding WifiError}"
-                         IsVisible="{Binding WifiError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+              <controls:StatusLine Name="WifiErrorText" Classes="Caption" Tone="Danger" Text="{Binding WifiError}"
+                                   IsVisible="{Binding WifiError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
             </StackPanel>
           </Border>
         </StackPanel>
@@ -457,9 +468,36 @@
     </ScrollViewer>
   </DockPanel>
 
+  <!-- The snackbar: a question, a save's progress or result, or unsaved changes -->
+  <Border Name="Footer" Classes="Snackbar" Margin="24,0,24,16" IsVisible="{Binding ShowFooter}">
+    <Panel>
+      <Grid Name="ConfirmPanel" ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding HasConfirmation}">
+        <TextBlock Name="ConfirmText" TextWrapping="Wrap" VerticalAlignment="Center"
+                   Text="{Binding Confirmation.Message, FallbackValue=''}"/>
+        <Button Name="ConfirmButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0"
+                Content="{Binding Confirmation.ConfirmLabel, FallbackValue=''}"
+                Command="{Binding Confirmation.ConfirmCommand, FallbackValue={x:Null}}"/>
+        <Button Name="CancelConfirmButton" Grid.Column="2" Margin="8,0,0,0" Content="Cancel"
+                Command="{Binding Confirmation.CancelCommand, FallbackValue={x:Null}}"/>
+      </Grid>
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" IsVisible="{Binding !HasConfirmation}">
+        <controls:StatusLine Name="ProgressText" VerticalAlignment="Center"
+                             Text="{Binding FooterText}" Tone="{Binding FooterTone}"/>
+        <Button Name="RevertButton" Grid.Column="1" Content="Revert" Margin="12,0,0,0"
+                Command="{Binding RevertCommand}" IsVisible="{Binding IsDirty}"/>
+        <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save to controller" Margin="8,0,0,0"
+                Command="{Binding SaveCommand}" IsVisible="{Binding IsDirty}"/>
+        <Button Name="DismissFooterButton" Grid.Column="3" Classes="Icon" Margin="4,0,0,0" ToolTip.Tip="Close"
+                VerticalAlignment="Center" Command="{Binding DismissFooterCommand}" IsVisible="{Binding CanDismissFooter}">
+          <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12"/>
+        </Button>
+      </Grid>
+    </Panel>
+  </Border>
+
   <!-- Modal dialogs: a scrim over the page, one card at a time -->
   <Border Name="DialogOverlay" Background="#66000000" IsVisible="{Binding HasDialog}">
-    <Border Name="DialogCard" Classes="Panel" Padding="24" MaxWidth="480" Margin="24"
+    <Border Name="DialogCard" Classes="Panel" Padding="24" MaxWidth="560" Margin="24"
             HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 8 28 0 #40000000">
       <Panel>
         <!-- Install firmware: asks first, since Install wipes the controller's setup -->
@@ -498,6 +536,47 @@
                     Command="{Binding StartFromScratchCommand}"/>
           </StackPanel>
           <Button Name="CloseSetupButton" HorizontalAlignment="Right" Content="Not now" Command="{Binding CloseSetupCommand}"/>
+        </StackPanel>
+
+        <!-- The hardware test (spec 8.5): open while testing; closing it ends the test -->
+        <StackPanel Name="TestDialog" Spacing="14" IsVisible="{Binding IsTesting}" MinWidth="400">
+          <TextBlock Classes="Subtitle" Text="Test controller"/>
+          <TextBlock Classes="Secondary" TextWrapping="Wrap"
+                     Text="Move a slider or press a button and it shows here. Each press switches the button's light or changes its screen."/>
+          <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="8">
+              <ItemsControl Name="TestSliderRows" ItemsSource="{Binding TestSliders}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TestSliderViewModel">
+                    <Grid ColumnDefinitions="110,*,60" Margin="0,3">
+                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                      <ProgressBar Grid.Column="1" Classes="Level" Minimum="0" Maximum="1" Value="{Binding Level}"
+                                   VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="2" Classes="Caption" Margin="10,0,0,0" VerticalAlignment="Center"
+                                 Text="{Binding Value}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <ItemsControl Name="TestButtonRows" ItemsSource="{Binding TestButtons}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TestButtonViewModel">
+                    <Grid ColumnDefinitions="110,Auto,*" Margin="0,3">
+                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                      <Ellipse Grid.Column="1" Classes="Led" Classes.on="{Binding IsPressed}" VerticalAlignment="Center"
+                               ToolTip.Tip="Lit while the button is held"/>
+                      <TextBlock Name="TestStateText" Grid.Column="2" Classes="Secondary" Margin="16,0,0,0"
+                                 VerticalAlignment="Center" Text="{Binding StateText}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+          <TextBlock Classes="Caption" TextWrapping="Wrap"
+                     Text="While testing, the controller doesn't change volume or run actions."/>
+          <Button Name="StopTestButton" Classes="Primary" HorizontalAlignment="Right" Content="Done"
+                  Command="{Binding StopTestCommand}"/>
         </StackPanel>
       </Panel>
     </Border>
