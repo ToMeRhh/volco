@@ -82,10 +82,39 @@ public class ControllerPageTests
         using var __ = vm;
         Greet(rig, ControllerConfigState.None, 0);
         Assert.True(page.FindControl<Border>("BannerPanel")!.IsVisible);
-        Assert.Equal("Set up your controller.", page.FindControl<TextBlock>("BannerText")!.Text);
-        Assert.True(page.FindControl<Button>("SetUpButton")!.IsVisible);
+        Assert.Equal("This controller isn't set up yet.", page.FindControl<TextBlock>("BannerText")!.Text);
+        Assert.False(page.FindControl<Button>("SetUpButton")!.IsVisible);   // in the setup dialog instead
         Assert.False(page.FindControl<Button>("ApplyMineButton")!.IsVisible);
         Assert.False(page.FindControl<Button>("FixItButton")!.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ANotSetUpController_GetsTheSetupDialog_OverThePage()
+    {
+        var (page, rig, vm) = Show(DiyBlob);
+        using var _ = rig;
+        using var __ = vm;
+        Greet(rig, ControllerConfigState.None, 0);
+        Assert.True(page.FindControl<Border>("DialogOverlay")!.IsVisible);
+        Assert.True(page.FindControl<StackPanel>("SetupDialog")!.IsVisible);
+        Assert.False(page.FindControl<StackPanel>("InstallDialog")!.IsVisible);
+        Assert.True(page.FindControl<Button>("SetupApplySavedButton")!.IsVisible);
+        Assert.False(page.FindControl<Button>("OpenSetupButton")!.IsVisible);
+
+        page.FindControl<Button>("CloseSetupButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(page.FindControl<Border>("DialogOverlay")!.IsVisible);
+        Assert.True(page.FindControl<Button>("OpenSetupButton")!.IsVisible);
+
+        page.FindControl<Button>("OpenSetupButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        page.FindControl<Button>("SetupFromPresetButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(page.FindControl<Border>("DialogOverlay")!.IsVisible);
+        Assert.True(page.FindControl<Border>("SetupGuidePanel")!.IsVisible);
+        Assert.True(page.FindControl<Border>("Footer")!.IsVisible);
+        Assert.True(page.FindControl<Button>("SaveButton")!.IsEffectivelyEnabled);
+        Assert.Equal("This setup isn't on the controller yet.", page.FindControl<TextBlock>("ProgressText")!.Text);
     }
 
     [AvaloniaFact]

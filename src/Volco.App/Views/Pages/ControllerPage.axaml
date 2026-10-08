@@ -5,7 +5,8 @@
              x:Class="Volco.App.Views.Pages.ControllerPage"
              x:DataType="vm:ControllerViewModel">
 
-  <DockPanel>
+  <Grid>
+  <DockPanel IsEnabled="{Binding !HasDialog}">
     <!-- Footer: sticky while there is something to save, a save runs, or its result shows -->
     <Border Name="Footer" DockPanel.Dock="Bottom" Classes="Panel" Margin="24,0,24,16"
             IsVisible="{Binding ShowFooter}">
@@ -23,7 +24,7 @@
         </Border>
         <Grid ColumnDefinitions="*,Auto,Auto">
           <TextBlock Name="ProgressText" Classes="Secondary" TextWrapping="Wrap" VerticalAlignment="Center"
-                     Text="{Binding ProgressText}"/>
+                     Text="{Binding FooterText}"/>
           <Button Name="RevertButton" Grid.Column="1" Content="Revert" Margin="12,0,0,0"
                   Command="{Binding RevertCommand}" IsVisible="{Binding IsDirty}"/>
           <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save to controller" Margin="8,0,0,0"
@@ -56,6 +57,8 @@
                 <WrapPanel Orientation="Horizontal">
                   <Button Name="CheckFirmwareBannerButton" Classes="Primary" Content="Check firmware" Margin="0,0,8,0"
                           Command="{Binding CheckWhatsConnectedCommand}" IsVisible="{Binding ShowCheckFirmware}"/>
+                  <Button Name="OpenSetupButton" Classes="Primary" Content="Set up…" Margin="0,0,8,0"
+                          Command="{Binding OpenSetupCommand}" IsVisible="{Binding ShowOpenSetup}"/>
                   <Button Name="UseControllersButton" Content="Use the controller's" Margin="0,0,8,0"
                           Command="{Binding UseControllersCommand}" IsVisible="{Binding ShowUseControllers}"/>
                   <Button Name="ApplyMineButton" Content="Apply mine" Margin="0,0,8,0"
@@ -94,16 +97,6 @@
                 <Button Name="CheckFirmwareButton" Content="Check firmware" Margin="0,0,8,0"
                         Command="{Binding CheckFirmwareCommand}" IsEnabled="{Binding CanUseFirmware}"/>
               </WrapPanel>
-              <Border Name="ConfirmInstallPanel" Classes="Indent" IsVisible="{Binding ConfirmInstallPending}">
-                <Grid ColumnDefinitions="*,Auto,Auto">
-                  <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                             Text="Installing erases the controller's setup (Volco keeps a copy you can apply after). Install the firmware?"/>
-                  <Button Name="ConfirmInstallButton" Grid.Column="1" Classes="Primary" Margin="12,0,0,0" Content="Install"
-                          Command="{Binding ConfirmInstallCommand}"/>
-                  <Button Name="CancelInstallButton" Grid.Column="2" Margin="8,0,0,0" Content="Cancel"
-                          Command="{Binding CancelInstallCommand}"/>
-                </Grid>
-              </Border>
               <TextBlock Name="FirmwareHintText" Classes="Caption" TextWrapping="Wrap" Text="{Binding FirmwareHint}"
                          IsVisible="{Binding FirmwareHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
               <StackPanel Name="FirmwareProgressPanel" Spacing="4" IsVisible="{Binding IsFirmwareRunning}">
@@ -131,6 +124,9 @@
                    Text="{Binding EditorPlaceholder}" IsVisible="{Binding !ShowEditor}"/>
 
         <StackPanel Name="EditorSections" Spacing="{StaticResource SpaceM}" IsVisible="{Binding ShowEditor}">
+        <Border Name="SetupGuidePanel" Classes="Indent" BorderBrush="{DynamicResource AccentBrush}" IsVisible="{Binding IsSettingUp}">
+          <TextBlock Name="SetupGuideText" TextWrapping="Wrap" Text="{Binding SetupGuideText}"/>
+        </Border>
         <!-- 2. Hardware -->
         <Border Name="HardwarePanel" Classes="Panel">
           <StackPanel Spacing="14">
@@ -460,4 +456,51 @@
       </StackPanel>
     </ScrollViewer>
   </DockPanel>
+
+  <!-- Modal dialogs: a scrim over the page, one card at a time -->
+  <Border Name="DialogOverlay" Background="#66000000" IsVisible="{Binding HasDialog}">
+    <Border Name="DialogCard" Classes="Panel" Padding="24" MaxWidth="480" Margin="24"
+            HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 8 28 0 #40000000">
+      <Panel>
+        <!-- Install firmware: asks first, since Install wipes the controller's setup -->
+        <StackPanel Name="InstallDialog" Spacing="16" IsVisible="{Binding ConfirmInstallPending}">
+          <TextBlock Classes="Subtitle" Text="Install Volco's firmware?"/>
+          <TextBlock TextWrapping="Wrap"
+                     Text="Installing erases the setup stored on the controller. Volco keeps a copy you can apply afterwards."/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Name="CancelInstallButton" Content="Cancel" Command="{Binding CancelInstallCommand}"/>
+            <Button Name="ConfirmInstallButton" Classes="Primary" Content="Install" Command="{Binding ConfirmInstallCommand}"/>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Onboarding: a controller with no setup stored on it -->
+        <StackPanel Name="SetupDialog" Spacing="16" IsVisible="{Binding IsSetupDialogOpen}">
+          <TextBlock Classes="Subtitle" Text="Set up your controller"/>
+          <TextBlock Name="SetupIntroText" TextWrapping="Wrap" Text="{Binding SetupIntro}"/>
+          <Button Name="SetupApplySavedButton" Classes="Primary" HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Center" Content="Apply my saved setup"
+                  Command="{Binding SetupApplySavedCommand}" IsVisible="{Binding SetupHasSavedSetup}"/>
+          <StackPanel Spacing="6">
+            <TextBlock Classes="Secondary" Text="Start a new setup from"/>
+            <Grid ColumnDefinitions="*,Auto">
+              <ComboBox Name="SetupPresetCombo" HorizontalAlignment="Stretch" ItemsSource="{Binding SetupPresets}"
+                        SelectedItem="{Binding SetupPreset, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="ctl:ControllerPreset">
+                    <TextBlock Text="{Binding DisplayName}"/>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Name="SetupFromPresetButton" Grid.Column="1" Margin="8,0,0,0" Content="Start"
+                      Classes.Primary="{Binding !SetupHasSavedSetup}" Command="{Binding StartFromPresetCommand}"/>
+            </Grid>
+            <Button Name="SetupFromScratchButton" Classes="Ghost" Content="Start from scratch (no inputs)"
+                    Command="{Binding StartFromScratchCommand}"/>
+          </StackPanel>
+          <Button Name="CloseSetupButton" HorizontalAlignment="Right" Content="Not now" Command="{Binding CloseSetupCommand}"/>
+        </StackPanel>
+      </Panel>
+    </Border>
+  </Border>
+  </Grid>
 </UserControl>

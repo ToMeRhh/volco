@@ -104,6 +104,29 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.False(vm.OfferTest);   // Install erased the setup: "Set up" comes before a test
         Assert.Equal("flash COM3 Install", _flasher.Calls.Single());
         Assert.StartsWith("Firmware 3f9c2a1b5d07 (from Volco ", vm.FirmwareText);
+        // The controller has no setup now: setting it up is the next step.
+        Assert.True(vm.IsSetupDialogOpen);
+        Assert.StartsWith("The firmware is installed. ", vm.SetupIntro);
+    }
+
+    [Fact]
+    public void Install_AsksInADialog_AndCancelLeavesThePageAsItWas()
+    {
+        var vm = Vm();
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => vm.FirmwareMessage is not null);
+
+        vm.InstallFirmwareCommand.Execute(null);
+        Assert.True(vm.HasDialog);
+        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
+        Assert.True(vm.OfferInstall);
+
+        vm.CancelInstallCommand.Execute(null);
+        Assert.False(vm.HasDialog);
+        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
+        Assert.True(vm.OfferInstall);
+        Assert.Equal("probe COM3", _flasher.Calls.Single());
     }
 
     [Fact]
