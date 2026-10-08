@@ -149,21 +149,21 @@ public static class DraftProblems
 
         // 7. Ranges.
         var s7 = c.EffectiveScreens();
-        void Range(ConfigField field, byte item, bool bad, string message) { if (bad) Add(field, item, message); }
-        Range(ConfigField.ScreenValue, 1, s7.Brightness > 255, "Brightness must be from 0 to 255.");
-        Range(ConfigField.ScreenValue, 2, s7.TransitionMs > 2000, "The slide duration must be at most 2000 ms.");
-        Range(ConfigField.ScreenValue, 3, s7.ScrollHoldMs > 10000, "The scroll hold must be at most 10000 ms.");
-        Range(ConfigField.ScreenValue, 4, s7.ScrollSpeedPxS is < 5 or > 200, "The scroll speed must be from 5 to 200 px/s.");
-        Range(ConfigField.ScreenValue, 5, s7.ScrollEndHoldMs > 10000, "The scroll end hold must be at most 10000 ms.");
-        Range(ConfigField.ScreenValue, 7, s7.DimAfterS is < 10 or > 86400, "Dim after must be from 10 to 86400 s.");
-        Range(ConfigField.ScreenValue, 8, s7.DimBrightness > 255, "The dimmed brightness must be from 0 to 255.");
-        Range(ConfigField.ScreenValue, 10, s7.OffAfterS is < 10 or > 86400, "Turn off after must be from 10 to 86400 s.");
-        Range(ConfigField.ScreenValue, 12, s7.PixelShiftEveryS is < 10 or > 86400, "Pixel shift must be from 10 to 86400 s.");
+        void Check(ConfigField field, byte item, bool bad, string message) { if (bad) Add(field, item, message); }
+        Check(ConfigField.ScreenValue, 1, s7.Brightness > 255, "Brightness must be from 0 to 255.");
+        Check(ConfigField.ScreenValue, 2, s7.TransitionMs > 2000, "The slide duration must be at most 2000 ms.");
+        Check(ConfigField.ScreenValue, 3, s7.ScrollHoldMs > 10000, "The scroll hold must be at most 10000 ms.");
+        Check(ConfigField.ScreenValue, 4, s7.ScrollSpeedPxS is < 5 or > 200, "The scroll speed must be from 5 to 200 px/s.");
+        Check(ConfigField.ScreenValue, 5, s7.ScrollEndHoldMs > 10000, "The scroll end hold must be at most 10000 ms.");
+        Check(ConfigField.ScreenValue, 7, s7.DimAfterS is < 10 or > 86400, "Dim after must be from 10 to 86400 s.");
+        Check(ConfigField.ScreenValue, 8, s7.DimBrightness > 255, "The dimmed brightness must be from 0 to 255.");
+        Check(ConfigField.ScreenValue, 10, s7.OffAfterS is < 10 or > 86400, "Turn off after must be from 10 to 86400 s.");
+        Check(ConfigField.ScreenValue, 12, s7.PixelShiftEveryS is < 10 or > 86400, "Pixel shift must be from 10 to 86400 s.");
         var input = c.EffectiveInput();
-        Range(ConfigField.InputValue, 1, input.DebounceMs is < 1 or > 200, "Debounce must be from 1 to 200 ms.");
-        Range(ConfigField.InputValue, 2, input.SliderIntervalMs is < 1 or > 100, "The slider sample interval must be from 1 to 100 ms.");
-        Range(ConfigField.InputValue, 3, input.FilterWeightPct is < 1 or > 100, "Smoothing must be from 1 to 100 %.");
-        Range(ConfigField.InputValue, 4, input.SliderDeadband > 500, "The deadband must be at most 500.");
+        Check(ConfigField.InputValue, 1, input.DebounceMs is < 1 or > 200, "Debounce must be from 1 to 200 ms.");
+        Check(ConfigField.InputValue, 2, input.SliderIntervalMs is < 1 or > 100, "The slider sample interval must be from 1 to 100 ms.");
+        Check(ConfigField.InputValue, 3, input.FilterWeightPct is < 1 or > 100, "Smoothing must be from 1 to 100 %.");
+        Check(ConfigField.InputValue, 4, input.SliderDeadband > 500, "The deadband must be at most 500.");
 
         // Whatever the validator reports is on the list, worded or not.
         var first = ControllerConfigValidator.Validate(c, chip);
