@@ -133,6 +133,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     public bool HasFirmwareText => FirmwareText.Length > 0;
 
+    /// <summary>The firmware line shows its icon: an update, another build, or one this app can't use.</summary>
+    public bool FirmwareNeedsAttention => FirmwareTone is LinkTone.Warning or LinkTone.Danger;
+
     public ControllerBanner Banner => _service.Banner;
 
     /// <summary>The banner's icon: reading is neutral, a setup to choose is a warning, a broken or
@@ -926,6 +929,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(FirmwareText));
         OnPropertyChanged(nameof(HasFirmwareText));
         OnPropertyChanged(nameof(FirmwareTone));
+        OnPropertyChanged(nameof(FirmwareNeedsAttention));
         OnPropertyChanged(nameof(BannerTone));
         OnPropertyChanged(nameof(Banner));
         OnPropertyChanged(nameof(BannerText));

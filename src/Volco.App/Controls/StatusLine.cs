@@ -18,6 +18,16 @@ public class StatusLine : TemplatedControl
     public static readonly StyledProperty<LinkTone> ToneProperty =
         AvaloniaProperty.Register<StatusLine, LinkTone>(nameof(Tone));
 
+    public static readonly StyledProperty<bool> ShowIconProperty =
+        AvaloniaProperty.Register<StatusLine, bool>(nameof(ShowIcon), defaultValue: true);
+
+    /// <summary>False: the text alone, for a line whose state is only worth an icon when it's bad.</summary>
+    public bool ShowIcon
+    {
+        get => GetValue(ShowIconProperty);
+        set => SetValue(ShowIconProperty, value);
+    }
+
     public string? Text
     {
         get => GetValue(TextProperty);
