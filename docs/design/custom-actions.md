@@ -225,12 +225,12 @@ controller's config blob carries no actions, so a controller cannot define a com
 ## 9. Later
 
 - A built-in **Call a webhook** action (HTTP without a shell, result on the LED).
-- Controller authentication (§7), then lifting the USB-only rule.
+- Controller authentication (§7), then lifting the USB-only rule ([#89](https://github.com/ToMeRhh/volco/issues/89)).
 - A "Stop it" repeat mode, turning a script button into start/stop.
 - A per-script timeout.
 - A playing animation on screens (a firmware flag, e.g. an animated icon), after trying the static
-  icons on hardware.
-- Scripts setting their own button's LED or screen text.
+  icons on hardware ([#90](https://github.com/ToMeRhh/volco/issues/90)).
+- Scripts setting their own button's LED or screen text ([#91](https://github.com/ToMeRhh/volco/issues/91)).
 
 ## 10. As built
 
