@@ -58,6 +58,11 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// detector fires the gesture (after the release, maybe after a double-press wait).</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _pressOverUsb = new();
 
+    /// <summary>Per button input: the action a press just ran, while its screen shows it instead
+    /// of the button's first action (custom-actions spec §11), and the timer that ends it.</summary>
+    private readonly Dictionary<int, (ButtonActionConfig Action, ITimer Timer)> _pressed = new();
+    private readonly object _pressedGate = new();
+
     private readonly IMediaSessions? _media;
     private readonly ProgramOpener? _programs;
     private readonly ScriptRunner? _scripts;
@@ -129,7 +134,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         // In test mode the same delegate shows the test state and ignores the announce step
         // (spec §8.5), so no preset blink or flash appears during a test.
         _link = new ControllerLink(
-            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step, ActionStatus),
+            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step, ActionStatus, PressedSnapshot()),
             ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) =>
         {
@@ -195,6 +200,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         if (started)
         {
             AppLog.Info("Test mode on");
+            ClearPressed();
             _buttonPressDetector?.Reset();   // a gesture started before the test can't fire during it
             _sliderProcessor?.DropPending();  // nor a slider value queued just before it
             _link.PushAll();
@@ -491,6 +497,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
 
         AppLog.Info($"Active preset: {presetId}");
+        ClearPressed();   // the other preset's actions: nothing pressed there yet
         WatchPrograms();
         ActivePresetChanged?.Invoke(this, presetId);
 
@@ -980,6 +987,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
         var presetBefore = ActivePresetId;
         action?.Execute();
+        if (action is not null) ShowPressed(e.ButtonIndex, binding, actionConfig);
 
         if (alreadyCurrent is not null) ShowDeviceOsd(alreadyCurrent.Id, alreadyCurrent.FriendlyName);
 
@@ -1186,6 +1194,64 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         VolumeChanged?.Invoke(this, n);
     }
 
+    /// <summary>After a press: its screen shows the action it ran for
+    /// <see cref="VolcoRuntimeOptions.ShowPressedFor"/>, unless that is the action the screen
+    /// shows anyway (pressing it ends any other shown action at once).</summary>
+    private void ShowPressed(int button, ButtonBindingConfig binding, ButtonActionConfig action)
+    {
+        if (IsDisposed) return;
+        if (!ControllerDisplay.ShowsWhenPressed(binding, action) || _options.ShowPressedFor <= TimeSpan.Zero)
+        {
+            if (ClearPressed(button)) PushControllerState();
+            return;
+        }
+        lock (_pressedGate)
+        {
+            if (_pressed.TryGetValue(button, out var old)) old.Timer.Dispose();
+            var timer = _options.Time.CreateTimer(_ => EndPressed(button, action), null, _options.ShowPressedFor, Timeout.InfiniteTimeSpan);
+            _pressed[button] = (action, timer);
+        }
+        PushControllerState();
+    }
+
+    /// <summary>The shown time of <paramref name="action"/> on <paramref name="button"/> is over
+    /// (unless another press replaced it meanwhile).</summary>
+    private void EndPressed(int button, ButtonActionConfig action)
+    {
+        lock (_pressedGate)
+        {
+            if (!_pressed.TryGetValue(button, out var entry) || !ReferenceEquals(entry.Action, action)) return;
+            entry.Timer.Dispose();
+            _pressed.Remove(button);
+        }
+        PushControllerState();
+    }
+
+    /// <summary>Ends the shown action of <paramref name="button"/> (-1: of every button).
+    /// Returns whether there was one. Does not push.</summary>
+    private bool ClearPressed(int button = -1)
+    {
+        lock (_pressedGate)
+        {
+            if (button >= 0)
+            {
+                if (!_pressed.Remove(button, out var entry)) return false;
+                entry.Timer.Dispose();
+                return true;
+            }
+            var any = _pressed.Count > 0;
+            foreach (var (_, entry) in _pressed) entry.Timer.Dispose();
+            _pressed.Clear();
+            return any;
+        }
+    }
+
+    private IReadOnlyDictionary<int, ButtonActionConfig>? PressedSnapshot()
+    {
+        lock (_pressedGate)
+            return _pressed.Count == 0 ? null : _pressed.ToDictionary(p => p.Key, p => p.Value.Action);
+    }
+
     /// <summary>A media session, a watched program or a script run changed (any thread).</summary>
     public event EventHandler? ActionStateChanged;
 
@@ -1320,6 +1386,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             _programs.Changed -= OnActionStateChanged;
             _programs.Watch(Array.Empty<CommandConfig>());
         }
+        ClearPressed();
         if (_scripts is not null)
         {
             _scripts.Changed -= OnActionStateChanged;

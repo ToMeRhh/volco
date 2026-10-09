@@ -61,4 +61,14 @@ public class ActionCatalogTests
         Assert.Equal("Blank. None of this button’s actions is set in this preset.",
             ActionCatalog.ScreenDescription(Binding(new ButtonActionConfig())));
     }
+
+    [Fact]
+    public void Screen_SaysItShowsAnotherActionForAMoment()
+    {
+        var play = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause };
+        Assert.Equal("Shows the Press action. Shows another action for a moment after you use it.",
+            ActionCatalog.ScreenDescription(Binding(Mute, play)));
+        Assert.Equal("Shows the Press action. Flashes the preset’s name when Hold changes the preset.",
+            ActionCatalog.ScreenDescription(Binding(play, Next)));
+    }
 }
