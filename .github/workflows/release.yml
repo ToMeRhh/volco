@@ -119,6 +119,9 @@ jobs:
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
+      env:
+        # Self-hosted runners: the default (/usr/share/dotnet, C:\Program Files\dotnet) needs admin.
+        DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
       with:
         dotnet-version: |
           8.0.x
