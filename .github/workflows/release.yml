@@ -18,7 +18,7 @@ on:
 jobs:
   version:
     name: Resolve version
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     outputs:
       version: ${{ steps.ver.outputs.version }}
       tag: ${{ steps.ver.outputs.tag }}
@@ -39,7 +39,7 @@ jobs:
   firmware:
     name: Build firmware
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     outputs:
       build-id: ${{ steps.fwid.outputs.id }}
     steps:
@@ -97,7 +97,7 @@ jobs:
   release:
     name: Build and Publish Release
     needs: [version, firmware]
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     permissions:
       contents: write
 

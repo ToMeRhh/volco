@@ -15,7 +15,7 @@ on:
 jobs:
   test:
     name: Run Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     steps:
     - name: Checkout Code
       uses: actions/checkout@v7
@@ -38,7 +38,7 @@ jobs:
 
   firmware-test:
     name: Firmware Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     outputs:
       build-id: ${{ steps.fwid.outputs.id }}
     steps:
@@ -124,7 +124,7 @@ jobs:
 
   simulator-test:
     name: Simulator Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     steps:
     - name: Checkout Code
       uses: actions/checkout@v7
@@ -154,7 +154,7 @@ jobs:
     # `gh workflow run build.yml --ref <branch> --field run_build=true`.
     if: github.event_name == 'workflow_dispatch' && inputs.run_build == true
     needs: firmware-test
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     permissions:
       contents: read
       packages: read
