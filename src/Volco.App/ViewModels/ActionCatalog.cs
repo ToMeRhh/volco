@@ -95,9 +95,11 @@ public static class ActionCatalog
     {
         if (LightSource(binding) is not { } source) return "Blank. None of this button’s actions is set in this preset.";
         var text = $"Shows the {source.Slot} action.";
-        return ControllerDisplay.FlashesPresetName(binding) && PresetSlot(binding) is { } slot
-            ? $"{text} Flashes the preset’s name when {slot} changes the preset."
-            : text;
+        if (ControllerDisplay.FlashesPresetName(binding) && PresetSlot(binding) is { } slot)
+            text += $" Flashes the preset’s name when {slot} changes the preset.";
+        if (binding.All().Any(a => ControllerDisplay.ShowsWhenPressed(binding, a)))
+            text += " Shows another action for a moment after you use it.";
+        return text;
     }
 
     /// <summary>The "Controller light: …" line on a button card, for one LED or an LED pair.</summary>

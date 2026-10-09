@@ -8,6 +8,7 @@ using Volco.Core.Media;
 using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
 using Volco.Core.Tests.Fakes;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Volco.Core.Tests.Runtime;
@@ -52,7 +53,8 @@ public sealed class CustomActionRuntimeTests : IDisposable
 
     private FakeControllerConnection Connection(int index) { lock (_connections) return _connections[index]; }
 
-    private VolcoRuntime Start(ConnectionType transport, Action<AppConfig> configure, IndicatorKind kind = IndicatorKind.Screen)
+    private VolcoRuntime Start(ConnectionType transport, Action<AppConfig> configure, IndicatorKind kind = IndicatorKind.Screen,
+                               VolcoRuntimeOptions? options = null)
     {
         var cm = new ConfigManager(Path.Combine(_dir, $"config-{Guid.NewGuid()}.json"));
         cm.Load();
@@ -64,7 +66,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
             var connection = new FakeControllerConnection(config);
             lock (_connections) _connections.Add(connection);
             return connection;
-        }, Quiet, new CustomActionServices(_media, _launcher, _starter));
+        }, options ?? Quiet, new CustomActionServices(_media, _launcher, _starter));
         _runtimes.Add(runtime);
         runtime.Start();
         var c = Connection(0);
@@ -236,5 +238,37 @@ public sealed class CustomActionRuntimeTests : IDisposable
         Assert.False(runtime.ScriptsAvailable);
         Assert.False(runtime.ProgramsAvailable);
         runtime.Execute(cm.Config.Buttons[0].Default().SinglePress);   // nothing to run it with; no throw
+    }
+
+    // ── The pressed action on the screen (custom-actions spec §11) ───────────
+
+    [Fact]
+    public void DoublePress_ShowsItsActionForAMoment_ThenTheFirstAgain()
+    {
+        var time = new FakeTimeProvider();
+        var runtime = Start(ConnectionType.Serial, c =>
+        {
+            c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
+            c.Buttons[0].Default().DoublePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "Spotify.exe", Name = "Spotify" },
+            };
+        }, options: Quiet with { Time = time });
+        var binding = runtime.Config.Config.Buttons[0].Default();
+        var first = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None,
+            ControllerDisplay.Screen(binding.SinglePress, runtime.Config.Config, runtime.ActivePresetId, _engine));
+        var media = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None, ScreenContent.Text("", ScreenIcon.Play, false, "Spotify"));
+        int Count(byte[] frame) => Connection(0).SentFrames.Count(f => f.AsSpan().SequenceEqual(frame));
+        Assert.True(WaitUntil(() => Count(first) == 1), "the first action's screen was not sent");
+
+        Press(Connection(0), 0);
+        Press(Connection(0), 0);
+
+        Assert.True(WaitUntil(() => _media.Sent.Count == 1), "the double press did not play/pause");
+        Assert.True(WaitUntil(() => Count(media) == 1), "the pressed action was not shown");
+        Assert.Equal(1, Count(first));
+
+        time.Advance(VolcoRuntimeOptions.Default.ShowPressedFor);
+        Assert.True(WaitUntil(() => Count(first) == 2), "the screen did not go back to the first action");
     }
 }

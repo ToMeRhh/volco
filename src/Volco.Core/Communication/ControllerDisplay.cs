@@ -23,6 +23,11 @@ public sealed record ScreenDisplay(ScreenContent Content) : ButtonDisplay;
 /// announces it: a screen that shows another action flashes the live preset instead
 /// (<see cref="FlashesPresetName"/>), and a single LED blinks (<see cref="BlinksOnPresetChange"/>).
 /// </para>
+/// <para>
+/// A screen shows another of the button's actions for a moment after it is pressed (the
+/// runtime's <c>pressed</c> map, <see cref="ShowsWhenPressed"/>), and a script action in its
+/// failure flash shows on the screen and the light whichever slot it is on (custom-actions spec §11).
+/// </para>
 /// </summary>
 public static class ControllerDisplay
 {
@@ -50,33 +55,53 @@ public static class ControllerDisplay
     /// <summary>One entry per controller button; null where the kind is None or unknown. Empty
     /// until the controller has said hello. <paramref name="announceStep"/> is the link tick since
     /// the last preset change (0 = the change itself), or null when no change is being announced.
-    /// <paramref name="status"/> is the live state of media, program and script actions (null: idle).</summary>
+    /// <paramref name="status"/> is the live state of media, program and script actions (null: idle).
+    /// <paramref name="pressed"/> maps a button to the action a press just ran, while the screen
+    /// shows it instead of the button's first action.</summary>
     public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string presetId, IAudioEngine audio, int? announceStep = null,
-                                                        IActionStatus? status = null)
+                                                        IActionStatus? status = null,
+                                                        IReadOnlyDictionary<int, ButtonActionConfig>? pressed = null)
     {
         var info = config.Controller;
         if (info is null) return Array.Empty<ButtonDisplay?>();
         var result = new ButtonDisplay?[info.Buttons.Count];
         for (int i = 0; i < result.Length; i++)
-            result[i] = For(config, i, info.Buttons[i], presetId, audio, announceStep, status);
+            result[i] = For(config, i, info.Buttons[i], presetId, audio, announceStep, status,
+                            pressed is not null && pressed.TryGetValue(i, out var p) ? p : null);
         return result;
     }
 
     public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string presetId, IAudioEngine audio,
-                                     int? announceStep = null, IActionStatus? status = null)
+                                     int? announceStep = null, IActionStatus? status = null, ButtonActionConfig? pressed = null)
     {
         var binding = button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(presetId) : null;
-        var action = binding is null ? null : Primary(binding);
+        var primary = binding is null ? null : Primary(binding);
+        var failing = binding is null ? null : FailingScript(binding, status);
+        var light = failing ?? primary;
+        var screen = failing ?? (binding is not null && pressed is not null && ShowsWhenPressed(binding, pressed) ? pressed : primary);
         var announcing = announceStep is >= 0 and < AnnounceSteps && binding is not null;
         return kind switch
         {
             IndicatorKind.Led when announcing && BlinksOnPresetChange(binding!) => new LedDisplay(Bit(announceStep % 2 == 0)),
-            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(action, kind, config, presetId, audio, status)),
+            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(light, kind, config, presetId, audio, status)),
             IndicatorKind.Screen when announcing && FlashesPresetName(binding!) => new ScreenDisplay(LivePresetScreen(config, presetId)),
-            IndicatorKind.Screen => new ScreenDisplay(Screen(action, config, presetId, audio, status)),
+            IndicatorKind.Screen => new ScreenDisplay(Screen(screen, config, presetId, audio, status)),
             _ => null,
         };
     }
+
+    /// <summary>Whether a press of <paramref name="pressed"/> makes the screen show it for a
+    /// moment: one of the binding's actions (the same object), not its first one, and neither
+    /// "Do nothing" nor a preset action (a preset change is announced on its own).</summary>
+    public static bool ShowsWhenPressed(ButtonBindingConfig binding, ButtonActionConfig pressed)
+        => pressed.Action != ButtonActionType.None && !IsPresetAction(pressed)
+           && !ReferenceEquals(pressed, Primary(binding))
+           && binding.All().Any(a => ReferenceEquals(a, pressed));
+
+    /// <summary>A Run a script action of the binding that is in its failure flash, or null.</summary>
+    private static ButtonActionConfig? FailingScript(ButtonBindingConfig binding, IActionStatus? status)
+        => status is null ? null
+           : binding.All().FirstOrDefault(a => a.Action == ButtonActionType.RunScript && status.Script(a).FlashStep is not null);
 
     /// <summary>A single LED blinks after a preset change when the button has a preset action,
     /// unless its light follows "Go to preset" (that light already says whether its preset is live).</summary>

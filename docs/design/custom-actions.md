@@ -250,3 +250,21 @@ Where the implementation differs from the draft above:
 - **Program and script presses** remember, per button, whether the press frame came from the
   current USB serial transport; the gesture (decided at release, maybe after the double-press
   wait) uses that flag.
+
+## 11. The pressed action on the screen
+
+A button shows its first action that is not "Do nothing" (press → double press → hold). Its other
+actions now get a moment on the screen:
+
+- **After a press**, a screen shows the action that press ran for 1.5 s
+  (`VolcoRuntimeOptions.ShowPressedFor`), live (a Play/pause shows `PLAYING` or `PAUSED` as the
+  app answers), then goes back to the first action. Pressing the first action ends it at once; a
+  new press replaces it. Not for "Do nothing", a press refused over the network, or preset actions
+  (a preset change is announced as before), and the preset announce wins over it.
+- **A failing script** shows its failure flash (`FAILED` on a screen, the blink on a light)
+  whichever slot it is on, over a pressed action too.
+- **Lights** keep following the first action otherwise: an LED has no room to say which action it shows.
+
+The runtime keeps the pressed action per button (`_pressed`, cleared on a preset change, a hardware
+test and dispose) and passes it to `ControllerDisplay.Compute`; `ControllerDisplay.ShowsWhenPressed`
+decides which presses count. The button card's "Screen:" line mentions it when another action can show.

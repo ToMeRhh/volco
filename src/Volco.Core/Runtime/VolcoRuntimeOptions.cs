@@ -33,6 +33,10 @@ public sealed record VolcoRuntimeOptions
     /// Reconnect or a port change). Zero: none.</summary>
     public TimeSpan ConnectGrace { get; init; } = TimeSpan.FromSeconds(3);
 
+    /// <summary>How long a screen shows the action a press just ran, when that is not the
+    /// action it shows anyway (custom-actions spec §11). Zero: never. Timed on <see cref="Time"/>.</summary>
+    public TimeSpan ShowPressedFor { get; init; } = TimeSpan.FromSeconds(1.5);
+
     /// <summary>HelloRequest retry, heartbeat and tick intervals.</summary>
     public ControllerLinkOptions Link { get; init; } = ControllerLinkOptions.Default;
 }
