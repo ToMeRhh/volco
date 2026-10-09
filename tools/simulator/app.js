@@ -7,7 +7,7 @@
   const now = () => performance.now();
 
   const CONFIG_KEY = 'volco-sim-config', PREFS_KEY = 'volco-sim-prefs';
-  const DEFAULT_PREFS = { host: 'localhost', port: '8765', reconnect: true, autoConnect: false, autosave: false,
+  const DEFAULT_PREFS = { host: 'localhost', port: '8765', reconnect: true, autoConnect: false, autosave: false, pinMapOpen: false,
     finish: 'silver', panelOpen: true, drawerOpen: false, drawerTab: 'frames' };
   const SLIDER_NAMES = ['Master', 'Spotify', 'Discord', 'Firefox', 'Game', 'Chrome', 'Zoom', 'Steam'];
   const BOARD = { x: 0, y: 3, z: -5 };   // where device.js puts the board; the camera's target

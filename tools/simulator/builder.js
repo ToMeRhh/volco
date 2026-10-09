@@ -18,7 +18,7 @@
    * @param {() => string|null} o.unavailable       why Apply can't work (no protobufjs), or null
    * @param {(layout:object) => void} o.onPreview   show this layout on the board
    * @param {(layout:object) => string|null} o.onApply  store it; returns an error message or null
-   * @param {{autosave:boolean, finish:string}} o.prefs
+   * @param {{autosave:boolean, finish:string, pinMapOpen:boolean}} o.prefs
    * @param {(prefs:object) => void} o.onPrefs
    * @param {(name:string) => void} o.onFinish
    */
@@ -104,6 +104,11 @@
         $('pins').title = `I/O pins: buttons, LEDs, I2C buses for screens, and sliders once the input-only pins are used.\n` +
           `Input-only pins (sliders only): ${pins.inputOnly} of ${pins.inputOnlyTotal}.`;
       }
+      $('pinmap-note').textContent = dirty() ? 'The draft\'s pins. Apply to store them.' : 'GPIO numbers, as Volco\'s Controller page asks for them.';
+      $('pinmap-list').replaceChildren(...(pins ? L.pinMap(r.config) : []).flatMap(({ label, value }) => [
+        Object.assign(document.createElement('dt'), { textContent: label }),
+        Object.assign(document.createElement('dd'), { textContent: value }),
+      ]));
       const show = (id, text) => { $(id).textContent = text; $(id).hidden = !text; };
       show('add-hint', (r.error ? `This layout doesn't fit. ${L.explain(r.error.message)}` : '')
         || (addButton ? `No room for another button. ${L.explain(addButton)}` : ''));
@@ -162,6 +167,8 @@
       clearTimeout(timer);
       if (prefs.autosave && dirty()) timer = setTimeout(apply, AUTOSAVE_MS);
     });
+    $('pinmap').open = !!prefs.pinMapOpen;
+    $('pinmap').addEventListener('toggle', () => { prefs.pinMapOpen = $('pinmap').open; o.onPrefs({ pinMapOpen: prefs.pinMapOpen }); });
     $('sl-dec').addEventListener('click', () => edit(l => { l.sliders.pop(); return l; }));
     const usable = el => el.getAttribute('aria-disabled') !== 'true';
     $('sl-inc').addEventListener('click', () => { if (usable($('sl-inc'))) edit(l => { l.sliders.push({}); return l; }); });

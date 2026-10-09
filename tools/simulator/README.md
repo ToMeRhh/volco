@@ -28,6 +28,8 @@ The panel edits the controller's hardware: a preset (DIY reference, Screen contr
 
 Saving stores a real controller config, the same protobuf the firmware keeps, and the simulated controller reboots into it (the screens go dark for a second and the link to Volco drops and comes back). Pins are allocated automatically from the ESP32's pin table, so Volco's Controller page accepts what it reads back. A control greys out when the chip has no pin left for it, with the reason in its tooltip. Pins themselves are edited in Volco; a config Volco writes keeps its pins.
 
+**Pin map** (under the pin meter) lists each slider's, button's, LED's and I2C bus's GPIO number, worded as Volco's Controller page asks for them, so you can set the simulator up there by hand (for example from scratch in the setup dialog). It shows the draft's pins, which are the stored ones until you edit. The developer tools' Config tab lists the stored config's pins too.
+
 If Volco writes a config while you have an unsaved draft, Volco's config wins and the panel says so.
 
 ## Sound waves

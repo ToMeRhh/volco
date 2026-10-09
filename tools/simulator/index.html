@@ -76,6 +76,13 @@ select { appearance: none; width: 100%; font: 500 14px var(--ui); color: var(--i
 .pins-bar { height: 100%; border-radius: 2px; background: var(--ink-soft); transition: width .2s; }
 .pins.full .pins-bar { background: var(--wait); }
 .pins.full .pins-n { color: var(--wait); }
+/* Pin map: each input's GPIO numbers, to enter on Volco's Controller page. */
+.pinmap summary { width: max-content; font: 500 12px var(--ui); color: var(--ink-soft); cursor: pointer; }
+.pinmap summary:hover { color: var(--ink); }
+.pinmap-note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-soft); }
+.pinmap-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 8px 0 0; font-size: 12px; }
+.pinmap-list dt { color: var(--ink-soft); }
+.pinmap-list dd { margin: 0; font: 500 12px var(--mono); color: var(--ink); }
 .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink); background: rgba(201, 138, 43, .12); border-radius: 8px; padding: 7px 10px; }
 .hint.below { margin: -4px 16px 12px; }
 .btns li.hint-row { display: block; padding: 0; background: none; box-shadow: none; }
@@ -144,6 +151,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); ou
 .log .empty { padding: 28px 14px; color: var(--ink-soft); font-family: var(--ui); font-size: 13px; }
 .kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; margin: 0; padding: 16px; font-size: 13px; }
 .kv dt { color: var(--ink-soft); } .kv dd { margin: 0; font: 500 13px var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.kv dd.lines { white-space: pre-line; }
 .acts { display: flex; gap: 6px; padding: 0 10px 12px; }
 .faults { list-style: none; margin: 0; padding: 6px 0; }
 .faults li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 0 14px 0 16px; font-size: 13px; }
@@ -201,6 +209,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); ou
       <dt>CRC</dt><dd id="cfg-crc">—</dd>
       <dt>Preset</dt><dd id="cfg-preset">—</dd>
       <dt>Hardware</dt><dd id="cfg-hw">—</dd>
+      <dt>Pins</dt><dd id="cfg-pins" class="lines">—</dd>
     </dl>
     <p class="memo" id="cfg-memory-row" hidden>Kept in memory only: this browser blocks storage.</p>
     <div class="acts"><button class="ghost small" id="cfg-copy">Copy as JSON</button><button class="ghost small danger" id="cfg-clear">Clear config</button></div>
@@ -245,6 +254,11 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); ou
   <div class="sec pins" id="pins">
     <div class="pins-row"><span class="lbl">Pins</span><span class="pins-n" id="pins-n"></span></div>
     <div class="pins-track"><div class="pins-bar" id="pins-bar"></div></div>
+    <details class="pinmap" id="pinmap">
+      <summary>Pin map</summary>
+      <p class="pinmap-note" id="pinmap-note"></p>
+      <dl class="pinmap-list" id="pinmap-list"></dl>
+    </details>
   </div>
   <div class="sec row">
     <span class="lbl">Finish</span>

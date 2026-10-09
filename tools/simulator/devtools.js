@@ -2,14 +2,14 @@
 // Browser only; uses protocol.js for frame names.
 (function (root) {
   'use strict';
-  const P = root.VolcoProtocol;
+  const P = root.VolcoProtocol, L = root.VolcoLayout;
   const KEEP = 400, SHOW = 160;
   const KIND_NAMES = ['plain', 'LED', 'LED pair', 'screen'];
   const CODES = ['OK', 'BAD_SEQUENCE', 'BAD_CRC', 'TOO_LARGE', 'DECODE_FAILED', 'INVALID'];
 
   /**
    * @param {object} o
-   * @param {() => object} o.config      { state, crc, size, preset, sliders, kinds, reason, memoryOnly, unavailable }
+   * @param {() => object} o.config      { state, crc, size, preset, sliders, kinds, config, reason, memoryOnly, unavailable }
    * @param {() => string} o.configJson  the stored config as protobuf JSON
    * @param {() => void} o.onClearConfig
    * @param {() => void} o.onReboot
@@ -60,6 +60,7 @@
       $('cfg-crc').textContent = c.state === 0 ? '—' : c.crc.toString(16).toUpperCase().padStart(8, '0');
       $('cfg-preset').textContent = c.preset || '—';
       $('cfg-hw').textContent = `${c.sliders} sliders · ${c.kinds.map(k => KIND_NAMES[k]).join(', ') || 'no buttons'}`;
+      $('cfg-pins').textContent = L.pinMap(c.config).map(r => `${r.label}: ${r.value}`).join('\n') || '—';
       $('cfg-memory-row').hidden = !c.memoryOnly;
     }
 

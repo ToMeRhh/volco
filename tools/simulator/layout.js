@@ -205,8 +205,32 @@
     return `The firmware supports ${message}.`;
   }
 
+  /**
+   * A config's pins, worded as Volco's Controller page asks for them, so a board can be set up
+   * there by hand: [{ label, value }], sliders, then buttons, then the I2C buses screens use.
+   */
+  function pinMap(config) {
+    const c = config || {};
+    const lights = low => `lights when ${low ? 'low' : 'high'}`;
+    const hex = a => `0x${a.toString(16).toUpperCase()}`;
+    const rows = (c.sliders || []).map((s, i) => ({ label: `Slider ${i + 1}`, value: `${s.pin}` }));
+    (c.buttons || []).forEach((b, i) => {
+      let value = `${b.pin}`;
+      if (b.led) value += ` · LED ${b.led.pin}, ${lights(b.led.activeLow)}`;
+      if (b.ledPair) value += ` · LED A ${b.ledPair.pinA}, B ${b.ledPair.pinB}, ${lights(b.ledPair.activeLow)}`;
+      if (b.screen) value += ` · screen on bus ${b.screen.bus ?? 0}, ${hex(b.screen.address ?? 0x3C)}`;
+      rows.push({ label: `Button ${i + 1}`, value });
+    });
+    [0, 1, 2, 3].forEach(n => {
+      const d = c[`i2c${n}`];
+      if (d && (c.buttons || []).some(b => b.screen && (b.screen.bus ?? 0) === n))
+        rows.push({ label: `I2C bus ${n}`, value: `SDA ${d.sda} · SCL ${d.scl}` });
+    });
+    return rows;
+  }
+
   const api = { KIND, LIMITS, CHIP, PREFER, PRESETS, DIY_REFERENCE, kindOf, withKind, kinds, fromConfig, presetLayout, toConfig, check, explain,
-    usable, outputCapable, adcCapable };
+    pinMap, usable, outputCapable, adcCapable };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.VolcoLayout = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
