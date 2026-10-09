@@ -186,3 +186,21 @@ test('a defined bus that only a new screen uses keeps its pins', () => {
   const leds = c.buttons.filter(b => b.led).map(b => b.led.pin);
   assert.ok(!leds.includes(25) && !leds.includes(26), `LEDs took bus pins: ${leds}`);
 });
+
+test('the pin map lists every pin a config uses, worded as the Controller page asks', () => {
+  assert.deepEqual(L.pinMap(L.DIY_REFERENCE), [
+    { label: 'Slider 1', value: '33' }, { label: 'Slider 2', value: '35' }, { label: 'Slider 3', value: '32' },
+    { label: 'Slider 4', value: '36' }, { label: 'Slider 5', value: '34' },
+    { label: 'Button 1', value: '4 · LED 12, lights when low' },
+    { label: 'Button 2', value: '14 · LED 21, lights when low' },
+    { label: 'Button 3', value: '5 · LED A 18, B 19, lights when high' },
+  ]);   // its buses are defined, but no screen uses them
+  assert.deepEqual(L.pinMap(ok(L.presetLayout('mixed'))).slice(5), [
+    { label: 'Button 1', value: '16 · screen on bus 0, 0x3C' },
+    { label: 'Button 2', value: '17 · screen on bus 0, 0x3D' },
+    { label: 'Button 3', value: '18 · LED 21, lights when high' },
+    { label: 'Button 4', value: '19 · LED A 22, B 23, lights when high' },
+    { label: 'I2C bus 0', value: 'SDA 5 · SCL 25' },
+  ]);
+  assert.deepEqual(L.pinMap(null), []);
+});
