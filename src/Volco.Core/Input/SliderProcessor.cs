@@ -311,7 +311,9 @@ public class SliderProcessor : IDisposable
             SliderLevelChanged?.Invoke(this, new SliderLevelEventArgs(sliderIndex, volume));
 
             // A sync reports where the slider already is: no OSD on every connect.
-            if (!isSync && deviceResolved && VolumeChanged != null)
+            // Read once: a subscriber leaving on another thread (the runtime disposing) between a check
+            // and the call would throw on this timer thread and end the process.
+            if (!isSync && deviceResolved && VolumeChanged is { } volumeChanged)
             {
                 // Display names (nickname, else the automatic short name) and icons, as everywhere
                 // else. The icon is the slider's own device, else the current output's (the device
@@ -323,7 +325,7 @@ public class SliderProcessor : IDisposable
                 var label = BuildSliderLabel(sliderConfig, currentOutputLook?.Name, configuredLook?.Name);
                 var icon = (configuredLook ?? currentOutputLook)?.Icon;
                 var muted = _audio.IsMuted(MuteSourceFor(sliderConfig));
-                VolumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume, icon));
+                volumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume, icon));
             }
         }
     }
