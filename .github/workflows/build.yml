@@ -83,6 +83,9 @@ jobs:
         test -s .pio/build/esp32/relink/link-command.txt   # the LGPL relink bundle the release zip carries
 
     - name: Upload firmware
+      # A full artifact quota must not skip the Windows compile checks below. The Windows build
+      # job, which needs this artifact, still fails without it.
+      continue-on-error: true
       uses: actions/upload-artifact@v7
       with:
         name: firmware-esp32
