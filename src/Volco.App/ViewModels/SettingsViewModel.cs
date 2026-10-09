@@ -56,7 +56,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     public ButtonsViewModel Buttons =>
-        _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast);
+        _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast,
+                                                   ActionCapabilities.Of(_runtime));
 
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config);
@@ -89,6 +90,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
+        _runtime.ActionStateChanged += OnActionStateChanged;
+        _config.ConnectionConfigChanged += OnConnectionConfigChanged;
         _controllerNavDot = _runtime.ControllerConfig.Banner.NeedsAttention;
 
         // The controller only reports a slider when it moves, so levels reported before this VM
@@ -161,6 +164,20 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             if (!_disposed) _buttonsViewModel?.RefreshLights();
         });
 
+    /// <summary>A media session, a watched program or a script run changed: previews and media
+    /// pickers follow.</summary>
+    private void OnActionStateChanged(object? sender, EventArgs e)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) _buttonsViewModel?.RefreshActionState();
+        });
+
+    private void OnConnectionConfigChanged(object? sender, EventArgs e)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) _buttonsViewModel?.RefreshTransport();
+        });
+
     /// <summary>Unsubscribes from the runtime and engine, and disposes the Connection ViewModel.</summary>
     public void Dispose()
     {
@@ -173,6 +190,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
+        _runtime.ActionStateChanged -= OnActionStateChanged;
+        _config.ConnectionConfigChanged -= OnConnectionConfigChanged;
         _controllerViewModel?.Dispose();
         if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();

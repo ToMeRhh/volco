@@ -6,6 +6,9 @@ using Volco.Core.Devices;
 using Volco.Core.Diagnostics;
 using Volco.Core.Input;
 using Volco.Core.Input.Actions;
+using Volco.Core.Media;
+using Volco.Core.Programs;
+using Volco.Core.Scripts;
 
 namespace Volco.Core.Runtime;
 
@@ -46,6 +49,18 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// null.
     /// </summary>
     private IControllerConnection? _connection;
+
+    /// <summary>The current transport when it is USB serial, else null: a press from it may run
+    /// programs and scripts (custom-actions spec §7). Written with the transport's publish.</summary>
+    private IControllerConnection? _serialTransport;
+
+    /// <summary>Per button input: whether its last press frame came over USB serial. Read when the
+    /// detector fires the gesture (after the release, maybe after a double-press wait).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _pressOverUsb = new();
+
+    private readonly IMediaSessions? _media;
+    private readonly ProgramOpener? _programs;
+    private readonly ScriptRunner? _scripts;
     private ButtonPressDetector? _buttonPressDetector;
     private SliderProcessor? _sliderProcessor;
     private bool _started;
@@ -95,9 +110,11 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// migration, AudioEngineFailed = true; everything else still starts.</param>
     /// <param name="connectionFactory">Null → the real Serial/Udp/WebSocket switch. Tests inject fakes.</param>
     /// <param name="options">Null → <see cref="VolcoRuntimeOptions.Default"/>.</param>
+    /// <param name="custom">Media sessions, program launcher and process starter; null or a null
+    /// member → those actions are not available.</param>
     public VolcoRuntime(ConfigManager config, IAudioEngine audio, bool audioReady,
                         Func<ConnectionConfig, IControllerConnection?>? connectionFactory = null,
-                        VolcoRuntimeOptions? options = null)
+                        VolcoRuntimeOptions? options = null, CustomActionServices? custom = null)
     {
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Audio = audio ?? throw new ArgumentNullException(nameof(audio));
@@ -105,10 +122,14 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         _connectionFactory = connectionFactory
                              ?? new Func<ConnectionConfig, IControllerConnection?>(CreateDefaultConnection);
         _options = options ?? VolcoRuntimeOptions.Default;
+        _media = custom?.Media;
+        _programs = custom?.Launcher is { } launcher ? new ProgramOpener(launcher, _options.Time) : null;
+        _scripts = custom?.Processes is { } processes ? new ScriptRunner(processes, _options.Time) : null;
+        ActionStatus = new ActionStatus(_media, _programs, _scripts);
         // In test mode the same delegate shows the test state and ignores the announce step
         // (spec §8.5), so no preset blink or flash appears during a test.
         _link = new ControllerLink(
-            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step),
+            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step, ActionStatus),
             ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) =>
         {
@@ -123,6 +144,17 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     }
 
     public IAudioEngine Audio { get; }
+
+    /// <summary>The live state of media, program and script actions (for the settings previews).</summary>
+    public IActionStatus ActionStatus { get; }
+
+    /// <summary>The media sessions, or null where this platform has none (the media app picker).</summary>
+    public IMediaSessions? Media => _media;
+
+    public bool ProgramsAvailable => _programs is not null;
+    public bool ScriptsAvailable => _scripts is not null;
+
+    private ActionServices Services => new(Audio, this, _media, _programs, _scripts);
 
     // ── Test mode (spec §8.5) ────────────────────────────────────────────────────────────────
 
@@ -459,6 +491,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
 
         AppLog.Info($"Active preset: {presetId}");
+        WatchPrograms();
         ActivePresetChanged?.Invoke(this, presetId);
 
         var from = presets.FindIndex(p => p.Id == previous);
@@ -524,10 +557,14 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
     /// <summary>Runs one action now, as a button press would (the settings UI's Test button).
     /// Preset actions change the live preset.</summary>
-    public void Execute(ButtonActionConfig action)
+    public void Execute(ButtonActionConfig action) => Execute(action, null);
+
+    /// <summary>As <see cref="Execute(ButtonActionConfig)"/>, for a button and gesture (a script's
+    /// environment). The settings UI is local, so programs and scripts run whatever the transport.</summary>
+    public void Execute(ButtonActionConfig action, ActionOrigin? origin)
     {
         if (IsDisposed) return;
-        ActionFactory.Create(action, Audio, this)?.Execute();
+        ActionFactory.Create(action, Services, origin)?.Execute();
     }
 
     /// <summary>
@@ -542,6 +579,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
         Audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
         Audio.DevicesChanged += OnDevicesChangedForControllerState;
+        if (_media is not null) _media.Changed += OnActionStateChanged;
+        if (_programs is not null) _programs.Changed += OnActionStateChanged;
+        if (_scripts is not null) _scripts.Changed += OnActionStateChanged;
+        WatchPrograms();
 
         if (!_audioReady)
         {
@@ -618,6 +659,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
         connection.MessageReceived += OnMessageReceived;
         connection.StatusChanged += OnTransportStatusChanged;
+        // Before the publish: a frame from the new transport is never judged against the old kind.
+        Volatile.Write(ref _serialTransport, config.Type == ConnectionType.Serial ? connection : null);
 
         // Publish. Anything displaced is a transport a concurrent StartConnection published in
         // the meantime; by the ownership rule, removing it makes it ours to retire.
@@ -849,7 +892,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             case ButtonMessage button:
                 AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
                 if (button.State == ButtonState.Pressed)
+                {
+                    _pressOverUsb[button.ButtonIndex] = sender is not null
+                        && ReferenceEquals(sender, Volatile.Read(ref _serialTransport))
+                        && ReferenceEquals(sender, Volatile.Read(ref _connection));
                     ButtonActivity?.Invoke(this, button.ButtonIndex);
+                }
                 var bcfg = Config.Config.Buttons.ElementAtOrDefault(button.ButtonIndex);
                 // Fix A: no double-press action configured (in the live preset) -> pass 0, which
                 // makes ButtonPressDetector fire Single synchronously on release instead of waiting
@@ -871,7 +919,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         var config = Config.Config;
         if (e.ButtonIndex < 0 || e.ButtonIndex >= config.Buttons.Count) return;
 
-        var binding = config.Buttons[e.ButtonIndex].BindingFor(ActivePresetId);
+        var presetId = ActivePresetId;
+        var binding = config.Buttons[e.ButtonIndex].BindingFor(presetId);
         var actionConfig = e.PressType switch
         {
             PressType.Single => binding.SinglePress,
@@ -881,7 +930,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         };
 
         if (actionConfig == null) return;
-        var action = ActionFactory.Create(actionConfig, Audio, this);
+        // Custom-actions spec §7: a press over UDP or WebSocket could be forged, so it never runs code.
+        if (ButtonActionTypes.RunsCode(actionConfig.Action)
+            && !(_pressOverUsb.TryGetValue(e.ButtonIndex, out var overUsb) && overUsb))
+        {
+            AppLog.Info($"Button {e.ButtonIndex}: {actionConfig.Action} refused; programs and scripts run only for presses over USB");
+            return;
+        }
+        var presetName = config.Presets.Find(p => p.Id == presetId)?.Name ?? presetId;
+        var action = ActionFactory.Create(actionConfig, Services, new ActionOrigin(e.ButtonIndex, e.PressType, presetName));
 
         // action.Execute() only posts a command to the audio thread - the write hasn't happened
         // yet when Execute() returns (review item 3). Reading TryGetDeviceState/GetDefaultDevice
@@ -1129,6 +1186,29 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         VolumeChanged?.Invoke(this, n);
     }
 
+    /// <summary>A media session, a watched program or a script run changed (any thread).</summary>
+    public event EventHandler? ActionStateChanged;
+
+    /// <summary>A media session, a watched program or a script run changed: the controller follows.</summary>
+    private void OnActionStateChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed) return;
+        PushControllerState();
+        ActionStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Polls the programs that Open a program actions in the live preset name.</summary>
+    private void WatchPrograms()
+    {
+        if (_programs is null || IsDisposed) return;
+        var presetId = ActivePresetId;
+        _programs.Watch(Config.Config.Buttons
+            .SelectMany(b => b.BindingFor(presetId).All())
+            .Where(a => a.Action == ButtonActionType.OpenProgram && a.Command is not null)
+            .Select(a => a.Command!)
+            .ToList());
+    }
+
     /// <summary>Sends whatever changed on the controller (the link dedups per button).</summary>
     private void PushControllerState()
     {
@@ -1159,6 +1239,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
         if (IsDisposed) return;
+        WatchPrograms();
         var stored = Volatile.Read(ref _activePresetId);
         if (stored is not null && !Config.Config.Presets.Exists(p => p.Id == stored)
             && Interlocked.CompareExchange(ref _activePresetId, null, stored) == stored)
@@ -1232,5 +1313,17 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
 
         Audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
         Audio.DevicesChanged -= OnDevicesChangedForControllerState;
+
+        if (_media is not null) _media.Changed -= OnActionStateChanged;
+        if (_programs is not null)
+        {
+            _programs.Changed -= OnActionStateChanged;
+            _programs.Watch(Array.Empty<CommandConfig>());
+        }
+        if (_scripts is not null)
+        {
+            _scripts.Changed -= OnActionStateChanged;
+            _scripts.Dispose();   // stops the flash timers; running scripts keep running
+        }
     }
 }

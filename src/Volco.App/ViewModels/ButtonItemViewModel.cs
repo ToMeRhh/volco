@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Input;
+using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
 
@@ -129,9 +131,12 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         Config = cfg;
         _owner = owner;
         _index = index;
-        Press = new ActionSlotViewModel("Press", devices, owner.PresetChoices, owner.Execute, OnActionChanged, name => owner.Describe(name));
-        DoublePress = new ActionSlotViewModel("Double press", devices, owner.PresetChoices, owner.Execute, OnActionChanged, name => owner.Describe(name));
-        Hold = new ActionSlotViewModel("Hold", devices, owner.PresetChoices, owner.Execute, OnActionChanged, name => owner.Describe(name));
+        Press = new ActionSlotViewModel("Press", devices, owner.PresetChoices, a => owner.Execute(a, Index, PressType.Single),
+                                        OnActionChanged, name => owner.Describe(name), owner.SlotHost);
+        DoublePress = new ActionSlotViewModel("Double press", devices, owner.PresetChoices, a => owner.Execute(a, Index, PressType.Double),
+                                              OnActionChanged, name => owner.Describe(name), owner.SlotHost);
+        Hold = new ActionSlotViewModel("Hold", devices, owner.PresetChoices, a => owner.Execute(a, Index, PressType.Long),
+                                       OnActionChanged, name => owner.Describe(name), owner.SlotHost);
         Reload();
     }
 
@@ -172,11 +177,11 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         // LEDs show what the controller shows now (the live preset); a screen preview shows the
         // preset being edited, so editing it is visible.
         var live = Config.BindingFor(_owner.LivePresetId);
-        LightValue = ControllerDisplay.LedValueFor(live, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.LivePresetId, _owner.Audio);
+        LightValue = ControllerDisplay.LedValueFor(live, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.LivePresetId, _owner.Audio, _owner.ActionStatus);
         // From this card's own config, not AppConfig.Buttons[Index]: during a drag preview the
         // card's Index no longer matches its position in the list.
         Screen = ControllerDisplay.Screen(edited.All().FirstOrDefault(a => a.Action != ButtonActionType.None),
-                                          _owner.AppConfig, _owner.EditingPresetId, _owner.Audio);
+                                          _owner.AppConfig, _owner.EditingPresetId, _owner.Audio, _owner.ActionStatus);
     }
 
     private void OnActionChanged()
@@ -209,6 +214,18 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     {
         foreach (var slot in Slots) slot.RefreshDevices(devices);
     }
+
+    /// <summary>A media session, program or script changed: the media pickers and the preview follow.</summary>
+    internal void RefreshActionState()
+    {
+        foreach (var slot in Slots) slot.RefreshMediaApps();
+        Refresh();
+    }
+
+    internal void RefreshTransport()
+    {
+        foreach (var slot in Slots) slot.RefreshTransport();
+    }
 }
 
 /// <summary>What a button card asks of the Buttons page that owns it.</summary>
@@ -220,7 +237,11 @@ internal interface IButtonCardOwner
     IAudioEngine Audio { get; }
     IReadOnlyList<PresetChoice> PresetChoices();
     string? PresetName(string? id);
-    void Execute(ButtonActionConfig action);
+    /// <summary>Test: runs <paramref name="action"/> once, as button <paramref name="button"/>'s
+    /// <paramref name="gesture"/> would.</summary>
+    void Execute(ButtonActionConfig action, int button, PressType gesture);
+    ActionSlotHost SlotHost { get; }
+    IActionStatus ActionStatus { get; }
     void Changed(ButtonItemViewModel item);
     void MoveUp(ButtonItemViewModel item);
     void MoveDown(ButtonItemViewModel item);

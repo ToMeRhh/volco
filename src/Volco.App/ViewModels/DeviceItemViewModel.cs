@@ -53,7 +53,7 @@ public sealed partial class DeviceItemViewModel : ObservableObject
         Icon = settings?.Icon ?? automaticIcon;
         _loading = false;
 
-        IconChoices = Enum.GetValues<ScreenIcon>().Where(i => i != ScreenIcon.Presets)
+        IconChoices = ScreenIconSets.OfferedOnDevicesPage
             .Select(i => new IconChoiceViewModel(i, choice => Icon = choice)).ToList();
         UpdateIconSelection();
     }

@@ -112,7 +112,13 @@ def write_csharp(rows):
              "/// <summary>The firmware's closed icon set (spec §4.5). IDs are stable: append, never insert.</summary>",
              "[JsonConverter(typeof(JsonStringEnumConverter))]", "public enum ScreenIcon : byte", "{"]
     lines += [f"    {cs} = {id_}," for id_, _, cs, _ in rows]
-    lines += ["}", ""]
+    lines += ["}", "",
+              "/// <summary>Sets of <see cref=\"ScreenIcon\"/> from the manifest.</summary>",
+              "public static class ScreenIconSets", "{",
+              "    /// <summary>The icons a device can be given on the Devices page (the manifest's last column).</summary>",
+              "    public static IReadOnlyList<ScreenIcon> OfferedOnDevicesPage { get; } = new[]", "    {"]
+    lines += [f"        ScreenIcon.{cs}," for _, _, cs, offered in rows if offered]
+    lines += ["    };", "}", ""]
     (ROOT / "src" / "Volco.Core" / "Communication" / "ScreenIcon.g.cs").write_text("\n".join(lines))
 
 # The simulator's copies are UMD scripts: a global in the browser, module.exports under Node.

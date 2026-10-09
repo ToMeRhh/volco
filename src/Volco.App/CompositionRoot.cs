@@ -13,6 +13,7 @@ using Volco.Core.Controller;
 using Volco.Core.Firmware;
 using Volco.Core.Input;
 using Volco.Core.Runtime;
+using Volco.Core.Scripts;
 using Volco.Core.Updates;
 
 namespace Volco.App;
@@ -71,8 +72,10 @@ internal sealed class CompositionRoot : IDisposable
         _platform = _createPlatform();
 
         var catalog = FirmwareCatalog.Load(_platform.Firmware ?? EmptyFirmwareSource.Instance);
+        // Scripts run through .NET's Process anywhere; media and programs need the platform's.
+        var custom = new CustomActionServices(_platform.Media, _platform.Launcher, new SystemProcessStarter());
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
-                                    new VolcoRuntimeOptions { Firmware = catalog });
+                                    new VolcoRuntimeOptions { Firmware = catalog }, custom);
         // The port a flash or probe settles on is saved on the UI thread, which owns the config.
         _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThread: a =>
         {

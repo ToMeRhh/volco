@@ -409,7 +409,7 @@ public class ConfigManagerLoadSaveTests : IDisposable
         cm.Load();
         var c = cm.Config;
 
-        Assert.Equal(5, c.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, c.SchemaVersion);
         Assert.Empty(c.Devices);
         Assert.Null(c.Controller);
         Assert.Equal(2, c.Presets.Count);
@@ -417,7 +417,7 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal("dev-2", c.Buttons[1].Default().SinglePress.DeviceB!.Id);
         Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
 
-        Assert.Contains("\"schemaVersion\": 5", File.ReadAllText(_configPath));
+        Assert.Contains($"\"schemaVersion\": {AppConfig.CurrentSchemaVersion}", File.ReadAllText(_configPath));
         Assert.Equal(V3Json, File.ReadAllText(Path.Combine(_tempDir, "config.v3.bak")));
         Assert.False(File.Exists(Path.Combine(_tempDir, "config.v1.bak")));
         Assert.False(ConfigMigrator.NeedsMigration(c));
@@ -435,11 +435,11 @@ public class ConfigManagerLoadSaveTests : IDisposable
         var cm = new ConfigManager(_configPath);
         cm.Load();
 
-        Assert.Equal(5, cm.Config.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, cm.Config.SchemaVersion);
         Assert.Equal("COM7", cm.Config.Connection.Serial.ComPort);
         Assert.Null(cm.Config.ControllerConfigBlob);
         var onDisk = File.ReadAllText(_configPath);
-        Assert.Contains("\"schemaVersion\": 5", onDisk);
+        Assert.Contains($"\"schemaVersion\": {AppConfig.CurrentSchemaVersion}", onDisk);
         Assert.DoesNotContain("baudRate", onDisk);
         Assert.Equal(v4, File.ReadAllText(Path.Combine(_tempDir, "config.v4.bak")));
     }
@@ -533,7 +533,7 @@ public class ConfigManagerLoadSaveTests : IDisposable
         new ConfigManager(_configPath).Load();
 
         var onDisk = File.ReadAllText(_configPath);
-        Assert.Contains("\"schemaVersion\": 5", onDisk);
+        Assert.Contains($"\"schemaVersion\": {AppConfig.CurrentSchemaVersion}", onDisk);
         Assert.DoesNotContain("outputDevices", onDisk);
         Assert.Contains("\"actions\"", onDisk);
 

@@ -57,10 +57,11 @@ public class ConfigManager
                         }
                         json = root.ToJsonString();
                     }
-                    else if (version is 3 or 4)
+                    else if (version is 3 or 4 or 5)
                     {
-                        // v3 → v4 only adds "devices" and "controller", and v4 → v5 only adds
-                        // "controllerConfigBlob" (and drops the baud rate, below); the new fields
+                        // v3 → v4 only adds "devices" and "controller", v4 → v5 only adds
+                        // "controllerConfigBlob" (and drops the baud rate, below), and v5 → v6 only
+                        // adds the media, program and script action fields; the new fields
                         // deserialize to their defaults when missing: stamp the version, keep a backup.
                         BackupBeforeMigration(json, $"config.v{version}.bak");
                         root["schemaVersion"] = AppConfig.CurrentSchemaVersion;

@@ -22,6 +22,9 @@
     <Compile Include="..\Volco.Core.Tests\Audio\FakeAudioEngine.cs" Link="Fakes\FakeAudioEngine.cs" />
     <Compile Include="..\Volco.Core.Tests\Runtime\FakeControllerConnection.cs" Link="Fakes\FakeControllerConnection.cs" />
     <Compile Include="..\Volco.Core.Tests\Firmware\FirmwareFakes.cs" Link="Fakes\FirmwareFakes.cs" />
+    <Compile Include="..\Volco.Core.Tests\Fakes\FakeMediaSessions.cs" Link="Fakes\FakeMediaSessions.cs" />
+    <Compile Include="..\Volco.Core.Tests\Fakes\FakeProgramLauncher.cs" Link="Fakes\FakeProgramLauncher.cs" />
+    <Compile Include="..\Volco.Core.Tests\Fakes\FakeProcessStarter.cs" Link="Fakes\FakeProcessStarter.cs" />
   </ItemGroup>
 
   <ItemGroup>

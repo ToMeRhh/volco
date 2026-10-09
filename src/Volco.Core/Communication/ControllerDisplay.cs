@@ -2,6 +2,9 @@ using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Devices;
 using Volco.Core.Input.Actions;
+using Volco.Core.Media;
+using Volco.Core.Programs;
+using Volco.Core.Runtime;
 
 namespace Volco.Core.Communication;
 
@@ -30,6 +33,15 @@ public static class ControllerDisplay
     public const string ChooseDevice = "Choose a device";
     public const string NoDevice = "No device";
     public const string ChoosePreset = "Choose a preset";
+    public const string Playing = "PLAYING";
+    public const string Paused = "PAUSED";
+    public const string Stopped = "STOPPED";
+    public const string Running = "RUNNING";
+    public const string Failed = "FAILED";
+    public const string ChooseFile = "Choose a file";
+
+    /// <summary>A media button's name when it follows the current app and there is none.</summary>
+    public const string MediaName = "Media";
 
     /// <summary>How many link ticks a preset change is announced for (6 × 250 ms ≈ 1.5 s): a
     /// single LED is on in the even steps, so it blinks 3 times.</summary>
@@ -37,19 +49,21 @@ public static class ControllerDisplay
 
     /// <summary>One entry per controller button; null where the kind is None or unknown. Empty
     /// until the controller has said hello. <paramref name="announceStep"/> is the link tick since
-    /// the last preset change (0 = the change itself), or null when no change is being announced.</summary>
-    public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string presetId, IAudioEngine audio, int? announceStep = null)
+    /// the last preset change (0 = the change itself), or null when no change is being announced.
+    /// <paramref name="status"/> is the live state of media, program and script actions (null: idle).</summary>
+    public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string presetId, IAudioEngine audio, int? announceStep = null,
+                                                        IActionStatus? status = null)
     {
         var info = config.Controller;
         if (info is null) return Array.Empty<ButtonDisplay?>();
         var result = new ButtonDisplay?[info.Buttons.Count];
         for (int i = 0; i < result.Length; i++)
-            result[i] = For(config, i, info.Buttons[i], presetId, audio, announceStep);
+            result[i] = For(config, i, info.Buttons[i], presetId, audio, announceStep, status);
         return result;
     }
 
     public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string presetId, IAudioEngine audio,
-                                     int? announceStep = null)
+                                     int? announceStep = null, IActionStatus? status = null)
     {
         var binding = button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(presetId) : null;
         var action = binding is null ? null : Primary(binding);
@@ -57,9 +71,9 @@ public static class ControllerDisplay
         return kind switch
         {
             IndicatorKind.Led when announcing && BlinksOnPresetChange(binding!) => new LedDisplay(Bit(announceStep % 2 == 0)),
-            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(action, kind, config, presetId, audio)),
+            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(action, kind, config, presetId, audio, status)),
             IndicatorKind.Screen when announcing && FlashesPresetName(binding!) => new ScreenDisplay(LivePresetScreen(config, presetId)),
-            IndicatorKind.Screen => new ScreenDisplay(Screen(action, config, presetId, audio)),
+            IndicatorKind.Screen => new ScreenDisplay(Screen(action, config, presetId, audio, status)),
             _ => null,
         };
     }
@@ -83,18 +97,35 @@ public static class ControllerDisplay
         => binding.All().FirstOrDefault(a => a.Action != ButtonActionType.None);
 
     /// <summary>The LED value for a whole binding (used by the settings UI's light preview).</summary>
-    public static byte LedValueFor(ButtonBindingConfig binding, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio)
-        => LedValue(Primary(binding), kind, config, presetId, audio);
+    public static byte LedValueFor(ButtonBindingConfig binding, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio,
+                                   IActionStatus? status = null)
+        => LedValue(Primary(binding), kind, config, presetId, audio, status);
 
     /// <summary>The steady LED value. 0 = off; mute: 1 while muted; switch: 1 while active.
     /// An LED pair: toggle 1 = A, 2 = B; presets 1 + the live preset's position. A single LED:
     /// toggle lit on B, dark on A; "Go to preset" lit while that preset is live; "Next preset" dark
-    /// (it blinks on a change instead).</summary>
-    public static byte LedValue(ButtonActionConfig? action, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio)
+    /// (it blinks on a change instead). Media: on while the target plays (Play/Pause, Stop). Program:
+    /// on while it runs. Script: on while it runs, blinking during the failure flash.</summary>
+    public static byte LedValue(ButtonActionConfig? action, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio,
+                                IActionStatus? status = null)
     {
         var single = kind == IndicatorKind.Led;
+        status ??= ActionStatus.None;
         switch (action?.Action)
         {
+            case ButtonActionType.MediaPlayPause:
+            case ButtonActionType.MediaStop:
+            {
+                var media = status.Media(action.MediaApp);
+                return Bit(media.Present && media.Playback == MediaPlayback.Playing);
+            }
+            case ButtonActionType.OpenProgram:
+                return Bit(status.Program(action.Command) == ProgramState.Running);
+            case ButtonActionType.RunScript:
+            {
+                var script = status.Script(action);
+                return script.FlashStep is { } step ? Bit(step % 2 == 0) : Bit(script.Running);
+            }
             case ButtonActionType.MuteCurrentOutput:
                 return Bit(audio.GetDefaultDevice(AudioFlow.Render) is not null && audio.IsMuted(DeviceRef.DefaultOutput()));
             case ButtonActionType.MuteCurrentInput:
@@ -126,11 +157,49 @@ public static class ControllerDisplay
         }
     }
 
-    /// <summary>Layout 1 content for an action (spec §2.2's table).</summary>
-    public static ScreenContent Screen(ButtonActionConfig? action, AppConfig config, string presetId, IAudioEngine audio)
+    /// <summary>Layout 1 content for an action (spec §2.2's table; custom-actions spec §3.3–§5.4):
+    /// the top line says the state, the main line names the device, app, program or script.</summary>
+    public static ScreenContent Screen(ButtonActionConfig? action, AppConfig config, string presetId, IAudioEngine audio,
+                                       IActionStatus? status = null)
     {
+        status ??= ActionStatus.None;
         switch (action?.Action)
         {
+            case ButtonActionType.MediaPlayPause:
+            case ButtonActionType.MediaStop:
+            {
+                var media = status.Media(action.MediaApp);
+                var name = media.Name.Length > 0 ? media.Name : MediaName;
+                if (!media.Present) return ScreenContent.Text("", ScreenIcon.Play, false, name);
+                return media.Playback switch
+                {
+                    MediaPlayback.Playing => ScreenContent.Text(Playing, ScreenIcon.Play, false, name),
+                    MediaPlayback.Paused => ScreenContent.Text(Paused, ScreenIcon.Pause, false, name),
+                    _ => ScreenContent.Text(Stopped, ScreenIcon.Pause, false, name),
+                };
+            }
+            case ButtonActionType.MediaNext:
+            case ButtonActionType.MediaPrevious:
+            {
+                var media = status.Media(action.MediaApp);
+                var name = media.Name.Length > 0 ? media.Name : MediaName;
+                var icon = action.Action == ButtonActionType.MediaNext ? ScreenIcon.Next : ScreenIcon.Previous;
+                return ScreenContent.Text("", icon, false, name);
+            }
+            case ButtonActionType.OpenProgram:
+            {
+                var name = CommandPath.DisplayName(action.Command);
+                if (name.Length == 0) return ScreenContent.Text("", ScreenIcon.App, false, ChooseFile);
+                return ScreenContent.Text(status.Program(action.Command) == ProgramState.Running ? Running : "", ScreenIcon.App, false, name);
+            }
+            case ButtonActionType.RunScript:
+            {
+                var name = CommandPath.DisplayName(action.Command);
+                if (name.Length == 0) return ScreenContent.Text("", ScreenIcon.Script, false, ChooseFile);
+                var script = status.Script(action);
+                var top = script.FlashStep is not null ? Failed : script.Running ? Running : "";
+                return ScreenContent.Text(top, ScreenIcon.Script, false, name);
+            }
             case ButtonActionType.MuteCurrentOutput:
                 return MuteScreen(config, audio, audio.GetDefaultDevice(AudioFlow.Render), DeviceRef.DefaultOutput());
             case ButtonActionType.MuteCurrentInput:

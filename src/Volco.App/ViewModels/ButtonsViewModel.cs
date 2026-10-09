@@ -6,9 +6,23 @@ using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Devices;
+using Volco.Core.Input;
+using Volco.Core.Input.Actions;
+using Volco.Core.Media;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
+
+/// <summary>What the Buttons page knows about media, program and script actions: which this
+/// platform runs, their live state for the previews, and the media sessions for the app picker.</summary>
+public sealed record ActionCapabilities(ActionAvailability Availability, IActionStatus Status, IMediaSessions? Media)
+{
+    public static ActionCapabilities None { get; } = new(new ActionAvailability(false, false, false), ActionStatus.None, null);
+
+    public static ActionCapabilities Of(VolcoRuntime runtime)
+        => new(new ActionAvailability(runtime.Media is not null, runtime.ProgramsAvailable, runtime.ScriptsAvailable),
+               runtime.ActionStatus, runtime.Media);
+}
 
 /// <summary>
 /// The Buttons page: presets (only button actions change per preset) and one card per configured
@@ -20,8 +34,10 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
     private readonly IPresetController _presets;
-    private readonly Action<ButtonActionConfig> _execute;
+    private readonly Action<ButtonActionConfig, ActionOrigin?> _execute;
     private readonly UndoToastViewModel _toast;
+    private readonly ActionCapabilities _capabilities;
+    private readonly ActionSlotHost _slotHost;
     private IReadOnlyList<AudioDevice> _devices;
 
     public ObservableCollection<ButtonItemViewModel> Items { get; } = new();
@@ -58,8 +74,14 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     public string MakeLiveText => $"Make {EditingName} live";
 
     public ButtonsViewModel(ConfigManager config, IAudioEngine audio, IPresetController presets,
-                            Action<ButtonActionConfig> execute, UndoToastViewModel toast)
+                            Action<ButtonActionConfig, ActionOrigin?> execute, UndoToastViewModel toast,
+                            ActionCapabilities? capabilities = null)
     {
+        _capabilities = capabilities ?? ActionCapabilities.None;
+        _slotHost = new ActionSlotHost(_capabilities.Availability,
+                                       () => _capabilities.Media?.GetApps() ?? Array.Empty<MediaApp>(),
+                                       () => config.Config.Connection.Type != ConnectionType.Serial,
+                                       File.Exists);
         _config = config;
         _audio = audio;
         _presets = presets;
@@ -121,7 +143,11 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
     public string DeviceName(DeviceRefConfig? device) => DeviceDisplay.NameOf(_config.Config, _audio, device, "?");
 
-    void IButtonCardOwner.Execute(ButtonActionConfig action) => _execute(action);
+    void IButtonCardOwner.Execute(ButtonActionConfig action, int button, PressType gesture)
+        => _execute(action, new ActionOrigin(button, gesture, EditingName));
+
+    ActionSlotHost IButtonCardOwner.SlotHost => _slotHost;
+    IActionStatus IButtonCardOwner.ActionStatus => _capabilities.Status;
 
     void IButtonCardOwner.Changed(ButtonItemViewModel item) => Save();
 
@@ -387,6 +413,18 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     public void RefreshLights()
     {
         foreach (var item in Items) item.Refresh();
+    }
+
+    /// <summary>A media session, a watched program or a script run changed.</summary>
+    public void RefreshActionState()
+    {
+        foreach (var item in Items) item.RefreshActionState();
+    }
+
+    /// <summary>The connection type changed: the "Runs only over USB" notes follow.</summary>
+    public void RefreshTransport()
+    {
+        foreach (var item in Items) item.RefreshTransport();
     }
 
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)

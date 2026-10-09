@@ -1,5 +1,6 @@
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Programs;
 
 namespace Volco.App.ViewModels;
 
@@ -10,6 +11,19 @@ public sealed record ActionChoice(ButtonActionType? Type, string Name, bool IsHe
     public bool IsSelectable => !IsHeader && IsAvailable && Type.HasValue;
 
     public override string ToString() => Name;
+}
+
+/// <summary>Which custom actions this platform can run (null services in <c>PlatformServices</c>
+/// make theirs unavailable in the picker).</summary>
+public sealed record ActionAvailability(bool Media, bool Programs, bool Scripts)
+{
+    public static ActionAvailability All { get; } = new(true, true, true);
+
+    public bool IsAvailable(ButtonActionType t)
+        => ButtonActionTypes.IsMedia(t) ? Media
+           : t == ButtonActionType.OpenProgram ? Programs
+           : t == ButtonActionType.RunScript ? Scripts
+           : true;
 }
 
 /// <summary>A preset, as offered by the "Switch to preset…" picker.</summary>
@@ -37,16 +51,35 @@ public static class ActionCatalog
         new(null, "Presets", IsHeader: true),
         new(ButtonActionType.NextPreset, "Next preset"),
         new(ButtonActionType.GoToPreset, "Switch to preset…"),
-        new(null, "Custom", IsHeader: true),
-        new(null, "Run a program, call a webhook… (coming later)", IsAvailable: false),
+        new(null, "Media", IsHeader: true),
+        new(ButtonActionType.MediaPlayPause, "Play / pause"),
+        new(ButtonActionType.MediaNext, "Next track"),
+        new(ButtonActionType.MediaPrevious, "Previous track"),
+        new(ButtonActionType.MediaStop, "Stop"),
+        new(null, "Programs and scripts", IsHeader: true),
+        new(ButtonActionType.OpenProgram, "Open a program"),
+        new(ButtonActionType.RunScript, "Run a script"),
     };
+
+    /// <summary><see cref="Choices"/>, with the actions this platform cannot run disabled.</summary>
+    public static IReadOnlyList<ActionChoice> ChoicesFor(ActionAvailability availability)
+        => availability == ActionAvailability.All
+            ? Choices
+            : Choices.Select(c => c.Type is { } t && !availability.IsAvailable(t) ? c with { IsAvailable = false } : c).ToList();
 
     public static ActionChoice For(ButtonActionType type)
         => Choices.FirstOrDefault(c => c.Type == type && !c.IsHeader) ?? Choices[1];
 
+    /// <summary>The entry for <paramref name="type"/> in <paramref name="choices"/>.</summary>
+    public static ActionChoice For(ButtonActionType type, IReadOnlyList<ActionChoice> choices)
+        => choices.FirstOrDefault(c => c.Type == type && !c.IsHeader) ?? choices[1];
+
     public static bool NeedsDevice(ButtonActionType t) => t is ButtonActionType.MuteSpecificDevice or ButtonActionType.SetOutputDevice;
     public static bool NeedsPair(ButtonActionType t) => t is ButtonActionType.ToggleOutputDevice;
     public static bool NeedsPreset(ButtonActionType t) => t is ButtonActionType.GoToPreset;
+    public static bool NeedsMediaApp(ButtonActionType t) => ButtonActionTypes.IsMedia(t);
+    public static bool NeedsCommand(ButtonActionType t) => ButtonActionTypes.RunsCode(t);
+    public static bool NeedsWhileRunning(ButtonActionType t) => t is ButtonActionType.RunScript;
 
     /// <summary>The action that decides the light: the first action that isn't None, single → double → long.</summary>
     public static (ButtonActionConfig Action, string Slot)? LightSource(ButtonBindingConfig binding)
@@ -83,6 +116,11 @@ public static class ActionCatalog
             ButtonActionType.GoToPreset when singleLed => $"On while {presetName(a.PresetId) ?? "that preset"} is live.",
             ButtonActionType.NextPreset or ButtonActionType.GoToPreset => "Shows the live preset: the first lights A, the second B.",
             ButtonActionType.SetOutputDevice => "On while that device is the output.",
+            ButtonActionType.MediaPlayPause or ButtonActionType.MediaStop => $"On while {MediaTarget(a)} plays.",
+            ButtonActionType.MediaNext or ButtonActionType.MediaPrevious => "Dark; next and previous have no on/off state.",
+            ButtonActionType.OpenProgram when ProgramOpener.IsTrackable(a.Command) => $"On while {CommandName(a, "the program")} runs.",
+            ButtonActionType.OpenProgram => "Dark; Volco can only tell whether a program (an .exe or its shortcut) runs.",
+            ButtonActionType.RunScript => "On while the script runs; blinks when it fails.",
             _ => "On while muted.",
         };
         var text = $"{what} Follows the {source.Slot} action.";
@@ -116,6 +154,12 @@ public static class ActionCatalog
             ButtonActionType.ToggleOutputDevice => $"Toggle {name(a.Device)} / {name(a.DeviceB)}",
             ButtonActionType.NextPreset => "Next preset",
             ButtonActionType.GoToPreset => $"Go to {presetName(a.PresetId) ?? "a preset"}",
+            ButtonActionType.MediaPlayPause => WithApp("Play/pause", a),
+            ButtonActionType.MediaNext => WithApp("Next track", a),
+            ButtonActionType.MediaPrevious => WithApp("Previous track", a),
+            ButtonActionType.MediaStop => WithApp("Stop", a),
+            ButtonActionType.OpenProgram => $"Open {CommandName(a, "a program")}",
+            ButtonActionType.RunScript => $"Run {CommandName(a, "a script")}",
             _ => a.Action.ToString(),
         };
     }
@@ -130,6 +174,15 @@ public static class ActionCatalog
         if (b.LongPress.Action != ButtonActionType.None) parts.Add("Hold: " + ShortLabel(b.LongPress, presetName, deviceName));
         return string.Join(" · ", parts);
     }
+
+    private static string WithApp(string verb, ButtonActionConfig a)
+        => a.MediaApp is { Name.Length: > 0 } app ? $"{verb} {app.Name}" : verb;
+
+    private static string MediaTarget(ButtonActionConfig a)
+        => a.MediaApp is { Name.Length: > 0 } app ? app.Name : "the current app";
+
+    private static string CommandName(ButtonActionConfig a, string fallback)
+        => CommandPath.DisplayName(a.Command) is { Length: > 0 } name ? name : fallback;
 
     /// <summary>"Speakers (Realtek Audio)" → "Speakers"; "?" when unset.</summary>
     public static string DeviceShort(DeviceRefConfig? d)
