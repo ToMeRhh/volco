@@ -6,7 +6,7 @@
   'use strict';
   const node = typeof module === 'object' && module.exports;
   const FONTS = node ? require('./fonts.js') : root.VOLCO_FONTS;
-  const { icons: ICONS } = node ? require('./icons.js') : root.VOLCO_ICONS;
+  const { frameMs: FRAME_MS, icons: ICONS } = node ? require('./icons.js') : root.VOLCO_ICONS;
   const P = node ? require('./protocol.js') : root.VolcoProtocol;
 
   const W = 128, H = 64;
@@ -145,18 +145,19 @@
       if (i === selected) fillRect(c, x0 + i * 10, 5, 6, 6); else rect(c, x0 + i * 10, 5, 6, 6);
     }
   }
-  function drawIcon(c, id) {
-    const rows = ICONS[id < ICONS.length ? id : 0][0];
+  function drawIcon(c, id, since) {
+    const frames = ICONS[id < ICONS.length ? id : 0];
+    const rows = frames[Math.floor(since / FRAME_MS) % frames.length];
     rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') set(c, ICON_X + x, ICON_Y + y); });
   }
-  /** Clears c and draws one screen. since drives scrolling (ScreenSlot.scrollSince). */
+  /** Clears c and draws one screen. since drives scrolling and an animated icon's frame (ScreenSlot.scrollSince). */
   function renderScreen(c, s, since, t = SCROLL) {
     c.fill(0);
     if (s.layout !== 1) { drawLine(c, fonts.main, s.main, 36, since, t); return; }   // unknown layout: main text only
     if (s.topKind === P.TOP.TEXT) drawLine(c, fonts.top, s.top, TOP_BASELINE, since, t);
     else if (s.topKind === P.TOP.DOTS) drawDots(c, s.dotsSelected, s.dotsCount);
     if (s.icon !== P.NO_ICON) {
-      drawIcon(c, s.icon);
+      drawIcon(c, s.icon, since);
       if (s.flags & 1) {   // muted: a slash with a dark outline so it reads over filled shapes
         line(c, ICON_X + 1, ICON_Y + 1, ICON_X + 26, ICON_Y + 26, 5, false);
         line(c, ICON_X + 1, ICON_Y + 1, ICON_X + 26, ICON_Y + 26, 2, true);

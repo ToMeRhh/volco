@@ -130,6 +130,44 @@ void test_not_connected_screen() {
   TEST_ASSERT_EQUAL(kNoIcon, s.icon);
 }
 
+void test_animated_icon_frames() {
+  Canvas f0, f1, again, slid;
+  ScreenContent s = screenText("PLAYING", kIcon_equalizer, "Spotify");
+  renderScreen(f0, s, 0, T);
+  renderScreen(f1, s, kIconFrameMs, T);
+  TEST_ASSERT_FALSE(f0 == f1);                          // the bars moved
+  renderScreen(again, s, 4u * kIconFrameMs, T);
+  TEST_ASSERT_TRUE(f0 == again);                        // 4 frames, then round again
+  renderScreen(slid, s, kIconFrameMs - 1, T);
+  TEST_ASSERT_TRUE(f0 == slid);                         // a frame lasts kIconFrameMs
+  // Only the icon area changes between frames.
+  for (int y = 0; y < 64; y++) for (int x = 0; x < 128; x++)
+    if (x < 50 || x >= 78 || y < 18 || y >= 46) TEST_ASSERT_EQUAL(f0.get(x, y), f1.get(x, y));
+}
+
+void test_still_icons_ignore_the_clock() {
+  Canvas a, b;
+  renderScreen(a, screenText("PAUSED", kIcon_equalizerstill, "Spotify"), 0, T);
+  renderScreen(b, screenText("PAUSED", kIcon_equalizerstill, "Spotify"), 3 * kIconFrameMs, T);
+  TEST_ASSERT_TRUE(a == b);
+  Canvas unknown, generic;
+  renderScreen(unknown, screenText("", 200, ""), 5 * kIconFrameMs, T);
+  renderScreen(generic, screenText("", 0, ""), 0, T);
+  TEST_ASSERT_TRUE(unknown == generic);                 // unknown id → generic, at any time
+}
+
+void test_muted_slash_on_every_frame() {
+  for (uint32_t f = 0; f < kIconFrames[kIcon_equalizer]; f++) {
+    Canvas plain, muted;
+    ScreenContent s = screenText("", kIcon_equalizer, "");
+    renderScreen(plain, s, f * kIconFrameMs, T);
+    s.iconFlags = 1;
+    renderScreen(muted, s, f * kIconFrameMs, T);
+    TEST_ASSERT_FALSE(plain == muted);
+    TEST_ASSERT_TRUE(muted.get(51, 19));                // the slash starts at the icon's top-left
+  }
+}
+
 // The renders shared with the web simulator (firmware/test/golden/render.txt). With
 // VOLCO_WRITE_GOLDEN set, the canvases are rewritten from this renderer instead of checked.
 void test_golden_renders() {
@@ -164,6 +202,9 @@ int main(int, char**) {
   RUN_TEST(test_slide_composition);
   RUN_TEST(test_shift_moves_pixels);
   RUN_TEST(test_not_connected_screen);
+  RUN_TEST(test_animated_icon_frames);
+  RUN_TEST(test_still_icons_ignore_the_clock);
+  RUN_TEST(test_muted_slash_on_every_frame);
   RUN_TEST(test_golden_renders);
   return UNITY_END();
 }

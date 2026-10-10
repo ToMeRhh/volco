@@ -104,7 +104,9 @@ void renderScreen(Canvas& c, const ScreenContent& s, uint32_t since, const Scrol
   else if (s.topKind == TOP_DOTS) drawDots(c, s.dotsSelected, s.dotsCount);
   if (s.icon != kNoIcon) {
     uint8_t id = s.icon < kIconCount ? s.icon : 0;  // unknown icon → generic
-    c.bitmap(kIconX, kIconY, kIconSize, kIconSize, kIconBits[kIconFirstFrame[id]], kIconRowBytes);
+    // An animated icon runs on the scrolling clock: frame 0 during a slide (playing-indicator spec §4).
+    uint8_t frame = kIconFirstFrame[id] + (uint8_t)((since / kIconFrameMs) % kIconFrames[id]);
+    c.bitmap(kIconX, kIconY, kIconSize, kIconSize, kIconBits[frame], kIconRowBytes);
     if (s.iconFlags & 1) {  // muted: a slash with a dark outline so it reads over filled shapes
       c.line(kIconX + 1, kIconY + 1, kIconX + 26, kIconY + 26, 5, false);
       c.line(kIconX + 1, kIconY + 1, kIconX + 26, kIconY + 26, 2, true);
