@@ -33,8 +33,8 @@ public class ControllerDisplayPressedTests
     }
 
     private static readonly ScreenContent MuteLive = ScreenContent.Text("LIVE", ScreenIcon.Speaker, false, "Speakers");
-    private static readonly ScreenContent Playing = ScreenContent.Text("PLAYING", ScreenIcon.Play, false, "Spotify");
-    private static readonly ScreenContent Paused = ScreenContent.Text("PAUSED", ScreenIcon.Pause, false, "Spotify");
+    private static readonly ScreenContent Playing = ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify");
+    private static readonly ScreenContent Paused = ScreenContent.Text("PAUSED", ScreenIcon.EqualizerStill, false, "Spotify");
 
     /// <summary>Button 0: press mutes the output, double press plays/pauses Spotify, hold runs a script.</summary>
     private static AppConfig Config(IndicatorKind kind)
