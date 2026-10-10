@@ -86,4 +86,48 @@ public class ScreenPreviewTests
     {
         Assert.Same(ScreenIcons.Geometry(ScreenIcon.Generic), ScreenIcons.Geometry((ScreenIcon)42));
     }
+
+    [AvaloniaFact]
+    public void AnimatedIcon_ShowsItsFramesInTurn()
+    {
+        var p = Show(ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"));
+        // New content restarts at frame 0, whatever the real timer did while the window opened.
+        p.Screen = ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Chrome");
+        var image = Part<Image>(p, "IconImage");
+        Assert.True(p.Animating);
+        Assert.Same(ScreenIcons.Bitmap(ScreenIcon.Equalizer, 0), image.Source);
+        p.NextFrame();
+        Assert.Same(ScreenIcons.Bitmap(ScreenIcon.Equalizer, 1), image.Source);
+        for (var i = 0; i < 3; i++) p.NextFrame();
+        Assert.Same(ScreenIcons.Bitmap(ScreenIcon.Equalizer, 0), image.Source);   // 4 frames, round again
+    }
+
+    [AvaloniaFact]
+    public void StillIcon_DoesNotAnimate_AndAChangeStopsTheAnimation()
+    {
+        var p = Show(ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"));
+        p.NextFrame();
+        p.Screen = ScreenContent.Text("PAUSED", ScreenIcon.EqualizerStill, false, "Spotify");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(p.Animating);
+        Assert.Same(ScreenIcons.Bitmap(ScreenIcon.EqualizerStill), Part<Image>(p, "IconImage").Source);
+    }
+
+    [AvaloniaFact]
+    public void LeavingTheWindow_StopsTheAnimation()
+    {
+        var p = Show(ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"));
+        ((Window)p.Parent!).Content = null;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(p.Animating);
+    }
+
+    [AvaloniaFact]
+    public void EveryFrame_LoadsItsBitmap()
+    {
+        foreach (var icon in Enum.GetValues<ScreenIcon>())
+            for (var f = 0; f < ScreenIconSets.FrameCount(icon); f++)
+                Assert.NotNull(ScreenIcons.Bitmap(icon, f));
+        Assert.NotSame(ScreenIcons.Bitmap(ScreenIcon.Equalizer, 0), ScreenIcons.Bitmap(ScreenIcon.Equalizer, 1));
+    }
 }

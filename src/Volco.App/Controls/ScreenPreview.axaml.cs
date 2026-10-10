@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Volco.Core.Communication;
 
 namespace Volco.App.Controls;
@@ -28,6 +29,9 @@ public partial class ScreenPreview : UserControl
     private readonly Image _icon;
     private readonly Panel _slash;
     private readonly LayoutTransformControl _scaler;
+    private readonly DispatcherTimer _animation = new() { Interval = TimeSpan.FromMilliseconds(ScreenIconSets.FrameMs) };
+    private int _frame;
+    private bool _attached;
 
     public ScreenPreview()
     {
@@ -39,6 +43,7 @@ public partial class ScreenPreview : UserControl
         _slash = this.FindControl<Panel>("Slash")!;
         _scaler = this.FindControl<LayoutTransformControl>("Scaler")!;
         _top.FontFamily = _main.FontFamily = ScreenIcons.Font;
+        _animation.Tick += (_, _) => NextFrame();
         Apply();
     }
 
@@ -52,6 +57,30 @@ public partial class ScreenPreview : UserControl
     {
         get => GetValue(ScaleProperty);
         set => SetValue(ScaleProperty, value);
+    }
+
+    /// <summary>Whether an animated icon is moving (the playing equaliser), as on the controller.</summary>
+    internal bool Animating => _animation.IsEnabled;
+
+    /// <summary>Shows an animated icon's next frame; the timer's tick.</summary>
+    internal void NextFrame()
+    {
+        _frame++;
+        ShowIcon();
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _attached = true;
+        UpdateAnimation();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _attached = false;
+        UpdateAnimation();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -70,8 +99,21 @@ public partial class ScreenPreview : UserControl
         _dots.IsVisible = c.TopKind == TopKind.Dots;
         _dots.ItemsSource = Enumerable.Range(0, c.DotsCount).Select(i => i == c.DotsSelected).ToList();
         _icon.IsVisible = c.Icon is not null;
-        _icon.Source = c.Icon is { } icon ? ScreenIcons.Bitmap(icon) : null;
+        _frame = 0;   // new content starts at frame 0, like a screen that just settled
+        ShowIcon();
+        UpdateAnimation();
         _slash.IsVisible = c.Icon is not null && c.Muted;
         _main.Text = c.Main;
     }
+
+    private void ShowIcon()
+    {
+        var c = Screen ?? ScreenContent.Blank;
+        _icon.Source = c.Icon is { } icon ? ScreenIcons.Bitmap(icon, _frame) : null;
+    }
+
+    // Runs only while shown and only for an icon with several frames.
+    private void UpdateAnimation() =>
+        _animation.IsEnabled = _attached
+            && Screen?.Icon is { } icon && ScreenIconSets.FrameCount(icon) > 1;
 }
