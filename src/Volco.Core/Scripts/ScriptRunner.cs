@@ -42,8 +42,9 @@ public sealed record ScriptStatus(bool Running, int? FlashStep)
 public sealed class ScriptRunner : IDisposable
 {
     public const int TailLines = 20;
-    public const int FlashSteps = 6;
-    public static TimeSpan FlashStepInterval { get; } = TimeSpan.FromMilliseconds(250);
+    // The same rhythm as any other press error (ControllerDisplay.FeedbackStep): a fast flash.
+    public const int FlashSteps = 12;
+    public static TimeSpan FlashStepInterval { get; } = TimeSpan.FromMilliseconds(125);
 
     private readonly IProcessStarter _starter;
     private readonly TimeProvider _time;

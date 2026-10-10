@@ -75,20 +75,22 @@ public sealed class ProgramOpener
             : ProgramState.Untracked;
 
     /// <summary>Brings the program to the front, or starts it. May block while the shell starts
-    /// it (a UAC prompt): callers run it off the input thread.</summary>
-    public void Open(CommandConfig command)
+    /// it (a UAC prompt): callers run it off the input thread. False when nothing is chosen or it
+    /// could not start (a press ignored as a double tap, or a running program without a window,
+    /// is not a failure).</summary>
+    public bool Open(CommandConfig command)
     {
         var path = command.Path.Trim();
         if (path.Length == 0)
         {
             AppLog.Info("Open a program: no program chosen");
-            return;
+            return false;
         }
         var exe = TrackedPath(command);
         if (exe is not null && _launcher.IsRunning(exe))
         {
             if (!_launcher.BringToFront(exe)) AppLog.Info($"Open a program: {exe} runs but has no window to bring to the front");
-            return;
+            return true;
         }
         if (exe is not null)
         {
@@ -98,17 +100,16 @@ public sealed class ProgramOpener
                 if (_lastLaunch.TryGetValue(exe, out var last) && _time.GetElapsedTime(last, now) < LaunchDebounce)
                 {
                     AppLog.Info($"Open a program: {exe} was just started; press ignored");
-                    return;
+                    return true;
                 }
                 _lastLaunch[exe] = now;
             }
         }
         AppLog.Info($"Open a program: starting {path}");
-        if (!_launcher.Start(command))
-        {
-            // A failed start must not block the next press.
-            if (exe is not null) lock (_gate) _lastLaunch.Remove(exe);
-        }
+        if (_launcher.Start(command)) return true;
+        // A failed start must not block the next press.
+        if (exe is not null) lock (_gate) _lastLaunch.Remove(exe);
+        return false;
     }
 
     /// <summary>Polls the executables of <paramref name="commands"/> (the live preset's programs).

@@ -175,7 +175,7 @@ public class ControllerDisplayCustomActionTests
             leds.Add(LedOf(a));
             _time.Advance(ScriptRunner.FlashStepInterval);
         }
-        Assert.Equal(new byte[] { 1, 0, 1, 0, 1, 0 }, leds);
+        Assert.Equal(Enumerable.Range(0, ScriptRunner.FlashSteps).Select(i => (byte)(i % 2 == 0 ? 1 : 0)), leds);
         Assert.Equal(ScreenContent.Text("", ScreenIcon.Script, false, "backup"), ScreenOf(a));
         Assert.Equal(0, LedOf(a));
     }

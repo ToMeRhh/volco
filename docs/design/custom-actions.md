@@ -251,20 +251,32 @@ Where the implementation differs from the draft above:
   current USB serial transport; the gesture (decided at release, maybe after the double-press
   wait) uses that flag.
 
-## 11. The pressed action on the screen
+## 11. Press feedback
 
-A button shows its first action that is not "Do nothing" (press → double press → hold). Its other
-actions now get a moment on the screen:
+A button shows its first action that is not "Do nothing" (press → double press → hold). For
+1.5 s after a press (`ControllerDisplay.FeedbackSteps` × `FeedbackStep`, 12 × 125 ms) it shows
+what the press did:
 
-- **After a press**, a screen shows the action that press ran for 1.5 s
-  (`VolcoRuntimeOptions.ShowPressedFor`), live (a Play/pause shows `PLAYING` or `PAUSED` as the
-  app answers), then goes back to the first action. Pressing the first action ends it at once; a
-  new press replaces it. Not for "Do nothing", a press refused over the network, or preset actions
-  (a preset change is announced as before), and the preset announce wins over it.
-- **A failing script** shows its failure flash (`FAILED` on a screen, the blink on a light)
-  whichever slot it is on, over a pressed action too.
-- **Lights** keep following the first action otherwise: an LED has no room to say which action it shows.
+| | Screen | Single LED / LED pair (A) |
+|---|---|---|
+| **The press did nothing** (any slot) | error icon (X), top: why, main: what was pressed | fast flash: 125 ms on, 125 ms off |
+| **Another action than the shown one** (double press or hold, not a preset action) | that action, live | 2 long blinks: 375 ms on, 375 ms off, twice |
+| **The shown action** | as always; ends any other feedback at once | as always |
 
-The runtime keeps the pressed action per button (`_pressed`, cleared on a preset change, a hardware
-test and dispose) and passes it to `ControllerDisplay.Compute`; `ControllerDisplay.ShowsWhenPressed`
-decides which presses count. The button card's "Screen:" line mentions it when another action can show.
+- **Why a press did nothing**, the error's top line: `NOT RUNNING` (the chosen media app has no
+  session), `NO MEDIA` (Current, and nothing has a session), `NOT AVAILABLE` (the app refused the
+  command or has that control disabled, or this platform lacks the action), `USB ONLY` (a program or
+  script pressed over UDP or WebSocket), `CAN'T OPEN` / `NO FILE` (a program). A missing media app is
+  told from the session snapshot at once; the others when Windows answers. A script that fails keeps
+  its own `FAILED` flash (now at the same 125 ms rhythm), on any slot.
+- **Play/pause shows the state it expects** at once (playing → `PAUSED`, paused → `PLAYING`), on any
+  slot, while the app still reports the state it had before the press, for at most 1 s
+  (`ControllerDisplay.ExpectSteps`); then the real state wins. Spotify takes about half a second
+  to report a pause.
+- A new press replaces the feedback; a preset change, a hardware test and dispose clear it, and
+  the preset announce wins over it. Each step pushes; the link sends only what changed.
+
+The runtime keeps a `PressFeedback` per button (`VolcoRuntime.StartFeedback`, its own timer per
+press) and passes them to `ControllerDisplay.Compute`. Actions report why they did nothing through
+`ActionOrigin.ReportError`, at once or later from another thread. The button card's "Screen:" and
+"Controller light:" lines mention the pressed-action display and the double blink when they apply.

@@ -1,4 +1,5 @@
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Diagnostics;
 using Volco.Core.Media;
@@ -12,6 +13,10 @@ namespace Volco.Core.Input.Actions;
 /// name. A Run a script action passes them to the script (custom-actions spec §5.1).</summary>
 public sealed record ActionOrigin(int Button, PressType Gesture, string PresetName)
 {
+    /// <summary>Told why a press did nothing (<see cref="ControllerDisplay.NotRunning"/> and the
+    /// like), at once or later from another thread; the button shows it (custom-actions spec §11).</summary>
+    public Action<string>? ReportError { get; init; }
+
     /// <summary>The environment a script run gets: VOLCO_BUTTON, VOLCO_GESTURE, VOLCO_PRESET.</summary>
     public IReadOnlyDictionary<string, string> Environment() => new Dictionary<string, string>
     {
@@ -32,15 +37,32 @@ public sealed class MediaAction : IButtonAction
     private readonly IMediaSessions _media;
     private readonly MediaAppConfig? _app;
     private readonly MediaCommand _command;
+    private readonly Action<string>? _reportError;
 
-    public MediaAction(IMediaSessions media, MediaAppConfig? app, MediaCommand command)
+    public MediaAction(IMediaSessions media, MediaAppConfig? app, MediaCommand command, Action<string>? reportError = null)
     {
         _media = media;
         _app = app;
         _command = command;
+        _reportError = reportError;
     }
 
-    public void Execute() => _media.Send(_app is { Id.Length: > 0 } ? _app.Id : null, _command);
+    public void Execute()
+    {
+        var id = _app is { Id.Length: > 0 } ? _app.Id : null;
+        // From the snapshot, so a missing app is reported at once rather than after a WinRT round trip.
+        if (id is null ? _media.CurrentAppId is null
+                       : !_media.GetApps().Any(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase)))
+        {
+            AppLog.Info($"Media {_command}: {(id is null ? "nothing is playing" : $"{id} is not running")}");
+            _reportError?.Invoke(id is null ? ControllerDisplay.NoMedia : ControllerDisplay.NotRunning);
+            return;
+        }
+        _media.Send(id, _command).ContinueWith(t =>
+        {
+            if (!(t.IsCompletedSuccessfully && t.Result)) _reportError?.Invoke(ControllerDisplay.NotAvailable);
+        }, TaskContinuationOptions.ExecuteSynchronously);
+    }
 }
 
 /// <summary>Brings the program to the front, or starts it (off the input thread: the shell may
@@ -49,11 +71,13 @@ public sealed class OpenProgramAction : IButtonAction
 {
     private readonly ProgramOpener _programs;
     private readonly CommandConfig? _command;
+    private readonly Action<string>? _reportError;
 
-    public OpenProgramAction(ProgramOpener programs, CommandConfig? command)
+    public OpenProgramAction(ProgramOpener programs, CommandConfig? command, Action<string>? reportError = null)
     {
         _programs = programs;
         _command = command;
+        _reportError = reportError;
     }
 
     public void Execute()
@@ -61,13 +85,20 @@ public sealed class OpenProgramAction : IButtonAction
         if (_command is null || _command.Path.Trim().Length == 0)
         {
             AppLog.Info("Open a program: no program chosen");
+            _reportError?.Invoke(ControllerDisplay.NoFile);
             return;
         }
         var command = _command;
         Task.Run(() =>
         {
-            try { _programs.Open(command); }
-            catch (Exception ex) { AppLog.Error($"Open a program: {command.Path} failed ({ex.GetType().Name}: {ex.Message})"); }
+            bool opened;
+            try { opened = _programs.Open(command); }
+            catch (Exception ex)
+            {
+                AppLog.Error($"Open a program: {command.Path} failed ({ex.GetType().Name}: {ex.Message})");
+                opened = false;
+            }
+            if (!opened) _reportError?.Invoke(ControllerDisplay.CantOpen);
         });
     }
 }

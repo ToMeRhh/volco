@@ -126,9 +126,11 @@ public static class ActionCatalog
             _ => "On while muted.",
         };
         var text = $"{what} Follows the {source.Slot} action.";
-        return singleLed && a.Action != ButtonActionType.NextPreset && ControllerDisplay.BlinksOnPresetChange(binding)
-            ? $"{text} Blinks when {PresetSlot(binding)} changes the preset."
-            : text;
+        if (singleLed && a.Action != ButtonActionType.NextPreset && ControllerDisplay.BlinksOnPresetChange(binding))
+            text += $" Blinks when {PresetSlot(binding)} changes the preset.";
+        if (binding.All().Any(x => ControllerDisplay.ShowsWhenPressed(binding, x)))
+            text += " Blinks twice when you use another of its actions.";
+        return text;
     }
 
     /// <summary>The first slot with a preset action, or null.</summary>

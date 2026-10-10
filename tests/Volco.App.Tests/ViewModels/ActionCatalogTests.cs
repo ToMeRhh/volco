@@ -63,6 +63,14 @@ public class ActionCatalogTests
     }
 
     [Fact]
+    public void Light_SaysItBlinksTwiceForAnotherAction()
+    {
+        var play = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause };
+        Assert.Equal("On while muted. Follows the Press action. Blinks twice when you use another of its actions.",
+            ActionCatalog.LightDescription(Binding(Mute, play), singleLed: true, Preset));
+    }
+
+    [Fact]
     public void Screen_SaysItShowsAnotherActionForAMoment()
     {
         var play = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause };

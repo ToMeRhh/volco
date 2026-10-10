@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 namespace volco {
-constexpr uint8_t kIconCount = 17;
+constexpr uint8_t kIconCount = 18;
 constexpr uint8_t kIconSize = 28;
 constexpr uint8_t kIconRowBytes = 4;
 // Row-major, LSB = leftmost pixel of each byte (XBM order).
@@ -25,4 +25,5 @@ constexpr uint8_t kIcon_next = 13;
 constexpr uint8_t kIcon_previous = 14;
 constexpr uint8_t kIcon_app = 15;
 constexpr uint8_t kIcon_script = 16;
+constexpr uint8_t kIcon_error = 17;
 }  // namespace volco

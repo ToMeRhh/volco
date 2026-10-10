@@ -26,6 +26,7 @@ public enum ScreenIcon : byte
     Previous = 14,
     App = 15,
     Script = 16,
+    Error = 17,
 }
 
 /// <summary>Sets of <see cref="ScreenIcon"/> from the manifest.</summary>

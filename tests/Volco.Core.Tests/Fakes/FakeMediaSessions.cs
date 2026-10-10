@@ -13,7 +13,14 @@ public sealed class FakeMediaSessions : IMediaSessions
 
     public IReadOnlyList<MediaApp> GetApps() { lock (_lock) return _apps.ToList(); }
 
-    public void Send(string? appId, MediaCommand command) { lock (_lock) _sent.Add((appId, command)); }
+    /// <summary>What <see cref="Send"/> answers (whether the app took the command).</summary>
+    public bool Accepts { get; set; } = true;
+
+    public Task<bool> Send(string? appId, MediaCommand command)
+    {
+        lock (_lock) _sent.Add((appId, command));
+        return Task.FromResult(Accepts);
+    }
 
     public IReadOnlyList<(string? AppId, MediaCommand Command)> Sent { get { lock (_lock) return _sent.ToList(); } }
 
