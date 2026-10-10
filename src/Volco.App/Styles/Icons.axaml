@@ -67,4 +67,5 @@
     <StreamGeometry x:Key="Icon.Device.Previous">M4 4.5H6.5V15.5H4Z M16 4.5V15.5L8 10Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Device.App">F0 M2.5 3.5H17.5V16.5H2.5Z M3.5 7H16.5V15.5H3.5Z M5 9H9.5V14H5Z M11 9.5H15V10.5H11Z M11 12H15V13H11Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Device.Script">F0 M2.5 3.5H17.5V16.5H2.5Z M3.5 4.5H16.5V15.5H3.5Z M5.5 7.2 6.3 6.4 9.9 10 6.3 13.6 5.5 12.8 8.3 10Z M10.5 12.5H14.5V13.5H10.5Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Device.Error">F0 M10 2a8 8 0 1 1 0 16a8 8 0 1 1 0-16Z M10 3.5a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13Z M6.6 7.6 7.6 6.6 10 9 12.4 6.6 13.4 7.6 11 10 13.4 12.4 12.4 13.4 10 11 7.6 13.4 6.6 12.4 9 10Z</StreamGeometry>
 </ResourceDictionary>

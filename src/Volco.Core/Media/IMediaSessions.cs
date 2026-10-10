@@ -33,9 +33,9 @@ public interface IMediaSessions
     string? CurrentAppId { get; }
 
     /// <summary>Sends <paramref name="command"/> to <paramref name="appId"/> (null: the current
-    /// app). Returns at once; never throws. No session, or a control the app has disabled, is a
-    /// logged no-op.</summary>
-    void Send(string? appId, MediaCommand command);
+    /// app). Returns at once; never throws. The task says whether the app took it: false (and
+    /// logged) for no session, a control the app has disabled, or an app that refused.</summary>
+    Task<bool> Send(string? appId, MediaCommand command);
 
     /// <summary>A session came or went, the current app changed, or a playback state changed.
     /// Any thread.</summary>

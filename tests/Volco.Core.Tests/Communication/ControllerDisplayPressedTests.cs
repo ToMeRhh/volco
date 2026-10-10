@@ -11,8 +11,8 @@ using Xunit;
 
 namespace Volco.Core.Tests.Communication;
 
-/// <summary>A screen shows the action a press just ran; a failing script shows on any slot
-/// (custom-actions spec §11).</summary>
+/// <summary>What a button shows for a moment after a press: the pressed action, an error, a
+/// Play/pause's expected state; and a failing script on any slot (custom-actions spec §11).</summary>
 public class ControllerDisplayPressedTests
 {
     private const string Script = @"C:\s\backup.bat";
@@ -34,8 +34,9 @@ public class ControllerDisplayPressedTests
 
     private static readonly ScreenContent MuteLive = ScreenContent.Text("LIVE", ScreenIcon.Speaker, false, "Speakers");
     private static readonly ScreenContent Playing = ScreenContent.Text("PLAYING", ScreenIcon.Play, false, "Spotify");
+    private static readonly ScreenContent Paused = ScreenContent.Text("PAUSED", ScreenIcon.Pause, false, "Spotify");
 
-    /// <summary>Button 0: press mutes the output, double press plays/pauses, hold runs a script.</summary>
+    /// <summary>Button 0: press mutes the output, double press plays/pauses Spotify, hold runs a script.</summary>
     private static AppConfig Config(IndicatorKind kind)
     {
         var c = AppConfig.CreateDefault();
@@ -43,7 +44,10 @@ public class ControllerDisplayPressedTests
         var b = new ButtonConfig();
         var binding = b.Default();
         binding.SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
-        binding.DoublePress = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause };
+        binding.DoublePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "Spotify.exe", Name = "Spotify" },
+        };
         binding.LongPress = new ButtonActionConfig { Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = Script } };
         c.Buttons.Add(b);
         c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Buttons = new() { kind } };
@@ -52,24 +56,50 @@ public class ControllerDisplayPressedTests
 
     private static ButtonBindingConfig Binding(AppConfig c) => c.Buttons[0].Default();
 
-    private ButtonDisplay? Show(AppConfig c, ButtonActionConfig? pressed)
+    /// <summary>Feedback as the runtime makes it for a press of <paramref name="action"/>.</summary>
+    private static PressFeedback Pressed(AppConfig c, ButtonActionConfig action, string? error = null, int step = 0,
+                                         MediaPlayback? from = null, MediaPlayback? expect = null)
+        => new(action, ControllerDisplay.ShowsWhenPressed(Binding(c), action), error, step, from, expect);
+
+    private ButtonDisplay? Show(AppConfig c, PressFeedback? feedback)
         => ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio, null, _status,
-                                     pressed is null ? null : new Dictionary<int, ButtonActionConfig> { [0] = pressed })[0];
+                                     feedback is null ? null : new Dictionary<int, PressFeedback> { [0] = feedback })[0];
+
+    private ScreenContent ScreenOf(AppConfig c, PressFeedback? feedback) => Assert.IsType<ScreenDisplay>(Show(c, feedback)).Content;
+    private byte LedOf(AppConfig c, PressFeedback? feedback) => Assert.IsType<LedDisplay>(Show(c, feedback)).Value;
+
+    // ── A press of another action ─────────────────────────────────────────────
 
     [Fact]
     public void Screen_ShowsThePressedAction_InsteadOfTheFirst()
     {
         var c = Config(IndicatorKind.Screen);
-        Assert.Equal(MuteLive, Assert.IsType<ScreenDisplay>(Show(c, null)).Content);
-        Assert.Equal(Playing, Assert.IsType<ScreenDisplay>(Show(c, Binding(c).DoublePress)).Content);
+        Assert.Equal(MuteLive, ScreenOf(c, null));
+        Assert.Equal(Playing, ScreenOf(c, Pressed(c, Binding(c).DoublePress)));
     }
 
     [Fact]
-    public void Led_KeepsFollowingTheFirstAction()
+    public void Led_BlinksTwiceLong_ForAnotherAction()
     {
         var c = Config(IndicatorKind.Led);
-        // The output is not muted: the mute light is off, although Spotify plays.
-        Assert.Equal(new LedDisplay(0), Show(c, Binding(c).DoublePress));
+        var leds = Enumerable.Range(0, ControllerDisplay.FeedbackSteps)
+                             .Select(step => LedOf(c, Pressed(c, Binding(c).DoublePress, step: step)));
+        Assert.Equal(new byte[] { 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0 }, leds);
+    }
+
+    [Fact]
+    public void LedPair_BlinksItsASide()
+    {
+        var c = Config(IndicatorKind.LedPair);
+        Assert.Equal(1, LedOf(c, Pressed(c, Binding(c).DoublePress, step: 0)));
+        Assert.Equal(0, LedOf(c, Pressed(c, Binding(c).DoublePress, step: 3)));
+    }
+
+    [Fact]
+    public void AfterTheLastStep_TheButtonShowsItsFirstActionAgain()
+    {
+        var c = Config(IndicatorKind.Screen);
+        Assert.Equal(MuteLive, ScreenOf(c, Pressed(c, Binding(c).DoublePress, step: ControllerDisplay.FeedbackSteps)));
     }
 
     [Fact]
@@ -77,7 +107,7 @@ public class ControllerDisplayPressedTests
     {
         var c = Config(IndicatorKind.Screen);
         var stranger = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause };
-        Assert.Equal(MuteLive, Assert.IsType<ScreenDisplay>(Show(c, stranger)).Content);
+        Assert.Equal(MuteLive, ScreenOf(c, new PressFeedback(stranger, true, ControllerDisplay.NotRunning, 0)));
     }
 
     [Fact]
@@ -94,6 +124,67 @@ public class ControllerDisplayPressedTests
         Assert.False(ControllerDisplay.ShowsWhenPressed(b, b.LongPress));              // Do nothing
     }
 
+    // ── Errors ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Error_ShowsTheErrorIcon_WhyAndWhat()
+    {
+        var c = Config(IndicatorKind.Screen);
+        _media.SetApps(Array.Empty<MediaApp>());
+        Assert.Equal(ScreenContent.Text("NOT RUNNING", ScreenIcon.Error, false, "Spotify"),
+                     ScreenOf(c, Pressed(c, Binding(c).DoublePress, ControllerDisplay.NotRunning)));
+        Assert.Equal(ScreenContent.Text("USB ONLY", ScreenIcon.Error, false, "backup"),
+                     ScreenOf(c, Pressed(c, Binding(c).LongPress, ControllerDisplay.UsbOnly)));
+    }
+
+    [Fact]
+    public void Error_OnTheFirstAction_ShowsToo()
+    {
+        var c = Config(IndicatorKind.Screen);
+        Assert.Equal(ScreenContent.Text("NOT AVAILABLE", ScreenIcon.Error, false, ""),
+                     ScreenOf(c, Pressed(c, Binding(c).SinglePress, ControllerDisplay.NotAvailable)));
+    }
+
+    [Fact]
+    public void Error_FlashesTheLedFast_OnAnySlot()
+    {
+        var c = Config(IndicatorKind.Led);
+        foreach (var action in Binding(c).All())
+        {
+            var leds = Enumerable.Range(0, ControllerDisplay.FeedbackSteps)
+                                 .Select(step => LedOf(c, Pressed(c, action, ControllerDisplay.NotRunning, step)));
+            Assert.Equal(new byte[] { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 }, leds);
+        }
+    }
+
+    // ── Play/pause's expected state ───────────────────────────────────────────
+
+    [Fact]
+    public void PlayPause_ShowsTheExpectedState_UntilWindowsReportsIt()
+    {
+        var c = Config(IndicatorKind.Screen);
+        var press = Pressed(c, Binding(c).DoublePress, from: MediaPlayback.Playing, expect: MediaPlayback.Paused);
+        Assert.Equal(Paused, ScreenOf(c, press));                       // Spotify still says playing
+
+        _media.SetApps(new[] { new MediaApp("Spotify.exe", "Spotify", MediaPlayback.Paused) });
+        Assert.Equal(Paused, ScreenOf(c, press));                       // now it says so too
+
+        _media.SetApps(new[] { new MediaApp("Spotify.exe", "Spotify", MediaPlayback.Playing) });
+        Assert.Equal(Playing, ScreenOf(c, press with { ExpectFrom = null, Expect = null }));   // the real state after a while
+    }
+
+    [Fact]
+    public void PlayPause_OnTheFirstAction_LightsTheExpectedState()
+    {
+        var c = Config(IndicatorKind.Led);
+        var b = Binding(c);
+        (b.SinglePress, b.DoublePress) = (b.DoublePress, b.SinglePress);   // Play/pause on press now
+        Assert.Equal(1, LedOf(c, null));                                    // Spotify plays
+        Assert.Equal(0, LedOf(c, Pressed(c, b.SinglePress, from: MediaPlayback.Playing, expect: MediaPlayback.Paused)));
+    }
+
+    // ── A failing script ──────────────────────────────────────────────────────
+
     [Fact]
     public void AFailingScript_ShowsOnAnySlot_OnScreenAndLight()
     {
@@ -102,13 +193,12 @@ public class ControllerDisplayPressedTests
         _starter.Runs[0].Run.End(1);
 
         var failed = ScreenContent.Text("FAILED", ScreenIcon.Script, false, "backup");
-        Assert.Equal(failed, Assert.IsType<ScreenDisplay>(Show(c, null)).Content);
-        // Over a pressed action too: the failure is the news.
-        Assert.Equal(failed, Assert.IsType<ScreenDisplay>(Show(c, Binding(c).DoublePress)).Content);
-        Assert.Equal(new LedDisplay(1), Show(Rebind(Config(IndicatorKind.Led), c), null));
+        Assert.Equal(failed, ScreenOf(c, null));
+        Assert.Equal(failed, ScreenOf(c, Pressed(c, Binding(c).DoublePress)));   // over a pressed action too
+        Assert.Equal(1, LedOf(Rebind(Config(IndicatorKind.Led), c), null));
 
         for (int i = 0; i < ScriptRunner.FlashSteps; i++) _time.Advance(ScriptRunner.FlashStepInterval);
-        Assert.Equal(MuteLive, Assert.IsType<ScreenDisplay>(Show(c, null)).Content);
+        Assert.Equal(MuteLive, ScreenOf(c, null));
     }
 
     /// <summary><paramref name="target"/> with <paramref name="source"/>'s button (the same action

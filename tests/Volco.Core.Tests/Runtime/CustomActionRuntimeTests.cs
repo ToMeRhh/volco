@@ -43,6 +43,8 @@ public sealed class CustomActionRuntimeTests : IDisposable
         var speakers = new AudioDevice("spk", "Speakers", AudioFlow.Render, true);
         _engine.Devices = new List<AudioDevice> { speakers };
         _engine.DefaultRender = speakers;
+        // Spotify is open and paused (the current app), unless a test says otherwise.
+        _media.SetApps(new[] { new MediaApp("Spotify.exe", "Spotify", MediaPlayback.Paused) });
     }
 
     public void Dispose()
@@ -240,10 +242,15 @@ public sealed class CustomActionRuntimeTests : IDisposable
         runtime.Execute(cm.Config.Buttons[0].Default().SinglePress);   // nothing to run it with; no throw
     }
 
-    // ── The pressed action on the screen (custom-actions spec §11) ───────────
+    // ── Press feedback (custom-actions spec §11) ─────────────────────────────
+
+    private int Count(byte[] frame) => Connection(0).SentFrames.Count(f => f.AsSpan().SequenceEqual(frame));
+
+    private static byte[] ScreenFrame(string top, ScreenIcon icon, string main)
+        => ProtocolEncoder.EncodeScreen(0, ScreenTransition.None, ScreenContent.Text(top, icon, false, main));
 
     [Fact]
-    public void DoublePress_ShowsItsActionForAMoment_ThenTheFirstAgain()
+    public void DoublePress_ShowsTheExpectedState_ThenTheRealOne_ThenTheFirstActionAgain()
     {
         var time = new FakeTimeProvider();
         var runtime = Start(ConnectionType.Serial, c =>
@@ -257,18 +264,95 @@ public sealed class CustomActionRuntimeTests : IDisposable
         var binding = runtime.Config.Config.Buttons[0].Default();
         var first = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None,
             ControllerDisplay.Screen(binding.SinglePress, runtime.Config.Config, runtime.ActivePresetId, _engine));
-        var media = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None, ScreenContent.Text("", ScreenIcon.Play, false, "Spotify"));
-        int Count(byte[] frame) => Connection(0).SentFrames.Count(f => f.AsSpan().SequenceEqual(frame));
+        var expected = ScreenFrame("PLAYING", ScreenIcon.Play, "Spotify");
+        var real = ScreenFrame("PAUSED", ScreenIcon.Pause, "Spotify");
         Assert.True(WaitUntil(() => Count(first) == 1), "the first action's screen was not sent");
 
         Press(Connection(0), 0);
         Press(Connection(0), 0);
 
         Assert.True(WaitUntil(() => _media.Sent.Count == 1), "the double press did not play/pause");
-        Assert.True(WaitUntil(() => Count(media) == 1), "the pressed action was not shown");
+        // Spotify (the fake) never reports the change: the screen says PLAYING at once anyway.
+        Assert.True(WaitUntil(() => Count(expected) == 1), "the expected state was not shown");
+        Assert.Equal(0, Count(real));
+
+        time.Advance(ControllerDisplay.FeedbackStep * ControllerDisplay.ExpectSteps);
+        Assert.True(WaitUntil(() => Count(real) == 1), "the real state did not win after a while");
         Assert.Equal(1, Count(first));
 
-        time.Advance(VolcoRuntimeOptions.Default.ShowPressedFor);
+        time.Advance(ControllerDisplay.FeedbackStep * (ControllerDisplay.FeedbackSteps - ControllerDisplay.ExpectSteps));
         Assert.True(WaitUntil(() => Count(first) == 2), "the screen did not go back to the first action");
+    }
+
+    [Fact]
+    public void DoublePress_BlinksAnLedTwice()
+    {
+        var time = new FakeTimeProvider();
+        Start(ConnectionType.Serial, c =>
+        {
+            c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
+            c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MediaNext };
+        }, IndicatorKind.Led, Quiet with { Time = time });
+        var on = ProtocolEncoder.EncodeLed(0, 1);
+        var off = ProtocolEncoder.EncodeLed(0, 0);
+        Assert.True(WaitUntil(() => Count(off) == 1), "the mute light was not sent");
+
+        Press(Connection(0), 0);
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => Count(on) == 1), "the first blink did not start");
+
+        for (int i = 0; i < ControllerDisplay.FeedbackSteps; i++) time.Advance(ControllerDisplay.FeedbackStep);
+        // On, off, on, off: the last off is the mute light again (not muted).
+        Assert.True(WaitUntil(() => Count(on) == 2 && Count(off) == 3), $"blinks: on {Count(on)}, off {Count(off)}");
+    }
+
+    [Fact]
+    public void MediaPress_AppNotRunning_ShowsTheError_AndSendsNothing()
+    {
+        Start(ConnectionType.Serial, c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "foobar.exe", Name = "foobar" },
+        });
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => Count(ScreenFrame("NOT RUNNING", ScreenIcon.Error, "foobar")) == 1), "no error screen");
+        Assert.Empty(_media.Sent);
+    }
+
+    [Fact]
+    public void MediaPress_NothingPlaying_ShowsNoMedia()
+    {
+        _media.SetApps(Array.Empty<MediaApp>(), current: null);
+        Start(ConnectionType.Serial, c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MediaNext });
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => Count(ScreenFrame("NO MEDIA", ScreenIcon.Error, "Media")) == 1), "no error screen");
+    }
+
+    [Fact]
+    public void MediaPress_TheAppRefuses_ShowsNotAvailable()
+    {
+        _media.Accepts = false;
+        Start(ConnectionType.Serial, c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MediaNext });
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => Count(ScreenFrame("NOT AVAILABLE", ScreenIcon.Error, "Spotify")) == 1), "no error screen");
+    }
+
+    [Fact]
+    public void ScriptPressOverUdp_ShowsUsbOnly()
+    {
+        Start(ConnectionType.Udp, Script);
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => Count(ScreenFrame("USB ONLY", ScreenIcon.Error, "backup")) == 1), "no error screen");
+    }
+
+    [Fact]
+    public void ProgramThatCannotStart_ShowsCantOpen()
+    {
+        _launcher.StartSucceeds = false;
+        Start(ConnectionType.Serial, c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.OpenProgram, Command = new CommandConfig { Path = @"C:\Games\doom.exe" },
+        });
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => Count(ScreenFrame("CAN'T OPEN", ScreenIcon.Error, "doom")) == 1), "no error screen");
     }
 }

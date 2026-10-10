@@ -58,10 +58,16 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// detector fires the gesture (after the release, maybe after a double-press wait).</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _pressOverUsb = new();
 
-    /// <summary>Per button input: the action a press just ran, while its screen shows it instead
-    /// of the button's first action (custom-actions spec §11), and the timer that ends it.</summary>
-    private readonly Dictionary<int, (ButtonActionConfig Action, ITimer Timer)> _pressed = new();
-    private readonly object _pressedGate = new();
+    /// <summary>Per button input: the feedback for a press just made (custom-actions spec §11),
+    /// moved on every <see cref="ControllerDisplay.FeedbackStep"/> by its own timer.</summary>
+    private readonly Dictionary<int, FeedbackEntry> _feedback = new();
+    private readonly object _feedbackGate = new();
+
+    private sealed class FeedbackEntry
+    {
+        public required PressFeedback Feedback;
+        public required ITimer Timer;
+    }
 
     private readonly IMediaSessions? _media;
     private readonly ProgramOpener? _programs;
@@ -134,7 +140,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         // In test mode the same delegate shows the test state and ignores the announce step
         // (spec §8.5), so no preset blink or flash appears during a test.
         _link = new ControllerLink(
-            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step, ActionStatus, PressedSnapshot()),
+            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step, ActionStatus, FeedbackSnapshot()),
             ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) =>
         {
@@ -200,7 +206,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         if (started)
         {
             AppLog.Info("Test mode on");
-            ClearPressed();
+            ClearFeedback();
             _buttonPressDetector?.Reset();   // a gesture started before the test can't fire during it
             _sliderProcessor?.DropPending();  // nor a slider value queued just before it
             _link.PushAll();
@@ -497,7 +503,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
 
         AppLog.Info($"Active preset: {presetId}");
-        ClearPressed();   // the other preset's actions: nothing pressed there yet
+        ClearFeedback();   // the other preset's actions: nothing pressed there yet
         WatchPrograms();
         ActivePresetChanged?.Invoke(this, presetId);
 
@@ -942,10 +948,15 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             && !(_pressOverUsb.TryGetValue(e.ButtonIndex, out var overUsb) && overUsb))
         {
             AppLog.Info($"Button {e.ButtonIndex}: {actionConfig.Action} refused; programs and scripts run only for presses over USB");
+            StartFeedback(e.ButtonIndex, binding, actionConfig, ControllerDisplay.UsbOnly);
             return;
         }
         var presetName = config.Presets.Find(p => p.Id == presetId)?.Name ?? presetId;
-        var action = ActionFactory.Create(actionConfig, Services, new ActionOrigin(e.ButtonIndex, e.PressType, presetName));
+        var button = e.ButtonIndex;
+        var action = ActionFactory.Create(actionConfig, Services, new ActionOrigin(button, e.PressType, presetName)
+        {
+            ReportError = why => StartFeedback(button, binding, actionConfig, why),
+        });
 
         // action.Execute() only posts a command to the audio thread - the write hasn't happened
         // yet when Execute() returns (review item 3). Reading TryGetDeviceState/GetDefaultDevice
@@ -985,9 +996,14 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         }
         Interlocked.Exchange(ref _pendingDeviceOsd, pendingSwitch);
 
+        // Feedback first: an error the action reports (at once, or later) replaces it.
+        if (action is null && actionConfig.Action != ButtonActionType.None)
+            StartFeedback(button, binding, actionConfig, ControllerDisplay.NotAvailable);
+        else if (action is not null)
+            StartFeedback(button, binding, actionConfig, error: null);
+
         var presetBefore = ActivePresetId;
         action?.Execute();
-        if (action is not null) ShowPressed(e.ButtonIndex, binding, actionConfig);
 
         if (alreadyCurrent is not null) ShowDeviceOsd(alreadyCurrent.Id, alreadyCurrent.FriendlyName);
 
@@ -1194,62 +1210,87 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         VolumeChanged?.Invoke(this, n);
     }
 
-    /// <summary>After a press: its screen shows the action it ran for
-    /// <see cref="VolcoRuntimeOptions.ShowPressedFor"/>, unless that is the action the screen
-    /// shows anyway (pressing it ends any other shown action at once).</summary>
-    private void ShowPressed(int button, ButtonBindingConfig binding, ButtonActionConfig action)
+    /// <summary>
+    /// After a press of <paramref name="action"/> on <paramref name="button"/>: its feedback for
+    /// <see cref="ControllerDisplay.FeedbackSteps"/> steps, replacing any before it. An error
+    /// always shows; otherwise only a press of another action than the one the button shows
+    /// (<see cref="ControllerDisplay.ShowsWhenPressed"/>) or a Play/pause (its expected state)
+    /// needs any, and a press of the shown action ends any other feedback at once.
+    /// </summary>
+    private void StartFeedback(int button, ButtonBindingConfig binding, ButtonActionConfig action, string? error)
     {
         if (IsDisposed) return;
-        if (!ControllerDisplay.ShowsWhenPressed(binding, action) || _options.ShowPressedFor <= TimeSpan.Zero)
+        var secondary = ControllerDisplay.ShowsWhenPressed(binding, action);
+        MediaPlayback? from = null, expect = null;
+        if (error is null && action.Action == ButtonActionType.MediaPlayPause
+            && ActionStatus.Media(action.MediaApp) is { Present: true, Playback: var now })
         {
-            if (ClearPressed(button)) PushControllerState();
+            from = now;
+            expect = now == MediaPlayback.Playing ? MediaPlayback.Paused : MediaPlayback.Playing;
+        }
+        if (error is null && !secondary && from is null)
+        {
+            if (ClearFeedback(button)) PushControllerState();
             return;
         }
-        lock (_pressedGate)
+
+        var feedback = new PressFeedback(action, secondary, error, 0, from, expect);
+        lock (_feedbackGate)
         {
-            if (_pressed.TryGetValue(button, out var old)) old.Timer.Dispose();
-            var timer = _options.Time.CreateTimer(_ => EndPressed(button, action), null, _options.ShowPressedFor, Timeout.InfiniteTimeSpan);
-            _pressed[button] = (action, timer);
+            if (_feedback.TryGetValue(button, out var old)) old.Timer.Dispose();
+            var entry = new FeedbackEntry { Feedback = feedback, Timer = null! };
+            entry.Timer = _options.Time.CreateTimer(_ => StepFeedback(button, entry), null,
+                                                    ControllerDisplay.FeedbackStep, ControllerDisplay.FeedbackStep);
+            _feedback[button] = entry;
         }
         PushControllerState();
     }
 
-    /// <summary>The shown time of <paramref name="action"/> on <paramref name="button"/> is over
-    /// (unless another press replaced it meanwhile).</summary>
-    private void EndPressed(int button, ButtonActionConfig action)
+    /// <summary>One step of <paramref name="entry"/>'s feedback (unless a later press replaced it).</summary>
+    private void StepFeedback(int button, FeedbackEntry entry)
     {
-        lock (_pressedGate)
+        lock (_feedbackGate)
         {
-            if (!_pressed.TryGetValue(button, out var entry) || !ReferenceEquals(entry.Action, action)) return;
-            entry.Timer.Dispose();
-            _pressed.Remove(button);
+            if (!_feedback.TryGetValue(button, out var current) || !ReferenceEquals(current, entry)) return;
+            var step = entry.Feedback.Step + 1;
+            if (step >= ControllerDisplay.FeedbackSteps)
+            {
+                entry.Timer.Dispose();
+                _feedback.Remove(button);
+            }
+            else
+            {
+                entry.Feedback = step >= ControllerDisplay.ExpectSteps
+                    ? entry.Feedback with { Step = step, ExpectFrom = null, Expect = null }   // the real state wins now
+                    : entry.Feedback with { Step = step };
+            }
         }
         PushControllerState();
     }
 
-    /// <summary>Ends the shown action of <paramref name="button"/> (-1: of every button).
-    /// Returns whether there was one. Does not push.</summary>
-    private bool ClearPressed(int button = -1)
+    /// <summary>Ends the feedback of <paramref name="button"/> (-1: of every button). Returns
+    /// whether there was any. Does not push.</summary>
+    private bool ClearFeedback(int button = -1)
     {
-        lock (_pressedGate)
+        lock (_feedbackGate)
         {
             if (button >= 0)
             {
-                if (!_pressed.Remove(button, out var entry)) return false;
+                if (!_feedback.Remove(button, out var entry)) return false;
                 entry.Timer.Dispose();
                 return true;
             }
-            var any = _pressed.Count > 0;
-            foreach (var (_, entry) in _pressed) entry.Timer.Dispose();
-            _pressed.Clear();
+            var any = _feedback.Count > 0;
+            foreach (var (_, entry) in _feedback) entry.Timer.Dispose();
+            _feedback.Clear();
             return any;
         }
     }
 
-    private IReadOnlyDictionary<int, ButtonActionConfig>? PressedSnapshot()
+    private IReadOnlyDictionary<int, PressFeedback>? FeedbackSnapshot()
     {
-        lock (_pressedGate)
-            return _pressed.Count == 0 ? null : _pressed.ToDictionary(p => p.Key, p => p.Value.Action);
+        lock (_feedbackGate)
+            return _feedback.Count == 0 ? null : _feedback.ToDictionary(p => p.Key, p => p.Value.Feedback);
     }
 
     /// <summary>A media session, a watched program or a script run changed (any thread).</summary>
@@ -1386,7 +1427,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             _programs.Changed -= OnActionStateChanged;
             _programs.Watch(Array.Empty<CommandConfig>());
         }
-        ClearPressed();
+        ClearFeedback();
         if (_scripts is not null)
         {
             _scripts.Changed -= OnActionStateChanged;

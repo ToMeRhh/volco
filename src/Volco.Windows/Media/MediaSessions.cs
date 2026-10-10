@@ -144,21 +144,25 @@ internal sealed class MediaSessions : IMediaSessions, IDisposable
         return name;
     }
 
-    public void Send(string? appId, MediaCommand command)
-        => _ = Task.Run(async () =>
+    public Task<bool> Send(string? appId, MediaCommand command)
+        => Task.Run(async () =>
         {
-            try { await SendAsync(appId, command); }
-            catch (Exception ex) { AppLog.Error($"Media {command}: failed ({ex.GetType().Name}: {ex.Message})"); }
+            try { return await SendAsync(appId, command); }
+            catch (Exception ex)
+            {
+                AppLog.Error($"Media {command}: failed ({ex.GetType().Name}: {ex.Message})");
+                return false;
+            }
         });
 
-    private async Task SendAsync(string? appId, MediaCommand command)
+    private async Task<bool> SendAsync(string? appId, MediaCommand command)
     {
         SessionManager? manager;
         lock (_gate) manager = _manager;
         if (manager is null)
         {
             AppLog.Info($"Media {command}: no media sessions");
-            return;
+            return false;
         }
         var session = appId is null
             ? manager.GetCurrentSession()
@@ -169,7 +173,7 @@ internal sealed class MediaSessions : IMediaSessions, IDisposable
         if (session is null)
         {
             AppLog.Info($"Media {command}: {appId ?? "no current app"} has no session");
-            return;
+            return false;
         }
         var controls = session.GetPlaybackInfo()?.Controls;
         IAsyncOperation<bool>? operation = command switch
@@ -183,9 +187,11 @@ internal sealed class MediaSessions : IMediaSessions, IDisposable
         if (operation is null)
         {
             AppLog.Info($"Media {command}: {session.SourceAppUserModelId} has that control disabled");
-            return;
+            return false;
         }
-        if (!await operation) AppLog.Info($"Media {command}: {session.SourceAppUserModelId} did not accept it");
+        if (await operation) return true;
+        AppLog.Info($"Media {command}: {session.SourceAppUserModelId} did not accept it");
+        return false;
     }
 
     public void Dispose()

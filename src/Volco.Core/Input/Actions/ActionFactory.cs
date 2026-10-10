@@ -25,11 +25,11 @@ public static class ActionFactory
             ButtonActionType.SetOutputDevice    => new SetOutputDeviceAction(services.Audio, config.Device),
             ButtonActionType.NextPreset when services.Presets is { } p => new NextPresetAction(p),
             ButtonActionType.GoToPreset when services.Presets is { } p => new GoToPresetAction(p, config.PresetId),
-            ButtonActionType.MediaPlayPause when services.Media is { } m => new MediaAction(m, config.MediaApp, MediaCommand.PlayPause),
-            ButtonActionType.MediaNext when services.Media is { } m      => new MediaAction(m, config.MediaApp, MediaCommand.Next),
-            ButtonActionType.MediaPrevious when services.Media is { } m  => new MediaAction(m, config.MediaApp, MediaCommand.Previous),
-            ButtonActionType.MediaStop when services.Media is { } m      => new MediaAction(m, config.MediaApp, MediaCommand.Stop),
-            ButtonActionType.OpenProgram when services.Programs is { } o => new OpenProgramAction(o, config.Command),
+            ButtonActionType.MediaPlayPause when services.Media is { } m => new MediaAction(m, config.MediaApp, MediaCommand.PlayPause, origin?.ReportError),
+            ButtonActionType.MediaNext when services.Media is { } m      => new MediaAction(m, config.MediaApp, MediaCommand.Next, origin?.ReportError),
+            ButtonActionType.MediaPrevious when services.Media is { } m  => new MediaAction(m, config.MediaApp, MediaCommand.Previous, origin?.ReportError),
+            ButtonActionType.MediaStop when services.Media is { } m      => new MediaAction(m, config.MediaApp, MediaCommand.Stop, origin?.ReportError),
+            ButtonActionType.OpenProgram when services.Programs is { } o => new OpenProgramAction(o, config.Command, origin?.ReportError),
             ButtonActionType.RunScript when services.Scripts is { } s    => new RunScriptAction(s, config, origin),
             _                                   => null
         };

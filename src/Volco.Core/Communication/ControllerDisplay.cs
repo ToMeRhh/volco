@@ -24,9 +24,12 @@ public sealed record ScreenDisplay(ScreenContent Content) : ButtonDisplay;
 /// (<see cref="FlashesPresetName"/>), and a single LED blinks (<see cref="BlinksOnPresetChange"/>).
 /// </para>
 /// <para>
-/// A screen shows another of the button's actions for a moment after it is pressed (the
-/// runtime's <c>pressed</c> map, <see cref="ShowsWhenPressed"/>), and a script action in its
-/// failure flash shows on the screen and the light whichever slot it is on (custom-actions spec §11).
+/// For <see cref="FeedbackSteps"/> × <see cref="FeedbackStep"/> after a press (a
+/// <see cref="PressFeedback"/>, custom-actions spec §11): a press that did nothing shows the error
+/// icon and why on a screen and flashes an LED fast; a press of another action than the one the
+/// button shows (<see cref="ShowsWhenPressed"/>) shows that action on a screen and blinks an LED
+/// twice; a Play/pause shows the state it expects until Windows reports it. A script action in its
+/// failure flash shows on the screen and the light whichever slot it is on.
 /// </para>
 /// </summary>
 public static class ControllerDisplay
@@ -45,6 +48,24 @@ public static class ControllerDisplay
     public const string Failed = "FAILED";
     public const string ChooseFile = "Choose a file";
 
+    // Why a press did nothing (the top line of the error screen).
+    public const string NotRunning = "NOT RUNNING";
+    public const string NoMedia = "NO MEDIA";
+    public const string NotAvailable = "NOT AVAILABLE";
+    public const string UsbOnly = "USB ONLY";
+    public const string CantOpen = "CAN'T OPEN";
+    public const string NoFile = "NO FILE";
+
+    /// <summary>How long one step of a press's feedback lasts: an error flashes on and off every
+    /// step, an OK blinks for 3 steps on, 3 off.</summary>
+    public static TimeSpan FeedbackStep { get; } = TimeSpan.FromMilliseconds(125);
+
+    /// <summary>How many steps a press's feedback lasts (12 × 125 ms = 1.5 s).</summary>
+    public const int FeedbackSteps = 12;
+
+    /// <summary>How many steps a Play/pause shows its expected state before the real one wins (1 s).</summary>
+    public const int ExpectSteps = 8;
+
     /// <summary>A media button's name when it follows the current app and there is none.</summary>
     public const string MediaName = "Media";
 
@@ -56,38 +77,84 @@ public static class ControllerDisplay
     /// until the controller has said hello. <paramref name="announceStep"/> is the link tick since
     /// the last preset change (0 = the change itself), or null when no change is being announced.
     /// <paramref name="status"/> is the live state of media, program and script actions (null: idle).
-    /// <paramref name="pressed"/> maps a button to the action a press just ran, while the screen
-    /// shows it instead of the button's first action.</summary>
+    /// <paramref name="feedback"/> maps a button to its feedback for a press just made.</summary>
     public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string presetId, IAudioEngine audio, int? announceStep = null,
                                                         IActionStatus? status = null,
-                                                        IReadOnlyDictionary<int, ButtonActionConfig>? pressed = null)
+                                                        IReadOnlyDictionary<int, PressFeedback>? feedback = null)
     {
         var info = config.Controller;
         if (info is null) return Array.Empty<ButtonDisplay?>();
         var result = new ButtonDisplay?[info.Buttons.Count];
         for (int i = 0; i < result.Length; i++)
             result[i] = For(config, i, info.Buttons[i], presetId, audio, announceStep, status,
-                            pressed is not null && pressed.TryGetValue(i, out var p) ? p : null);
+                            feedback is not null && feedback.TryGetValue(i, out var f) ? f : null);
         return result;
     }
 
     public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string presetId, IAudioEngine audio,
-                                     int? announceStep = null, IActionStatus? status = null, ButtonActionConfig? pressed = null)
+                                     int? announceStep = null, IActionStatus? status = null, PressFeedback? feedback = null)
     {
         var binding = button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(presetId) : null;
         var primary = binding is null ? null : Primary(binding);
         var failing = binding is null ? null : FailingScript(binding, status);
-        var light = failing ?? primary;
-        var screen = failing ?? (binding is not null && pressed is not null && ShowsWhenPressed(binding, pressed) ? pressed : primary);
+        // Feedback for one of this binding's actions only (a preset change replaced the binding).
+        var fb = feedback is not null && feedback.Step is >= 0 and < FeedbackSteps && binding is not null
+                 && binding.All().Any(a => ReferenceEquals(a, feedback.Action)) ? feedback : null;
+        if (fb is { ExpectFrom: { } from, Expect: { } expect })
+            status = new ExpectingStatus(status ?? ActionStatus.None, from, expect);
         var announcing = announceStep is >= 0 and < AnnounceSteps && binding is not null;
         return kind switch
         {
             IndicatorKind.Led when announcing && BlinksOnPresetChange(binding!) => new LedDisplay(Bit(announceStep % 2 == 0)),
-            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(light, kind, config, presetId, audio, status)),
+            IndicatorKind.Led or IndicatorKind.LedPair when fb?.Error is not null => new LedDisplay(Bit(fb.Step % 2 == 0)),
+            IndicatorKind.Led or IndicatorKind.LedPair when failing is not null => new LedDisplay(LedValue(failing, kind, config, presetId, audio, status)),
+            IndicatorKind.Led or IndicatorKind.LedPair when fb is { Secondary: true } => new LedDisplay(Bit(fb.Step / 3 % 2 == 0)),
+            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(primary, kind, config, presetId, audio, status)),
             IndicatorKind.Screen when announcing && FlashesPresetName(binding!) => new ScreenDisplay(LivePresetScreen(config, presetId)),
-            IndicatorKind.Screen => new ScreenDisplay(Screen(screen, config, presetId, audio, status)),
+            IndicatorKind.Screen when fb?.Error is { } why => new ScreenDisplay(ErrorScreen(fb.Action, why, status)),
+            IndicatorKind.Screen when failing is not null => new ScreenDisplay(Screen(failing, config, presetId, audio, status)),
+            IndicatorKind.Screen when fb is { Secondary: true } => new ScreenDisplay(Screen(fb.Action, config, presetId, audio, status)),
+            IndicatorKind.Screen => new ScreenDisplay(Screen(primary, config, presetId, audio, status)),
             _ => null,
         };
+    }
+
+    /// <summary>A press that did nothing: the error icon, why on top, and what was pressed below.</summary>
+    private static ScreenContent ErrorScreen(ButtonActionConfig action, string why, IActionStatus? status)
+    {
+        string name;
+        if (ButtonActionTypes.IsMedia(action.Action))
+            name = (status ?? ActionStatus.None).Media(action.MediaApp).Name is { Length: > 0 } app ? app : MediaName;
+        else if (ButtonActionTypes.RunsCode(action.Action))
+            name = CommandPath.DisplayName(action.Command);
+        else
+            name = "";
+        return ScreenContent.Text(why, ScreenIcon.Error, false, name);
+    }
+
+    /// <summary>A Play/pause's expected state, while the app still reports the one it had before
+    /// the press (Windows takes a moment, and longer for a pause than for a play).</summary>
+    private sealed class ExpectingStatus : IActionStatus
+    {
+        private readonly IActionStatus _inner;
+        private readonly MediaPlayback _from;
+        private readonly MediaPlayback _expect;
+
+        public ExpectingStatus(IActionStatus inner, MediaPlayback from, MediaPlayback expect)
+        {
+            _inner = inner;
+            _from = from;
+            _expect = expect;
+        }
+
+        public MediaStatus Media(MediaAppConfig? target)
+        {
+            var real = _inner.Media(target);
+            return real.Present && real.Playback == _from ? real with { Playback = _expect } : real;
+        }
+
+        public ProgramState Program(CommandConfig? command) => _inner.Program(command);
+        public Scripts.ScriptStatus Script(ButtonActionConfig action) => _inner.Script(action);
     }
 
     /// <summary>Whether a press of <paramref name="pressed"/> makes the screen show it for a
