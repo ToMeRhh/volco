@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draws Volco's 28x28 1-bit screen icons from vector descriptions (on a
 24-unit grid). Run once, inspect, commit the PNGs: after that the PNGs are the source of truth and
-can be hand-edited. Usage: python3 firmware/tools/draw_icons.py [--preview out.png]"""
+can be hand-edited. Usage: python3 firmware/tools/draw_icons.py [--only stem,stem] [--preview out.png]"""
 import math, sys
 from pathlib import Path
 from PIL import Image, ImageDraw
@@ -75,14 +75,29 @@ def webcam(p):
 def presets(p):
     p.poly((12, 3), (21, 8), (12, 13), (3, 8)); p.line((3, 12.5), (12, 17.5), (21, 12.5)); p.line((3, 17), (12, 22), (21, 17))
 
+# Equaliser bars (the playing indicator, docs/design/playing-indicator.md): square bars on exact
+# pixels, standing on the bottom row 25. Unlike `generic` (round-capped lines centred on the middle).
+EQ_X, EQ_W, EQ_GAP, EQ_BOTTOM = 3, 3, 2, 25      # pixels
+def bars(*heights):                               # heights in pixels
+    def draw(p):
+        for i, h in enumerate(heights):
+            x = EQ_X + i * (EQ_W + EQ_GAP)
+            p.d.rectangle([x * SS, (EQ_BOTTOM + 1 - h) * SS, (x + EQ_W) * SS - 1, (EQ_BOTTOM + 1) * SS - 1], fill=255)
+    return draw
+EQUALIZER_FRAMES = [(9, 16, 12, 20, 7), (15, 10, 20, 13, 11), (20, 14, 8, 16, 17), (11, 21, 15, 9, 14)]
+
 ICONS = [("generic", generic), ("speaker", speaker), ("speakers", speakers), ("headphones", headphones),
          ("headset", headset), ("earbuds", earbuds), ("display", display), ("mic", mic),
          ("studiomic", studiomic), ("webcam", webcam), ("presets", presets)]
+ICONS += [(f"equalizer_{i}", bars(*h)) for i, h in enumerate(EQUALIZER_FRAMES)]
+ICONS += [("equalizerstill", bars(5, 8, 3, 7, 4))]
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     images = []
+    only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
     for stem, draw in ICONS:
+        if only and not any(stem == o or stem.startswith(o + "_") for o in only): continue
         pen = Pen(); draw(pen); img = pen.done()
         img.save(OUT / f"{stem}.png"); images.append(img)
     if "--preview" in sys.argv:
