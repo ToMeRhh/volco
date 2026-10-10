@@ -130,4 +130,29 @@ public class ScreenPreviewTests
                 Assert.NotNull(ScreenIcons.Bitmap(icon, f));
         Assert.NotSame(ScreenIcons.Bitmap(ScreenIcon.Equalizer, 0), ScreenIcons.Bitmap(ScreenIcon.Equalizer, 1));
     }
+
+    [AvaloniaFact]
+    public void HiddenWindow_StopsTheAnimation_AndShowingItRestartsIt()
+    {
+        // Closing Settings only hides the window: its previews stay attached.
+        var p = Show(ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"));
+        var window = (Window)p.Parent!;
+        window.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(p.Animating);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(p.Animating);
+    }
+
+    [AvaloniaFact]
+    public void HiddenPreview_DoesNotAnimate()
+    {
+        // A button with LEDs keeps its (hidden) screen preview.
+        var p = Show(ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"));
+        p.IsVisible = false;
+        Assert.False(p.Animating);
+        p.IsVisible = true;
+        Assert.True(p.Animating);
+    }
 }
