@@ -1,6 +1,6 @@
 # Playing indicator: animated equaliser on media screens
 
-Date: 2026-10-09. Status: implemented (branch `worktree-playing-anim`); awaiting the hardware review. Issue #90.
+Date: 2026-10-09. Status: implemented; hardware-reviewed on 2026-10-10. Issue #90.
 
 ## 1. Goal
 
