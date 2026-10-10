@@ -20,4 +20,17 @@ public class ScreenIconManifestTests
         foreach (var row in rows)
             Assert.Equal(byte.Parse(row[0]), (byte)Enum.Parse<ScreenIcon>(row[2]));
     }
+
+    [Fact]
+    public void FrameCountsMatchTheManifest()
+    {
+        var rows = File.ReadAllLines(RepoPaths.Combine("firmware", "assets", "icons", "manifest.txt"))
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0 && !l.StartsWith('#'))
+            .Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+        foreach (var row in rows)
+            Assert.Equal(int.Parse(row[3]), ScreenIconSets.FrameCount(Enum.Parse<ScreenIcon>(row[2])));
+        Assert.Equal(4, ScreenIconSets.FrameCount(ScreenIcon.Equalizer));
+    }
 }

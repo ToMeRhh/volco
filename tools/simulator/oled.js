@@ -6,7 +6,7 @@
   'use strict';
   const node = typeof module === 'object' && module.exports;
   const FONTS = node ? require('./fonts.js') : root.VOLCO_FONTS;
-  const ICONS = node ? require('./icons.js') : root.VOLCO_ICONS;
+  const { icons: ICONS } = node ? require('./icons.js') : root.VOLCO_ICONS;
   const P = node ? require('./protocol.js') : root.VolcoProtocol;
 
   const W = 128, H = 64;
@@ -146,7 +146,7 @@
     }
   }
   function drawIcon(c, id) {
-    const rows = ICONS[id < ICONS.length ? id : 0];
+    const rows = ICONS[id < ICONS.length ? id : 0][0];
     rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') set(c, ICON_X + x, ICON_Y + y); });
   }
   /** Clears c and draws one screen. since drives scrolling (ScreenSlot.scrollSince). */
