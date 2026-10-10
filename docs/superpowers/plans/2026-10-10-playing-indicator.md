@@ -10,6 +10,8 @@
 
 **Spec:** `docs/design/playing-indicator.md`
 
+**Note (after rebasing onto PR #94):** `main` took icon id 17 for `error`, so the equaliser is 18 and the still bars 19 (render golden payload bytes `0x12`/`0x13`). The ids 17/18 below are as originally planned.
+
 ## Global Constraints
 
 - No protocol change: the `Screen` frame (`0x84`) and the protocol version stay as they are.

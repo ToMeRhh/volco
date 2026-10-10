@@ -37,8 +37,10 @@ insert):
 
 | id | stem | C# name | frames | Devices page |
 |---|---|---|---|---|
-| 17 | `equalizer` | `Equalizer` | 4 | no |
-| 18 | `equalizerstill` | `EqualizerStill` | 1 | no |
+| 18 | `equalizer` | `Equalizer` | 4 | no |
+| 19 | `equalizerstill` | `EqualizerStill` | 1 | no |
+
+(17 is `error`, added by the press feedback of custom-actions §11.)
 
 - Stems are the C# name in lower case, as for `studiomic` (`ScreenIcons.Bitmap` relies on it).
 - The manifest gains a `frames` column; every existing icon has 1. An icon with one frame is
@@ -79,7 +81,9 @@ two rendered canvases.
 ## 6. App
 
 - `ControllerDisplay` (Play/Pause and Stop): `Playing` → `Equalizer`; `Paused` and `Stopped` →
-  `EqualizerStill`. "Target not running" keeps the play icon. `Play` and `Pause` stay in the icon
+  `EqualizerStill`. "Target not running" keeps the play icon. Play/pause's expected state after a press
+  (custom-actions §11) goes through the same mapping, so a press that starts playback shows the
+  moving bars at once, and the real state that follows is the same content (no restart). `Play` and `Pause` stay in the icon
   set.
 - `ScreenPreview` (settings) animates an icon with several frames on a timer at `kIconFrameMs`,
   stopped while the control is detached. `ScreenIcons.Bitmap` loads frame PNGs by the same naming
