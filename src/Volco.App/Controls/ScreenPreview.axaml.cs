@@ -31,7 +31,7 @@ public partial class ScreenPreview : UserControl
     private readonly LayoutTransformControl _scaler;
     private readonly DispatcherTimer _animation = new() { Interval = TimeSpan.FromMilliseconds(ScreenIconSets.FrameMs) };
     private int _frame;
-    private bool _attached;
+    private TopLevel? _window;   // while attached: its IsVisible stops the animation (Settings hides, not closes)
 
     public ScreenPreview()
     {
@@ -43,7 +43,7 @@ public partial class ScreenPreview : UserControl
         _slash = this.FindControl<Panel>("Slash")!;
         _scaler = this.FindControl<LayoutTransformControl>("Scaler")!;
         _top.FontFamily = _main.FontFamily = ScreenIcons.Font;
-        _animation.Tick += (_, _) => NextFrame();
+        _animation.Tick += (_, _) => { if (IsEffectivelyVisible) NextFrame(); };   // an ancestor may be hidden
         Apply();
     }
 
@@ -72,14 +72,16 @@ public partial class ScreenPreview : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        _attached = true;
+        _window = TopLevel.GetTopLevel(this);
+        if (_window is not null) _window.PropertyChanged += OnWindowPropertyChanged;
         UpdateAnimation();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
-        _attached = false;
+        if (_window is not null) _window.PropertyChanged -= OnWindowPropertyChanged;
+        _window = null;
         UpdateAnimation();
     }
 
@@ -87,6 +89,7 @@ public partial class ScreenPreview : UserControl
     {
         base.OnPropertyChanged(change);
         if (change.Property == ScreenProperty || change.Property == ScaleProperty) Apply();
+        else if (change.Property == IsVisibleProperty) UpdateAnimation();
     }
 
     private void Apply()
@@ -112,8 +115,13 @@ public partial class ScreenPreview : UserControl
         _icon.Source = c.Icon is { } icon ? ScreenIcons.Bitmap(icon, _frame) : null;
     }
 
-    // Runs only while shown and only for an icon with several frames.
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsVisibleProperty) UpdateAnimation();
+    }
+
+    // Runs only while the preview and its window are visible, and only for an icon with several frames.
     private void UpdateAnimation() =>
-        _animation.IsEnabled = _attached
+        _animation.IsEnabled = _window is { IsVisible: true } && IsVisible
             && Screen?.Icon is { } icon && ScreenIconSets.FrameCount(icon) > 1;
 }
