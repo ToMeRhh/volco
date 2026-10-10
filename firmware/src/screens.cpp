@@ -208,7 +208,7 @@ void screens_init(const volco::RuntimeConfig& rc, uint32_t now) {
     s.panel->begin();
     s.panel->setContrast(brightness);
     s.slot.show(volco::notConnectedScreen(), volco::TRANSITION_NONE, now, false);
-    memset(s.sent.buf, 0xFF, sizeof s.sent.buf);  // force the first push
+    s.sent.clear();  // begin() cleared the panel: s.sent mirrors its RAM, so only lit tiles are sent first
     numScreens++;
   }
   if (numScreens == 0) return;  // no screens: never touch I2C
