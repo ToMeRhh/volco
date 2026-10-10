@@ -38,14 +38,16 @@ insert):
 | id | stem | C# name | frames | Devices page |
 |---|---|---|---|---|
 | 17 | `equalizer` | `Equalizer` | 4 | no |
-| 18 | `equalizer_still` | `EqualizerStill` | 1 | no |
+| 18 | `equalizerstill` | `EqualizerStill` | 1 | no |
 
+- Stems are the C# name in lower case, as for `studiomic` (`ScreenIcons.Bitmap` relies on it).
 - The manifest gains a `frames` column; every existing icon has 1. An icon with one frame is
   `<stem>.png`; an icon with n > 1 frames is `<stem>_0.png` … `<stem>_<n-1>.png`.
 - The art: 28×28, 1-bit, four or five vertical bars with a 1–2 px gap, standing on a common
   baseline. The four `equalizer` frames move each bar to a different height so the loop reads as
-  bouncing; `equalizer_still` is one low, uneven set. Drawn by a small Pillow script (kept in
-  `firmware/tools/`), committed as PNGs like the others; the user reviews the frames, enlarged,
+  bouncing; `equalizerstill` is one low, uneven set. Drawn by
+  `firmware/tools/draw_icons.py` (which already draws the device icons), committed as PNGs like
+  the others; the user reviews the frames, enlarged,
   before the firmware work.
 - `gen_assets.py` writes every frame into `kIconBits` (now indexed by frame, not id) plus
   `kIconFirstFrame[kIconCount]` and `kIconFrames[kIconCount]`, and a frame period constant,
@@ -82,8 +84,8 @@ two rendered canvases.
 - `ScreenPreview` (settings) animates an icon with several frames on a timer at `kIconFrameMs`,
   stopped while the control is detached. `ScreenIcons.Bitmap` loads frame PNGs by the same naming
   rule; the frame PNGs are linked into `Volco.App/Assets/Icons` like the others.
-- `ScreenIcons.Geometry` (OSD, Devices page) is not used for these icons; neither is offered on the
-  Devices page.
+- `ScreenIcons.Geometry` needs vector art for every icon (a test checks they are distinct), so
+  `Styles/Icons.axaml` gets simple bar shapes for both; neither icon is offered on the Devices page.
 
 ## 7. Simulator
 
