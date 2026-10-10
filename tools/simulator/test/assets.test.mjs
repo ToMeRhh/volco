@@ -26,13 +26,18 @@ test('fonts.js holds the firmware glyph tables', () => {
   }
 });
 
-test('icons.js holds the firmware icon bitmaps', () => {
+test('icons.js holds the firmware icon frames', () => {
   const cpp = fs.readFileSync(path.join(src, 'volco_icons.cpp'), 'utf8');
-  const icons = require('../icons.js');
+  const h = fs.readFileSync(path.join(src, 'volco_icons.h'), 'utf8');
+  const { frameMs, icons } = require('../icons.js');
   const blocks = [...cpp.matchAll(/\{ {2}\/\/ \d+ \w+\n([^}]*)\}/g)].map(m => hexes(m[1]));
-  assert.equal(icons.length, blocks.length);
-  icons.forEach((rows, id) => {
-    const packed = rows.flatMap(r => [0, 8, 16, 24].map(b => [...r.slice(b, b + 8)].reduce((v, bit, i) => v | (bit === '1' ? 1 << i : 0), 0)));
-    assert.deepEqual(packed, blocks[id], `icon ${id}`);
+  const frames = icons.flat();
+  assert.equal(frames.length, blocks.length);
+  frames.forEach((rows, i) => {
+    const packed = rows.flatMap(r => [0, 8, 16, 24].map(b => [...r.slice(b, b + 8)].reduce((v, bit, j) => v | (bit === '1' ? 1 << j : 0), 0)));
+    assert.deepEqual(packed, blocks[i], `frame ${i}`);
   });
+  const counts = cpp.match(/kIconFrames\[kIconCount\] = \{([^}]*)\}/)[1].split(',').map(Number);
+  assert.deepEqual(icons.map(f => f.length), counts);
+  assert.equal(frameMs, +h.match(/kIconFrameMs = (\d+)/)[1]);
 });

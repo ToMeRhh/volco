@@ -196,7 +196,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
             Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "Spotify.exe", Name = "Spotify" },
         });
         var playing = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None,
-            ScreenContent.Text("PLAYING", ScreenIcon.Play, false, "Spotify"));
+            ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"));
 
         _media.SetApps(new[] { new MediaApp("Spotify.exe", "Spotify", MediaPlayback.Playing) });
 
@@ -264,8 +264,8 @@ public sealed class CustomActionRuntimeTests : IDisposable
         var binding = runtime.Config.Config.Buttons[0].Default();
         var first = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None,
             ControllerDisplay.Screen(binding.SinglePress, runtime.Config.Config, runtime.ActivePresetId, _engine));
-        var expected = ScreenFrame("PLAYING", ScreenIcon.Play, "Spotify");
-        var real = ScreenFrame("PAUSED", ScreenIcon.Pause, "Spotify");
+        var expected = ScreenFrame("PLAYING", ScreenIcon.Equalizer, "Spotify");
+        var real = ScreenFrame("PAUSED", ScreenIcon.EqualizerStill, "Spotify");
         Assert.True(WaitUntil(() => Count(first) == 1), "the first action's screen was not sent");
 
         Press(Connection(0), 0);

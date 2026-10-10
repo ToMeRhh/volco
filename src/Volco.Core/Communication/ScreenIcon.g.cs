@@ -27,6 +27,8 @@ public enum ScreenIcon : byte
     App = 15,
     Script = 16,
     Error = 17,
+    Equalizer = 18,
+    EqualizerStill = 19,
 }
 
 /// <summary>Sets of <see cref="ScreenIcon"/> from the manifest.</summary>
@@ -45,5 +47,15 @@ public static class ScreenIconSets
         ScreenIcon.Mic,
         ScreenIcon.StudioMic,
         ScreenIcon.Webcam,
+    };
+
+    /// <summary>How long each frame of an animated icon shows, in ms (the firmware's kIconFrameMs).</summary>
+    public const int FrameMs = 180;
+
+    /// <summary>How many frames an icon has (the manifest's frames column); 1 for a still icon.</summary>
+    public static int FrameCount(ScreenIcon icon) => icon switch
+    {
+        ScreenIcon.Equalizer => 4,
+        _ => 1,
     };
 }

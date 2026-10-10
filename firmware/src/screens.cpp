@@ -171,10 +171,12 @@ void render(Screen& s, uint32_t now) {
     volco::shiftFrame(frameOut, dx, dy, frameA);
     frameOut = frameA;
   }
-  if (frameOut == s.sent) return;
+  // Only the tiles that changed go over I2C: an animated icon is 16 tiles (128 bytes), not 1 KB.
+  const volco::TileBox box = volco::changedTiles(s.sent, frameOut);
+  if (box.w == 0) return;
   s.sent = frameOut;
   memcpy(s.panel->getBufferPtr(), frameOut.buf, sizeof frameOut.buf);  // same page layout as U8g2's full buffer
-  s.panel->sendBuffer();
+  s.panel->updateDisplayArea(box.x, box.y, box.w, box.h);
 }
 
 }  // namespace
@@ -206,7 +208,7 @@ void screens_init(const volco::RuntimeConfig& rc, uint32_t now) {
     s.panel->begin();
     s.panel->setContrast(brightness);
     s.slot.show(volco::notConnectedScreen(), volco::TRANSITION_NONE, now, false);
-    memset(s.sent.buf, 0xFF, sizeof s.sent.buf);  // force the first push
+    s.sent.clear();  // begin() cleared the panel: s.sent mirrors its RAM, so only lit tiles are sent first
     numScreens++;
   }
   if (numScreens == 0) return;  // no screens: never touch I2C
@@ -247,8 +249,9 @@ void screens_tick(uint32_t now) {
   }
   if (power == volco::POWER_OFF) return;
 
-  // Redraw at most one panel per pass (~25-30 ms of I2C at 400 kHz), round-robin, so one pass
-  // never blocks the loop for longer than one panel's redraw (spec §4.6).
+  // Redraw at most one panel per pass, round-robin, so one pass never blocks the loop for longer
+  // than one panel's redraw (spec §4.6): ~25-30 ms of I2C at 400 kHz for a full frame, a few ms
+  // for an animated icon's tiles.
   for (uint8_t k = 0; k < numScreens; k++) {
     uint8_t i = (uint8_t)((nextPanel + k) % numScreens);
     Screen& s = screens[i];

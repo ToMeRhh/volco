@@ -21,7 +21,8 @@ int textWidth(const Font& f, const char* utf8, size_t len);
 void drawText(Canvas& c, const Font& f, int x, int baseline, const char* utf8, size_t len, int clipX0, int clipX1);
 // How far text wider than its area by `distancePx` has scrolled after showing for sinceMs.
 int scrollOffset(int distancePx, uint32_t sinceMs, const ScrollTiming& t);
-// Clears `c` and draws one screen. sinceMs drives scrolling (ScreenSlot::scrollSince).
+// Clears `c` and draws one screen. sinceMs drives scrolling and an animated icon's frame
+// (ScreenSlot::scrollSince).
 void renderScreen(Canvas& c, const ScreenContent& s, uint32_t sinceMs, const ScrollTiming& t);
 // The local screen shown at boot and after the PC goes silent (spec §2.4).
 ScreenContent notConnectedScreen();

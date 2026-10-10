@@ -3,11 +3,16 @@
 #include <stdint.h>
 
 namespace volco {
-constexpr uint8_t kIconCount = 18;
+constexpr uint8_t kIconCount = 20;
+constexpr uint8_t kIconFrameTotal = 23;
+constexpr uint16_t kIconFrameMs = 180;  // one frame of an animated icon
 constexpr uint8_t kIconSize = 28;
 constexpr uint8_t kIconRowBytes = 4;
-// Row-major, LSB = leftmost pixel of each byte (XBM order).
-extern const uint8_t kIconBits[kIconCount][kIconSize * kIconRowBytes];
+// One entry per frame. Row-major, LSB = leftmost pixel of each byte (XBM order).
+extern const uint8_t kIconBits[kIconFrameTotal][kIconSize * kIconRowBytes];
+// An icon's frames are kIconBits[kIconFirstFrame[id]] .. + kIconFrames[id] - 1.
+extern const uint8_t kIconFirstFrame[kIconCount];
+extern const uint8_t kIconFrames[kIconCount];
 constexpr uint8_t kIcon_generic = 0;
 constexpr uint8_t kIcon_speaker = 1;
 constexpr uint8_t kIcon_speakers = 2;
@@ -26,4 +31,6 @@ constexpr uint8_t kIcon_previous = 14;
 constexpr uint8_t kIcon_app = 15;
 constexpr uint8_t kIcon_script = 16;
 constexpr uint8_t kIcon_error = 17;
+constexpr uint8_t kIcon_equalizer = 18;
+constexpr uint8_t kIcon_equalizerstill = 19;
 }  // namespace volco

@@ -11,24 +11,29 @@ namespace Volco.App.Controls;
 /// vector versions of the same icons for the rest of the desktop UI.</summary>
 internal static class ScreenIcons
 {
-    private static readonly Dictionary<ScreenIcon, Bitmap> Cache = new();
+    private static readonly Dictionary<(ScreenIcon, int), Bitmap> Cache = new();
 
     /// <summary>Arimo, the face the firmware's fonts are generated from.</summary>
     public static FontFamily Font { get; } = new("avares://Volco.App/Assets/Fonts#Arimo");
 
     /// <summary>The 1-bit OLED art, for the screen preview only: it is crisp at 1:1 pixels and
-    /// pixelated at any other size.</summary>
-    public static Bitmap Bitmap(ScreenIcon icon)
+    /// pixelated at any other size. <paramref name="frame"/> picks an animated icon's frame.</summary>
+    public static Bitmap Bitmap(ScreenIcon icon, int frame = 0)
     {
         // A hand-edited config can hold any number; there is no PNG for an undefined one.
         if (!Enum.IsDefined(icon)) icon = ScreenIcon.Generic;
+        var frames = ScreenIconSets.FrameCount(icon);
+        frame = ((frame % frames) + frames) % frames;
         lock (Cache)
         {
-            if (!Cache.TryGetValue(icon, out var bitmap))
+            if (!Cache.TryGetValue((icon, frame), out var bitmap))
             {
-                // File stems are the lower-case enum names (manifest.txt: StudioMic -> studiomic).
-                var uri = new Uri($"avares://Volco.App/Assets/Icons/{icon.ToString().ToLowerInvariant()}.png");
-                Cache[icon] = bitmap = new Bitmap(AssetLoader.Open(uri));
+                // File stems are the lower-case enum names (manifest.txt: StudioMic -> studiomic);
+                // an animated icon's frames are <stem>_0.png, <stem>_1.png, ...
+                var stem = icon.ToString().ToLowerInvariant();
+                var file = frames > 1 ? $"{stem}_{frame}" : stem;
+                var uri = new Uri($"avares://Volco.App/Assets/Icons/{file}.png");
+                Cache[(icon, frame)] = bitmap = new Bitmap(AssetLoader.Open(uri));
             }
             return bitmap;
         }

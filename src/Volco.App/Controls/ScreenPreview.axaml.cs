@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Volco.Core.Communication;
 
 namespace Volco.App.Controls;
@@ -28,6 +29,9 @@ public partial class ScreenPreview : UserControl
     private readonly Image _icon;
     private readonly Panel _slash;
     private readonly LayoutTransformControl _scaler;
+    private readonly DispatcherTimer _animation = new() { Interval = TimeSpan.FromMilliseconds(ScreenIconSets.FrameMs) };
+    private int _frame;
+    private TopLevel? _window;   // while attached: its IsVisible stops the animation (Settings hides, not closes)
 
     public ScreenPreview()
     {
@@ -39,6 +43,7 @@ public partial class ScreenPreview : UserControl
         _slash = this.FindControl<Panel>("Slash")!;
         _scaler = this.FindControl<LayoutTransformControl>("Scaler")!;
         _top.FontFamily = _main.FontFamily = ScreenIcons.Font;
+        _animation.Tick += (_, _) => { if (IsEffectivelyVisible) NextFrame(); };   // an ancestor may be hidden
         Apply();
     }
 
@@ -54,10 +59,37 @@ public partial class ScreenPreview : UserControl
         set => SetValue(ScaleProperty, value);
     }
 
+    /// <summary>Whether an animated icon is moving (the playing equaliser), as on the controller.</summary>
+    internal bool Animating => _animation.IsEnabled;
+
+    /// <summary>Shows an animated icon's next frame; the timer's tick.</summary>
+    internal void NextFrame()
+    {
+        _frame++;
+        ShowIcon();
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _window = TopLevel.GetTopLevel(this);
+        if (_window is not null) _window.PropertyChanged += OnWindowPropertyChanged;
+        UpdateAnimation();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        if (_window is not null) _window.PropertyChanged -= OnWindowPropertyChanged;
+        _window = null;
+        UpdateAnimation();
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
         if (change.Property == ScreenProperty || change.Property == ScaleProperty) Apply();
+        else if (change.Property == IsVisibleProperty) UpdateAnimation();
     }
 
     private void Apply()
@@ -70,8 +102,26 @@ public partial class ScreenPreview : UserControl
         _dots.IsVisible = c.TopKind == TopKind.Dots;
         _dots.ItemsSource = Enumerable.Range(0, c.DotsCount).Select(i => i == c.DotsSelected).ToList();
         _icon.IsVisible = c.Icon is not null;
-        _icon.Source = c.Icon is { } icon ? ScreenIcons.Bitmap(icon) : null;
+        _frame = 0;   // new content starts at frame 0, like a screen that just settled
+        ShowIcon();
+        UpdateAnimation();
         _slash.IsVisible = c.Icon is not null && c.Muted;
         _main.Text = c.Main;
     }
+
+    private void ShowIcon()
+    {
+        var c = Screen ?? ScreenContent.Blank;
+        _icon.Source = c.Icon is { } icon ? ScreenIcons.Bitmap(icon, _frame) : null;
+    }
+
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsVisibleProperty) UpdateAnimation();
+    }
+
+    // Runs only while the preview and its window are visible, and only for an icon with several frames.
+    private void UpdateAnimation() =>
+        _animation.IsEnabled = _window is { IsVisible: true } && IsVisible
+            && Screen?.Icon is { } icon && ScreenIconSets.FrameCount(icon) > 1;
 }

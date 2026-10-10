@@ -60,11 +60,11 @@ public class ControllerDisplayCustomActionTests
     {
         _media.SetApps(new[] { Spotify, Chrome }, current: "Spotify.exe");
         var a = Media(ButtonActionType.MediaPlayPause);
-        Assert.Equal(ScreenContent.Text("PLAYING", ScreenIcon.Play, false, "Spotify"), ScreenOf(a));
+        Assert.Equal(ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"), ScreenOf(a));
         Assert.Equal(1, LedOf(a));
 
         _media.SetApps(new[] { Spotify, Chrome }, current: "chrome");
-        Assert.Equal(ScreenContent.Text("PAUSED", ScreenIcon.Pause, false, "Google Chrome"), ScreenOf(a));
+        Assert.Equal(ScreenContent.Text("PAUSED", ScreenIcon.EqualizerStill, false, "Google Chrome"), ScreenOf(a));
         Assert.Equal(0, LedOf(a));
     }
 
@@ -73,7 +73,7 @@ public class ControllerDisplayCustomActionTests
     {
         _media.SetApps(new[] { Spotify, Chrome }, current: "chrome");
         var a = Media(ButtonActionType.MediaPlayPause, App("Spotify.exe", "Spotify"));
-        Assert.Equal(ScreenContent.Text("PLAYING", ScreenIcon.Play, false, "Spotify"), ScreenOf(a));
+        Assert.Equal(ScreenContent.Text("PLAYING", ScreenIcon.Equalizer, false, "Spotify"), ScreenOf(a));
         Assert.Equal(1, LedOf(a));
         Assert.Equal(1, LedOf(a, IndicatorKind.LedPair));
     }
@@ -100,7 +100,7 @@ public class ControllerDisplayCustomActionTests
     {
         _media.SetApps(new[] { Spotify with { Playback = MediaPlayback.Stopped } });
         var a = Media(ButtonActionType.MediaStop);
-        Assert.Equal(ScreenContent.Text("STOPPED", ScreenIcon.Pause, false, "Spotify"), ScreenOf(a));
+        Assert.Equal(ScreenContent.Text("STOPPED", ScreenIcon.EqualizerStill, false, "Spotify"), ScreenOf(a));
         Assert.Equal(0, LedOf(a));
     }
 

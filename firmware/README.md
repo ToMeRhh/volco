@@ -168,7 +168,7 @@ Layout 1, in pixels on the 128x64 panel:
 | Slot | Area | Content |
 |---|---|---|
 | Top | rows 0-15 | Text (10 px Regular, centred, baseline row 11) or dots (6x6 squares on a 10 px pitch, the selected one filled). |
-| Icon | 28x28 at x 50, y 18 | An icon; the muted flag draws a diagonal slash. |
+| Icon | 28x28 at x 50, y 18 | An icon; the muted flag draws a diagonal slash. An animated icon (the playing equaliser) shows frame `(since / kIconFrameMs) % frames` of the screen's scroll clock, so it holds frame 0 during a slide. |
 | Main | x 2-125, baseline row 60 | Text (14 px Bold), centred when it fits. |
 
 Text wider than its area is left-aligned (right-aligned for Hebrew), holds for `scroll_hold_ms`, scrolls at `scroll_speed_px_s`, holds at the end, then jumps back. Hebrew is reordered into visual order by `volco_bidi` before drawing.
@@ -185,6 +185,7 @@ It needs Python 3 and Pillow 10 or newer. It renders Arimo (10 px Regular and 14
 
 - **To change an icon**, edit its PNG in `assets/icons/` (28x28, 1-bit) and re-run the script.
 - **To add one**, append a row to `assets/icons/manifest.txt`, add the PNG, and re-run the script.
+- **An animated icon** has a frame count above 1 in the manifest's `frames` column and one PNG per frame, `<stem>_0.png`, `<stem>_1.png`, ...; every frame shows for `kIconFrameMs` (180 ms, `ICON_FRAME_MS` in the script). `screens.cpp` sends a panel only the 8x8 tiles that changed (`changedTiles`), so an animating icon costs about 128 bytes of I2C per frame.
 
 ## `main.cpp`
 

@@ -14,3 +14,4 @@ the code has moved on since, the code and `CLAUDE.md` are the current reference.
 | [`link-state.md`](link-state.md) | What "Connected" means, and the other link states |
 | [`simulator.md`](simulator.md) | The web simulator: the 3D desk scene, the builder and pin allocation, demo mode, developer tools |
 | [`custom-actions.md`](custom-actions.md) | Media, open-a-program and run-a-script button actions; the USB-only rule for programs and scripts |
+| [`playing-indicator.md`](playing-indicator.md) | The animated equaliser on media buttons' screens; animated icons and partial screen pushes |

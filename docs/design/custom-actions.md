@@ -100,7 +100,7 @@ and this is logged once.
 
 | Action | Single LED / LED pair | Screen (layout 1) |
 |---|---|---|
-| Play/Pause, Stop | lit while the target plays (a pair lights A, like mute) | top: `PLAYING` / `PAUSED` / `STOPPED`; icon: play (playing) or pause; main: app name |
+| Play/Pause, Stop | lit while the target plays (a pair lights A, like mute) | top: `PLAYING` / `PAUSED` / `STOPPED`; icon: the equaliser, moving while playing and frozen otherwise ([`playing-indicator.md`](playing-indicator.md)); main: app name |
 | Next, Previous | dark (no state, like Next preset) | top blank; icon: next / previous; main: app name |
 | target not running | dark | top blank; icon: play; main: app name (`Media` for Current with no session) |
 

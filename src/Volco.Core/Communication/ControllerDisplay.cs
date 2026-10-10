@@ -265,9 +265,9 @@ public static class ControllerDisplay
                 if (!media.Present) return ScreenContent.Text("", ScreenIcon.Play, false, name);
                 return media.Playback switch
                 {
-                    MediaPlayback.Playing => ScreenContent.Text(Playing, ScreenIcon.Play, false, name),
-                    MediaPlayback.Paused => ScreenContent.Text(Paused, ScreenIcon.Pause, false, name),
-                    _ => ScreenContent.Text(Stopped, ScreenIcon.Pause, false, name),
+                    MediaPlayback.Playing => ScreenContent.Text(Playing, ScreenIcon.Equalizer, false, name),
+                    MediaPlayback.Paused => ScreenContent.Text(Paused, ScreenIcon.EqualizerStill, false, name),
+                    _ => ScreenContent.Text(Stopped, ScreenIcon.EqualizerStill, false, name),
                 };
             }
             case ButtonActionType.MediaNext:
