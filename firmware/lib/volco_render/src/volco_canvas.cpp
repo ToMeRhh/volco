@@ -1,5 +1,6 @@
 #include "volco_canvas.h"
 #include <stdlib.h>
+#include <string.h>
 
 namespace volco {
 
@@ -30,6 +31,21 @@ void Canvas::bitmap(int x, int y, int w, int h, const uint8_t* bits, int rowByte
   for (int row = 0; row < h; row++)
     for (int col = 0; col < w; col++)
       if (bits[row * rowBytes + (col >> 3)] & (1u << (col & 7))) set(x + col, y + row);
+}
+
+TileBox changedTiles(const Canvas& a, const Canvas& b) {
+  int x0 = 16, y0 = 8, x1 = -1, y1 = -1;
+  for (int page = 0; page < Canvas::kHeight / 8; page++)
+    for (int tx = 0; tx < Canvas::kWidth / 8; tx++) {
+      int i = page * Canvas::kWidth + tx * 8;
+      if (memcmp(a.buf + i, b.buf + i, 8) == 0) continue;
+      if (tx < x0) x0 = tx;
+      if (tx > x1) x1 = tx;
+      if (page < y0) y0 = page;
+      if (page > y1) y1 = page;
+    }
+  if (x1 < 0) return {0, 0, 0, 0};
+  return {(uint8_t)x0, (uint8_t)y0, (uint8_t)(x1 - x0 + 1), (uint8_t)(y1 - y0 + 1)};
 }
 
 }  // namespace volco

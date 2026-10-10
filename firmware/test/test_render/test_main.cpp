@@ -123,6 +123,41 @@ void test_shift_moves_pixels() {
   TEST_ASSERT_TRUE(out.get(9, 9));
 }
 
+void test_changed_tiles() {
+  Canvas a, b;
+  a.clear(); b.clear();
+  TileBox none = changedTiles(a, b);
+  TEST_ASSERT_EQUAL(0, none.w);
+
+  b.set(9, 17);                                         // tile x 1, page 2
+  TileBox one = changedTiles(a, b);
+  TEST_ASSERT_EQUAL(1, one.x); TEST_ASSERT_EQUAL(2, one.y);
+  TEST_ASSERT_EQUAL(1, one.w); TEST_ASSERT_EQUAL(1, one.h);
+
+  b.set(127, 63);                                       // tile x 15, page 7: the box spans both
+  TileBox span = changedTiles(a, b);
+  TEST_ASSERT_EQUAL(1, span.x); TEST_ASSERT_EQUAL(2, span.y);
+  TEST_ASSERT_EQUAL(15, span.w); TEST_ASSERT_EQUAL(6, span.h);
+
+  memset(a.buf, 0xFF, sizeof a.buf);                    // the first push after boot
+  b.clear();
+  TileBox all = changedTiles(a, b);
+  TEST_ASSERT_EQUAL(0, all.x); TEST_ASSERT_EQUAL(0, all.y);
+  TEST_ASSERT_EQUAL(16, all.w); TEST_ASSERT_EQUAL(8, all.h);
+}
+
+void test_animation_changes_only_the_icon_tiles() {
+  Canvas f0, f1;
+  ScreenContent s = screenText("PLAYING", kIcon_equalizer, "Spotify");
+  renderScreen(f0, s, 0, T);
+  renderScreen(f1, s, kIconFrameMs, T);
+  TileBox box = changedTiles(f0, f1);
+  // The icon is x 50..77, y 18..45: tiles x 6..9, pages 2..5, at most 16 tiles (128 bytes).
+  TEST_ASSERT_TRUE(box.w > 0);
+  TEST_ASSERT_TRUE(box.x >= 6 && box.x + box.w <= 10);
+  TEST_ASSERT_TRUE(box.y >= 2 && box.y + box.h <= 6);
+}
+
 void test_not_connected_screen() {
   ScreenContent s = notConnectedScreen();
   TEST_ASSERT_EQUAL_STRING("NOT CONNECTED", s.top);
@@ -201,6 +236,8 @@ int main(int, char**) {
   RUN_TEST(test_long_text_scrolls_and_is_clipped);
   RUN_TEST(test_slide_composition);
   RUN_TEST(test_shift_moves_pixels);
+  RUN_TEST(test_changed_tiles);
+  RUN_TEST(test_animation_changes_only_the_icon_tiles);
   RUN_TEST(test_not_connected_screen);
   RUN_TEST(test_animated_icon_frames);
   RUN_TEST(test_still_icons_ignore_the_clock);

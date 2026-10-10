@@ -29,4 +29,12 @@ class Canvas {
   bool operator==(const Canvas& o) const { return memcmp(buf, o.buf, sizeof buf) == 0; }
 };
 
+// A box of 8×8 tiles (x 0-15, y = page 0-7), U8g2's updateDisplayArea units. w == 0: empty.
+struct TileBox {
+  uint8_t x, y, w, h;
+};
+
+// The smallest box holding every tile in which a and b differ.
+TileBox changedTiles(const Canvas& a, const Canvas& b);
+
 }  // namespace volco
