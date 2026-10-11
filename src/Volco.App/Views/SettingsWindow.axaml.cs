@@ -1,8 +1,11 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
@@ -74,6 +77,42 @@ public partial class SettingsWindow : Window
             if (e.PropertyName == nameof(SettingsViewModel.ControllerNavDot)) _controllerNav.ShowDot = vm.ControllerNavDot;
         };
         Closing += OnClosing;
+
+        // The notices load on first open (~45 KB); Escape or a click on the scrim closes them.
+        vm.About.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(AboutViewModel.IsNoticesOpen) || !vm.About.IsNoticesOpen) return;
+            var box = this.FindControl<TextBox>("NoticesBox")!;
+            if (string.IsNullOrEmpty(box.Text)) box.Text = LoadNotices();
+        };
+        AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+        this.FindControl<Border>("NoticesOverlay")!.PointerPressed += OnNoticesOverlayPressed;
+    }
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || !_vm.About.IsNoticesOpen) return;
+        _vm.About.CloseNoticesCommand.Execute(null);
+        e.Handled = true;
+    }
+
+    private void OnNoticesOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, sender)) return;   // a click inside the card
+        _vm.About.CloseNoticesCommand.Execute(null);
+        e.Handled = true;
+    }
+
+    /// <summary>THIRD-PARTY-NOTICES.txt and the Arimo OFL, embedded from the repository.</summary>
+    internal static string LoadNotices()
+    {
+        static string Read(string name)
+        {
+            using var s = AssetLoader.Open(new Uri($"avares://Volco.App/Assets/Notices/{name}"));
+            return new StreamReader(s).ReadToEnd();
+        }
+        return Read("THIRD-PARTY-NOTICES.txt") + "\n\n" + new string('=', 78) + "\nArimo — SIL Open Font License 1.1\n"
+               + new string('=', 78) + "\n\n" + Read("OFL.txt");
     }
 
     private static NavItem Nav(string label, string tag, string iconKey, Func<Control> create)

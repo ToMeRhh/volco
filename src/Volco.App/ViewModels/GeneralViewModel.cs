@@ -9,9 +9,10 @@ using Volco.Core.Updates;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The General page: start at sign-in (where the platform has it), updates (release builds only),
-/// troubleshooting, the app's version and a link to the project on GitHub. The device section is
-/// <see cref="DevicesViewModel"/>. The update flow itself lives in <see cref="Controls.UpdatesPanel"/>.
+/// The General page: start at sign-in (where the platform has it), updates (release builds only)
+/// and troubleshooting (the log and config file locations). The device section is
+/// <see cref="DevicesViewModel"/>; the version and GitHub link are <see cref="AboutViewModel"/>.
+/// The update flow itself lives in <see cref="Controls.UpdatesPanel"/>.
 /// </summary>
 public partial class GeneralViewModel : ObservableObject
 {
@@ -33,8 +34,6 @@ public partial class GeneralViewModel : ObservableObject
         _debugLogging = config.Config.DebugLogging;
         _startAtSignIn = ReadStartAtSignIn();
         ShowUpdates = isRelease;
-        VersionText = $"Volco {BuildInfo.FormatVersion(isRelease, BuildInfo.Version, BuildInfo.Commit)}";
-        BuildDetails = isRelease ? null : BuildInfo.BuildDetails;
     }
 
     public GeneralViewModel(ConfigManager config, IStartWithSystem? startWithSystem = null)
@@ -94,19 +93,10 @@ public partial class GeneralViewModel : ObservableObject
     /// <summary>The in-app updater only makes sense for official release builds.</summary>
     public bool ShowUpdates { get; }
 
-    /// <summary>"Volco v1.2.3" on releases, "Volco dev a1b2c3d" on other builds.</summary>
-    public string VersionText { get; }
-
-    /// <summary>
-    /// Branch, commit, build time and origin, one per line, on non-release builds; null on
-    /// releases, which show just the version.
-    /// </summary>
-    public string? BuildDetails { get; }
-
     public string LogPath => AppLog.LogPath;
 
-    /// <summary>The project's GitHub page, linked from About.</summary>
-    public Uri RepoUri { get; } = new(BuildInfo.RepoUrl);
+    /// <summary>Where the settings are saved (config.json).</summary>
+    public string ConfigPath => _config.ConfigPath;
 
     partial void OnDebugLoggingChanged(bool value)
     {
@@ -117,18 +107,24 @@ public partial class GeneralViewModel : ObservableObject
 
     /// <summary>Opens the folder holding volco.log in the system file browser. Best effort.</summary>
     [RelayCommand]
-    private void OpenLogFolder()
+    private void OpenLogFolder() => OpenFolderOf(AppLog.LogPath, "log");
+
+    /// <summary>Opens the folder holding config.json in the system file browser. Best effort.</summary>
+    [RelayCommand]
+    private void OpenConfigFolder() => OpenFolderOf(_config.ConfigPath, "config");
+
+    private static void OpenFolderOf(string file, string what)
     {
         try
         {
-            var dir = Path.GetDirectoryName(AppLog.LogPath);
+            var dir = Path.GetDirectoryName(file);
             if (string.IsNullOrEmpty(dir)) return;
             Directory.CreateDirectory(dir);
             Process.Start(new ProcessStartInfo { FileName = dir, UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            AppLog.Error($"Could not open the log folder: {ex.Message}");
+            AppLog.Error($"Could not open the {what} folder: {ex.Message}");
         }
     }
 }

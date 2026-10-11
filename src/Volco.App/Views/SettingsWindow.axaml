@@ -46,7 +46,7 @@
     <Border Grid.Column="1" Name="PageTitleBar" Classes="TitleBarDrag"
             WindowDecorationProperties.ElementRole="TitleBar"/>
 
-    <!-- Navigation, with the connection state always visible at the bottom -->
+    <!-- Navigation, with the connection state always visible at the bottom and About above it -->
     <DockPanel Grid.Column="0" Grid.Row="1" Margin="10,4,10,12">
       <StackPanel Name="ConnectionFooter" DockPanel.Dock="Bottom" Orientation="Horizontal"
                   Spacing="8" Margin="12,8">
@@ -54,6 +54,17 @@
                  Fill="{Binding Connection.StatusTone, Converter={StaticResource ToneToBrush}}"/>
         <TextBlock Name="FooterText" Classes="Caption" VerticalAlignment="Center"
                    Text="{Binding Connection.FooterText}"/>
+      </StackPanel>
+      <StackPanel Name="AboutFooter" DockPanel.Dock="Bottom" Spacing="2" Margin="12,8,12,0">
+        <!-- Non-release builds carry their branch, commit and build time as the tooltip -->
+        <TextBlock Name="VersionText" Classes="Caption" Text="{Binding About.VersionText}"
+                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding About.BuildDetails}"/>
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <HyperlinkButton Name="RepoLink" Padding="0" FontSize="12" Content="GitHub"
+                           NavigateUri="{Binding About.RepoUri}" ToolTip.Tip="{Binding About.RepoUri}"/>
+          <HyperlinkButton Name="NoticesLink" Padding="0" FontSize="12" Content="Notices"
+                           ToolTip.Tip="Third-party notices" Command="{Binding About.OpenNoticesCommand}"/>
+        </StackPanel>
       </StackPanel>
       <ListBox Name="NavList" Classes="Nav">
         <ListBox.ItemTemplate>
@@ -90,5 +101,25 @@
         </StackPanel>
       </Border>
     </Panel>
+
+    <!-- Third-party notices: a modal card over the whole window; Escape or a click outside closes it -->
+    <Border Name="NoticesOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" Background="#66000000"
+            IsVisible="{Binding About.IsNoticesOpen}">
+      <Border Name="NoticesCard" Classes="Panel" Padding="24" Margin="40" MaxWidth="720"
+              HorizontalAlignment="Center" BoxShadow="0 8 28 0 #40000000">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+            <TextBlock Classes="Subtitle" Text="Third-party notices"/>
+            <!-- The controller firmware Volco carries is built from these components (spec 9.3). -->
+            <TextBlock Classes="Caption" TextWrapping="Wrap"
+                       Text="The controller firmware that Volco installs is built from these components."/>
+          </StackPanel>
+          <Button Name="CloseNoticesButton" DockPanel.Dock="Bottom" HorizontalAlignment="Right"
+                  Margin="0,14,0,0" Content="Close" Command="{Binding About.CloseNoticesCommand}"/>
+          <TextBox Name="NoticesBox" IsReadOnly="True" TextWrapping="Wrap"
+                   FontFamily="Consolas, Menlo, monospace" FontSize="11"/>
+        </DockPanel>
+      </Border>
+    </Border>
   </Grid>
 </Window>

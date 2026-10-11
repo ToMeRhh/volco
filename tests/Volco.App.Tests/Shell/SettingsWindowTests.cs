@@ -1,13 +1,17 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.Input;
 using Avalonia.Styling;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
 using Volco.Core.Config;
 using Volco.Core.Runtime;
+using Volco.Core.Updates;
 using Volco.Core.Tests.Audio;
 using Xunit;
 
@@ -97,6 +101,71 @@ public class SettingsWindowTests
         window.Show();
 
         Assert.Equal("Looking for your controller", window.FindControl<TextBlock>("FooterText")!.Text);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_AboutSitsAboveTheConnectionState()
+    {
+        var window = Create();
+        window.Show();
+        var about = window.FindControl<StackPanel>("AboutFooter")!;
+        var connection = window.FindControl<StackPanel>("ConnectionFooter")!;
+
+        Assert.True(about.IsEffectivelyVisible);
+        Assert.Equal(new AboutViewModel().VersionText, window.FindControl<TextBlock>("VersionText")!.Text);
+        var link = window.FindControl<HyperlinkButton>("RepoLink")!;
+        Assert.Equal(new Uri("https://github.com/ToMeRhh/volco"), link.NavigateUri);
+        Assert.True(link.IsEffectivelyVisible);
+        var aboutBottom = about.TranslatePoint(new Point(0, about.Bounds.Height), window)!.Value.Y;
+        var connectionTop = connection.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+        Assert.True(aboutBottom <= connectionTop, $"About ends at {aboutBottom}, the connection starts at {connectionTop}");
+    }
+
+    [Fact]
+    public void About_DevBuild_CarriesTheBuildDetails_ReleaseJustTheVersion()
+    {
+        var dev = new AboutViewModel(isRelease: false);
+        Assert.Equal($"Volco dev {BuildInfo.Commit}", dev.VersionText);
+        Assert.Equal(BuildInfo.BuildDetails, dev.BuildDetails);
+        Assert.Contains("Branch ", dev.BuildDetails);
+
+        var release = new AboutViewModel(isRelease: true);
+        Assert.Equal($"Volco v{BuildInfo.Version}", release.VersionText);
+        Assert.Null(release.BuildDetails);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_Notices_OpenAsADialog_AndClose()
+    {
+        var window = Create();
+        window.Show();
+        var vm = Assert.IsType<SettingsViewModel>(window.DataContext);
+        var overlay = window.FindControl<Border>("NoticesOverlay")!;
+        var box = window.FindControl<TextBox>("NoticesBox")!;
+        Assert.False(overlay.IsVisible);
+        Assert.True(string.IsNullOrEmpty(box.Text));   // loaded on first open
+
+        window.FindControl<HyperlinkButton>("NoticesLink")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(overlay.IsVisible);
+        Assert.Contains("nanopb", box.Text);
+        Assert.Contains("GNU LESSER GENERAL PUBLIC LICENSE", box.Text);
+        Assert.Contains("SIL OPEN FONT LICENSE", box.Text!.ToUpperInvariant());
+
+        window.FindControl<Button>("CloseNoticesButton")!.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(overlay.IsVisible);
+
+        vm.About.OpenNoticesCommand.Execute(null);
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(vm.About.IsNoticesOpen);
+
+        vm.About.OpenNoticesCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        window.MouseDown(new Point(20, window.Bounds.Height / 2), MouseButton.Left);   // the scrim, left of the card
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(vm.About.IsNoticesOpen);
     }
 
     [AvaloniaFact]

@@ -4,7 +4,6 @@ using Volco.App.Tests.Shell;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
 using Volco.Core.Diagnostics;
-using Volco.Core.Updates;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
@@ -42,19 +41,6 @@ public class GeneralPageTests
     }
 
     [AvaloniaFact]
-    public void GeneralPage_LinksToTheRepository()
-    {
-        using var rig = new TestRig();
-        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new GeneralPage(vm.General);
-        new Window { Content = page }.Show();
-
-        var link = page.FindControl<HyperlinkButton>("RepoLink")!;
-        Assert.Equal(new Uri("https://github.com/ToMeRhh/volco"), link.NavigateUri);
-        Assert.True(link.IsEffectivelyVisible);
-    }
-
-    [AvaloniaFact]
     public void GeneralPage_ShowsTheLogPath_AndAnOpenFolderButton()
     {
         using var rig = new TestRig();
@@ -67,28 +53,30 @@ public class GeneralPageTests
     }
 
     [AvaloniaFact]
-    public void GeneralPage_DevBuild_ShowsTheCommitAndBuildDetails()
+    public void GeneralPage_ShowsWhereTheSettingsAreSaved()
     {
         using var rig = new TestRig();
-        var page = new GeneralPage(new GeneralViewModel(rig.Config, isRelease: false));
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var page = new GeneralPage(vm.General);
         new Window { Content = page }.Show();
 
-        Assert.Equal($"Volco dev {BuildInfo.Commit}", page.FindControl<TextBlock>("VersionText")!.Text);
-        var details = page.FindControl<TextBlock>("BuildDetailsText")!;
-        Assert.Equal(BuildInfo.BuildDetails, details.Text);
-        Assert.Contains("Branch ", details.Text);
-        Assert.True(details.IsVisible);
+        var path = page.FindControl<TextBlock>("ConfigPathText")!;
+        Assert.Equal(rig.Config.ConfigPath, path.Text);
+        Assert.EndsWith("config.json", path.Text);
+        Assert.True(path.IsEffectivelyVisible);
+        Assert.NotNull(page.FindControl<Button>("OpenConfigFolderButton")!.Command);
     }
 
     [AvaloniaFact]
-    public void GeneralPage_ReleaseBuild_ShowsJustTheVersion()
+    public void GeneralPage_NoLongerHoldsTheAboutDetails()
     {
         using var rig = new TestRig();
-        var page = new GeneralPage(new GeneralViewModel(rig.Config, isRelease: true));
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var page = new GeneralPage(vm.General);
         new Window { Content = page }.Show();
 
-        Assert.Equal($"Volco v{BuildInfo.Version}", page.FindControl<TextBlock>("VersionText")!.Text);
-        Assert.False(page.FindControl<TextBlock>("BuildDetailsText")!.IsVisible);
+        Assert.Null(page.FindControl<Border>("AboutPanel"));
+        Assert.Null(page.FindControl<HyperlinkButton>("RepoLink"));
     }
 
     [AvaloniaFact]
@@ -171,20 +159,5 @@ public class GeneralPageTests
         Assert.Same(withUpdates.Updates, withUpdates.FindControl<ContentControl>("UpdatesHost")!.Content);
         Assert.Null(without.Updates);
         Assert.Null(without.FindControl<ContentControl>("UpdatesHost")!.Content);
-    }
-
-    [AvaloniaFact]
-    public void TheThirdPartyNotices_LoadWhenOpened()
-    {
-        using var rig = new TestRig();
-        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new GeneralPage(vm.General);
-        new Window { Content = page }.Show();
-        var box = page.FindControl<TextBox>("NoticesBox")!;
-        Assert.True(string.IsNullOrEmpty(box.Text));
-        page.FindControl<Expander>("NoticesExpander")!.IsExpanded = true;
-        Assert.Contains("nanopb", box.Text);
-        Assert.Contains("GNU LESSER GENERAL PUBLIC LICENSE", box.Text);
-        Assert.Contains("SIL OPEN FONT LICENSE", box.Text!.ToUpperInvariant());
     }
 }
