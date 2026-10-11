@@ -20,6 +20,10 @@
     <!-- Trimmed apps turn [ComImport] COM off by default; the audio engine (CsWin32's Core Audio
          interfaces, DefaultDevicePolicy's IPolicyConfig) depends on it. -->
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- Trimmed apps also turn reflection-based System.Text.Json off. Volco's config has its own
+         source-generated context, but EspDotNet reads its flasher stubs (embedded JSON) by
+         reflection; it isn't marked trimmable, so its types survive whole. -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <!-- No EventSource tracing (dotnet-trace) or debugger support in the published exe. -->
     <EventSourceSupport>false</EventSourceSupport>
     <DebuggerSupport>false</DebuggerSupport>
