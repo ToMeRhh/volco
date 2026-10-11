@@ -6,8 +6,8 @@ using Volco.Core.Diagnostics;
 namespace Volco.Windows.Platform;
 
 /// <summary>
-/// Win32 implementation of <see cref="IWindowEffects"/>. The only UI P/Invoke in the repo; the
-/// style combination is the one proven to work on Windows.
+/// Win32 implementation of <see cref="IWindowEffects"/>. With Program's AllowSetForegroundWindow,
+/// the only UI P/Invoke in the repo; the style combination is the one proven to work on Windows.
 /// </summary>
 internal sealed class Win32WindowEffects : IWindowEffects
 {

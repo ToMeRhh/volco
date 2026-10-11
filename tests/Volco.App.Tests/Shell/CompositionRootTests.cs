@@ -18,20 +18,21 @@ public class CompositionRootTests
     }
 
     private static CompositionRoot Create(FakeAudioEngine engine, bool audioReady,
-                                          Action<CompositionRoot>? onConnect = null)
+                                          Action<CompositionRoot>? onConnect = null, bool showSettings = false,
+                                          IStartWithSystem? startWithSystem = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         CompositionRoot? root = null;
         root = new CompositionRoot(
             Path.Combine(dir, "config.json"),
-            () => new PlatformServices(engine, audioReady, new RecordingEffects()),
+            () => new PlatformServices(engine, audioReady, new RecordingEffects(), StartWithSystem: startWithSystem),
             connectionFactory: cfg =>
             {
                 onConnect?.Invoke(root!);
                 return new FakeControllerConnection(cfg);
             },
-            createTray: false);
+            createTray: false, showSettings: showSettings);
         return root;
     }
 
@@ -124,6 +125,36 @@ public class CompositionRootTests
         {
             root.Start();
             Assert.Null(root.SettingsWindow);
+        }
+        finally { root.Shutdown(); }
+    }
+
+    [AvaloniaFact]
+    public void CompositionRoot_OpenedByTheUser_ShowsSettingsOnStart()
+    {
+        var root = Create(new FakeAudioEngine(), audioReady: true, showSettings: true);
+        try
+        {
+            root.Start();
+            Assert.NotNull(root.SettingsWindow);
+            Assert.True(root.SettingsWindow!.IsVisible);
+        }
+        finally { root.Shutdown(); }
+    }
+
+    [AvaloniaFact]
+    public void CompositionRoot_HandsStartWithSystemToTheGeneralPage()
+    {
+        var startup = new FakeStartWithSystem { IsEnabled = true };
+        var root = Create(new FakeAudioEngine(), audioReady: true, startWithSystem: startup);
+        try
+        {
+            root.Start();
+            root.CheckForUpdates();
+            var page = Assert.IsType<Volco.App.Views.Pages.GeneralPage>(root.SettingsWindow!.CurrentPage);
+            var vm = Assert.IsType<Volco.App.ViewModels.GeneralViewModel>(page.DataContext);
+            Assert.True(vm.ShowStartAtSignIn);
+            Assert.True(vm.StartAtSignIn);
         }
         finally { root.Shutdown(); }
     }

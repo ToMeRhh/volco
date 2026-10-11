@@ -15,6 +15,12 @@ public partial class VolcoApplication : Application
     /// <summary>Set by <see cref="VolcoAppHost.Run"/> before the framework starts.</summary>
     internal static Func<PlatformServices>? CreatePlatform { get; set; }
 
+    /// <summary>Set by <see cref="VolcoAppHost.Run"/>: a background start doesn't show the window.</summary>
+    internal static LaunchOptions Launch { get; set; } = new(Background: false);
+
+    /// <summary>Set by <see cref="VolcoAppHost.Run"/>; listens for later starts once the app is up.</summary>
+    internal static SingleInstance? Instance { get; set; }
+
     /// Replaces WinUI's App.RequestExit/App.IsExiting (used by the Updates panel and SettingsWindow).
     public static bool IsExiting => _isExiting;
 
@@ -72,8 +78,14 @@ public partial class VolcoApplication : Application
                 var configPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "Volco", "config.json");
-                _root = new CompositionRoot(configPath, factory);
+                _root = new CompositionRoot(configPath, factory, showSettings: !Launch.Background);
                 _root.Start();
+                // Volco opened again while it runs: bring its window up.
+                Instance?.Listen(() => Dispatcher.UIThread.Post(() =>
+                {
+                    AppLog.Info("Another start asked to show the window");
+                    if (!_isExiting) _root?.ShowSettings();
+                }));
             }
             catch (Exception ex)
             {

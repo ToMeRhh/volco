@@ -21,7 +21,7 @@ namespace Volco.App;
 /// <summary>
 /// Owns startup and shutdown. Startup: ConfigManager + Load, createPlatform(), VolcoRuntime,
 /// every runtime handler subscribed, and only then runtime.Start(); then tray, then settings if
-/// the audio engine failed. Shutdown: runtime Dispose, engine Dispose, windows, tray.
+/// the user opened Volco (not a background start) or the audio engine failed. Shutdown: runtime Dispose, engine Dispose, windows, tray.
 /// </summary>
 internal sealed class CompositionRoot : IDisposable
 {
@@ -29,6 +29,7 @@ internal sealed class CompositionRoot : IDisposable
     private readonly Func<PlatformServices> _createPlatform;
     private readonly Func<ConnectionConfig, IControllerConnection?>? _connectionFactory;
     private readonly bool _createTray;
+    private readonly bool _showSettings;
 
     private ConfigManager? _config;
     private PlatformServices? _platform;
@@ -50,12 +51,13 @@ internal sealed class CompositionRoot : IDisposable
 
     public CompositionRoot(string configPath, Func<PlatformServices> createPlatform,
                            Func<ConnectionConfig, IControllerConnection?>? connectionFactory = null,
-                           bool createTray = true)
+                           bool createTray = true, bool showSettings = false)
     {
         _configPath = configPath;
         _createPlatform = createPlatform;
         _connectionFactory = connectionFactory;
         _createTray = createTray;
+        _showSettings = showSettings;
     }
 
     public VolcoRuntime? Runtime => _runtime;
@@ -104,8 +106,9 @@ internal sealed class CompositionRoot : IDisposable
         if (_createTray) CreateTray();
         _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
 
-        // A tooltip needs hovering to notice; if audio failed, put a window in front of the user.
-        if (_runtime.AudioEngineFailed) ShowSettings();
+        // Opened by the user (not a background start at sign-in): show the window. And a tooltip
+        // needs hovering to notice; if audio failed, put a window in front of the user anyway.
+        if (_showSettings || _runtime.AudioEngineFailed) ShowSettings();
 
         AppLog.Info("App launch complete");
     }
@@ -246,7 +249,8 @@ internal sealed class CompositionRoot : IDisposable
             if (_runtime is null) return;
             if (_settingsWindow is null)
             {
-                _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher(), _firmware);
+                _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher(), _firmware,
+                                                           _platform?.StartWithSystem);
                 _settingsWindow = new SettingsWindow(_settingsViewModel, _runtime);
                 _settingsWindow.Closed += (_, _) =>
                 {

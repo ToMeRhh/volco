@@ -11,6 +11,8 @@ public partial class GeneralPage : UserControl
     public GeneralPage()
     {
         AvaloniaXamlLoader.Load(this);
+        // Start at sign-in can also change in the OS's own startup settings: re-read on each show.
+        AttachedToVisualTree += (_, _) => (DataContext as GeneralViewModel)?.RefreshStartAtSignIn();
         var expander = this.FindControl<Expander>("NoticesExpander")!;
         expander.PropertyChanged += (_, e) =>
         {
