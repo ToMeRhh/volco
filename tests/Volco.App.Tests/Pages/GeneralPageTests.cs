@@ -41,6 +41,19 @@ public class GeneralPageTests
     }
 
     [AvaloniaFact]
+    public void GeneralPage_LinksToTheRepository()
+    {
+        using var rig = new TestRig();
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var page = new GeneralPage(vm.General);
+        new Window { Content = page }.Show();
+
+        var link = page.FindControl<HyperlinkButton>("RepoLink")!;
+        Assert.Equal(new Uri("https://github.com/ToMeRhh/volco"), link.NavigateUri);
+        Assert.True(link.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
     public void GeneralPage_ShowsTheLogPath_AndAnOpenFolderButton()
     {
         using var rig = new TestRig();

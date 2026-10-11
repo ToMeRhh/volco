@@ -184,6 +184,21 @@ public class ControllerConnectionTests
     }
 
     [AvaloniaFact]
+    public void Connection_TheLinkButtons_AreInTheConnectionCard()
+    {
+        var (page, _, rig, vm) = Show();
+        using var _ = rig;
+        using var __ = vm;
+        var card = page.FindControl<Border>("ConnectionPanel")!;
+
+        foreach (var name in new[] { "ReconnectButton", "DisconnectButton", "ConnectButton" })
+        {
+            var button = page.FindControl<Button>(name)!;
+            Assert.Contains(card, button.GetVisualAncestors());
+        }
+    }
+
+    [AvaloniaFact]
     public void Connection_Disconnect_OffersConnect()
     {
         var (page, _, rig, vm) = Show();

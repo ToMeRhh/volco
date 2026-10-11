@@ -32,9 +32,14 @@ public partial class GeneralPage : UserControl
                + new string('=', 78) + "\n\n" + Read("OFL.txt");
     }
 
-    public GeneralPage(GeneralViewModel viewModel) : this()
+    public GeneralPage(GeneralViewModel viewModel, DevicesViewModel? devices = null) : this()
     {
         DataContext = viewModel;
+        if (devices is not null)
+        {
+            Devices = new DevicesSection(devices);
+            this.FindControl<ContentControl>("DevicesHost")!.Content = Devices;
+        }
         if (viewModel.ShowUpdates)
         {
             Updates = new UpdatesPanel();
@@ -44,4 +49,7 @@ public partial class GeneralPage : UserControl
 
     /// <summary>The Updates panel, when this is a release build.</summary>
     internal UpdatesPanel? Updates { get; }
+
+    /// <summary>The Devices section, when the page was given its view model.</summary>
+    internal DevicesSection? Devices { get; }
 }

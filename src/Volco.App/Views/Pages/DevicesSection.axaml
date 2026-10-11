@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:controls="using:Volco.App.Controls"
-             x:Class="Volco.App.Views.Pages.DevicesPage"
+             x:Class="Volco.App.Views.Pages.DevicesSection"
              x:DataType="vm:DevicesViewModel">
   <UserControl.Resources>
     <DataTemplate x:Key="DeviceCardTemplate" x:DataType="vm:DeviceItemViewModel">
@@ -71,25 +71,24 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <StackPanel Margin="{StaticResource PagePadding}" Spacing="{StaticResource SpaceL}" MaxWidth="{StaticResource PageMaxWidth}">
-      <StackPanel Spacing="2" Margin="0,8,0,0">
-        <TextBlock Text="Devices" Classes="Title"/>
-        <TextBlock Classes="Secondary" TextWrapping="Wrap"
-                   Text="Give your audio devices short names and icons. Volco uses them on your controller's screens, in the volume pop-up and in its own device lists."/>
-      </StackPanel>
-      <StackPanel Spacing="8">
-        <TextBlock Text="OUTPUTS" Classes="Caption" FontWeight="SemiBold"/>
-        <ItemsControl Name="OutputList" ItemsSource="{Binding Outputs}" ItemTemplate="{StaticResource DeviceCardTemplate}">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-        </ItemsControl>
-      </StackPanel>
-      <StackPanel Spacing="8">
-        <TextBlock Text="INPUTS" Classes="Caption" FontWeight="SemiBold"/>
-        <ItemsControl Name="InputList" ItemsSource="{Binding Inputs}" ItemTemplate="{StaticResource DeviceCardTemplate}">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-        </ItemsControl>
-      </StackPanel>
+  <!-- A section of the General page, which scrolls it -->
+  <StackPanel Spacing="{StaticResource SpaceM}">
+    <StackPanel Spacing="2">
+      <TextBlock Text="Devices" Classes="Subtitle"/>
+      <TextBlock Classes="Secondary" TextWrapping="Wrap"
+                 Text="Give your audio devices short names and icons. Volco uses them on your controller's screens, in the volume pop-up and in its own device lists."/>
     </StackPanel>
-  </ScrollViewer>
+    <StackPanel Spacing="8">
+      <TextBlock Text="OUTPUTS" Classes="Caption" FontWeight="SemiBold"/>
+      <ItemsControl Name="OutputList" ItemsSource="{Binding Outputs}" ItemTemplate="{StaticResource DeviceCardTemplate}">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      </ItemsControl>
+    </StackPanel>
+    <StackPanel Spacing="8">
+      <TextBlock Text="INPUTS" Classes="Caption" FontWeight="SemiBold"/>
+      <ItemsControl Name="InputList" ItemsSource="{Binding Inputs}" ItemTemplate="{StaticResource DeviceCardTemplate}">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      </ItemsControl>
+    </StackPanel>
+  </StackPanel>
 </UserControl>

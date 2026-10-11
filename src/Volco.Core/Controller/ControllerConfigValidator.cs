@@ -124,10 +124,10 @@ public static class ControllerConfigValidator
         if (s7.ScrollHoldMs > 10000) return ValidationResult.Invalid(3, ConfigField.ScreenValue);
         if (s7.ScrollSpeedPxS is < 5 or > 200) return ValidationResult.Invalid(4, ConfigField.ScreenValue);
         if (s7.ScrollEndHoldMs > 10000) return ValidationResult.Invalid(5, ConfigField.ScreenValue);
-        if (s7.DimAfterS is < 10 or > 86400) return ValidationResult.Invalid(7, ConfigField.ScreenValue);
+        if (s7.DimAfterS is < 1 or > 86400) return ValidationResult.Invalid(7, ConfigField.ScreenValue);
         if (s7.DimBrightness > 255) return ValidationResult.Invalid(8, ConfigField.ScreenValue);
-        if (s7.OffAfterS is < 10 or > 86400) return ValidationResult.Invalid(10, ConfigField.ScreenValue);
-        if (s7.PixelShiftEveryS is < 10 or > 86400) return ValidationResult.Invalid(12, ConfigField.ScreenValue);
+        if (s7.OffAfterS is < 1 or > 86400) return ValidationResult.Invalid(10, ConfigField.ScreenValue);
+        if (s7.PixelShiftEveryS is < 1 or > 86400) return ValidationResult.Invalid(12, ConfigField.ScreenValue);
         var input = c.EffectiveInput();
         if (input.DebounceMs is < 1 or > 200) return ValidationResult.Invalid(1, ConfigField.InputValue);
         if (input.SliderIntervalMs is < 1 or > 100) return ValidationResult.Invalid(2, ConfigField.InputValue);

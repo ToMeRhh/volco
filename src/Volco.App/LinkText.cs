@@ -75,10 +75,10 @@ public static class LinkText
                     : $"Another app is using {port} (a serial monitor?). Close it and Volco carries on by itself."
                 : $"Another app is using port {Port(c)}. Choose another one, here and on the controller.",
             LinkState.NoAnswer => $"Something is plugged in on {port}, but it isn't answering as a Volco controller. " +
-                                  "It may not have Volco's firmware yet: check it on the Controller page.",
+                                  "It may not have Volco's firmware yet: check it on the Hardware page.",
             LinkState.Incompatible => serial
-                ? "The controller's firmware is from another version of Volco. Update it on the Controller page."
-                : "The controller's firmware is from another version of Volco. Plug it in with USB to update it on the Controller page.",
+                ? "The controller's firmware is from another version of Volco. Update it on the Hardware page."
+                : "The controller's firmware is from another version of Volco. Plug it in with USB to update it on the Hardware page.",
             LinkState.Waiting => link.Activity switch
             {
                 LinkActivity.CheckingFirmware or LinkActivity.InstallingFirmware or LinkActivity.UpdatingFirmware

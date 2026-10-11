@@ -230,8 +230,8 @@ case("udp_disabled_incomplete_ok", lambda m: (setattr(m.udp, "enabled", False), 
 
 SCREEN_RANGES = [("brightness", 1, 0, 255), ("transition_ms", 2, 0, 2000), ("scroll_hold_ms", 3, 0, 10000),
                  ("scroll_speed_px_s", 4, 5, 200), ("scroll_end_hold_ms", 5, 0, 10000),
-                 ("dim_after_s", 7, 10, 86400), ("dim_brightness", 8, 0, 255), ("off_after_s", 10, 10, 86400),
-                 ("pixel_shift_every_s", 12, 10, 86400)]
+                 ("dim_after_s", 7, 1, 86400), ("dim_brightness", 8, 0, 255), ("off_after_s", 10, 1, 86400),
+                 ("pixel_shift_every_s", 12, 1, 86400)]
 INPUT_RANGES = [("debounce_ms", 1, 1, 200), ("slider_interval_ms", 2, 1, 100), ("filter_weight_pct", 3, 1, 100),
                 ("slider_deadband", 4, 0, 500)]
 for sub, field_code, table in (("screens", 15, SCREEN_RANGES), ("input", 16, INPUT_RANGES)):

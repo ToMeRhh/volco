@@ -40,7 +40,7 @@ public class SettingsWindowTests
         window.Show();
         Assert.True(window.IsVisible);
         var host = window.FindControl<ContentControl>("PageHost")!;
-        Assert.IsType<SlidersPage>(host.Content);
+        Assert.IsType<GeneralPage>(host.Content);
     }
 
     [AvaloniaFact]
@@ -53,16 +53,16 @@ public class SettingsWindowTests
 
         var expected = new[]
         {
-            typeof(SlidersPage), typeof(ButtonsPage), typeof(DevicesPage), typeof(ControllerPage), typeof(GeneralPage),
+            typeof(GeneralPage), typeof(ControllerPage), typeof(SlidersPage), typeof(ButtonsPage),
         };
-        Assert.Equal(5, nav.ItemCount);
+        Assert.Equal(4, nav.ItemCount);
         for (var i = 0; i < expected.Length; i++)
         {
             nav.SelectedIndex = i;
             Assert.IsType(expected[i], host.Content);
         }
         Assert.Equal(
-            new[] { "Sliders", "Buttons", "Devices", "Controller", "General" },
+            new[] { "General", "Hardware", "Sliders", "Buttons" },
             nav.Items.Cast<NavItem>().Select(n => n.Label).ToArray());
     }
 
@@ -72,9 +72,22 @@ public class SettingsWindowTests
         var window = Create();
         window.Show();
 
-        window.ShowPage("general");
+        window.ShowPage("buttons");
+        Assert.IsType<ButtonsPage>(window.CurrentPage);
 
+        window.ShowPage("general");
         Assert.IsType<GeneralPage>(window.CurrentPage);
+    }
+
+    [AvaloniaFact]
+    public void SettingsWindow_GeneralHoldsTheDevicesSection()
+    {
+        var window = Create();
+        window.Show();
+
+        var general = Assert.IsType<GeneralPage>(window.CurrentPage);
+        Assert.NotNull(general.Devices);
+        Assert.Same(window, TopLevel.GetTopLevel(general.Devices));
     }
 
     [AvaloniaFact]

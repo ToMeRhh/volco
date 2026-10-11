@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Volco.App.Tests.Pages;
 
-public class DevicesPageTests
+public class DevicesSectionTests
 {
     private static FakeAudioEngine Engine()
     {
@@ -26,12 +26,12 @@ public class DevicesPageTests
         };
     }
 
-    private static (DevicesPage Page, TestRig Rig, SettingsViewModel Vm) Show(Action<AppConfig>? configure = null)
+    private static (DevicesSection Page, TestRig Rig, SettingsViewModel Vm) Show(Action<AppConfig>? configure = null)
     {
         var rig = new TestRig(Engine());
         configure?.Invoke(rig.Config.Config);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new DevicesPage(vm.Devices);
+        var page = new DevicesSection(vm.Devices);
         new Window { Content = page, Width = 900, Height = 1000 }.Show();
         Dispatcher.UIThread.RunJobs();
         return (page, rig, vm);

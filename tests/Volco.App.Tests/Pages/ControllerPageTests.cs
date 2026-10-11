@@ -163,6 +163,29 @@ public class ControllerPageTests
     }
 
     [AvaloniaFact]
+    public void ScreenTimes_TakeANumberWithOrWithoutTheUnit_DownToOneSecond()
+    {
+        var (page, rig, vm) = Show(DiyBlob);
+        using var _ = rig;
+        using var __ = vm;
+        Greet(rig, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+        var box = page.FindControl<NumericUpDown>("DimAfterBox")!;
+
+        box.Text = "5";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(5m, vm.Controller.DimAfterS);
+
+        box.Text = "30s";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(30m, vm.Controller.DimAfterS);
+
+        box.Text = "1 s";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1m, vm.Controller.DimAfterS);
+        Assert.Null(vm.Controller.BehaviourError);
+    }
+
+    [AvaloniaFact]
     public void TheConnectionCard_ComesBeforeTheStatusCard()
     {
         var (page, rig, vm) = Show(DiyBlob);

@@ -234,7 +234,7 @@ internal sealed class CompositionRoot : IDisposable
             _firmwareMenuItem.IsVisible = attention;
             _firmwareMenuItem.Header = _trayShowsUpdate ? "Update controller firmware…"
                 : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? "Set up the controller…"
-                : "Open the Controller page…";
+                : "Open the Hardware page…";
         }
     }
 
