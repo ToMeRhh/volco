@@ -21,7 +21,7 @@ permissions:
 jobs:
   version:
     name: Resolve version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.ver.outputs.version }}
       tag: ${{ steps.ver.outputs.tag }}
@@ -42,7 +42,7 @@ jobs:
   firmware:
     name: Build firmware
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       build-id: ${{ steps.fwid.outputs.id }}
     steps:
