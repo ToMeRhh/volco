@@ -95,7 +95,7 @@
         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
           <TextBlock Text="File" Classes="Caption" VerticalAlignment="Center"/>
           <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <TextBox Name="CommandPathBox" MinWidth="240" Watermark="{Binding CommandPlaceholder}"
+            <TextBox Name="CommandPathBox" MinWidth="240" PlaceholderText="{Binding CommandPlaceholder}"
                      Text="{Binding CommandPath, Mode=TwoWay}"/>
             <Button Name="BrowseButton" Grid.Column="1" Content="Browse…" Click="BrowseButton_Click"/>
           </Grid>
@@ -103,13 +103,13 @@
                      Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding PathMissing}"
                      Text="This file doesn't exist."/>
           <TextBlock Grid.Row="2" Text="Arguments" Classes="Caption" VerticalAlignment="Center"/>
-          <TextBox Name="CommandArgumentsBox" Grid.Row="2" Grid.Column="1" Watermark="Optional"
+          <TextBox Name="CommandArgumentsBox" Grid.Row="2" Grid.Column="1" PlaceholderText="Optional"
                    Text="{Binding CommandArguments, Mode=TwoWay}"/>
           <TextBlock Grid.Row="3" Text="Start in" Classes="Caption" VerticalAlignment="Center"/>
-          <TextBox Name="CommandFolderBox" Grid.Row="3" Grid.Column="1" Watermark="The file's own folder"
+          <TextBox Name="CommandFolderBox" Grid.Row="3" Grid.Column="1" PlaceholderText="The file's own folder"
                    Text="{Binding CommandWorkingDirectory, Mode=TwoWay}"/>
           <TextBlock Grid.Row="4" Text="Name" Classes="Caption" VerticalAlignment="Center"/>
-          <TextBox Name="CommandNameBox" Grid.Row="4" Grid.Column="1" Watermark="Shown on the controller's screen; the file name when empty"
+          <TextBox Name="CommandNameBox" Grid.Row="4" Grid.Column="1" PlaceholderText="Shown on the controller's screen; the file name when empty"
                    Text="{Binding CommandName, Mode=TwoWay}"/>
           <CheckBox Name="StartAnotherCheck" Grid.Row="5" Grid.Column="1" IsVisible="{Binding NeedsWhileRunning}"
                     IsChecked="{Binding StartAnother, Mode=TwoWay}"
