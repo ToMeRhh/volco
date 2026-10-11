@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Volco.App.Platform;
 using Volco.Core.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
@@ -19,6 +20,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly IAudioEngine _audio;
     private readonly VolcoRuntime _runtime;
     private readonly FirmwareService? _firmware;
+    private readonly IStartWithSystem? _startWithSystem;
 
     // Runtime and engine events fire on arbitrary threads (audio thread, SliderProcessor's
     // coalescing timer, transport threads). Every handler posts through this first.
@@ -60,7 +62,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
                                                    ActionCapabilities.Of(_runtime));
 
     public GeneralViewModel General =>
-        _generalViewModel ??= new GeneralViewModel(_config);
+        _generalViewModel ??= new GeneralViewModel(_config, _startWithSystem);
 
     public ControllerViewModel Controller =>
         _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware, Connection);
@@ -75,9 +77,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _controllerNavDot;
 
     public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui,
-                             FirmwareService? firmware = null)
+                             FirmwareService? firmware = null, IStartWithSystem? startWithSystem = null)
     {
         _firmware = firmware;
+        _startWithSystem = startWithSystem;
         _config = config;
         _audio = audio;
         _runtime = runtime;
