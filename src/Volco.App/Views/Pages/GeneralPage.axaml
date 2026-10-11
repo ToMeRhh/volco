@@ -14,11 +14,7 @@
         <StackPanel Spacing="14">
           <TextBlock Text="Startup" Classes="Subtitle"/>
           <Grid ColumnDefinitions="*,Auto">
-            <StackPanel Spacing="2">
-              <TextBlock Text="Start Volco when you sign in"/>
-              <TextBlock Classes="Caption" TextWrapping="Wrap"
-                         Text="It starts in the tray, without this window. Opening Volco yourself shows the window."/>
-            </StackPanel>
+            <TextBlock Text="Start Volco when you sign in" VerticalAlignment="Center"/>
             <ToggleSwitch Name="StartAtSignInToggle" Grid.Column="1" VerticalAlignment="Center"
                           IsChecked="{Binding StartAtSignIn, Mode=TwoWay}"
                           OnContent="On" OffContent="Off"/>
