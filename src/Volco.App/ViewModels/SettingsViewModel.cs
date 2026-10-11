@@ -36,6 +36,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>The window's one "… · Undo" message.</summary>
     public UndoToastViewModel Toast { get; } = new();
 
+    /// <summary>The version, GitHub link and notices at the bottom of the sidebar.</summary>
+    public AboutViewModel About { get; } = new();
+
     /// <summary>The link status and connection settings: the sidebar footer and the Controller
     /// page's Connection section share it.</summary>
     public ConnectionViewModel Connection =>

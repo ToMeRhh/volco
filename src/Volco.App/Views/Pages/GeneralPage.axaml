@@ -47,29 +47,20 @@
             <StackPanel Spacing="2">
               <TextBlock Text="Log file"/>
               <TextBlock Name="LogPathText" Classes="Caption" Text="{Binding LogPath}"
-                         TextTrimming="CharacterEllipsis"/>
+                         TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding LogPath}"/>
             </StackPanel>
             <Button Name="OpenLogFolderButton" Grid.Column="1" VerticalAlignment="Center"
                     Content="Open folder" Command="{Binding OpenLogFolderCommand}"/>
           </Grid>
-        </StackPanel>
-      </Border>
-
-      <Border Name="AboutPanel" Classes="Panel">
-        <StackPanel Spacing="14">
-          <TextBlock Text="About" Classes="Subtitle"/>
-          <StackPanel Spacing="2">
-            <TextBlock Name="VersionText" Text="{Binding VersionText}"/>
-            <TextBlock Name="BuildDetailsText" Classes="Caption" Text="{Binding BuildDetails}"
-                       IsVisible="{Binding BuildDetails, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-          </StackPanel>
-          <HyperlinkButton Name="RepoLink" Padding="0" NavigateUri="{Binding RepoUri}"
-                           Content="Volco on GitHub" ToolTip.Tip="{Binding RepoUri}"/>
-          <!-- The controller firmware Volco carries is built from these components (spec 9.3). -->
-          <Expander Name="NoticesExpander" Header="Third-party notices (controller firmware)">
-            <TextBox Name="NoticesBox" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="320"
-                     FontFamily="Consolas, Menlo, monospace" FontSize="11"/>
-          </Expander>
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Settings file"/>
+              <TextBlock Name="ConfigPathText" Classes="Caption" Text="{Binding ConfigPath}"
+                         TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ConfigPath}"/>
+            </StackPanel>
+            <Button Name="OpenConfigFolderButton" Grid.Column="1" VerticalAlignment="Center"
+                    Content="Open folder" Command="{Binding OpenConfigFolderCommand}"/>
+          </Grid>
         </StackPanel>
       </Border>
 
