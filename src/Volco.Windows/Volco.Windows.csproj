@@ -43,6 +43,14 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- ANGLE (Avalonia's GPU path on Windows) comes with Avalonia.Win32; Volco renders in software
+       (Program.UseWindowsBackends), so the published exe doesn't carry it. -->
+  <Target Name="DropAngle" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'av_libglesv2.dll'" />
+    </ItemGroup>
+  </Target>
+
   <!-- The controller firmware (spec 9.3): CI downloads it into Firmware/esp32; local builds have none. -->
   <ItemGroup>
     <EmbeddedResource Include="Firmware\esp32\*" LogicalName="Firmware/esp32/%(Filename)%(Extension)" />
