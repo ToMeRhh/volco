@@ -1,0 +1,21 @@
+name: Feature request
+description: An idea for Volco, the firmware or the hardware
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: The problem or the use case, rather than a specific solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could Volco help?
+      description: Your idea for how it could work, if you have one.
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Your hardware, other tools you use, screenshots or sketches.

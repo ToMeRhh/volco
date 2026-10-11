@@ -8,3 +8,4 @@ src/Volco.Windows/Firmware/esp32/
 .claude/
 .vscode/
 firmware/tools/__pycache__/
+docs/superpowers/
