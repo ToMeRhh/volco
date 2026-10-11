@@ -13,7 +13,7 @@ public class DeviceSettingsConfig
     /// <summary>The endpoint id: the device's identity.</summary>
     public string Id { get; set; } = "";
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<AudioFlow>))]
     public AudioFlow Flow { get; set; } = AudioFlow.Render;
 
     /// <summary>The last name Windows reported, so a disconnected device still has a name.</summary>
@@ -35,7 +35,7 @@ public class ControllerInfoConfig
 {
     public int ProtocolVersion { get; set; }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ChipFamily>))]
     public ChipFamily Chip { get; set; }
 
     /// <summary>The firmware build id the controller reported (spec §9.2).</summary>

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
@@ -197,7 +198,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         presets.Add(new PresetConfig { Id = id, Name = name });
         foreach (var button in Buttons)
             if (button.Actions.TryGetValue(EditingPresetId, out var source) && source is not null)
-                button.Actions[id] = CloneJson(source);
+                button.Actions[id] = CloneJson(source, ConfigJsonContext.Default.ButtonBindingConfig);
         RebuildPresetTabs();
         RefreshPresetPickers();
         EditingPresetId = id;
@@ -320,7 +321,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
     public void Reset(ButtonItemViewModel item)
     {
-        var before = CloneJson(item.Config);
+        var before = CloneJson(item.Config, ConfigJsonContext.Default.ButtonConfig);
         item.Config.Actions.Clear();
         item.Config.LongPressMs = new ButtonConfig().LongPressMs;
         item.Config.DoublePressWindowMs = new ButtonConfig().DoublePressWindowMs;
@@ -434,8 +435,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         RefreshLights();
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static T CloneJson<T>(T value)
-        => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, JsonOptions), JsonOptions)!;
+    private static T CloneJson<T>(T value, JsonTypeInfo<T> type)
+        => JsonSerializer.Deserialize(JsonSerializer.Serialize(value, type), type)!;
 }

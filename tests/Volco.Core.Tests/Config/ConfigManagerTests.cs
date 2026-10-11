@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Config;
 using Xunit;
 
@@ -68,6 +70,46 @@ public class ConfigManagerTests
         Assert.Equal("Headphones", deserialized.Buttons[0].Default().DoublePress.DeviceB!.FriendlyName);
         Assert.Equal("default", deserialized.Buttons[0].BindingFor("gaming").LongPress.PresetId);
         Assert.Equal(new[] { "Default", "Gaming" }, deserialized.Presets.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ConfigJsonContext_WritesAndReadsWhatReflectionDoes()
+    {
+        // The trimmed Volco.exe has only the source-generated contract; it must keep config.json
+        // byte-for-byte what the reflection serializer wrote before.
+        var config = AppConfig.CreateDefault();
+        config.Sliders[0] = new SliderConfig
+        {
+            Type = SliderMappingType.Device, Device = new DeviceRefConfig { Id = "{0.0.0}.{a}", FriendlyName = "Speakers" },
+            Curve = ResponseCurve.SCurve, DeadZonePercent = 0.05, SmoothingFactor = 0.5, Invert = true,
+        };
+        config.Sliders[1] = new SliderConfig { Type = SliderMappingType.Processes, Processes = { "spotify.exe" } };
+        config.Buttons[0].Actions[AppConfig.DefaultPresetId] = new ButtonBindingConfig
+        {
+            SinglePress = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "Spotify.exe", Name = "Spotify" } },
+            DoublePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.RunScript, WhileRunning = WhileRunningPolicy.StartAnother,
+                Command = new CommandConfig { Path = @"C:\s\a.ps1", Arguments = "-x", WorkingDirectory = @"C:\s", Name = "A" },
+            },
+            LongPress = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice, Device = new DeviceRefConfig { Id = "a" }, DeviceB = new DeviceRefConfig { Id = "b" } },
+        };
+        config.Devices.Add(new DeviceSettingsConfig { Id = "a", Flow = AudioFlow.Capture, FriendlyName = "Mic", Nickname = "M", Icon = ScreenIcon.Generic });
+        config.Controller = new ControllerInfoConfig
+        {
+            ProtocolVersion = 1, Chip = ChipFamily.Esp32, FirmwareVersion = "abc", Sliders = 5,
+            Buttons = { IndicatorKind.Led, IndicatorKind.Screen },
+        };
+        config.ControllerConfigBlob = "AAEC";
+        config.DebugLogging = true;
+
+        var reflection = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var expected = JsonSerializer.Serialize(config, reflection);
+
+        var json = JsonSerializer.Serialize(config, ConfigJsonContext.Default.AppConfig);
+        Assert.Equal(expected, json);
+        var back = JsonSerializer.Deserialize(json, ConfigJsonContext.Default.AppConfig)!;
+        Assert.Equal(expected, JsonSerializer.Serialize(back, reflection));
     }
 
     [Fact]
