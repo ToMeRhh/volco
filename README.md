@@ -13,6 +13,7 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 [![Release](https://img.shields.io/github/v/release/ToMeRhh/volco?color=3358C4)](https://github.com/ToMeRhh/volco/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+[![Sponsor](https://img.shields.io/github/sponsors/ToMeRhh?label=sponsor&logo=githubsponsors&color=EA4AAA)](https://github.com/sponsors/ToMeRhh)
 
 </div>
 
@@ -28,9 +29,7 @@ Today it runs on **Windows**. The app is built so it can be ported to **macOS an
 
 > **Built with Claude Code.** I'm an experienced software engineer, and I built Volco with [Claude Code](https://claude.com/claude-code) as my pair programmer. I designed the architecture, reviewed every change and tested it on real hardware.
 
-This is my first open-source project, so issues, ideas and feedback are very welcome. ❤️
-
-<!-- TODO(Tomer): reword the three paragraphs above in your own voice. -->
+This is my first open-source project, so issues, ideas and feedback are very welcome. ❤️ If Volco is useful to you, you can support it through [GitHub Sponsors](https://github.com/sponsors/ToMeRhh).
 
 ## 📸 The hardware
 
