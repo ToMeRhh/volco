@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Avalonia;
 using Volco.App;
 using Volco.Core.Diagnostics;
 using Volco.Windows.Firmware;
@@ -32,7 +33,7 @@ internal static class Program
         // Volco it asks to show its window may come to the front instead of flashing in the taskbar.
         AllowSetForegroundWindow(ASFW_ANY);
 
-        return VolcoAppHost.Run(args, () =>
+        return VolcoAppHost.Run(args, UseWindowsBackends, () =>
         {
             var engine = new Volco.Windows.Audio.AudioEngine();
             bool ready = engine.Start();
@@ -42,4 +43,9 @@ internal static class Program
                                         new MediaSessions(), new ProgramLauncher(), startWithSystem);
         });
     }
+
+    // What Avalonia.Desktop's UsePlatformDetect picks on Windows, without referencing the Linux
+    // and macOS backends it also carries.
+    private static AppBuilder UseWindowsBackends(AppBuilder builder) =>
+        builder.UseHarfBuzz().UseWin32().UseSkia();
 }

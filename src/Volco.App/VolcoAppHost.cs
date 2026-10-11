@@ -6,10 +6,12 @@ namespace Volco.App;
 
 public static class VolcoAppHost
 {
-    /// Entry point for every OS head. createPlatform runs once on the UI thread during
-    /// framework initialisation. Returns the process exit code.
-    public static int Run(string[] args, Func<PlatformServices> createPlatform)
+    /// Entry point for every OS head. usePlatform adds the head's Avalonia windowing and rendering
+    /// backends (Volco.App references no backend, so a head ships only its own). createPlatform
+    /// runs once on the UI thread during framework initialisation. Returns the process exit code.
+    public static int Run(string[] args, Func<AppBuilder, AppBuilder> usePlatform, Func<PlatformServices> createPlatform)
     {
+        ArgumentNullException.ThrowIfNull(usePlatform);
         ArgumentNullException.ThrowIfNull(createPlatform);
         var launch = LaunchOptions.Parse(args);
 
@@ -25,10 +27,10 @@ public static class VolcoAppHost
         VolcoApplication.CreatePlatform = createPlatform;
         VolcoApplication.Launch = launch;
         VolcoApplication.Instance = instance;
-        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
+        return usePlatform(BuildAvaloniaApp()).StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
     }
 
-    /// Configured builder without a platform factory, for the previewer and tests.
+    /// Configured builder without Avalonia backends or a platform factory.
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<VolcoApplication>().UsePlatformDetect();
+        AppBuilder.Configure<VolcoApplication>();
 }

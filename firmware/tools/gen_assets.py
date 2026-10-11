@@ -126,7 +126,7 @@ def write_csharp(rows):
              "// </auto-generated>", "using System.Text.Json.Serialization;", "",
              "namespace Volco.Core.Communication;", "",
              "/// <summary>The firmware's closed icon set (spec §4.5). IDs are stable: append, never insert.</summary>",
-             "[JsonConverter(typeof(JsonStringEnumConverter))]", "public enum ScreenIcon : byte", "{"]
+             "[JsonConverter(typeof(JsonStringEnumConverter<ScreenIcon>))]", "public enum ScreenIcon : byte", "{"]
     lines += [f"    {cs} = {id_}," for id_, _, cs, _, _ in rows]
     lines += ["}", "",
               "/// <summary>Sets of <see cref=\"ScreenIcon\"/> from the manifest.</summary>",

@@ -11,8 +11,26 @@
     <ApplicationIcon>volco.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- Publish trimming. Partial mode trims only assemblies marked
+       trimmable (the framework, the Windows SDK projection, Avalonia); Volco's own assemblies,
+       EspDotNet and Google.Protobuf are kept whole. -->
+  <PropertyGroup>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <!-- Trimmed apps turn [ComImport] COM off by default; the audio engine (CsWin32's Core Audio
+         interfaces, DefaultDevicePolicy's IPolicyConfig) depends on it. -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- No EventSource tracing (dotnet-trace) or debugger support in the published exe. -->
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebuggerSupport>false</DebuggerSupport>
+  </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <!-- The Windows backends only (Program.UseWindowsBackends), not Avalonia.Desktop, which also
+         carries the Linux and macOS ones. -->
+    <PackageReference Include="Avalonia.Win32" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.HarfBuzz" Version="12.1.2" />
     <!-- The USB firmware flasher (spec 8.6); only this project may reference it. -->
     <PackageReference Include="EspDotNet" Version="5.0.2" />
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.335">

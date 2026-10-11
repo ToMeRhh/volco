@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Volco.Core.Communication;
 
 /// <summary>How a button shows its state, as the controller reports it in Hello (spec §3.2).</summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<IndicatorKind>))]
 public enum IndicatorKind : byte
 {
     None = 0,

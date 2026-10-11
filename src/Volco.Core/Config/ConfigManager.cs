@@ -8,12 +8,6 @@ namespace Volco.Core.Config;
 public class ConfigManager
 {
     private readonly string _configPath;
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     private readonly object _saveLock = new();
     private Timer? _debounceTimer;
     private bool _savePending;   // under _saveLock: a debounced save hasn't been written yet
@@ -71,7 +65,7 @@ public class ConfigManager
                     if (root["connection"]?["serial"] is JsonObject serial) serial.Remove("baudRate");
                     json = root.ToJsonString();
                 }
-                Config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? AppConfig.CreateDefault();
+                Config = JsonSerializer.Deserialize(json, ConfigJsonContext.Default.AppConfig) ?? AppConfig.CreateDefault();
             }
             catch (Exception ex)
             {
@@ -224,7 +218,7 @@ public class ConfigManager
         // Position is identity: keep the readable Index fields in step with the list order.
         for (int i = 0; i < Config.Sliders.Count; i++) Config.Sliders[i].Index = i;
         for (int i = 0; i < Config.Buttons.Count; i++) Config.Buttons[i].Index = i;
-        var json = JsonSerializer.Serialize(Config, JsonOptions);
+        var json = JsonSerializer.Serialize(Config, ConfigJsonContext.Default.AppConfig);
         File.WriteAllText(_configPath, json);
     }
 }

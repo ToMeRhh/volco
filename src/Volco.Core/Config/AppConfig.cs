@@ -2,13 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace Volco.Core.Config;
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<ConnectionType>))]
 public enum ConnectionType { Serial, Udp, WebSocket }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<ResponseCurve>))]
 public enum ResponseCurve { Linear, Logarithmic, Exponential, SCurve }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<SliderMappingType>))]
 public enum SliderMappingType
 {
     Processes,
@@ -19,7 +19,7 @@ public enum SliderMappingType
     None
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<ButtonActionType>))]
 public enum ButtonActionType
 {
     None,
@@ -51,7 +51,7 @@ public static class ButtonActionTypes
 }
 
 /// <summary>What a script button does when pressed while its script still runs.</summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<WhileRunningPolicy>))]
 public enum WhileRunningPolicy
 {
     Ignore,

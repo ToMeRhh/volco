@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace Volco.Core.Communication;
 
 /// <summary>The firmware's closed icon set (spec §4.5). IDs are stable: append, never insert.</summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<ScreenIcon>))]
 public enum ScreenIcon : byte
 {
     Generic = 0,
