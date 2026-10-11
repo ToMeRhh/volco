@@ -13,6 +13,9 @@
       <!-- The Updates panel goes here on release builds (code-behind). -->
       <ContentControl Name="UpdatesHost"/>
 
+      <!-- Device nicknames and icons (code-behind) -->
+      <ContentControl Name="DevicesHost"/>
+
       <Border Name="TroubleshootingPanel" Classes="Panel">
         <StackPanel Spacing="14">
           <TextBlock Text="Troubleshooting" Classes="Subtitle"/>
@@ -45,6 +48,8 @@
             <TextBlock Name="BuildDetailsText" Classes="Caption" Text="{Binding BuildDetails}"
                        IsVisible="{Binding BuildDetails, Converter={x:Static ObjectConverters.IsNotNull}}"/>
           </StackPanel>
+          <HyperlinkButton Name="RepoLink" Padding="0" NavigateUri="{Binding RepoUri}"
+                           Content="Volco on GitHub" ToolTip.Tip="{Binding RepoUri}"/>
           <!-- The controller firmware Volco carries is built from these components (spec 9.3). -->
           <Expander Name="NoticesExpander" Header="Third-party notices (controller firmware)">
             <TextBox Name="NoticesBox" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="320"

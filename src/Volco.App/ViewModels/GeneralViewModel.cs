@@ -8,7 +8,8 @@ using Volco.Core.Updates;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The General page: updates (release builds only), troubleshooting and the app's version. The
+/// The General page: updates (release builds only), troubleshooting, the app's version and a link
+/// to the project on GitHub. The device section is <see cref="DevicesViewModel"/>. The
 /// update flow itself lives in <see cref="Controls.UpdatesPanel"/>.
 /// </summary>
 public partial class GeneralViewModel : ObservableObject
@@ -42,6 +43,9 @@ public partial class GeneralViewModel : ObservableObject
     public string? BuildDetails { get; }
 
     public string LogPath => AppLog.LogPath;
+
+    /// <summary>The project's GitHub page, linked from About.</summary>
+    public Uri RepoUri { get; } = new(BuildInfo.RepoUrl);
 
     partial void OnDebugLoggingChanged(bool value)
     {

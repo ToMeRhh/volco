@@ -174,10 +174,10 @@ ValidationResult validateConfig(const volco_config_ControllerConfig& c, const Ch
   if (!inRange(s.scroll_hold_ms, 0, 10000)) return invalid(3, FIELD_SCREEN_VALUE);
   if (!inRange(s.scroll_speed_px_s, 5, 200)) return invalid(4, FIELD_SCREEN_VALUE);
   if (!inRange(s.scroll_end_hold_ms, 0, 10000)) return invalid(5, FIELD_SCREEN_VALUE);
-  if (!inRange(s.dim_after_s, 10, 86400)) return invalid(7, FIELD_SCREEN_VALUE);
+  if (!inRange(s.dim_after_s, 1, 86400)) return invalid(7, FIELD_SCREEN_VALUE);
   if (!inRange(s.dim_brightness, 0, 255)) return invalid(8, FIELD_SCREEN_VALUE);
-  if (!inRange(s.off_after_s, 10, 86400)) return invalid(10, FIELD_SCREEN_VALUE);
-  if (!inRange(s.pixel_shift_every_s, 10, 86400)) return invalid(12, FIELD_SCREEN_VALUE);
+  if (!inRange(s.off_after_s, 1, 86400)) return invalid(10, FIELD_SCREEN_VALUE);
+  if (!inRange(s.pixel_shift_every_s, 1, 86400)) return invalid(12, FIELD_SCREEN_VALUE);
   const volco_config_InputTuning& in = c.input;
   if (!inRange(in.debounce_ms, 1, 200)) return invalid(1, FIELD_INPUT_VALUE);
   if (!inRange(in.slider_interval_ms, 1, 100)) return invalid(2, FIELD_INPUT_VALUE);

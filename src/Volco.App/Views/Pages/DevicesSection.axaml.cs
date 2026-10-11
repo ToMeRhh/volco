@@ -4,15 +4,16 @@ using Volco.App.ViewModels;
 
 namespace Volco.App.Views.Pages;
 
-/// <summary>Device nicknames and icons (spec §6.1). Bindings do all the work.</summary>
-public partial class DevicesPage : UserControl
+/// <summary>Device nicknames and icons (spec §6.1), a section of the General page. Bindings do
+/// all the work.</summary>
+public partial class DevicesSection : UserControl
 {
-    public DevicesPage()
+    public DevicesSection()
     {
         AvaloniaXamlLoader.Load(this);
         // The view model is cached and other pages change device references, so rebuild on each show.
         AttachedToVisualTree += (_, _) => (DataContext as DevicesViewModel)?.Refresh();
     }
 
-    public DevicesPage(DevicesViewModel viewModel) : this() => DataContext = viewModel;
+    public DevicesSection(DevicesViewModel viewModel) : this() => DataContext = viewModel;
 }

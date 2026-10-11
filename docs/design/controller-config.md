@@ -331,12 +331,12 @@ message ScreenBehaviour {
   optional uint32 scroll_speed_px_s = 4 [default = 30];      // 5..200
   optional uint32 scroll_end_hold_ms = 5 [default = 1200];   // 0..10000
   optional bool dim_enabled = 6 [default = true];
-  optional uint32 dim_after_s = 7 [default = 120];           // 10..86400
+  optional uint32 dim_after_s = 7 [default = 120];           // 1..86400
   optional uint32 dim_brightness = 8 [default = 8];          // 0..255
   optional bool off_enabled = 9 [default = true];
-  optional uint32 off_after_s = 10 [default = 1800];         // 10..86400
+  optional uint32 off_after_s = 10 [default = 1800];         // 1..86400
   optional bool pixel_shift_enabled = 11 [default = true];
-  optional uint32 pixel_shift_every_s = 12 [default = 180];  // 10..86400
+  optional uint32 pixel_shift_every_s = 12 [default = 180];  // 1..86400
   optional bool wake_swallows_press = 13 [default = true];
 }
 

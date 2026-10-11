@@ -59,11 +59,10 @@ public partial class SettingsWindow : Window
 
         _navList.ItemsSource = new[]
         {
+            Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General, vm.Devices)),
+            _controllerNav = Nav("Hardware", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
             Nav("Sliders", "sliders", "Icon.Sliders", () => new SlidersPage(vm.Sliders)),
             Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage(vm.Buttons)),
-            Nav("Devices", "devices", "Icon.Speaker", () => new DevicesPage(vm.Devices)),
-            _controllerNav = Nav("Controller", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
-            Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
         };
         _navList.SelectionChanged += OnNavSelectionChanged;
         _navList.SelectedIndex = 0;
@@ -84,7 +83,8 @@ public partial class SettingsWindow : Window
         return new NavItem(label, tag, icon, create);
     }
 
-    /// <summary>Switches to the page with this tag ("sliders", "buttons", "devices", "controller", "general").</summary>
+    /// <summary>Switches to the page with this tag ("general", "controller" (shown as Hardware),
+    /// "sliders", "buttons").</summary>
     public void ShowPage(string tag)
     {
         var items = _navList.ItemsSource?.Cast<NavItem>().ToList() ?? new List<NavItem>();

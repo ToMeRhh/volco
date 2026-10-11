@@ -20,6 +20,9 @@ public static class BuildInfo
     /// <summary>GitHub repository name used for update checks.</summary>
     public const string RepoName = "volco";
 
+    /// <summary>The project's page on GitHub, linked from the General page.</summary>
+    public const string RepoUrl = $"https://github.com/{RepoOwner}/{RepoName}";
+
     private sealed record Stamp(Version Version, string Channel, string? Commit, string? Branch, DateTimeOffset? BuiltAt, string? Origin);
 
     private static readonly Lazy<Stamp> Info = new(Read);

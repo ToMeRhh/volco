@@ -66,7 +66,7 @@ public class CrossPageRefreshTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Toggle Speakers / Headphones", vm.Buttons.Items[0].Summary);
 
-        Show(window, "devices");
+        Show(window, "general");   // Devices is a section of General
         vm.Devices.Outputs.Single(d => d.Id == "dev-2").Nickname = "Arctis";
         Dispatcher.UIThread.RunJobs();
         Show(window, "buttons");
@@ -93,7 +93,7 @@ public class CrossPageRefreshTests
         vm.Sliders.Items[0].IsExpanded = true;
         Dispatcher.UIThread.RunJobs();
 
-        Show(window, "devices");
+        Show(window, "general");   // Devices is a section of General
         vm.Devices.Outputs.Single(d => d.Id == "dev-2").Nickname = "Arctis";
         Dispatcher.UIThread.RunJobs();
         Show(window, "sliders");
@@ -109,7 +109,7 @@ public class CrossPageRefreshTests
     {
         var (window, rig, vm) = Open();
         using var _ = rig; using var __ = vm;
-        Show(window, "devices");
+        Show(window, "general");   // Devices is a section of General
         var headphones = vm.Devices.Outputs.Single(d => d.Id == "dev-2");
         Assert.Equal("", headphones.UsedBy);
         var changed = new List<string?>();
@@ -120,7 +120,7 @@ public class CrossPageRefreshTests
         slot.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteSpecificDevice);
         slot.Device = "Headphones";
         Dispatcher.UIThread.RunJobs();
-        Show(window, "devices");
+        Show(window, "general");   // Devices is a section of General
 
         Assert.Same(headphones, vm.Devices.Outputs.Single(d => d.Id == "dev-2"));   // card kept
         Assert.Equal("Used by Button 2", headphones.UsedBy);

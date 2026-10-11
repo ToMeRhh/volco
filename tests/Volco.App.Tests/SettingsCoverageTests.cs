@@ -187,7 +187,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new DevicesPage(vm.Devices);
+        var page = new DevicesSection(vm.Devices);
         Host(page);
         var item = vm.Devices.Outputs.Single(d => d.Id == "dev-1");
         item.IsExpanded = true;

@@ -50,7 +50,7 @@ Next up is a custom PCB and a new case with an OLED screen above each button. Bo
 You don't need my board, though. Volco works with **any layout you wire up**: as many sliders and buttons as you have pins, and each button can have **no indicator, an LED, an LED pair, or a small OLED screen**. You describe the hardware in the app, and the controller stores it. There's nothing to change in the code.
 
 > [!NOTE]
-> **Coming from deej?** If your deej build runs on an **ESP32**, Volco can replace it in place: install the firmware from the app, enter your slider pins on the Controller page, and keep your hardware as it is. (On an Arduino Uno or Nano, the firmware doesn't run yet.)
+> **Coming from deej?** If your deej build runs on an **ESP32**, Volco can replace it in place: install the firmware from the app, enter your slider pins on the Hardware page, and keep your hardware as it is. (On an Arduino Uno or Nano, the firmware doesn't run yet.)
 
 > [!TIP]
 > **No hardware yet?** Open [`tools/simulator/index.html`](tools/simulator/) in a browser. It's a 3D simulated controller that connects to the app over WebSocket, so you can try everything first.
@@ -83,7 +83,7 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 3. **Flash the firmware.** Plug the ESP32 in over USB, open **Settings → Controller**, pick its COM port and choose **Install firmware…**. It takes under a minute.
 4. **Set it up.** On the same page, choose **Set up**, start from the **DIY reference** preset or your own layout, and **Save to controller**. Then map your sliders and buttons on their pages. Done! 🎉
 
-Wi-Fi (UDP) is in the Controller page's **Advanced** section. USB always stays on, so a wrong Wi-Fi setting can be fixed over the cable.
+Wi-Fi (UDP) is in the Hardware page's **Advanced** section. USB always stays on, so a wrong Wi-Fi setting can be fixed over the cable.
 
 ## 🧩 How it works
 
