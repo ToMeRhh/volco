@@ -45,7 +45,9 @@ internal static class Program
     }
 
     // What Avalonia.Desktop's UsePlatformDetect picks on Windows, without referencing the Linux
-    // and macOS backends it also carries.
+    // and macOS backends it also carries. Rendering is Skia on the CPU: the GPU path needs ANGLE
+    // (av_libglesv2.dll, 5 MB), which the publish leaves out (Volco.Windows.csproj, DropAngle).
     private static AppBuilder UseWindowsBackends(AppBuilder builder) =>
-        builder.UseHarfBuzz().UseWin32().UseSkia();
+        builder.UseHarfBuzz().UseWin32().UseSkia()
+               .With(new Win32PlatformOptions { RenderingMode = [Win32RenderingMode.Software] });
 }
