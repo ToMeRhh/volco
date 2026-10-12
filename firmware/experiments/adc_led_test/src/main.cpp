@@ -4,7 +4,7 @@
 //   Sliders 0..4 on 33, 35, 32, 36, 34.
 //   Button 0 (pin 4)  toggles LED0 (pin 12, active low).
 //   Button 1 (pin 14) toggles LED1 (pin 21, active low).
-//   Button 2 (pin 5)  cycles the pair: off -> A (18) -> B (19) -> off (active high).
+//   Button 2 (pin 5)  cycles the pair: off -> A (18) -> B (19) -> off (active low).
 //
 // Serial commands (type the letter, then Enter if your monitor needs it):
 //   a  auto test: every LED state against all-off, averaged, 3 rounds
@@ -25,7 +25,7 @@ constexpr int NB = sizeof BUTTON_PINS;
 
 struct Led { uint8_t pin; bool activeLow; const char* name; };
 static const Led LEDS[] = {
-    {12, true, "LED0"}, {21, true, "LED1"}, {18, false, "PAIR-A"}, {19, false, "PAIR-B"}};
+    {12, true, "LED0"}, {21, true, "LED1"}, {18, true, "PAIR-A"}, {19, true, "PAIR-B"}};
 constexpr int NL = sizeof LEDS / sizeof LEDS[0];
 static bool ledOn[NL];
 
