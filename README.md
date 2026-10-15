@@ -73,7 +73,19 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 | 🔧 **Firmware from the app** | Volco carries its matching firmware and installs or updates it over USB |
 | 🔄 **Self-updating** | The app updates itself from GitHub Releases |
 
-<!-- TODO(Tomer): screenshots of the settings window and the volume OSD would go well here. -->
+## 🖼️ The app
+
+<table>
+<tr>
+<td width="50%" align="center"><a href="docs/images/app-sliders.png"><img src="docs/images/app-sliders.png" alt="Volco's Sliders page: two sliders on output devices, one on a game, one on Spotify, and one on all other apps"></a><br><sub><b>Sliders:</b> a device, an app, or everything else</sub></td>
+<td width="50%" align="center"><a href="docs/images/app-buttons.png"><img src="docs/images/app-buttons.png" alt="Volco's Buttons page: mute with a double press for Spotify play/pause, mute mic, and a speakers/headphones toggle with an LED pair"></a><br><sub><b>Buttons:</b> press, double press and hold, with LED feedback</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><a href="docs/images/app-hardware.png"><img src="docs/images/app-hardware.png" alt="Volco's Hardware page: connected over USB, the firmware version, and the controller's slider and button pins" width="50%"></a><br><sub><b>Hardware:</b> the connection, the firmware, and the layout stored on the controller</sub></td>
+</tr>
+</table>
+
+<!-- TODO(Tomer): a screenshot of the volume OSD would go well here. -->
 
 ## 🚀 Getting started
 
