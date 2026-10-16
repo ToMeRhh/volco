@@ -108,7 +108,7 @@ Four pages in a 200 px navigation column: **Sliders, Buttons, Connection, Genera
 - **Header:** title, description, "Add button".
 - **Presets** (buttons only; sliders are not affected):
   - With one preset, only an "Add preset" link and a one-line explanation are shown.
-  - With two or more, a segmented tab row shows the presets. The tab selects which preset you are **editing**; the preset **live** on the controller has a green dot. Next to the tabs: Add preset, Rename, Delete.
+  - With two or more, folder tabs show the presets, and the button cards sit inside the tab of the preset you are **editing**. Each preset has its own colour (by position, six tints per theme, `PresetFill{n}`/`PresetEdge{n}`): its tab is filled with it, and the edited tab's frame takes its fill and edge, so it is clear which preset the cards belong to. The preset **live** on the controller has a green dot. Next to the tabs: Add preset; at the top of the tab: the live line (or Make live), Rename, Delete.
   - A banner under the tabs says either "*Default* is live on the controller" or "You are editing *Gaming*. The controller is using *Default*. [Make Gaming live]".
   - The app always starts on the first preset.
   - Only actions are per preset. Timing and position are shared by every preset. Dragging a button card moves its actions in every preset; Reset clears them in every preset.

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.Controls;
@@ -458,6 +459,70 @@ public class ButtonsPageTests
         Assert.Equal("gaming", rig.Runtime.ActivePresetId);
         Assert.Equal("gaming", buttons.LivePresetId);
         Assert.True(buttons.Presets.Single(p => p.Id == "gaming").IsLive);
+    }
+
+    private static Color Brush(Control control, string key)
+    {
+        Assert.True(control.TryFindResource(key, control.ActualThemeVariant, out var value), $"{key} missing");
+        return Assert.IsAssignableFrom<ISolidColorBrush>(value).Color;
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_TheCardsSitInTheEditedPresetsTab_InThatPresetsColour()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        });
+        using var _ = rig; using var __ = vm;
+        var body = page.FindControl<Border>("PresetBody")!;
+        var tabs = All<RadioButton>(page, "PresetTab");
+
+        // The cards are inside the frame, and each tab has its own colour.
+        Assert.True(Card(page, 0).GetVisualAncestors().Contains(body));
+        Assert.True(body.Classes.Contains("framed"));
+        Assert.Equal(new[] { 0, 1, 2 }, tabs.Select(PresetTint.GetIndex));
+        var fills = tabs.Select(t => Brush(t, PresetTint.FillKey)).ToList();
+        Assert.Equal(3, fills.Distinct().Count());
+        Assert.Equal(fills[0], Assert.IsAssignableFrom<ISolidColorBrush>(body.Background).Color);
+
+        vm.Buttons.Presets[2].SelectCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(fills[2], Assert.IsAssignableFrom<ISolidColorBrush>(body.Background).Color);
+        Assert.Equal(Brush(tabs[2], PresetTint.EdgeKey), Assert.IsAssignableFrom<ISolidColorBrush>(body.BorderBrush).Color);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_OnePreset_DrawsNoFrame()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        var body = page.FindControl<Border>("PresetBody")!;
+
+        Assert.False(body.Classes.Contains("framed"));
+        Assert.Null(body.Background);
+        Assert.False(page.FindControl<Grid>("Banner")!.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_DeletingAPreset_MovesTheColoursOfThePresetsAfterIt()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        });
+        using var _ = rig; using var __ = vm;
+        var buttons = vm.Buttons;
+        buttons.Presets[1].SelectCommand.Execute(null);
+        buttons.DeletePresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { 0, 1 }, buttons.Presets.Select(p => p.TintIndex));
+        buttons.Presets[1].SelectCommand.Execute(null);
+        Assert.Equal(1, buttons.EditingTintIndex);
     }
 
     [AvaloniaFact]

@@ -46,7 +46,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
     /// <summary>The preset whose actions the cards show and edit.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEditingLive), nameof(EditingName), nameof(BannerText), nameof(MakeLiveText))]
+    [NotifyPropertyChangedFor(nameof(IsEditingLive), nameof(EditingName), nameof(BannerText), nameof(MakeLiveText),
+                              nameof(EditingTintIndex))]
     private string _editingPresetId;
 
     /// <summary>The preset the controller is using (from the runtime).</summary>
@@ -67,7 +68,10 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     public string EditingName => PresetName(EditingPresetId) ?? "";
     public string LiveName => PresetName(LivePresetId) ?? "";
 
-    /// <summary>The line under the preset tabs.</summary>
+    /// <summary>The edited preset's colour (its tab's), which frames the button cards.</summary>
+    public int EditingTintIndex => Math.Max(0, _config.Config.Presets.FindIndex(p => p.Id == EditingPresetId));
+
+    /// <summary>The line at the top of the edited preset's tab.</summary>
     public string BannerText => IsEditingLive
         ? $"{EditingName} is live on the controller."
         : $"You are editing {EditingName}. The controller is using {LiveName}.";
@@ -157,9 +161,12 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     private void RebuildPresetTabs()
     {
         Presets.Clear();
-        foreach (var p in _config.Config.Presets)
-            Presets.Add(new PresetTabViewModel(p.Id, p.Name, tab => EditingPresetId = tab.Id));
+        var presets = _config.Config.Presets;
+        for (int i = 0; i < presets.Count; i++)
+            Presets.Add(new PresetTabViewModel(presets[i].Id, presets[i].Name, i, tab => EditingPresetId = tab.Id));
         HasMultiplePresets = Presets.Count > 1;
+        // A delete or undo moves the presets after it, and their colours with them.
+        OnPropertyChanged(nameof(EditingTintIndex));
         UpdateTabFlags();
     }
 
