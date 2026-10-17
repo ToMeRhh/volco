@@ -73,6 +73,28 @@ public class ProgramOpenerTests
     }
 
     [Fact]
+    public void SchemeUrl_IsUntracked()
+    {
+        Assert.Equal(ProgramState.Untracked, _opener.State(Cmd("ms-settings:sound")));
+        Assert.Equal(ProgramState.Untracked, _opener.State(Cmd(@"shell:AppsFolder\Doom.exe")));
+    }
+
+    [Fact]
+    public void QuotedSavedPath_IsTracked_AndStartsUnquoted()
+    {
+        var cmd = Cmd("\"" + Game + "\"");
+        Assert.True(ProgramOpener.IsTrackable(cmd));
+        Assert.Equal(Game, _opener.TrackedPath(cmd));
+
+        _opener.Open(cmd);
+        Assert.Equal(Game, Assert.Single(_launcher.Started).Path);
+
+        _launcher.SetRunning(Game, true);
+        _opener.Open(cmd);
+        Assert.Equal(new[] { Game }, _launcher.Fronted);
+    }
+
+    [Fact]
     public void Document_IsUntracked()
         => Assert.Equal(ProgramState.Untracked, _opener.State(Cmd(@"C:\notes\todo.txt")));
 

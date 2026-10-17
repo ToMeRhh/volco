@@ -83,8 +83,8 @@ public sealed class ScriptRunner : IDisposable
     public void Run(ButtonActionConfig action, IReadOnlyDictionary<string, string> environment)
     {
         if (Volatile.Read(ref _disposed) != 0) return;
-        var command = action.Command ?? new CommandConfig();
-        var path = command.Path.Trim();
+        var command = CommandPath.Unquoted(action.Command ?? new CommandConfig());
+        var path = command.Path;
         var name = path.Length == 0 ? "(no script chosen)" : path;
         var state = _states.GetValue(action, _ => new RunState());
         lock (state)

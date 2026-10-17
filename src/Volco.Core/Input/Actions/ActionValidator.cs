@@ -84,21 +84,15 @@ public static partial class ActionValidator
         else if (ctx.DeviceFlow(device!) == AudioFlow.Capture) problems[key] = "Choose an output device.";
     }
 
-    private static string Unquote(string text)
-    {
-        text = text.Trim();
-        if (text.Length >= 2 && text[0] == '"' && text[^1] == '"') text = text[1..^1].Trim();
-        return text;
-    }
-
     private static void CheckCommand(ButtonActionConfig action, ActionValidationContext ctx,
                                      Dictionary<string, string> problems)
     {
         var isScript = action.Action == ButtonActionType.RunScript;
-        var path = Unquote(action.Command?.Path ?? "");
+        var path = CommandPath.Unquote(action.Command?.Path);
         if (path.Length == 0)
             problems[Path] = isScript ? "Choose the script to run." : "Choose the program to open.";
-        else if (!CommandPath.IsUrl(path))
+        // Open a program also takes a URL or shell target (ms-settings:sound); a script needs a file.
+        else if (isScript || !CommandPath.IsUrl(path))
         {
             if (!FullPath().IsMatch(path))
                 problems[Path] = "Enter the full path, starting with a drive letter, e.g. C:\\…";
@@ -110,7 +104,7 @@ public static partial class ActionValidator
                 problems[Path] = "This file doesn’t exist.";
         }
 
-        var directory = Unquote(action.Command?.WorkingDirectory ?? "");
+        var directory = CommandPath.Unquote(action.Command?.WorkingDirectory);
         if (directory.Length > 0 && !FullPath().IsMatch(directory))
             problems[WorkingDirectory] = "Enter the folder’s full path, or leave it empty.";
     }

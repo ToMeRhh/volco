@@ -39,6 +39,20 @@ public class ScriptRunnerTests
     }
 
     [Fact]
+    public void QuotedSavedPath_Runs()
+    {
+        var action = Action(path: "\"" + Script + "\"");
+        action.Command!.WorkingDirectory = "\"C:\\work\"";
+        _runner.Run(action, Env);
+
+        var (spec, _) = Assert.Single(_starter.Runs);
+        Assert.Equal(@"C:\Windows\System32\cmd.exe", spec.FileName);
+        Assert.Equal("/d /s /c \"\"" + Script + "\"\"", spec.Arguments);
+        Assert.Equal(@"C:\work", spec.WorkingDirectory);
+        Assert.True(_runner.Status(action).Running);
+    }
+
+    [Fact]
     public void Ignore_DropsPressesWhileItRuns()
     {
         var action = Action();

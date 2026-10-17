@@ -47,7 +47,7 @@ public sealed class ProgramOpener
     /// state can be known (without reading the shortcut).</summary>
     public static bool IsTrackable(CommandConfig? command)
     {
-        var path = command?.Path.Trim() ?? "";
+        var path = CommandPath.Unquote(command?.Path);
         return path.Length > 0 && !CommandPath.IsUrl(path) && CommandPath.Extension(path) is ".exe" or ".lnk";
     }
 
@@ -55,7 +55,7 @@ public sealed class ProgramOpener
     /// shortcut's target when that is an exe, else null (URLs, documents).</summary>
     public string? TrackedPath(CommandConfig? command)
     {
-        var path = command?.Path.Trim() ?? "";
+        var path = CommandPath.Unquote(command?.Path);
         if (path.Length == 0 || CommandPath.IsUrl(path)) return null;
         var ext = CommandPath.Extension(path);
         if (ext == ".exe") return path;
@@ -80,7 +80,8 @@ public sealed class ProgramOpener
     /// is not a failure).</summary>
     public bool Open(CommandConfig command)
     {
-        var path = command.Path.Trim();
+        command = CommandPath.Unquoted(command);
+        var path = command.Path;
         if (path.Length == 0)
         {
             AppLog.Info("Open a program: no program chosen");

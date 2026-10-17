@@ -94,6 +94,30 @@ public class ActionValidatorTests
     public void OpenProgram_Url()
         => Assert.Empty(ActionValidator.Validate(Script("steam://rungameid/570", ButtonActionType.OpenProgram), Ctx(fileExists: false)));
 
+    [Theory]
+    [InlineData("ms-settings:sound")]
+    [InlineData("shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App")]
+    [InlineData("spotify:")]
+    [InlineData("mailto:me@example.com")]
+    [InlineData("\"ms-settings:sound\"")]
+    public void OpenProgram_SchemeUrl_IsValid(string path)
+        => Assert.Empty(ActionValidator.Validate(Script(path, ButtonActionType.OpenProgram), Ctx(fileExists: false)));
+
+    [Fact]
+    public void OpenProgram_DriveLetter_IsAPath()
+        => AssertOnly(ActionValidator.Validate(Script("C:\\x.exe", ButtonActionType.OpenProgram), Ctx(fileExists: false)),
+            "path", "This file doesn’t exist.");
+
+    [Theory]
+    [InlineData("ms-settings:sound")]
+    [InlineData("steam://rungameid/570")]
+    public void RunScript_Url_IsInvalid(string path)
+        => AssertOnly(ActionValidator.Validate(Script(path), Ctx()), "path", FullPathMessage);
+
+    [Fact]
+    public void QuotedPath_IsValid()
+        => Assert.Empty(ActionValidator.Validate(Script("\"C:\\Scripts\\lights.bat\""), Ctx()));
+
     [Fact]
     public void UncPath()
         => Assert.Empty(ActionValidator.Validate(Script("\\\\nas\\share\\a.bat"), Ctx()));
