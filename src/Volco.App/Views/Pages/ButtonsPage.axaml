@@ -98,17 +98,15 @@
                 <TextBlock Name="BannerText" Classes="Secondary" TextWrapping="Wrap"
                            VerticalAlignment="Center" Text="{Binding BannerText}"/>
               </DockPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Name="MakeLiveButton"
-                        Content="{Binding MakeLiveText}" Command="{Binding MakeLiveCommand}"
-                        IsVisible="{Binding !IsEditingLive}"/>
-                <Button Name="RenamePresetButton" Classes="Ghost" Content="Rename"
-                        Command="{Binding StartRenameCommand}" IsVisible="{Binding !IsRenaming}"/>
-                <TextBox Name="PresetNameBox" Width="180" IsVisible="{Binding IsRenaming}"
-                         Text="{Binding RenameText, Mode=TwoWay}"/>
-                <Button Name="DeletePresetButton" Classes="Ghost Danger" Content="Delete"
-                        Command="{Binding DeletePresetCommand}"/>
-              </StackPanel>
+              <Button Name="MakeLiveButton" Margin="0,0,8,0"
+                      Content="{Binding MakeLiveText}" Command="{Binding MakeLiveCommand}"
+                      IsVisible="{Binding !IsEditingLive}"/>
+              <Button Name="RenamePresetButton" Classes="Ghost" Margin="0,0,8,0" Content="Rename"
+                      Command="{Binding StartRenameCommand}" IsVisible="{Binding !IsRenaming}"/>
+              <TextBox Name="PresetNameBox" Width="180" Margin="0,0,8,0" IsVisible="{Binding IsRenaming}"
+                       Text="{Binding RenameText, Mode=TwoWay}"/>
+              <Button Name="DeletePresetButton" Classes="Ghost Danger" Content="Delete"
+                      Command="{Binding DeletePresetCommand}"/>
             </WrapPanel>
 
             <!-- Button cards -->

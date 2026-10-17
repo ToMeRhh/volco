@@ -285,10 +285,13 @@ public class SettingsWindowTests
         {
             if (!child.IsVisible || child.Bounds.Width <= 0) continue;
             var topLeft = child.TranslatePoint(new Point(0, 0), page);
+            // A scroll bar's parts sit over the page's edge by design.
+            if (child is Avalonia.Controls.Primitives.ScrollBar) continue;
             if (topLeft is { } p && p.X + child.Bounds.Width > page.Bounds.Width + 0.5)
                 problems.Add($"{pageName}: {Describe(child)} ends at {p.X + child.Bounds.Width:F0}, page is {page.Bounds.Width:F0} wide");
+            // Squeezed: four or more lines in a column under 200 px.
             if (child is TextBlock { TextWrapping: Avalonia.Media.TextWrapping.Wrap } text
-                && (text.Text?.Length ?? 0) >= 12 && text.Bounds.Width < 120)
+                && text.Bounds.Height >= 4 * text.FontSize * 1.2 && text.Bounds.Width < 200)
                 problems.Add($"{pageName}: {Describe(child)} \"{text.Text}\" is squeezed to {text.Bounds.Width:F0} wide");
             if (child is TextBox or ComboBox or NumericUpDown or AutoCompleteBox) continue;
             Collect(page, child, pageName, problems);

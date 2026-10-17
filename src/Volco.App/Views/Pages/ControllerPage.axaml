@@ -47,9 +47,10 @@
                         IsVisible="{Binding Connection.IsUserDisconnected}"/>
               </StackPanel>
             </Grid>
-            <Grid ColumnDefinitions="150,*">
-              <TextBlock Text="Connect using" Classes="Secondary" VerticalAlignment="Center"/>
-              <Border Grid.Column="1" Classes="SegmentTrack" HorizontalAlignment="Left">
+            <!-- A wrap: in the narrowest window the choice goes under its label. -->
+            <WrapPanel>
+              <TextBlock Text="Connect using" Classes="Secondary" Width="150" Margin="0,4" VerticalAlignment="Center"/>
+              <Border Classes="SegmentTrack" HorizontalAlignment="Left">
                 <StackPanel Orientation="Horizontal" Spacing="2">
                   <RadioButton Name="SerialOption" Classes="Segment" Content="USB cable"
                                IsChecked="{Binding Connection.IsSerial, Mode=TwoWay}"/>
@@ -59,7 +60,7 @@
                                IsChecked="{Binding Connection.IsWebSocket, Mode=TwoWay}"/>
                 </StackPanel>
               </Border>
-            </Grid>
+            </WrapPanel>
 
             <StackPanel Name="SerialSection" Spacing="12" IsVisible="{Binding Connection.IsSerial}">
               <Grid ColumnDefinitions="150,Auto,Auto">

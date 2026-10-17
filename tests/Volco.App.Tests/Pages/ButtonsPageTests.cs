@@ -480,8 +480,8 @@ public class ButtonsPageTests
         var tabs = All<RadioButton>(page, "PresetTab");
 
         // The cards are inside the frame, and each tab has its own colour.
-        Assert.True(Card(page, 0).GetVisualAncestors().Contains(body));
-        Assert.True(body.Classes.Contains("framed"));
+        Assert.Contains(body, Card(page, 0).GetVisualAncestors());
+        Assert.Contains("framed", body.Classes);
         Assert.Equal(new[] { 0, 1, 2 }, tabs.Select(PresetTint.GetIndex));
         var fills = tabs.Select(t => Brush(t, PresetTint.FillKey)).ToList();
         Assert.Equal(3, fills.Distinct().Count());
@@ -517,7 +517,7 @@ public class ButtonsPageTests
         using var _ = rig; using var __ = vm;
         var body = page.FindControl<Border>("PresetBody")!;
 
-        Assert.False(body.Classes.Contains("framed"));
+        Assert.DoesNotContain("framed", body.Classes);
         Assert.Null(body.Background);
         Assert.False(page.FindControl<WrapPanel>("Banner")!.IsVisible);
     }
