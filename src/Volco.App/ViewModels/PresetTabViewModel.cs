@@ -10,6 +10,9 @@ public sealed partial class PresetTabViewModel : ObservableObject
 
     public string Id { get; }
 
+    /// <summary>The preset's colour: its position in the list (<see cref="Controls.PresetTint"/>).</summary>
+    public int TintIndex { get; }
+
     [ObservableProperty]
     private string _name;
 
@@ -21,9 +24,10 @@ public sealed partial class PresetTabViewModel : ObservableObject
     [ObservableProperty]
     private bool _isLive;
 
-    internal PresetTabViewModel(string id, string name, Action<PresetTabViewModel> select)
+    internal PresetTabViewModel(string id, string name, int tintIndex, Action<PresetTabViewModel> select)
     {
         Id = id;
+        TintIndex = tintIndex;
         _name = name;
         _select = select;
     }

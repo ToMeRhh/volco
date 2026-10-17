@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
@@ -19,12 +20,13 @@ namespace Volco.App.Tests.Shell;
 
 public class SettingsWindowTests
 {
-    private static SettingsWindow Create()
+    private static SettingsWindow Create(Action<AppConfig>? configure = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var config = new ConfigManager(Path.Combine(dir, "config.json"));
         config.Load();
+        configure?.Invoke(config.Config);
         var runtime = new VolcoRuntime(config, new FakeAudioEngine(), audioReady: true);
         var vm = new SettingsViewModel(config, runtime.Audio, runtime, new AvaloniaUiDispatcher());
         return new SettingsWindow(vm, runtime);
@@ -228,11 +230,76 @@ public class SettingsWindowTests
     public void SettingsWindow_Size()
     {
         var window = Create();
-        Assert.Equal(680, window.MinWidth);
+        Assert.Equal(820, window.MinWidth);
         Assert.Equal(520, window.MinHeight);
         Assert.Equal(860, window.Width);
         Assert.Equal(660, window.Height);
     }
+
+    /// <summary>
+    /// At the smallest window size every page still fits: nothing reaches past the page's right
+    /// edge, and no wrapping text is squeezed into a narrow column (a letter or word per line).
+    /// The Buttons page is the widest: two presets, every card open, a program action (path box
+    /// and Browse) on one and a toggle on another.
+    /// </summary>
+    [AvaloniaFact]
+    public void SettingsWindow_AtItsMinimumSize_EveryPageFits()
+    {
+        var window = Create(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "A preset with a rather long name" });
+            c.Buttons[0].Default().SinglePress.Action = ButtonActionType.OpenProgram;
+            c.Buttons[0].Default().SinglePress.Command = new CommandConfig { Path = @"C:\Program Files\Some App\app.exe" };
+            c.Buttons[1].Default().SinglePress.Action = ButtonActionType.ToggleOutputDevice;
+        });
+        window.Width = window.MinWidth;
+        window.Height = window.MinHeight;
+        window.Show();
+        var nav = window.FindControl<ListBox>("NavList")!;
+        var host = window.FindControl<ContentControl>("PageHost")!;
+        var problems = new List<string>();
+
+        for (int i = 0; i < nav.ItemCount; i++)
+        {
+            nav.SelectedIndex = i;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            if (host.Content is ButtonsPage buttons && buttons.DataContext is ButtonsViewModel bvm)
+            {
+                bvm.EditingPresetId = "gaming"; // not live: the Make live button shows too
+                foreach (var item in bvm.Items) item.IsExpanded = true;
+            }
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var page = (Control)host.Content!;
+            Collect(page, page, page.GetType().Name, problems);
+        }
+
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>Walks the page's visible controls, not into the inside of input controls (a text
+    /// box's text may scroll past its edge).</summary>
+    private static void Collect(Control page, Control control, string pageName, List<string> problems)
+    {
+        foreach (var child in control.GetVisualChildren().OfType<Control>())
+        {
+            if (!child.IsVisible || child.Bounds.Width <= 0) continue;
+            var topLeft = child.TranslatePoint(new Point(0, 0), page);
+            // A scroll bar's parts sit over the page's edge by design.
+            if (child is Avalonia.Controls.Primitives.ScrollBar) continue;
+            if (topLeft is { } p && p.X + child.Bounds.Width > page.Bounds.Width + 0.5)
+                problems.Add($"{pageName}: {Describe(child)} ends at {p.X + child.Bounds.Width:F0}, page is {page.Bounds.Width:F0} wide");
+            // Squeezed: four or more lines in a column under 200 px.
+            if (child is TextBlock { TextWrapping: Avalonia.Media.TextWrapping.Wrap } text
+                && text.Bounds.Height >= 4 * text.FontSize * 1.2 && text.Bounds.Width < 200)
+                problems.Add($"{pageName}: {Describe(child)} \"{text.Text}\" is squeezed to {text.Bounds.Width:F0} wide");
+            if (child is TextBox or ComboBox or NumericUpDown or AutoCompleteBox) continue;
+            Collect(page, child, pageName, problems);
+        }
+    }
+
+    private static string Describe(Control c)
+        => c.Name is { Length: > 0 } name ? $"{c.GetType().Name} {name}" : c.GetType().Name;
 
     [Theory]
     [InlineData(WindowCloseReason.WindowClosing, false, false, true)]

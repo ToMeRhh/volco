@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.Controls;
@@ -458,6 +459,110 @@ public class ButtonsPageTests
         Assert.Equal("gaming", rig.Runtime.ActivePresetId);
         Assert.Equal("gaming", buttons.LivePresetId);
         Assert.True(buttons.Presets.Single(p => p.Id == "gaming").IsLive);
+    }
+
+    private static Color Brush(Control control, string key)
+    {
+        Assert.True(control.TryFindResource(key, control.ActualThemeVariant, out var value), $"{key} missing");
+        return Assert.IsAssignableFrom<ISolidColorBrush>(value).Color;
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_TheCardsSitInTheEditedPresetsTab_InThatPresetsColour()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        });
+        using var _ = rig; using var __ = vm;
+        var body = page.FindControl<Border>("PresetBody")!;
+        var tabs = All<RadioButton>(page, "PresetTab");
+
+        // The cards are inside the frame, and each tab has its own colour.
+        Assert.Contains(body, Card(page, 0).GetVisualAncestors());
+        Assert.Contains("framed", body.Classes);
+        Assert.Equal(new[] { 0, 1, 2 }, tabs.Select(PresetTint.GetIndex));
+        var fills = tabs.Select(t => Brush(t, PresetTint.FillKey)).ToList();
+        Assert.Equal(3, fills.Distinct().Count());
+        Assert.Equal(fills[0], Assert.IsAssignableFrom<ISolidColorBrush>(body.Background).Color);
+
+        vm.Buttons.Presets[2].SelectCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(fills[2], Assert.IsAssignableFrom<ISolidColorBrush>(body.Background).Color);
+        Assert.Equal(Brush(tabs[2], PresetTint.EdgeKey), Assert.IsAssignableFrom<ISolidColorBrush>(body.BorderBrush).Color);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_ManyPresets_TheTabsWrapOntoMoreLines()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            for (int i = 2; i <= 12; i++) c.Presets.Add(new PresetConfig { Id = $"p{i}", Name = $"Preset number {i}" });
+        });
+        using var _ = rig; using var __ = vm;
+        var strip = page.FindControl<Grid>("PresetTabStrip")!;
+        var tabs = All<RadioButton>(page, "PresetTab");
+
+        Assert.Equal(12, tabs.Count);
+        Assert.True(tabs.Select(t => t.TranslatePoint(new Point(0, 0), strip)!.Value.Y).Distinct().Count() > 1);
+        Assert.All(tabs, t => Assert.True(t.TranslatePoint(new Point(t.Bounds.Width, 0), strip)!.Value.X <= strip.Bounds.Width + 0.5));
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_OnePreset_DrawsNoFrame()
+    {
+        var (page, rig, vm) = Show();
+        using var _ = rig; using var __ = vm;
+        var body = page.FindControl<Border>("PresetBody")!;
+
+        Assert.DoesNotContain("framed", body.Classes);
+        Assert.Null(body.Background);
+        Assert.False(page.FindControl<WrapPanel>("Banner")!.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_DeletingAPreset_MovesTheColoursOfThePresetsAfterIt()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        });
+        using var _ = rig; using var __ = vm;
+        var buttons = vm.Buttons;
+        buttons.Presets[1].SelectCommand.Execute(null);
+        buttons.DeletePresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { 0, 1 }, buttons.Presets.Select(p => p.TintIndex));
+        buttons.Presets[1].SelectCommand.Execute(null);
+        Assert.Equal(1, buttons.EditingTintIndex);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_DeletingAPreset_EditsThePresetBeforeIt()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        });
+        using var _ = rig; using var __ = vm;
+        var buttons = vm.Buttons;
+
+        buttons.EditingPresetId = "work";
+        buttons.DeletePresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("gaming", buttons.EditingPresetId);
+        Assert.True(buttons.Presets.Single(p => p.Id == "gaming").IsEditing);
+
+        // The first has none before it: the new first is edited.
+        buttons.EditingPresetId = AppConfig.DefaultPresetId;
+        buttons.DeletePresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("gaming", buttons.EditingPresetId);
     }
 
     [AvaloniaFact]

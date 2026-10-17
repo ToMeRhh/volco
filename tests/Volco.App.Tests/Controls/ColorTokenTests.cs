@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Styling;
+using Volco.App.Controls;
 using Xunit;
 
 namespace Volco.App.Tests.Controls;
@@ -91,6 +92,29 @@ public class ColorTokenTests
         {
             var ratio = Contrast(Token(foreground, theme), Token(background, theme));
             Assert.True(ratio >= minimum, $"{foreground} on {background} ({theme}) is {ratio:F2}:1, needs {minimum}:1");
+        }
+    }
+
+    /// <summary>The preset tints (Buttons page): every text token reads on each fill, at 4.5:1
+    /// (7:1 in high contrast), and each edge stands out from the page and from its fill at 3:1.</summary>
+    [AvaloniaFact]
+    public void PresetTints_MeetTheirContrastTargets_InEveryTheme()
+    {
+        foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark, VolcoThemes.HighContrastDark, VolcoThemes.HighContrastLight })
+        {
+            var text = theme == ThemeVariant.Light || theme == ThemeVariant.Dark ? 4.5 : 7.0;
+            for (int i = 0; i < PresetTint.Count; i++)
+            {
+                var fill = Token($"PresetFill{i}Color", theme);
+                var edge = Token($"PresetEdge{i}Color", theme);
+                foreach (var key in new[] { "TextColor", "TextSecondaryColor", "TextTertiaryColor" })
+                {
+                    var ratio = Contrast(Token(key, theme), fill);
+                    Assert.True(ratio >= text, $"{key} on PresetFill{i} ({theme}) is {ratio:F2}:1, needs {text}:1");
+                }
+                Assert.True(Contrast(edge, Token("BgColor", theme)) >= 3.0, $"PresetEdge{i} on Bg ({theme})");
+                Assert.True(Contrast(edge, fill) >= 3.0, $"PresetEdge{i} on PresetFill{i} ({theme})");
+            }
         }
     }
 

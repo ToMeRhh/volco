@@ -25,6 +25,18 @@
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
       <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
       <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+      <SolidColorBrush x:Key="PresetFill0Brush" Color="{DynamicResource PresetFill0Color}"/>
+      <SolidColorBrush x:Key="PresetEdge0Brush" Color="{DynamicResource PresetEdge0Color}"/>
+      <SolidColorBrush x:Key="PresetFill1Brush" Color="{DynamicResource PresetFill1Color}"/>
+      <SolidColorBrush x:Key="PresetEdge1Brush" Color="{DynamicResource PresetEdge1Color}"/>
+      <SolidColorBrush x:Key="PresetFill2Brush" Color="{DynamicResource PresetFill2Color}"/>
+      <SolidColorBrush x:Key="PresetEdge2Brush" Color="{DynamicResource PresetEdge2Color}"/>
+      <SolidColorBrush x:Key="PresetFill3Brush" Color="{DynamicResource PresetFill3Color}"/>
+      <SolidColorBrush x:Key="PresetEdge3Brush" Color="{DynamicResource PresetEdge3Color}"/>
+      <SolidColorBrush x:Key="PresetFill4Brush" Color="{DynamicResource PresetFill4Color}"/>
+      <SolidColorBrush x:Key="PresetEdge4Brush" Color="{DynamicResource PresetEdge4Color}"/>
+      <SolidColorBrush x:Key="PresetFill5Brush" Color="{DynamicResource PresetFill5Color}"/>
+      <SolidColorBrush x:Key="PresetEdge5Brush" Color="{DynamicResource PresetEdge5Color}"/>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}"/>
@@ -45,6 +57,18 @@
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
       <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
       <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+      <SolidColorBrush x:Key="PresetFill0Brush" Color="{DynamicResource PresetFill0Color}"/>
+      <SolidColorBrush x:Key="PresetEdge0Brush" Color="{DynamicResource PresetEdge0Color}"/>
+      <SolidColorBrush x:Key="PresetFill1Brush" Color="{DynamicResource PresetFill1Color}"/>
+      <SolidColorBrush x:Key="PresetEdge1Brush" Color="{DynamicResource PresetEdge1Color}"/>
+      <SolidColorBrush x:Key="PresetFill2Brush" Color="{DynamicResource PresetFill2Color}"/>
+      <SolidColorBrush x:Key="PresetEdge2Brush" Color="{DynamicResource PresetEdge2Color}"/>
+      <SolidColorBrush x:Key="PresetFill3Brush" Color="{DynamicResource PresetFill3Color}"/>
+      <SolidColorBrush x:Key="PresetEdge3Brush" Color="{DynamicResource PresetEdge3Color}"/>
+      <SolidColorBrush x:Key="PresetFill4Brush" Color="{DynamicResource PresetFill4Color}"/>
+      <SolidColorBrush x:Key="PresetEdge4Brush" Color="{DynamicResource PresetEdge4Color}"/>
+      <SolidColorBrush x:Key="PresetFill5Brush" Color="{DynamicResource PresetFill5Color}"/>
+      <SolidColorBrush x:Key="PresetEdge5Brush" Color="{DynamicResource PresetEdge5Color}"/>
     </ResourceDictionary>
     <ResourceDictionary x:Key="{x:Static app:VolcoThemes.HighContrastDark}">
       <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}"/>
@@ -65,6 +89,18 @@
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
       <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
       <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+      <SolidColorBrush x:Key="PresetFill0Brush" Color="{DynamicResource PresetFill0Color}"/>
+      <SolidColorBrush x:Key="PresetEdge0Brush" Color="{DynamicResource PresetEdge0Color}"/>
+      <SolidColorBrush x:Key="PresetFill1Brush" Color="{DynamicResource PresetFill1Color}"/>
+      <SolidColorBrush x:Key="PresetEdge1Brush" Color="{DynamicResource PresetEdge1Color}"/>
+      <SolidColorBrush x:Key="PresetFill2Brush" Color="{DynamicResource PresetFill2Color}"/>
+      <SolidColorBrush x:Key="PresetEdge2Brush" Color="{DynamicResource PresetEdge2Color}"/>
+      <SolidColorBrush x:Key="PresetFill3Brush" Color="{DynamicResource PresetFill3Color}"/>
+      <SolidColorBrush x:Key="PresetEdge3Brush" Color="{DynamicResource PresetEdge3Color}"/>
+      <SolidColorBrush x:Key="PresetFill4Brush" Color="{DynamicResource PresetFill4Color}"/>
+      <SolidColorBrush x:Key="PresetEdge4Brush" Color="{DynamicResource PresetEdge4Color}"/>
+      <SolidColorBrush x:Key="PresetFill5Brush" Color="{DynamicResource PresetFill5Color}"/>
+      <SolidColorBrush x:Key="PresetEdge5Brush" Color="{DynamicResource PresetEdge5Color}"/>
     </ResourceDictionary>
     <ResourceDictionary x:Key="{x:Static app:VolcoThemes.HighContrastLight}">
       <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}"/>
@@ -85,6 +121,18 @@
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
       <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
       <SolidColorBrush x:Key="IconAccentBrush" Color="{DynamicResource IconAccentColor}"/>
+      <SolidColorBrush x:Key="PresetFill0Brush" Color="{DynamicResource PresetFill0Color}"/>
+      <SolidColorBrush x:Key="PresetEdge0Brush" Color="{DynamicResource PresetEdge0Color}"/>
+      <SolidColorBrush x:Key="PresetFill1Brush" Color="{DynamicResource PresetFill1Color}"/>
+      <SolidColorBrush x:Key="PresetEdge1Brush" Color="{DynamicResource PresetEdge1Color}"/>
+      <SolidColorBrush x:Key="PresetFill2Brush" Color="{DynamicResource PresetFill2Color}"/>
+      <SolidColorBrush x:Key="PresetEdge2Brush" Color="{DynamicResource PresetEdge2Color}"/>
+      <SolidColorBrush x:Key="PresetFill3Brush" Color="{DynamicResource PresetFill3Color}"/>
+      <SolidColorBrush x:Key="PresetEdge3Brush" Color="{DynamicResource PresetEdge3Color}"/>
+      <SolidColorBrush x:Key="PresetFill4Brush" Color="{DynamicResource PresetFill4Color}"/>
+      <SolidColorBrush x:Key="PresetEdge4Brush" Color="{DynamicResource PresetEdge4Color}"/>
+      <SolidColorBrush x:Key="PresetFill5Brush" Color="{DynamicResource PresetFill5Color}"/>
+      <SolidColorBrush x:Key="PresetEdge5Brush" Color="{DynamicResource PresetEdge5Color}"/>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
