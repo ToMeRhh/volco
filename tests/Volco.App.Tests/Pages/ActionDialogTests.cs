@@ -240,8 +240,9 @@ public class ActionDialogTests
         // A different action starts empty again.
         s.Dialog.Draft.Device = "Speakers";
         s.Dialog.Pick(ButtonActionType.SetOutputDevice);
+        Settle(s.Window);
         Assert.Null(s.Dialog.Draft.Config.Device);
-        Assert.Equal("", s.Dialog.Draft.Device);
+        Assert.Null(In<ComboBox>(s.View, "DeviceCombo").SelectedItem);
         Assert.Equal(ButtonActionType.None, s.Config.Buttons[0].Default().SinglePress.Action);   // nothing written yet
     }
 
