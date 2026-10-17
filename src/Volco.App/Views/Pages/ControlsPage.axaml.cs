@@ -22,7 +22,14 @@ public partial class ControlsPage : UserControl
         AvaloniaXamlLoader.Load(this);
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Bubble);
-        this.FindControl<Border>("DialogOverlay")!.PointerPressed += OnOverlayPressed;
+        var overlay = this.FindControl<Border>("DialogOverlay")!;
+        overlay.PointerPressed += OnOverlayPressed;
+        // Focus moves into an opened dialog, so Escape reaches the page.
+        overlay.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty && overlay.IsVisible)
+                this.FindControl<Button>("CloseDialogButton")!.Focus(NavigationMethod.Tab);
+        };
     }
 
     public ControlsPage(ControlsViewModel viewModel) : this()
