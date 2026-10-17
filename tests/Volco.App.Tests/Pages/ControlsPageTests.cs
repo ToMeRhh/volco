@@ -139,7 +139,7 @@ public class ControlsPageTests
         var wide = OpenWindow(rig, vm, 1100);
         wide.ShowPage("controls");
         Settle(wide);
-        Assert.False(wide.Classes.Contains("compact"));
+        Assert.DoesNotContain("compact", wide.Classes);
         Assert.Equal(168, wide.FindControl<Border>("Sidebar")!.Bounds.Width);
         Assert.All(Tiles<TextBlock>(wide).Where(t => t.Classes.Contains("NavLabel")), t => Assert.True(t.IsEffectivelyVisible));
         Assert.Equal(380, Inspector((ControlsPage)wide.CurrentPage!).Bounds.Width);
@@ -149,7 +149,7 @@ public class ControlsPageTests
         var narrow = OpenWindow(rig, vm2, 900);
         narrow.ShowPage("controls");
         Settle(narrow);
-        Assert.True(narrow.Classes.Contains("compact"));
+        Assert.Contains("compact", narrow.Classes);
         Assert.Equal(56, narrow.FindControl<Border>("Sidebar")!.Bounds.Width);
         var labels = Tiles<TextBlock>(narrow).Where(t => t.Classes.Contains("NavLabel")).ToList();
         Assert.Equal(3, labels.Count);
