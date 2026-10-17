@@ -105,6 +105,10 @@ public class ConnectionConfig
 public partial class SliderConfig
 {
     public int Index { get; set; }
+
+    /// <summary>The user's name for this slider; "" means unnamed.</summary>
+    public string Name { get; set; } = "";
+
     public SliderMappingType Type { get; set; } = SliderMappingType.Device;
     public List<string> Processes { get; set; } = new();
 
