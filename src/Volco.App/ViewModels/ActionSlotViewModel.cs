@@ -4,7 +4,6 @@ using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Input.Actions;
 using Volco.Core.Media;
-using Volco.Core.Programs;
 
 namespace Volco.App.ViewModels;
 
@@ -329,7 +328,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     partial void OnCommandPathChanged(string value)
     {
         if (_loading) return;
-        Command().Path = CommandPath.Unquote(value);   // "Copy as path" quotes it
+        Command().Path = Volco.Core.Programs.CommandPath.Unquote(value);   // "Copy as path" quotes it
         Edited();
     }
 
@@ -343,7 +342,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     partial void OnCommandWorkingDirectoryChanged(string value)
     {
         if (_loading) return;
-        Command().WorkingDirectory = CommandPath.Unquote(value);
+        Command().WorkingDirectory = Volco.Core.Programs.CommandPath.Unquote(value);
         Edited();
     }
 
