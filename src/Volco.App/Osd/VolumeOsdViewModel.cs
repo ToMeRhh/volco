@@ -53,9 +53,9 @@ internal sealed class VolumeOsdViewModel
             : (n.Kind is OsdKind.Mute or OsdKind.Device) && n.Muted
             ? "Muted"
             : $"{Math.Round(level, MidpointRounding.AwayFromZero):0}%";
-        // A preset switch has no level: the preset's name, "Preset" on the right, and no bar.
+        // A preset switch has no level: the preset's name, "Mode" on the right, and no bar.
         var label = n.Label;
-        if (n.Kind == OsdKind.Preset) valueText = "Preset";
+        if (n.Kind == OsdKind.Preset) valueText = "Mode";
 
         var deviceIcon = n.Kind is OsdKind.Device or OsdKind.Mute or OsdKind.Volume ? n.Icon : null;
         var glyph = n.Kind == OsdKind.Preset ? OsdGlyph.Preset

@@ -12,7 +12,7 @@ namespace Volco.App.Tests.Pages;
 
 /// <summary>
 /// Keyboard-only use. Tab walks the Controls page in reading order: each slider tile, the mode
-/// tabs and Add mode, each button tile, then the selected control's inspector.
+/// tabs, Rename and Add mode, each button tile, then the selected control's inspector.
 /// </summary>
 public class TabOrderTests
 {
@@ -47,10 +47,10 @@ public class TabOrderTests
             new[]
             {
                 "SliderTile", "SliderTile", "SliderTile", "SliderTile",
-                "ModeTab", "AddModeButton",
+                "ModeTab", "RenameModeButton", "AddModeButton",   // Delete is off with one mode
                 "ButtonTile", "ButtonTile", "ButtonTile",
                 "NameBox",
             },
-            TabSequence(window, first, 10));
+            TabSequence(window, first, 11));
     }
 }

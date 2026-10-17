@@ -152,6 +152,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         // A delete or undo moves the presets after it, and their colours with them.
         OnPropertyChanged(nameof(EditingTintIndex));
         UpdateTabFlags();
+        DeletePresetCommand.NotifyCanExecuteChanged();
     }
 
     private void UpdateTabFlags()
@@ -185,7 +186,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     {
         var presets = _config.Config.Presets;
         var id = NewPresetId();
-        var name = $"Preset {presets.Count + 1}";
+        var name = $"Mode {presets.Count + 1}";
         presets.Add(new PresetConfig { Id = id, Name = name });
         foreach (var button in Buttons)
             if (button.Actions.TryGetValue(EditingPresetId, out var source) && source is not null)
@@ -228,7 +229,9 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         Save();
     }
 
-    [RelayCommand]
+    private bool CanDeletePreset() => _config.Config.Presets.Count > 1;
+
+    [RelayCommand(CanExecute = nameof(CanDeletePreset))]
     private void DeletePreset()
     {
         var presets = _config.Config.Presets;
@@ -253,7 +256,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         LivePresetId = _presets.ActivePresetId;
         Save();
 
-        _toast.Show($"Preset “{preset.Name}” deleted", () =>
+        _toast.Show($"Mode “{preset.Name}” deleted", () =>
         {
             presets.Insert(Math.Min(index, presets.Count), preset);
             foreach (var (button, binding) in removedActions)
@@ -310,7 +313,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         Renumber();
         RefreshController();
         Save();
-        _toast.Show($"{item.Title} removed", () =>
+        _toast.Show($"{item.Heading} removed", () =>
         {
             Buttons.Add(cfg);
             Items.Add(item);

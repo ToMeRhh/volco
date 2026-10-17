@@ -34,18 +34,18 @@ public class ActionCatalogTests
     [Fact]
     public void Presets_OnOneLed_NextBlinks_GoToIsLitWhileLive()
     {
-        Assert.Equal("Dark; blinks when the preset changes. Follows the Press action.",
+        Assert.Equal("Dark; blinks when the mode changes. Follows the Press action.",
             ActionCatalog.LightDescription(Binding(Next), singleLed: true, Preset));
         Assert.Equal("On while Gaming is live. Follows the Press action.",
             ActionCatalog.LightDescription(Binding(GoToGaming), singleLed: true, Preset));
-        Assert.Equal("Shows the live preset: the first lights A, the second B. Follows the Press action.",
+        Assert.Equal("Shows the live mode: the first lights A, the second B. Follows the Press action.",
             ActionCatalog.LightDescription(Binding(Next), singleLed: false, Preset));
     }
 
     [Fact]
     public void OneLedWithAPresetActionOnHold_AlsoBlinks()
     {
-        Assert.Equal("On while muted. Follows the Press action. Blinks when Hold changes the preset.",
+        Assert.Equal("On while muted. Follows the Press action. Blinks when Hold changes the mode.",
             ActionCatalog.LightDescription(Binding(Mute, Next), singleLed: true, Preset));
         Assert.Equal("On while muted. Follows the Press action.",
             ActionCatalog.LightDescription(Binding(Mute, Next), singleLed: false, Preset));
@@ -54,11 +54,11 @@ public class ActionCatalogTests
     [Fact]
     public void Screen_SaysItFlashesThePresetWhenAnotherSlotChangesIt()
     {
-        Assert.Equal("Shows the Press action. Flashes the preset’s name when Hold changes the preset.",
+        Assert.Equal("Shows the Press action. Flashes the mode’s name when Hold changes the mode.",
             ActionCatalog.ScreenDescription(Binding(Mute, Next)));
         Assert.Equal("Shows the Press action.", ActionCatalog.ScreenDescription(Binding(Next, GoToGaming)));
         Assert.Equal("Shows the Press action.", ActionCatalog.ScreenDescription(Binding(Mute)));
-        Assert.Equal("Blank. None of this button’s actions is set in this preset.",
+        Assert.Equal("Blank. None of this button’s actions is set in this mode.",
             ActionCatalog.ScreenDescription(Binding(new ButtonActionConfig())));
     }
 
@@ -76,7 +76,7 @@ public class ActionCatalogTests
         var play = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause };
         Assert.Equal("Shows the Press action. Shows another action for a moment after you use it.",
             ActionCatalog.ScreenDescription(Binding(Mute, play)));
-        Assert.Equal("Shows the Press action. Flashes the preset’s name when Hold changes the preset.",
+        Assert.Equal("Shows the Press action. Flashes the mode’s name when Hold changes the mode.",
             ActionCatalog.ScreenDescription(Binding(play, Next)));
     }
 }

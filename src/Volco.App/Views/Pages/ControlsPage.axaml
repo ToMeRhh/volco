@@ -60,6 +60,12 @@
                       <Button Name="MakeLiveButton" Classes="ModeAction Live" Content="Make live"
                               Command="{Binding Buttons.MakeLiveCommand}" IsVisible="{Binding !Buttons.IsEditingLive}"
                               ToolTip.Tip="{Binding Buttons.MakeLiveText}"/>
+                      <Button Name="RenameModeButton" Classes="ModeAction" Content="Rename"
+                              Command="{Binding Buttons.StartRenameCommand}" IsVisible="{Binding !Buttons.IsRenaming}"/>
+                      <TextBox Name="ModeNameBox" Width="160" VerticalAlignment="Top" IsVisible="{Binding Buttons.IsRenaming}"
+                               Text="{Binding Buttons.RenameText, Mode=TwoWay}"/>
+                      <Button Name="DeleteModeButton" Classes="ModeAction" Content="Delete"
+                              Command="{Binding Buttons.DeletePresetCommand}"/>
                       <Button Name="AddModeButton" Classes="ModeAction" Command="{Binding Buttons.AddPresetCommand}"
                               ToolTip.Tip="Add a mode that starts as a copy of this one">
                         <StackPanel Orientation="Horizontal" Spacing="4">

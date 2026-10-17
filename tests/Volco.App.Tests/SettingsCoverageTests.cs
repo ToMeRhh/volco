@@ -300,6 +300,28 @@ public class SettingsCoverageTests
     }
 
     [AvaloniaFact]
+    public void Modes_AddRenameDelete()
+    {
+        using var rig = new TestRig(Engine());
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var page = new ControlsPage(vm.Controls);
+        Host(page);
+
+        Named<Button>(page, "AddModeButton").Command!.Execute(null);           // Presets[] (added)
+        Dispatcher.UIThread.RunJobs();
+        Named<TextBox>(page, "ModeNameBox").Text = "Gaming";
+        vm.Buttons.CommitRenameCommand.Execute(null);                          // Presets[].Name
+        Named<Button>(page, "RenameModeButton").Command!.Execute(null);
+        Named<TextBox>(page, "ModeNameBox").Text = "Play";
+        vm.Buttons.CommitRenameCommand.Execute(null);
+        Assert.Equal(new[] { "Default", "Play" }, SaveAndReload(rig).Presets.Select(p => p.Name));
+
+        vm.Buttons.EditingPresetId = AppConfig.DefaultPresetId;
+        Named<Button>(page, "DeleteModeButton").Command!.Execute(null);         // Presets[] (removed)
+        Assert.Equal(new[] { "Play" }, SaveAndReload(rig).Presets.Select(p => p.Name));
+    }
+
+    [AvaloniaFact]
     public void Devices_NicknameAndIcon()
     {
         using var rig = new TestRig(Engine());

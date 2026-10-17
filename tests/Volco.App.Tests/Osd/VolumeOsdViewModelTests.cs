@@ -215,7 +215,7 @@ public class VolumeOsdViewModelTests
         vm.Apply(new VolumeChangeNotification("Gaming", 0f, false, OsdKind.Preset));
 
         Assert.Equal("Gaming", vm.Label);
-        Assert.Equal("Preset", vm.ValueText);
+        Assert.Equal("Mode", vm.ValueText);
         Assert.Equal(OsdGlyph.Preset, vm.Glyph);
         Assert.False(vm.ShowsLevel);
     }
