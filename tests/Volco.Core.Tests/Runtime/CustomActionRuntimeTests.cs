@@ -32,14 +32,12 @@ public sealed class CustomActionRuntimeTests : IDisposable
     private readonly List<FakeControllerConnection> _connections = new();
     private readonly List<VolcoRuntime> _runtimes = new();
     private readonly string _dir;
-    private readonly string _script;
+    private const string _script = @"C:\Scripts\backup.bat";
 
     public CustomActionRuntimeTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), $"volco-custom-{Guid.NewGuid()}");
         Directory.CreateDirectory(_dir);
-        _script = Path.Combine(_dir, "backup.bat");
-        File.WriteAllText(_script, "@echo off\r\n");
         var speakers = new AudioDevice("spk", "Speakers", AudioFlow.Render, true);
         _engine.Devices = new List<AudioDevice> { speakers };
         _engine.DefaultRender = speakers;
