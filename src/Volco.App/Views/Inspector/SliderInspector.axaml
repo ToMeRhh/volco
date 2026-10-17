@@ -1,0 +1,117 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:pages="using:Volco.App.Views.Pages"
+             x:Class="Volco.App.Views.Inspector.SliderInspector"
+             x:DataType="vm:SliderItemViewModel">
+  <!-- The selected slider (spec §5.1): its name, what it controls, and its response. -->
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
+      <TextBlock Name="HeadingText" Classes="InspectorKind" Text="{Binding Heading}"/>
+      <TextBox Name="NameBox" Classes="NameField" Text="{Binding Name, Mode=TwoWay}"
+               PlaceholderText="{Binding TargetLabel}"/>
+    </StackPanel>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Classes="InspectorBody">
+        <Border Name="MissingPanel" Classes="InspectorRows" IsVisible="{Binding IsMissing}">
+          <Grid ColumnDefinitions="*,Auto" Classes="InspectorRow">
+            <TextBlock Classes="Secondary" Text="Not on this controller" VerticalAlignment="Center"/>
+            <Button Name="RemoveButton" Grid.Column="1" Classes="Danger" Content="Remove"
+                    Command="{Binding RemoveLastCommand}">
+              <Button.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                  <Binding Path="IsMissing"/>
+                  <Binding Path="IsLast"/>
+                </MultiBinding>
+              </Button.IsVisible>
+            </Button>
+          </Grid>
+        </Border>
+
+        <Border Classes="InspectorRows">
+          <Button Name="ControlsRow" Classes="InspectorRow"
+                  Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).OpenTargetCommand}"
+                  CommandParameter="{Binding}">
+            <Grid ColumnDefinitions="78,Auto,*,Auto">
+              <TextBlock Classes="RowLabel" Text="Controls"/>
+              <Border Grid.Column="1" Classes="RowIcon">
+                <PathIcon Data="{Binding TargetIconKey, Converter={x:Static conv:IconConverters.Resource}}"/>
+              </Border>
+              <TextBlock Name="TargetText" Grid.Column="2" Classes="RowValue" Classes.none="{Binding IsNotSetUp}"
+                         Text="{Binding TargetLabel}"/>
+              <PathIcon Grid.Column="3" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+            </Grid>
+          </Button>
+        </Border>
+
+        <!-- Response: today's per-slider settings, collapsed -->
+        <Border Name="ResponseSection" Classes="InspectorSection">
+          <StackPanel>
+            <ToggleButton Name="ResponseToggle" Classes="SectionHeader" IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
+              <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Text="Response" FontWeight="Medium"/>
+                <TextBlock Name="ResponseSummaryText" Grid.Column="1" Classes="Caption" Margin="0,0,8,0"
+                           VerticalAlignment="Center" Text="{Binding ResponseSummary}"/>
+                <PathIcon Grid.Column="2" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </ToggleButton>
+            <StackPanel Name="ResponseBody" Classes="SectionBody" IsVisible="{Binding IsAdvancedOpen}">
+              <ListBox Name="CurveList" Classes="Curves" SelectedIndex="{Binding CurveIndex, Mode=TwoWay}">
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <UniformGrid Columns="4"/>
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBoxItem ToolTip.Tip="Linear">
+                  <StackPanel Spacing="3">
+                    <Path Classes="CurveGraph" Data="M1,19 L19,1"/>
+                    <TextBlock Text="Linear"/>
+                  </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem ToolTip.Tip="Logarithmic">
+                  <StackPanel Spacing="3">
+                    <Path Classes="CurveGraph" Data="M1,19 C1,8 8,1 19,1"/>
+                    <TextBlock Text="Log"/>
+                  </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem ToolTip.Tip="Exponential">
+                  <StackPanel Spacing="3">
+                    <Path Classes="CurveGraph" Data="M1,19 C12,19 19,12 19,1"/>
+                    <TextBlock Text="Exp"/>
+                  </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem ToolTip.Tip="S-curve">
+                  <StackPanel Spacing="3">
+                    <Path Classes="CurveGraph" Data="M1,19 C10,19 10,1 19,1"/>
+                    <TextBlock Text="S-curve"/>
+                  </StackPanel>
+                </ListBoxItem>
+              </ListBox>
+              <Grid ColumnDefinitions="90,*,44">
+                <TextBlock Text="Dead zone" Classes="Secondary" VerticalAlignment="Center"/>
+                <Slider Name="DeadZoneSlider" Grid.Column="1" Minimum="0" Maximum="0.45"
+                        Value="{Binding DeadZonePercent, Mode=TwoWay}"/>
+                <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
+                           Text="{Binding DeadZonePercent, StringFormat={}{0:P0}}"/>
+              </Grid>
+              <Grid ColumnDefinitions="90,*,44">
+                <TextBlock Text="Smoothing" Classes="Secondary" VerticalAlignment="Center"/>
+                <Slider Name="SmoothingSlider" Grid.Column="1" Minimum="0" Maximum="0.95"
+                        Value="{Binding SmoothingFactor, Mode=TwoWay}"/>
+                <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
+                           Text="{Binding SmoothingFactor, StringFormat={}{0:P0}}"/>
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Reverse" Classes="Secondary" VerticalAlignment="Center"/>
+                <ToggleSwitch Name="InvertSwitch" Grid.Column="1" OnContent="" OffContent=""
+                              IsChecked="{Binding Invert, Mode=TwoWay}"/>
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

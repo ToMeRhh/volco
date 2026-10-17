@@ -4,6 +4,7 @@ using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Input;
+using Volco.Core.Input.Actions;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
@@ -25,7 +26,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     internal ButtonConfig Config { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title))]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(Heading))]
     private int _index;
 
     // A drag preview renumbers cards without moving their config: only what depends on the
@@ -45,6 +46,13 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     public string Title => $"Button {Index}";
 
+    /// <summary>The inspector's heading, numbered from 1.</summary>
+    public string Heading => $"Button {Index + 1}";
+
+    /// <summary>The Controls page's selected tile.</summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
     [ObservableProperty]
     private bool _isLast;
 
@@ -55,10 +63,15 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     // ── Timing (shared by every preset) ───────────────────────────────────────
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TimingSummary))]
     private int _longPressMs;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TimingSummary))]
     private int _doublePressWindowMs;
+
+    /// <summary>The inspector's Timing summary.</summary>
+    public string TimingSummary => $"{LongPressMs} ms · {DoublePressWindowMs} ms";
 
     // ── Derived display ───────────────────────────────────────────────────────
 
@@ -75,6 +88,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>Which gesture the main action is on; null when the edited preset has none.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LightRowText))]
     private PressType? _mainGesture;
 
     /// <summary>The edited preset's other actions, in Press, Double press, Hold order.</summary>
@@ -94,13 +108,39 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>What the controller reported for this input (spec §6.3); null before the first Hello.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLed), nameof(IsLedPair), nameof(IsScreen), nameof(IsIndicatorUnknown), nameof(IndicatorText), nameof(ShowLightDescription))]
+    [NotifyPropertyChangedFor(nameof(IsLed), nameof(IsLedPair), nameof(IsScreen), nameof(IsIndicatorUnknown), nameof(IndicatorText), nameof(ShowLightDescription),
+                              nameof(KindText), nameof(HasLightRow), nameof(LightRowLabel))]
     private IndicatorKind? _indicator;
 
     public bool IsLed => Indicator == IndicatorKind.Led;
     public bool IsLedPair => Indicator == IndicatorKind.LedPair;
     public bool IsScreen => Indicator == IndicatorKind.Screen;
     public bool IsIndicatorUnknown => Indicator is null;
+
+    /// <summary>The inspector header's kind; empty before the first Hello.</summary>
+    public string KindText => Indicator switch
+    {
+        null => "",
+        IndicatorKind.Led => "LED",
+        IndicatorKind.LedPair => "LED pair",
+        IndicatorKind.Screen => "Screen",
+        _ => "No light",
+    };
+
+    /// <summary>The inspector's Light or Screen row; a button without a light has none.</summary>
+    public bool HasLightRow => Indicator is IndicatorKind.Led or IndicatorKind.LedPair or IndicatorKind.Screen;
+
+    public string LightRowLabel => IsScreen ? "Screen" : "Light";
+
+    /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited preset.</summary>
+    public string LightRowText => MainGesture is { } gesture ? $"Follows {GestureName(gesture)}" : "Off";
+
+    public static string GestureName(PressType gesture) => gesture switch
+    {
+        PressType.Double => "Double press",
+        PressType.Long => "Hold",
+        _ => "Press",
+    };
 
     public string IndicatorText => Indicator switch
     {
@@ -225,6 +265,16 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         MainLabel = mainLabel;
         HasEditedActions = main is not null;
         if (!others.SequenceEqual(Secondary)) Secondary = others;
+
+        // The inspector's rows: label, the saved action's first problem (spec §6.4, on load), main.
+        var context = _owner.ValidationContext();
+        foreach (var (slot, gesture) in new[] { (Press, PressType.Single), (DoublePress, PressType.Double), (Hold, PressType.Long) })
+        {
+            var action = slot.Config;
+            var set = action.Action != ButtonActionType.None;
+            var problem = set ? ActionValidator.Validate(action, context).Values.FirstOrDefault() : null;
+            slot.SetRow(set ? ActionCatalog.ShortLabel(action, _owner.PresetName, _owner.DeviceName) : "—", problem, gesture == main);
+        }
     }
 
     private void OnActionChanged()
@@ -292,5 +342,7 @@ internal interface IButtonCardOwner
     void RemoveLast();
     IndicatorKind? IndicatorFor(int index);
     string DeviceName(DeviceRefConfig? device);
+    /// <summary>The validation context with the real system: plugged-in devices and files.</summary>
+    ActionValidationContext ValidationContext();
     DeviceChoice Describe(string friendlyName);
 }

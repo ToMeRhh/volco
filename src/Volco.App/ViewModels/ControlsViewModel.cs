@@ -1,6 +1,8 @@
 using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Config;
+using Volco.Core.Input;
 
 namespace Volco.App.ViewModels;
 
@@ -80,6 +82,19 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     public void Select(ObservableObject item) => Selected = item;
 
+    // The tiles draw their own selection outline.
+    partial void OnSelectedChanged(ObservableObject? oldValue, ObservableObject? newValue)
+    {
+        SetSelected(oldValue, false);
+        SetSelected(newValue, true);
+    }
+
+    private static void SetSelected(ObservableObject? item, bool selected)
+    {
+        if (item is SliderItemViewModel slider) slider.IsSelected = selected;
+        else if (item is ButtonItemViewModel button) button.IsSelected = selected;
+    }
+
     /// <summary>Slider 1, else button 1, else nothing.</summary>
     private ObservableObject? DefaultSelection()
         => Sliders.Items.Count > 0 ? Sliders.Items[0]
@@ -105,7 +120,32 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     public void OpenDialog(ObservableObject dialog) => Dialog = dialog;
 
+    [RelayCommand]
     public void CloseDialog() => Dialog = null;
+
+    /// <summary>Opens the action dialog for one gesture of a button (spec §6.1).</summary>
+    public void OpenActionDialog(ButtonItemViewModel button, PressType gesture)
+        => OpenDialog(new PendingDialogRequest(button, gesture));
+
+    /// <summary>Opens the target dialog for a slider (spec §6.2).</summary>
+    public void OpenTargetDialog(SliderItemViewModel slider)
+        => OpenDialog(new PendingDialogRequest(slider, null));
+
+    /// <summary>An inspector action row: the slot's button and gesture.</summary>
+    [RelayCommand]
+    private void OpenAction(ActionSlotViewModel slot)
+    {
+        var button = Buttons.Items.FirstOrDefault(b => b.Slots.Contains(slot));
+        if (button is null) return;
+        var gesture = slot == button.Press ? PressType.Single : slot == button.DoublePress ? PressType.Double : PressType.Long;
+        OpenActionDialog(button, gesture);
+    }
+
+    [RelayCommand]
+    private void OpenTarget(SliderItemViewModel slider) => OpenTargetDialog(slider);
+
+    [RelayCommand]
+    private void Clear(ButtonItemViewModel button) => ClearButton(button);
 
     // ── Controller events (UI thread) ─────────────────────────────────────────
 
@@ -183,4 +223,12 @@ public sealed partial class ControlsViewModel : ObservableObject
             _config.RequestSave();
         });
     }
+}
+
+/// <summary>A dialog the Controls page asked for: the control and, for a button, the gesture.
+/// A placeholder until the action and target dialogs replace it.</summary>
+public sealed class PendingDialogRequest(ObservableObject control, PressType? gesture) : ObservableObject
+{
+    public ObservableObject Control { get; } = control;
+    public PressType? Gesture { get; } = gesture;
 }

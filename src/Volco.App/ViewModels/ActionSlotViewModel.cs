@@ -48,7 +48,8 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NeedsDevice), nameof(NeedsPair), nameof(NeedsPreset), nameof(CanTest),
                               nameof(NeedsMediaApp), nameof(NeedsCommand), nameof(NeedsWhileRunning),
-                              nameof(CommandHint), nameof(CommandPlaceholder), nameof(ShowUsbOnly))]
+                              nameof(CommandHint), nameof(CommandPlaceholder), nameof(ShowUsbOnly),
+                              nameof(IconKey), nameof(IsUsb))]
     private ActionChoice _selectedChoice = ActionCatalog.For(ButtonActionType.None);
 
     /// <summary>Render device names (plus a configured one that is not plugged in).</summary>
@@ -110,6 +111,42 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
 
     /// <summary>Programs and scripts run only for presses over USB (custom-actions spec §7).</summary>
     public bool ShowUsbOnly => NeedsCommand && _host.PressesOverNetwork();
+
+    // ── The Controls page's inspector row ─────────────────────────────────────
+
+    /// <summary>The row's text: the action's short label, or "—" when the slot is empty.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RowTip))]
+    private string _rowText = "—";
+
+    /// <summary>The first problem <see cref="Volco.Core.Input.Actions.ActionValidator"/> finds in
+    /// the saved action, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProblem))]
+    private string? _problem;
+
+    /// <summary>This slot holds the button's main action (the one its light follows).</summary>
+    [ObservableProperty]
+    private bool _isMain;
+
+    public bool HasProblem => Problem is not null;
+
+    /// <summary>The action's <see cref="ButtonActionType"/> name, for its icon.</summary>
+    public string IconKey => Type.ToString();
+
+    /// <summary>Programs and scripts carry the "USB" tag, whatever the transport.</summary>
+    public bool IsUsb => NeedsCommand;
+
+    /// <summary>"Press: Mute mic", for the dense drawing's icons.</summary>
+    public string RowTip => $"{Label}: {RowText}";
+
+    /// <summary>Set by the button after each change.</summary>
+    internal void SetRow(string text, string? problem, bool isMain)
+    {
+        RowText = text;
+        Problem = problem;
+        IsMain = isMain;
+    }
 
     public string CommandHint => Type == ButtonActionType.RunScript
         ? "Runs hidden. .bat, .cmd and .exe start fastest; PowerShell takes a moment longer. " +

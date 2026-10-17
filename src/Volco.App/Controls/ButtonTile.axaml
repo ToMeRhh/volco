@@ -1,0 +1,95 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Controls.ButtonTile"
+             x:DataType="vm:ButtonItemViewModel"
+             Focusable="True">
+  <!-- One button on the Controls page's drawing (spec §4.3). Its four rows (indicator, cap, main
+       action, other actions) share their heights with every tile on the board, so caps and
+       action lists line up whatever each button has. -->
+  <Panel Classes="TileRoot" Classes.active="{Binding IsActive}">
+    <Border Name="TileBorder" Classes="Tile" Classes.selected="{Binding IsSelected}">
+      <Grid ColumnDefinitions="14,*,14" ColumnSpacing="4" Margin="4,8,4,6">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" SharedSizeGroup="BtnInd"/>
+          <RowDefinition Height="Auto" SharedSizeGroup="BtnCap"/>
+          <RowDefinition Height="Auto" SharedSizeGroup="BtnMain"/>
+          <RowDefinition Height="Auto" SharedSizeGroup="BtnSecs"/>
+        </Grid.RowDefinitions>
+
+        <!-- 1. The light or screen, in the edited mode, aligned to the bottom of its row -->
+        <Panel Name="Indicator" Grid.ColumnSpan="3" Classes="Indicator" HorizontalAlignment="Center"
+               VerticalAlignment="Bottom" ToolTip.Tip="{Binding LightDescription}">
+          <Ellipse Name="Led" Classes="Led" Classes.on="{Binding LedOn}" IsVisible="{Binding IsLed}"/>
+          <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsLedPair}">
+            <Ellipse Name="LedA" Classes="Led" Classes.on="{Binding LedA}"/>
+            <Ellipse Name="LedB" Classes="Led" Classes.on="{Binding LedB}"/>
+          </StackPanel>
+          <Panel IsVisible="{Binding IsScreen}">
+            <Panel Classes="ScreenFull">
+              <controls:ScreenPreview Name="ScreenPreviewTile" Scale="0.75" Screen="{Binding Screen}"/>
+            </Panel>
+            <Border Classes="ScreenText">
+              <TextBlock Text="{Binding Screen.Main}" TextTrimming="CharacterEllipsis"/>
+            </Border>
+          </Panel>
+        </Panel>
+
+        <!-- 2. The cap -->
+        <Ellipse Name="Cap" Grid.Row="1" Grid.ColumnSpan="3" Classes="Cap" HorizontalAlignment="Center"/>
+
+        <!-- The grip, beside the action rows: one drag moves all of this button's actions -->
+        <Border Name="Grip" Grid.Row="2" Grid.RowSpan="2" Classes="TileGrip" VerticalAlignment="Top">
+          <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
+        </Border>
+
+        <!-- 3. The main action -->
+        <TextBlock Name="MainAction" Grid.Row="2" Grid.Column="1" Classes="MainAction"
+                   Classes.none="{Binding MainGesture, Converter={x:Static ObjectConverters.IsNull}}"
+                   Text="{Binding MainLabel}" TextWrapping="Wrap" MaxLines="2"
+                   TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
+
+        <!-- Dense boards: one row of three action icons instead (spec §4.4) -->
+        <StackPanel Name="ActionIcons" Grid.Row="2" Grid.Column="1" Classes="ActionIcons"
+                    Orientation="Horizontal" Spacing="3" HorizontalAlignment="Center">
+          <Border Classes="GestureIcon" Classes.main="{Binding Press.IsMain}" Classes.empty="{Binding !Press.CanTest}"
+                  ToolTip.Tip="{Binding Press.RowTip}">
+            <PathIcon Data="{Binding Press.IconKey, Converter={x:Static conv:IconConverters.Action}}"
+                      IsVisible="{Binding Press.CanTest}"/>
+          </Border>
+          <Border Classes="GestureIcon" Classes.main="{Binding DoublePress.IsMain}" Classes.empty="{Binding !DoublePress.CanTest}"
+                  ToolTip.Tip="{Binding DoublePress.RowTip}">
+            <PathIcon Data="{Binding DoublePress.IconKey, Converter={x:Static conv:IconConverters.Action}}"
+                      IsVisible="{Binding DoublePress.CanTest}"/>
+          </Border>
+          <Border Classes="GestureIcon" Classes.main="{Binding Hold.IsMain}" Classes.empty="{Binding !Hold.CanTest}"
+                  ToolTip.Tip="{Binding Hold.RowTip}">
+            <PathIcon Data="{Binding Hold.IconKey, Converter={x:Static conv:IconConverters.Action}}"
+                      IsVisible="{Binding Hold.CanTest}"/>
+          </Border>
+        </StackPanel>
+
+        <!-- 4. The other actions, one line each with its gesture mark -->
+        <Panel Grid.Row="3" Grid.Column="1" Classes="SecondaryRow">
+          <ItemsControl Name="SecondaryActions" ItemsSource="{Binding Secondary}" IsVisible="{Binding !IsMissing}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:GestureLine">
+                <DockPanel Classes="SecondaryLine" HorizontalAlignment="Center">
+                  <TextBlock DockPanel.Dock="Left" Margin="0,0,4,0"
+                             Text="{Binding Gesture, Converter={x:Static conv:GestureMarkConverter.Instance}}"/>
+                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Name="MissingText" Classes="TileMissing" Text="Not on this controller"
+                     IsVisible="{Binding IsMissing}"/>
+        </Panel>
+      </Grid>
+    </Border>
+    <Rectangle Classes="MissingOutline" IsVisible="{Binding IsMissing}"/>
+    <Border Classes="TileActive"/>
+  </Panel>
+</UserControl>

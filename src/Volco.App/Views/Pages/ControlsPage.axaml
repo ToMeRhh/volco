@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:controls="using:Volco.App.Controls"
+             xmlns:inspector="using:Volco.App.Views.Inspector"
+             x:Class="Volco.App.Views.Pages.ControlsPage"
+             x:DataType="vm:ControlsViewModel">
+  <!-- The Controls page (spec docs/design/controls-page.md): the title, a drawing of the
+       controller (sliders, then the buttons in the edited mode's frame) and an inspector for the
+       selected control. Only the drawing scrolls. -->
+  <Panel>
+    <Grid ColumnDefinitions="*,Auto">
+      <ScrollViewer Name="DrawingScroll" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20,8,20,20" Spacing="14">
+          <TextBlock Name="PageTitle" Classes="Title" Text="Controls"/>
+
+          <Border Name="Case" Classes="Case" Classes.dense="{Binding IsDense}">
+            <StackPanel Spacing="14">
+              <ItemsControl Name="SliderList" ItemsSource="{Binding Sliders.Items}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <controls:FillWrapPanel Name="SliderGrid" Classes="SliderGrid"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SliderItemViewModel">
+                    <controls:SliderTile/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <!-- The buttons, framed in the edited mode's colour, with the mode tabs on its top edge -->
+              <Border Name="ButtonFrame" Classes="ModeFrame"
+                      controls:PresetTint.Index="{Binding Buttons.EditingTintIndex}">
+                <StackPanel Spacing="8">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <ItemsControl Name="ModeTabs" ItemsSource="{Binding Buttons.Presets}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel/>
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PresetTabViewModel">
+                          <RadioButton Name="ModeTab" Classes="ModeTab" GroupName="ControlsModeTabs"
+                                       controls:PresetTint.Index="{Binding TintIndex}"
+                                       IsChecked="{Binding IsEditing, Mode=OneWay}"
+                                       Command="{Binding SelectCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <Ellipse Name="LiveDot" Classes="LiveDot" IsVisible="{Binding IsLive}"
+                                       ToolTip.Tip="Live on the controller"/>
+                              <TextBlock Text="{Binding Name}"/>
+                            </StackPanel>
+                          </RadioButton>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Top">
+                      <Button Name="MakeLiveButton" Classes="ModeAction Live" Content="Make live"
+                              Command="{Binding Buttons.MakeLiveCommand}" IsVisible="{Binding !Buttons.IsEditingLive}"
+                              ToolTip.Tip="{Binding Buttons.MakeLiveText}"/>
+                      <Button Name="AddModeButton" Classes="ModeAction" Command="{Binding Buttons.AddPresetCommand}"
+                              ToolTip.Tip="Add a mode that starts as a copy of this one">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
+                          <TextBlock Text="Add mode"/>
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+                  </Grid>
+
+                  <ItemsControl Name="ButtonList" ItemsSource="{Binding Buttons.Items}" Grid.IsSharedSizeScope="True">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <controls:FillWrapPanel Name="ButtonGrid" Classes="ButtonGrid"/>
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ButtonItemViewModel">
+                        <controls:ButtonTile/>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <TextBlock Name="ConnectLineText" Classes="Secondary" TextWrapping="Wrap"
+                     Text="{Binding ConnectLine}" IsVisible="{Binding ShowConnectLine}"/>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- The inspector keeps its place and size; only its body scrolls -->
+      <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
+        <ContentControl Name="InspectorContent" Content="{Binding Selected}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type vm:SliderItemViewModel}" x:DataType="vm:SliderItemViewModel">
+              <inspector:SliderInspector/>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ButtonItemViewModel}" x:DataType="vm:ButtonItemViewModel">
+              <inspector:ButtonInspector/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Grid>
+
+    <!-- The page's dialogs: a modal card over the page; Escape or a click outside closes it -->
+    <Border Name="DialogOverlay" Background="#66000000" IsVisible="{Binding HasDialog}">
+      <Border Name="DialogCard" Classes="Panel" Padding="24" Margin="24" MaxWidth="640" MaxHeight="560"
+              HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 8 28 0 #40000000">
+        <DockPanel>
+          <Button Name="CloseDialogButton" DockPanel.Dock="Bottom" HorizontalAlignment="Right" Content="Close"
+                  Command="{Binding CloseDialogCommand}"/>
+          <ContentControl Name="DialogHost" Content="{Binding Dialog}">
+            <ContentControl.DataTemplates>
+              <DataTemplate DataType="{x:Type vm:PendingDialogRequest}" x:DataType="vm:PendingDialogRequest">
+                <Panel/>
+              </DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+        </DockPanel>
+      </Border>
+    </Border>
+  </Panel>
+</UserControl>

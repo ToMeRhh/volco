@@ -40,6 +40,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     private readonly ActionCapabilities _capabilities;
     private readonly ActionSlotHost _slotHost;
     private IReadOnlyList<AudioDevice> _devices;
+    private IReadOnlyList<AudioDevice> _captureDevices;
 
     public ObservableCollection<ButtonItemViewModel> Items { get; } = new();
     public ObservableCollection<PresetTabViewModel> Presets { get; } = new();
@@ -93,6 +94,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         _execute = execute;
         _toast = toast;
         _devices = audio.GetDevices(AudioFlow.Render);
+        _captureDevices = audio.GetDevices(AudioFlow.Capture);
         _livePresetId = presets.ActivePresetId;
         _editingPresetId = _livePresetId;
         RebuildPresetTabs();
@@ -147,6 +149,19 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     public DeviceChoice Describe(string friendlyName) => DeviceChoice.For(_config.Config, _devices, friendlyName);
 
     public string DeviceName(DeviceRefConfig? device) => DeviceDisplay.NameOf(_config.Config, _audio, device, "?");
+
+    ActionValidationContext IButtonCardOwner.ValidationContext()
+        => new(_config.Config.Presets.Select(p => p.Id).ToList(), DeviceFlow, _slotHost.FileExists);
+
+    /// <summary>The flow of a plugged-in device (by id, else by name); null when it isn't plugged in.</summary>
+    private AudioFlow? DeviceFlow(DeviceRefConfig device)
+    {
+        var all = _devices.Concat(_captureDevices);
+        var match = device.Id.Length > 0
+            ? all.FirstOrDefault(d => d.Id == device.Id)
+            : all.FirstOrDefault(d => string.Equals(d.FriendlyName, device.FriendlyName, StringComparison.OrdinalIgnoreCase));
+        return match?.Flow;
+    }
 
     void IButtonCardOwner.Execute(ButtonActionConfig action, int button, PressType gesture)
         => _execute(action, new ActionOrigin(button, gesture, EditingName));
@@ -441,6 +456,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
     {
         _devices = devices;
+        _captureDevices = _audio.GetDevices(AudioFlow.Capture);
         foreach (var item in Items) item.RefreshDevices(devices);
         RefreshLights();
     }

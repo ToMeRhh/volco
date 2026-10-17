@@ -27,18 +27,40 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     /// <summary>The hardware input number (= list position). Relabelled live while dragging.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title))]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(Heading))]
     private int _index;
 
     public string Title => $"Slider {Index}";
 
+    /// <summary>The inspector's heading, numbered from 1.</summary>
+    public string Heading => $"Slider {Index + 1}";
+
+    /// <summary>The Controls page's selected tile.</summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
     /// <summary>The user's name for the slider; "" means unnamed.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Label))]
+    [NotifyPropertyChangedFor(nameof(Label), nameof(IsUnset))]
     private string _name = "";
 
     /// <summary>The tile's label: the name, else what it controls, else "Not set".</summary>
-    public string Label => Name?.Trim() is { Length: > 0 } name ? name : IsNotSetUp ? "Not set" : Summary;
+    public string Label => Name?.Trim() is { Length: > 0 } name ? name : TargetLabel;
+
+    /// <summary>What it controls, or "Not set": the Controls row, and the name box's placeholder.</summary>
+    public string TargetLabel => IsNotSetUp ? "Not set" : Summary;
+
+    /// <summary>No name and nothing to control: the label "Not set" is drawn quieter.</summary>
+    public bool IsUnset => string.IsNullOrWhiteSpace(Name) && IsNotSetUp;
+
+    /// <summary>The Controls row's icon (a resource key).</summary>
+    public string TargetIconKey => MappingType switch
+    {
+        SliderMappingType.Device => "Icon.Speaker",
+        SliderMappingType.Processes => "Icon.Device.App",
+        SliderMappingType.Unmapped => "Icon.Volume",
+        _ => "Icon.Plus",
+    };
 
     /// <summary>True for the last card: only it offers "Remove last slider".</summary>
     [ObservableProperty]
@@ -51,7 +73,8 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     // ── What it controls ──────────────────────────────────────────────────────
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsApps), nameof(IsOtherApps), nameof(IsDevice), nameof(IsNotSetUp), nameof(Summary))]
+    [NotifyPropertyChangedFor(nameof(IsApps), nameof(IsOtherApps), nameof(IsDevice), nameof(IsNotSetUp), nameof(Summary),
+                              nameof(IsUnset), nameof(TargetIconKey))]
     private SliderMappingType _mappingType;
 
     public bool IsApps
@@ -104,17 +127,24 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     // ── Advanced ──────────────────────────────────────────────────────────────
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResponseSummary))]
     private bool _invert;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CurveIndex))]
+    [NotifyPropertyChangedFor(nameof(CurveIndex), nameof(ResponseSummary))]
     private ResponseCurve _curve;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResponseSummary))]
     private double _deadZonePercent;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResponseSummary))]
     private double _smoothingFactor;
+
+    /// <summary>The inspector's Response summary: "Linear" with every setting at its default.</summary>
+    public string ResponseSummary
+        => Curve == ResponseCurve.Linear && DeadZonePercent == 0 && SmoothingFactor == 0 && !Invert ? "Linear" : "Custom";
 
     /// <summary>Order matches the curve picker: Linear, Logarithmic, Exponential, S-Curve.</summary>
     public int CurveIndex
@@ -250,11 +280,13 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     // ── Write-through ─────────────────────────────────────────────────────────
 
-    // Label reads Summary, which is raised from several places.
+    // Label and TargetLabel read Summary, which is raised from several places.
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
-        if (e.PropertyName == nameof(Summary)) OnPropertyChanged(nameof(Label));
+        if (e.PropertyName != nameof(Summary)) return;
+        OnPropertyChanged(nameof(TargetLabel));
+        OnPropertyChanged(nameof(Label));
     }
 
     partial void OnNameChanged(string value)
