@@ -65,7 +65,7 @@ jobs:
 
     - name: Native tests
       working-directory: firmware
-      run: pio test -e native
+      run: pio test -e native -e native_avr
 
     - name: Build firmware (ESP32)
       working-directory: firmware

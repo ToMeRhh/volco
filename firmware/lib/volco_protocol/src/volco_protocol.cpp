@@ -35,7 +35,15 @@ bool FrameParser::feed(uint8_t b) {
     case WAIT_LENGTH:
       len_ = b;
       idx_ = 0;
-      state_ = len_ == 0 ? WAIT_START : WAIT_PAYLOAD;
+      if (len_ > kMaxPayload) {  // can't hold it: skip its payload and checksum, then resync
+        skip_ = (uint16_t)(len_ + 1);
+        state_ = SKIP;
+      } else {
+        state_ = len_ == 0 ? WAIT_START : WAIT_PAYLOAD;
+      }
+      return false;
+    case SKIP:
+      if (--skip_ == 0) state_ = WAIT_START;
       return false;
     case WAIT_PAYLOAD:
       buf_[idx_++] = b;
@@ -202,6 +210,7 @@ void Link::onPayload(const uint8_t* p, uint8_t len, uint32_t now, uint8_t transp
       }
       break;
     case MSG_SCREEN: {
+#if VOLCO_HAS_SCREENS
       uint8_t button, transition;
       ScreenContent c;
       if (!decodeScreen(p, len, button, transition, c) || !isScreenButton(button)) break;
@@ -214,6 +223,7 @@ void Link::onPayload(const uint8_t* p, uint8_t len, uint32_t now, uint8_t transp
       } else {
         sink_.applyScreen(button, transition, c, now);
       }
+#endif
       break;
     }
     case MSG_BEGIN:
@@ -249,7 +259,11 @@ void Link::applyHeld(uint32_t now) {
   for (uint8_t b = 0; b < config_.buttons; b++) {
     Held& h = held_[b];
     if (h.hasLed) sink_.applyLed(b, h.led);
+#if VOLCO_HAS_SCREENS
     if (h.hasScreen) sink_.applyScreen(b, h.transition, h.screen, now);
+#else
+    (void)now;
+#endif
     h = Held();
   }
 }

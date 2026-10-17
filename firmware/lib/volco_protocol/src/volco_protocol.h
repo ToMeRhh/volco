@@ -8,9 +8,21 @@ namespace volco {
 
 constexpr uint8_t kStartMarker = 0xAA;
 constexpr uint8_t kProtocolVersion = 1;
-constexpr uint16_t kMaxPayload = 255;  // type + body
-constexpr uint8_t kMaxText = 60;       // UTF-8 bytes per text slot
-constexpr uint8_t kMaxButtons = 32;
+// Compile-time limits per chip family (docs/design/arduino-avr.md §6.2). Defaults: the ESP32.
+#ifndef VOLCO_MAX_BUTTONS
+#define VOLCO_MAX_BUTTONS 32
+#endif
+#ifndef VOLCO_HAS_SCREENS
+#define VOLCO_HAS_SCREENS 1
+#endif
+#ifndef VOLCO_MAX_PAYLOAD
+#define VOLCO_MAX_PAYLOAD 255
+#endif
+constexpr uint16_t kMaxPayload = VOLCO_MAX_PAYLOAD;  // type + body; longer frames are skipped
+static_assert(kMaxPayload >= 64 && kMaxPayload <= 255, "VOLCO_MAX_PAYLOAD must be 64..255");
+constexpr uint8_t kMaxText = 60;  // UTF-8 bytes per text slot
+constexpr uint8_t kMaxButtons = VOLCO_MAX_BUTTONS;
+constexpr bool kHasScreens = VOLCO_HAS_SCREENS;
 constexpr uint8_t kNoIcon = 0xFF;
 
 enum MsgType : uint8_t {
@@ -51,11 +63,12 @@ class FrameParser {
   uint8_t length() const { return len_; }
 
  private:
-  enum State : uint8_t { WAIT_START, WAIT_LENGTH, WAIT_PAYLOAD, WAIT_CHECKSUM };
+  enum State : uint8_t { WAIT_START, WAIT_LENGTH, WAIT_PAYLOAD, WAIT_CHECKSUM, SKIP };
   State state_ = WAIT_START;
   uint8_t buf_[kMaxPayload] = {0};
   uint8_t len_ = 0;
   uint16_t idx_ = 0;
+  uint16_t skip_ = 0;  // bytes left of a frame too long for buf_ (payload + checksum)
 };
 
 // Writes a whole frame for `payload` (type + body) into `out` (len + 3 bytes). Returns its size.
@@ -137,9 +150,11 @@ class Link {
   struct Held {
     bool hasLed = false;
     uint8_t led = 0;
+#if VOLCO_HAS_SCREENS
     bool hasScreen = false;
     uint8_t transition = TRANSITION_NONE;
     ScreenContent screen;
+#endif
   };
   void sendFrame(const uint8_t* payload, uint8_t len, uint32_t now);
   void sendHello(uint32_t now);
