@@ -1,0 +1,5 @@
+{
+  "name": "volco_indicators",
+  "description": "LED and LED pair rendering (Arduino digitalWrite); not built for the native tests.",
+  "platforms": ["espressif32", "atmelavr"]
+}

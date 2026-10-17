@@ -209,7 +209,7 @@
   const POWER = { NORMAL: 0, DIM: 1, OFF: 2 };
   const SHIFT_CYCLE = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
   /** cfg: { dim, off, shift, swallow, dimAfterMs, offAfterMs, shiftEveryMs }. hasScreens false: a
-   *  board with no screens never dims, shifts or swallows a press (firmware/src/screens.cpp). */
+   *  board with no screens never dims, shifts or swallows a press (firmware/src/esp32/screens.cpp). */
   function createPanels(cfg, hasScreens = true) {
     if (!hasScreens) cfg = { ...cfg, dim: false, off: false, shift: false, swallow: false };
     let last = 0, swallowed = 0;
@@ -238,7 +238,7 @@
       },
     };
   }
-  /** The frame a slot shows now, as firmware/src/screens.cpp's render() composes it. */
+  /** The frame a slot shows now, as firmware/src/esp32/screens.cpp's render() composes it. */
   function frame(slot, panels, now, t = SCROLL) {
     const a = canvas(), b = canvas(), out = canvas();
     if (slot.inTransition(now)) {

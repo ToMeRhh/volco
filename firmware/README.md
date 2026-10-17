@@ -15,16 +15,18 @@ It still knows nothing about what a button *means*. Single, double and long pres
 
 ## Files
 
+`src/esp32/` is the ESP32 firmware; each chip family builds its own folder of `src/` (`build_src_filter`).
+
 | Path | Contents |
 |---|---|
-| `src/config.h` | Fixed constants: serial baud, buffer sizes, protocol timing. |
-| `src/config_store.*` | Loads the controller config from NVS, keeps its bytes for read replies, and saves new ones. |
-| `src/config_session.*` | The config session: read replies, chunked writes, validate, store, reboot (spec §5.3, §5.4, §6.7). |
-| `src/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
-| `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
-| `src/indicators.*` | LED rendering. |
-| `src/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
-| `src/debug_log.h` | The `DEBUG_LOG` macro. |
+| `src/esp32/config.h` | Fixed constants: serial baud, buffer sizes, protocol timing. |
+| `src/esp32/config_store.*` | Loads the controller config from NVS, keeps its bytes for read replies, and saves new ones. |
+| `src/esp32/config_session.*` | The config session: read replies, chunked writes, validate, store, reboot (spec §5.3, §5.4, §6.7). |
+| `src/esp32/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
+| `src/esp32/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
+| `lib/volco_indicators` | LED and LED pair rendering, shared by every chip's firmware. |
+| `src/esp32/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
+| `src/esp32/debug_log.h` | The `DEBUG_LOG` macro. |
 | `lib/volco_protocol/` | Frame parser and encoder, message decoding, Hello, Begin/Commit holding, keepalive and host timeout, the active-transport rule. |
 | `lib/volco_config/` | The controller config: decode, validation, chip table, CRC, chunked receiver, `RuntimeConfig`. |
 | `lib/volco_bidi/` | Logical to visual reordering of UTF-8 text, for Hebrew. |
@@ -54,7 +56,7 @@ Volco's Controller page sets the config. For firmware work without the app, use 
 ~/.platformio/penv/bin/python firmware/tools/config_tool.py --port <port> read                   # prints the stored config as JSON
 ```
 
-`firmware/tools/hello_check.py --port <port> --sliders N --kinds 1,1,2` resets the board and confirms the Hello matches the layout. Fixed constants (serial baud, buffer sizes, protocol timing) stay in `src/config.h`.
+`firmware/tools/hello_check.py --port <port> --sliders N --kinds 1,1,2` resets the board and confirms the Hello matches the layout. Fixed constants (serial baud, buffer sizes, protocol timing) stay in `src/esp32/config.h`.
 
 ## Wiring screens and choosing pins
 

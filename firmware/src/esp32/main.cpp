@@ -4,7 +4,7 @@
 #include "config_session.h"
 #include "config_store.h"
 #include "debug_log.h"
-#include "indicators.h"
+#include "volco_indicators.h"
 #include "screens.h"
 #include "transport.h"
 #include "volco_protocol.h"

@@ -15,7 +15,7 @@ namespace Volco.Core.Communication;
 /// verifies the port is still present via <see cref="SerialPort.GetPortNames"/>, and a reconnect
 /// timer retries <see cref="SerialPort.Open"/> once the port is missing. The retry interval
 /// (<see cref="ReconnectIntervalMs"/>) mirrors the ESP32 firmware's own RECONNECT_INTERVAL_MS
-/// (firmware/src/config.h) so both sides of the link agree on cadence.
+/// (firmware/src/esp32/config.h) so both sides of the link agree on cadence.
 /// </summary>
 public class SerialConnection : IControllerConnection
 {
