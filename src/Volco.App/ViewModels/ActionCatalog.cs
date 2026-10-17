@@ -34,7 +34,7 @@ public sealed record PresetChoice(string Id, string Name)
 
 /// <summary>
 /// Everything the settings UI knows about button actions: the grouped picker, short labels for
-/// card summaries, which parameters an action takes, and what the controller light shows.
+/// tiles and rows, which parameters an action takes, and what the controller light shows.
 /// New action types (custom actions) are added here, and the pickers follow.
 /// </summary>
 public static class ActionCatalog
@@ -90,7 +90,7 @@ public static class ActionCatalog
         return null;
     }
 
-    /// <summary>The "Screen: …" line on a button card with a screen.</summary>
+    /// <summary>What a button with a screen shows.</summary>
     public static string ScreenDescription(ButtonBindingConfig binding)
     {
         if (LightSource(binding) is not { } source) return "Blank. None of this button’s actions is set in this preset.";
@@ -102,7 +102,7 @@ public static class ActionCatalog
         return text;
     }
 
-    /// <summary>The "Controller light: …" line on a button card, for one LED or an LED pair.</summary>
+    /// <summary>What a button's light shows, for one LED or an LED pair.</summary>
     public static string LightDescription(ButtonBindingConfig binding, bool singleLed,
                                           Func<string?, string?> presetName, Func<DeviceRefConfig?, string>? deviceName = null)
     {
@@ -143,7 +143,7 @@ public static class ActionCatalog
         return null;
     }
 
-    /// <summary>A short label for card summaries, e.g. "Mute mic" or "Toggle Speakers / Headphones".</summary>
+    /// <summary>A short label for tiles and inspector rows, e.g. "Mute mic" or "Toggle Speakers / Headphones".</summary>
     public static string ShortLabel(ButtonActionConfig a, Func<string?, string?> presetName,
                                     Func<DeviceRefConfig?, string>? deviceName = null)
     {
@@ -166,17 +166,6 @@ public static class ActionCatalog
             ButtonActionType.RunScript => $"Run {CommandName(a, "a script")}",
             _ => a.Action.ToString(),
         };
-    }
-
-    /// <summary>The closed card's summary for one preset's binding.</summary>
-    public static string Summary(ButtonBindingConfig b, Func<string?, string?> presetName,
-                                 Func<DeviceRefConfig?, string>? deviceName = null)
-    {
-        var parts = new List<string>();
-        if (b.SinglePress.Action != ButtonActionType.None) parts.Add(ShortLabel(b.SinglePress, presetName, deviceName));
-        if (b.DoublePress.Action != ButtonActionType.None) parts.Add("Double: " + ShortLabel(b.DoublePress, presetName, deviceName));
-        if (b.LongPress.Action != ButtonActionType.None) parts.Add("Hold: " + ShortLabel(b.LongPress, presetName, deviceName));
-        return string.Join(" · ", parts);
     }
 
     private static string WithApp(string verb, ButtonActionConfig a)

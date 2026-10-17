@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
@@ -7,16 +6,15 @@ using Volco.Core.Config;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// One slider card. Its position in <see cref="SlidersViewModel.Items"/> (= <see cref="Index"/>) is
-/// the hardware input number; a slider has no name, only that number and what it controls. Edits
-/// write straight through to the wrapped <see cref="SliderConfig"/> and request a save.
+/// One slider of the Controls page. Its position in <see cref="SlidersViewModel.Items"/>
+/// (= <see cref="Index"/>) is the hardware input number. Edits write straight through to the
+/// wrapped <see cref="SliderConfig"/> and request a save.
 /// </summary>
 public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 {
     /// <summary>The device picker's first entry: a null <see cref="SliderConfig.Device"/>.</summary>
     public const string CurrentDefaultOutput = "Current default output";
 
-    private readonly IAudioEngine _audio;
     private readonly Action _save;
     private readonly ISliderCardOwner _owner;
     private bool _loading;
@@ -63,7 +61,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         _ => "Icon.Plus",
     };
 
-    /// <summary>True for the last card: only it offers "Remove last slider".</summary>
+    /// <summary>True for the last slider: only it can be removed.</summary>
     [ObservableProperty]
     private bool _isLast;
 
@@ -96,14 +94,11 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         set { if (value) MappingType = SliderMappingType.Device; }
     }
 
-    /// <summary>"Not set up": only Reset (or a new card) gets here; the three choices leave it.</summary>
+    /// <summary>"Not set up": a new slider, until the target dialog sets it.</summary>
     public bool IsNotSetUp => MappingType == SliderMappingType.None;
 
-    /// <summary>The apps (image names) an Apps slider controls, shown as chips.</summary>
-    public ObservableCollection<AppChip> Apps { get; } = new();
-
-    /// <summary>The app names, in chip order.</summary>
-    public IReadOnlyList<string> AppNames => Apps.Select(a => a.Name).ToList();
+    /// <summary>The apps (image names) an Apps slider controls.</summary>
+    public IReadOnlyList<string> AppNames => Config.Processes;
 
     /// <summary>"Current default output" followed by every render device.</summary>
     [ObservableProperty]
@@ -119,7 +114,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     public string Summary => MappingType switch
     {
-        SliderMappingType.Processes => Apps.Count > 0 ? string.Join(", ", AppNames) : "No apps yet",
+        SliderMappingType.Processes => AppNames.Count > 0 ? string.Join(", ", AppNames) : "No apps yet",
         SliderMappingType.Unmapped => "All other apps",
         SliderMappingType.Device => SelectedDevice,
         _ => "Not set up",
@@ -176,53 +171,25 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     [ObservableProperty]
     private double _liveLevel;
 
-    /// <summary>Set (false → true) whenever the controller reports this slider, so the card
+    /// <summary>Set (false → true) whenever the controller reports this slider, so the tile
     /// flashes; the view's style animation does the fading.</summary>
     [ObservableProperty]
     private bool _isActive;
 
     [ObservableProperty]
-    private bool _isExpanded;
-
-    [ObservableProperty]
     private bool _isAdvancedOpen;
 
     [RelayCommand]
-    private void ToggleExpanded() => IsExpanded = !IsExpanded;
-
-    // ── Card menu ─────────────────────────────────────────────────────────────
-
-    [RelayCommand]
-    private void MoveUp() => _owner.MoveUp(this);
-
-    [RelayCommand]
-    private void MoveDown() => _owner.MoveDown(this);
-
-    [RelayCommand]
-    private void Reset() => _owner.Reset(this);
-
-    [RelayCommand]
     private void RemoveLast() => _owner.RemoveLast();
-
-    /// <summary>Removes the chip for <paramref name="app"/> and saves.</summary>
-    public void RemoveApp(string? app)
-    {
-        var existing = Apps.FirstOrDefault(a => string.Equals(a.Name, app, StringComparison.OrdinalIgnoreCase));
-        if (existing is null) return;
-        Apps.Remove(existing);
-        WriteApps();
-    }
 
     public DeviceChoice Describe(string friendlyName)
         => friendlyName == CurrentDefaultOutput ? new DeviceChoice(CurrentDefaultOutput, "") : _owner.Describe(friendlyName);
 
     // ── Construction ──────────────────────────────────────────────────────────
 
-    internal SliderItemViewModel(SliderConfig cfg, int index, IAudioEngine audio,
-                                 IReadOnlyList<AudioDevice> devices, ISliderCardOwner owner, Action save)
+    internal SliderItemViewModel(SliderConfig cfg, int index, IReadOnlyList<AudioDevice> devices, ISliderCardOwner owner, Action save)
     {
         Config = cfg;
-        _audio = audio;
         _owner = owner;
         _save = save;
         _index = index;
@@ -230,7 +197,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         Reload();
     }
 
-    /// <summary>Re-reads every field from <see cref="Config"/> without saving (after Reset or Undo).</summary>
+    /// <summary>Re-reads every field from <see cref="Config"/> without saving (after the target dialog changed it).</summary>
     internal void Reload()
     {
         _loading = true;
@@ -238,8 +205,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         {
             Name = Config.Name ?? "";
             MappingType = Config.Type;
-            Apps.Clear();
-            foreach (var process in Config.Processes) Apps.Add(new AppChip(process, RemoveApp));
             SelectedDevice = Config.Device is { FriendlyName.Length: > 0 } configured
                 ? configured.FriendlyName
                 : CurrentDefaultOutput;
@@ -251,33 +216,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         finally { _loading = false; }
         OnPropertyChanged(nameof(Summary));
     }
-
-    /// <summary>Adds a chip (trimmed; a case-insensitive duplicate is ignored) and saves.</summary>
-    public bool AddApp(string? app)
-    {
-        var name = app?.Trim() ?? "";
-        if (name.Length == 0 || Apps.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase)))
-            return false;
-        Apps.Add(new AppChip(name, RemoveApp));
-        WriteApps();
-        return true;
-    }
-
-    private void WriteApps()
-    {
-        Config.Processes = AppNames.ToList();
-        OnPropertyChanged(nameof(Summary));
-        _owner.AppsChanged();
-        Persist();
-    }
-
-    /// <summary>Distinct image names of every live audio session, for the chip input's suggestions.</summary>
-    public List<string> GetLiveProcessNames()
-        => _audio.GetSessions()
-            .Select(s => s.ImageName)
-            .Where(n => !string.IsNullOrEmpty(n))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
 
     // ── Write-through ─────────────────────────────────────────────────────────
 
@@ -353,7 +291,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     // ── Live updates (UI thread) ──────────────────────────────────────────────
 
-    /// <summary>Marks the card active again, restarting its flash.</summary>
+    /// <summary>Marks the tile active again, restarting its flash.</summary>
     public void Pulse()
     {
         IsActive = false;
@@ -401,31 +339,9 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     }
 }
 
-/// <summary>One app chip: its name and the command that removes it.</summary>
-public sealed partial class AppChip
-{
-    private readonly Action<string> _remove;
-
-    public AppChip(string name, Action<string> remove)
-    {
-        Name = name;
-        _remove = remove;
-    }
-
-    public string Name { get; }
-
-    [RelayCommand]
-    private void Remove() => _remove(Name);
-
-    public override string ToString() => Name;
-}
-
-/// <summary>What a slider card asks of the list that owns it.</summary>
+/// <summary>What a slider asks of the list that owns it.</summary>
 internal interface ISliderCardOwner
 {
-    void MoveUp(SliderItemViewModel item);
-    void MoveDown(SliderItemViewModel item);
-    void Reset(SliderItemViewModel item);
     void RemoveLast();
     void AppsChanged();
     DeviceChoice Describe(string friendlyName);

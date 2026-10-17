@@ -7,11 +7,10 @@ using Volco.Core.Config;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The Sliders page: one card per configured slider, in hardware-input order. Position is
-/// identity, so reordering moves configuration between physical sliders, a middle card can only be
-/// reset (never removed), and only the last card can be removed.
+/// The sliders of the Controls page, in hardware-input order. Position is identity, so moving a
+/// slider moves its configuration to another physical slider, and only the last can be removed.
 /// </summary>
-public partial class SlidersViewModel : ObservableObject, IReorderableList, ISliderCardOwner
+public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
 {
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
@@ -30,29 +29,6 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
             Items.Add(NewItem(config.Config.Sliders[i], i));
         Renumber();
         AppsChanged();
-        RefreshController();
-    }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasCountHint))]
-    private string _countHint = "";
-
-    public bool HasCountHint => CountHint.Length > 0;
-
-    [ObservableProperty]
-    private bool _canAddMissing;
-
-    [ObservableProperty]
-    private string _addMissingText = "";
-
-    /// <summary>Re-reads the controller's hardware (a Hello arrived) or the card count changed.</summary>
-    public void RefreshController()
-    {
-        var n = _config.Config.Controller?.Sliders;
-        CountHint = CountHints.Text("slider", n, Items.Count);
-        var missing = (n ?? 0) - Items.Count;
-        CanAddMissing = missing > 0;
-        AddMissingText = missing == 1 ? "Add the missing one" : $"Add the missing {missing}";
     }
 
     private List<SliderConfig> Sliders => _config.Config.Sliders;
@@ -65,26 +41,11 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
     internal IReadOnlyList<AudioDevice> Devices => _devices;
 
     private SliderItemViewModel NewItem(SliderConfig cfg, int index)
-        => new(cfg, index, _audio, _devices, this, Save);
+        => new(cfg, index, _devices, this, Save);
 
     private void Save() => _config.RequestSave();
 
-    // ── Add / reset / remove ──────────────────────────────────────────────────
-
-    /// <summary>Adds a "Not set up" slider for the next hardware input, opened for editing.</summary>
-    [RelayCommand]
-    private void Add()
-    {
-        var cfg = new SliderConfig { Type = SliderMappingType.None };
-        Sliders.Add(cfg);
-        var item = NewItem(cfg, Items.Count);
-        item.IsExpanded = true;
-        Items.Add(item);
-        Renumber();
-        AppsChanged();
-        RefreshController();
-        Save();
-    }
+    // ── Add / remove ──────────────────────────────────────────────────────────
 
     /// <summary>Adds a "Not set up" slider for each input the controller has beyond the list.</summary>
     [RelayCommand]
@@ -100,25 +61,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         }
         Renumber();
         AppsChanged();
-        RefreshController();
         Save();
-    }
-
-    public void Reset(SliderItemViewModel item)
-    {
-        var before = Clone(item.Config);
-        CopyInto(item.Config, new SliderConfig { Type = SliderMappingType.None });
-        item.Reload();
-        item.IsAdvancedOpen = false;
-        AppsChanged();
-        Save();
-        _toast.Show($"{item.Title} reset", () =>
-        {
-            CopyInto(item.Config, before);
-            item.Reload();
-            AppsChanged();
-            Save();
-        });
     }
 
     public void RemoveLast()
@@ -130,7 +73,6 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         Sliders.RemoveAt(Sliders.Count - 1);
         Renumber();
         AppsChanged();
-        RefreshController();
         Save();
         _toast.Show($"{item.Title} removed", () =>
         {
@@ -138,26 +80,11 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
             Items.Add(item);
             Renumber();
             AppsChanged();
-            RefreshController();
             Save();
         });
     }
 
     // ── Reordering ────────────────────────────────────────────────────────────
-
-    public int Count => Items.Count;
-
-    public void MoveUp(SliderItemViewModel item)
-    {
-        var i = Items.IndexOf(item);
-        if (i > 0) Move(i, i - 1);
-    }
-
-    public void MoveDown(SliderItemViewModel item)
-    {
-        var i = Items.IndexOf(item);
-        if (i >= 0 && i < Items.Count - 1) Move(i, i + 1);
-    }
 
     public void Move(int from, int to)
     {
@@ -170,23 +97,6 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         Save();
     }
 
-    public void PreviewMove(int from, int to)
-    {
-        for (int i = 0; i < Items.Count; i++)
-            Items[i].Index = PreviewIndex(i, from, to);
-    }
-
-    public void CancelPreview() => Renumber();
-
-    /// <summary>Where the card at <paramref name="i"/> would land if <paramref name="from"/> moved to <paramref name="to"/>.</summary>
-    internal static int PreviewIndex(int i, int from, int to)
-    {
-        if (i == from) return to;
-        if (from < to && i > from && i <= to) return i - 1;
-        if (to < from && i >= to && i < from) return i + 1;
-        return i;
-    }
-
     private void Renumber()
     {
         for (int i = 0; i < Items.Count; i++)
@@ -196,9 +106,9 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         }
     }
 
-    /// <summary>Refreshes every "All other apps" hint after any slider's apps or type changed.</summary>
     public DeviceChoice Describe(string friendlyName) => DeviceChoice.For(_config.Config, _devices, friendlyName);
 
+    /// <summary>Refreshes every "All other apps" hint after any slider's apps or type changed.</summary>
     public void AppsChanged()
     {
         foreach (var item in Items)
@@ -215,7 +125,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
     // ── Live updates (UI thread) ──────────────────────────────────────────────
 
     /// <summary>Updates the level bar of the slider at hardware input <paramref name="sliderIndex"/>
-    /// and flashes its card.</summary>
+    /// and flashes its tile.</summary>
     public void UpdateLiveLevel(int sliderIndex, float level)
     {
         if (sliderIndex < 0 || sliderIndex >= Items.Count) return;
@@ -225,7 +135,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
     }
 
     /// <summary>
-    /// Seeds every card's level from <paramref name="getLevel"/> (the runtime's last known levels):
+    /// Seeds every slider's level from <paramref name="getLevel"/> (the runtime's last known levels):
     /// the controller only reports a slider when it moves, so a window opened later would otherwise
     /// show nothing until each slider moved again. Unknown levels are left alone.
     /// </summary>
@@ -236,7 +146,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
                 item.LiveLevel = Math.Clamp(level, 0f, 1f);
     }
 
-    /// <summary>Re-seeds every card's device picker. Callers are on the UI thread.</summary>
+    /// <summary>Re-reads every slider's devices. Callers are on the UI thread.</summary>
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
     {
         _devices = devices;
@@ -283,7 +193,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         Save();
     }
 
-    // ── Config copies (for Undo) ──────────────────────────────────────────────
+    // ── Config copies ─────────────────────────────────────────────────────────
 
     internal static SliderConfig Clone(SliderConfig s) => new()
     {
@@ -297,17 +207,4 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         DeadZonePercent = s.DeadZonePercent,
         SmoothingFactor = s.SmoothingFactor,
     };
-
-    private static void CopyInto(SliderConfig target, SliderConfig source)
-    {
-        var copy = Clone(source);
-        target.Name = copy.Name;
-        target.Type = copy.Type;
-        target.Processes = copy.Processes;
-        target.Device = copy.Device;
-        target.Invert = copy.Invert;
-        target.Curve = copy.Curve;
-        target.DeadZonePercent = copy.DeadZonePercent;
-        target.SmoothingFactor = copy.SmoothingFactor;
-    }
 }

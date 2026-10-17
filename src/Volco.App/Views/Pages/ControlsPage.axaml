@@ -4,7 +4,6 @@
              xmlns:controls="using:Volco.App.Controls"
              xmlns:inspector="using:Volco.App.Views.Inspector"
              xmlns:dialogs="using:Volco.App.Views.Dialogs"
-             xmlns:pages="using:Volco.App.Views.Pages"
              x:Class="Volco.App.Views.Pages.ControlsPage"
              x:DataType="vm:ControlsViewModel">
   <!-- The Controls page (spec docs/design/controls-page.md): the title, a drawing of the

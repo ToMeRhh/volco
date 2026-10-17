@@ -49,39 +49,6 @@
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}"/>
   </Style>
-  <!-- "Not set up": no fill, a quieter outline and a muted title. -->
-  <Style Selector="Border.Card.unset">
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
-  </Style>
-  <Style Selector="Border.Card.unset TextBlock.CardTitleText">
-    <Setter Property="FontWeight" Value="Normal"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
-  </Style>
-  <!-- Activity flash: each card has a Border.ActiveOutline (accent, normally invisible) that
-       fades out once each time the card gets the "active" class. -->
-  <Style Selector="Border.ActiveOutline">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
-    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}"/>
-    <Setter Property="IsHitTestVisible" Value="False"/>
-    <Setter Property="Opacity" Value="0"/>
-  </Style>
-  <Style Selector="Border.Card.active Border.ActiveOutline">
-    <Style.Animations>
-      <Animation Duration="0:0:0.6" FillMode="None">
-        <KeyFrame Cue="0%">
-          <Setter Property="Opacity" Value="1"/>
-        </KeyFrame>
-        <KeyFrame Cue="40%">
-          <Setter Property="Opacity" Value="1"/>
-        </KeyFrame>
-        <KeyFrame Cue="100%">
-          <Setter Property="Opacity" Value="0"/>
-        </KeyFrame>
-      </Animation>
-    </Style.Animations>
-  </Style>
   <Style Selector="Border.CardBody">
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     <Setter Property="BorderThickness" Value="0,1,0,0"/>
@@ -168,24 +135,6 @@
     <Setter Property="Background" Value="Transparent"/>
   </Style>
 
-  <!-- The drag handle: quiet until the card is hovered or the handle has focus. -->
-  <Style Selector="Border.Grip">
-    <Setter Property="Width" Value="22"/>
-    <Setter Property="Height" Value="32"/>
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="CornerRadius" Value="4"/>
-    <Setter Property="Cursor" Value="SizeNorthSouth"/>
-    <Setter Property="Focusable" Value="True"/>
-    <Setter Property="Opacity" Value="0.45"/>
-  </Style>
-  <Style Selector="Border.Card:pointerover Border.Grip, Border.Grip:focus">
-    <Setter Property="Opacity" Value="1"/>
-  </Style>
-  <Style Selector="Border.Grip:focus-visible">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
-  </Style>
-
   <!-- ── Segmented choice (RadioButton.Segment inside Border.SegmentTrack) ── -->
   <Style Selector="Border.SegmentTrack">
     <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
@@ -226,55 +175,6 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
-  <!-- ── Preset tabs (the Buttons page) ──────────────────────────────────
-       Folder tabs over Border.PresetBody, the frame around the edited preset's buttons. Each tab
-       and the frame carry their preset's colour (controls:PresetTint puts PresetFill and
-       PresetEdge in their resources); the checked tab joins the frame under it. -->
-  <Style Selector="RadioButton.PresetTab">
-    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-    <Setter Property="VerticalAlignment" Value="Bottom"/>
-    <!-- 4 between tabs and between wrapped lines; unchecked tabs stop a pixel short of the frame. -->
-    <Setter Property="Margin" Value="0,4,4,1"/>
-    <Setter Property="Template">
-      <ControlTemplate TargetType="RadioButton">
-        <Border Name="PART_Tab"
-                Background="{DynamicResource PresetFill}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1,1,1,0"
-                CornerRadius="8,8,0,0"
-                Padding="14,6,14,8">
-          <ContentPresenter Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            Foreground="{TemplateBinding Foreground}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"/>
-        </Border>
-      </ControlTemplate>
-    </Setter>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:pointerover">
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:checked">
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-    <Setter Property="Margin" Value="0,4,4,0"/>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:checked /template/ Border#PART_Tab">
-    <Setter Property="BorderBrush" Value="{DynamicResource PresetEdge}"/>
-    <Setter Property="BorderThickness" Value="1,3,1,0"/>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:focus-visible /template/ Border#PART_Tab">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-  </Style>
-  <!-- With one preset there are no tabs and the frame draws nothing. -->
-  <Style Selector="Border.PresetBody.framed">
-    <Setter Property="Background" Value="{DynamicResource PresetFill}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource PresetEdge}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="0,8,8,8"/>
-    <Setter Property="Padding" Value="12"/>
-  </Style>
-
   <!-- ── "Advanced" toggle ─────────────────────────────────────────────── -->
   <Style Selector="ToggleButton.Advanced">
     <Setter Property="Background" Value="Transparent"/>
@@ -297,13 +197,6 @@
     <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
     <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
     <Setter Property="Padding" Value="10,2,4,2"/>
-  </Style>
-  <Style Selector="Border.ChipBox">
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
-    <Setter Property="Padding" Value="4"/>
-    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
   </Style>
 
   <!-- Device icon picker (Devices page). -->
@@ -422,7 +315,7 @@
     <Setter Property="TextAlignment" Value="Center"/>
     <Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
-  <!-- The flash when the controller reports the control (like the cards' ActiveOutline). -->
+  <!-- The flash when the controller reports the control. -->
   <Style Selector="Border.TileActive">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="BorderThickness" Value="2"/>

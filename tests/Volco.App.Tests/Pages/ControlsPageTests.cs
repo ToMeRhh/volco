@@ -15,7 +15,9 @@ using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Input;
 using Volco.Core.Input.Actions;
+using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
+using Volco.Core.Tests.Fakes;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
@@ -525,6 +527,70 @@ public class ControlsPageTests
 
         press.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteCurrentOutput);
         Assert.Null(press.Problem);
+    }
+
+    // ── Live previews ─────────────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void LightPreview_FollowsTheLiveState()
+    {
+        using var s = Show(c =>
+        {
+            Hardware(c, 5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen);
+            c.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+            c.Buttons[1].Default().SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" },
+                DeviceB = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" },
+            };
+        });
+        var buttons = Tiles<ButtonTile>(s.Page);
+        Assert.DoesNotContain("on", In<Ellipse>(buttons[0], "Led").Classes);
+        Assert.Contains("on", In<Ellipse>(buttons[1], "LedA").Classes);      // Speakers is A, and the default
+        Assert.DoesNotContain("on", In<Ellipse>(buttons[1], "LedB").Classes);
+
+        // A mute from anywhere (here the Windows mixer) lights the mute button's LED.
+        s.Rig.Engine.DeviceStates["dev-1"] = (0.5f, true);
+        s.Rig.Engine.RaiseDeviceVolumeChanged("dev-1", 0.5f, muted: true, isOwnChange: false);
+        Settle(s.Window);
+        Assert.Contains("on", In<Ellipse>(buttons[0], "Led").Classes);
+    }
+
+    [AvaloniaFact]
+    public void Try_RunsTheScript_AsThatButtonAndGesture_AndTheScreenFollowsTheRun()
+    {
+        var script = $@"C:\volco-test-{Guid.NewGuid()}.bat";   // a Windows full path; on Linux a file by that name in the working directory
+        File.WriteAllText(script, "");
+        try
+        {
+            var starter = new FakeProcessStarter();
+            using var rig = new TestRig(EngineWithAudio(), custom: new CustomActionServices(new FakeMediaSessions(), new FakeProgramLauncher(), starter));
+            rig.Config.Config.Buttons[0].Default().LongPress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = script, Name = "Lights" },
+            };
+            using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+            var page = new ControlsPage(vm.Controls);
+            var window = new Window { Content = page, Width = 932, Height = 680 };
+            window.Show();
+            vm.Controls.Select(vm.Buttons.Items[0]);
+            Settle(window);
+
+            InRow<Button>(page, "Hold", "TryButton").Command!.Execute(null);
+            Settle(window);
+
+            var (spec, run) = Assert.Single(starter.Runs);
+            Assert.Equal("0", spec.Environment["VOLCO_BUTTON"]);
+            Assert.Equal("long", spec.Environment["VOLCO_GESTURE"]);
+            Assert.Equal("Default", spec.Environment["VOLCO_PRESET"]);
+            Assert.Equal("RUNNING", vm.Buttons.Items[0].Screen.TopText);
+
+            run.End(0);
+            Settle(window);
+            Assert.Equal("", vm.Buttons.Items[0].Screen.TopText);
+        }
+        finally { File.Delete(script); }
     }
 
     // ── Routing from the runtime (Task 6 review) ──────────────────────────────

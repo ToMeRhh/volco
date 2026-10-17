@@ -14,7 +14,7 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>What the Buttons page knows about media, program and script actions: which this
+/// <summary>What the Controls page knows about media, program and script actions: which this
 /// platform runs, their live state for the previews, and the media sessions for the app picker.</summary>
 public sealed record ActionCapabilities(ActionAvailability Availability, IActionStatus Status, IMediaSessions? Media)
 {
@@ -26,11 +26,11 @@ public sealed record ActionCapabilities(ActionAvailability Availability, IAction
 }
 
 /// <summary>
-/// The Buttons page: presets (only button actions change per preset) and one card per configured
-/// button in hardware-input order. Position is identity, as on the Sliders page; moving a card
-/// moves its actions in every preset.
+/// The buttons of the Controls page: presets (only button actions change per preset) and the
+/// buttons in hardware-input order. Position is identity, as for sliders; moving a button moves
+/// its actions in every preset.
 /// </summary>
-public sealed partial class ButtonsViewModel : ObservableObject, IReorderableList, IButtonCardOwner
+public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwner
 {
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
@@ -45,19 +45,16 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     public ObservableCollection<ButtonItemViewModel> Items { get; } = new();
     public ObservableCollection<PresetTabViewModel> Presets { get; } = new();
 
-    /// <summary>The preset whose actions the cards show and edit.</summary>
+    /// <summary>The preset whose actions the buttons show and edit.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEditingLive), nameof(EditingName), nameof(BannerText), nameof(MakeLiveText),
+    [NotifyPropertyChangedFor(nameof(IsEditingLive), nameof(EditingName), nameof(MakeLiveText),
                               nameof(EditingTintIndex))]
     private string _editingPresetId;
 
     /// <summary>The preset the controller is using (from the runtime).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEditingLive), nameof(LiveName), nameof(BannerText))]
+    [NotifyPropertyChangedFor(nameof(IsEditingLive))]
     private string _livePresetId;
-
-    [ObservableProperty]
-    private bool _hasMultiplePresets;
 
     [ObservableProperty]
     private bool _isRenaming;
@@ -67,15 +64,9 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
     public bool IsEditingLive => EditingPresetId == LivePresetId;
     public string EditingName => PresetName(EditingPresetId) ?? "";
-    public string LiveName => PresetName(LivePresetId) ?? "";
 
-    /// <summary>The edited preset's colour (its tab's), which frames the button cards.</summary>
+    /// <summary>The edited preset's colour (its tab's), which frames the buttons.</summary>
     public int EditingTintIndex => Math.Max(0, _config.Config.Presets.FindIndex(p => p.Id == EditingPresetId));
-
-    /// <summary>The line at the top of the edited preset's tab.</summary>
-    public string BannerText => IsEditingLive
-        ? $"{EditingName} is live on the controller."
-        : $"You are editing {EditingName}. The controller is using {LiveName}.";
 
     public string MakeLiveText => $"Make {EditingName} live";
 
@@ -86,7 +77,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         _capabilities = capabilities ?? ActionCapabilities.None;
         _slotHost = new ActionSlotHost(_capabilities.Availability,
                                        () => _capabilities.Media?.GetApps() ?? Array.Empty<MediaApp>(),
-                                       () => config.Config.Connection.Type != ConnectionType.Serial,
                                        fileExists ?? File.Exists);
         _config = config;
         _audio = audio;
@@ -104,28 +94,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         RefreshController();
     }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasCountHint))]
-    private string _countHint = "";
-
-    public bool HasCountHint => CountHint.Length > 0;
-
-    [ObservableProperty]
-    private bool _canAddMissing;
-
-    [ObservableProperty]
-    private string _addMissingText = "";
-
-    /// <summary>Re-reads the controller's hardware (a Hello arrived) or the card count changed.</summary>
-    public void RefreshController()
-    {
-        var n = _config.Config.Controller?.Buttons.Count;
-        CountHint = CountHints.Text("button", n, Items.Count);
-        var missing = (n ?? 0) - Items.Count;
-        CanAddMissing = missing > 0;
-        AddMissingText = missing == 1 ? "Add the missing one" : $"Add the missing {missing}";
-        RefreshLights();
-    }
+    /// <summary>Re-reads the controller's hardware (a Hello arrived): the lights follow.</summary>
+    public void RefreshController() => RefreshLights();
 
     private List<ButtonConfig> Buttons => _config.Config.Buttons;
     private void Save() => _config.RequestSave();
@@ -179,7 +149,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         var presets = _config.Config.Presets;
         for (int i = 0; i < presets.Count; i++)
             Presets.Add(new PresetTabViewModel(presets[i].Id, presets[i].Name, i, tab => EditingPresetId = tab.Id));
-        HasMultiplePresets = Presets.Count > 1;
         // A delete or undo moves the presets after it, and their colours with them.
         OnPropertyChanged(nameof(EditingTintIndex));
         UpdateTabFlags();
@@ -254,8 +223,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         var tab = Presets.FirstOrDefault(t => t.Id == preset.Id);
         if (tab is not null) tab.Name = name;
         OnPropertyChanged(nameof(EditingName));
-        OnPropertyChanged(nameof(LiveName));
-        OnPropertyChanged(nameof(BannerText));
         OnPropertyChanged(nameof(MakeLiveText));
         RefreshPresetPickers();
         Save();
@@ -314,19 +281,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         }
     }
 
-    // ── Add / reset / remove ──────────────────────────────────────────────────
-
-    [RelayCommand]
-    private void Add()
-    {
-        var cfg = new ButtonConfig();
-        Buttons.Add(cfg);
-        var item = new ButtonItemViewModel(cfg, Items.Count, _devices, this) { IsExpanded = true };
-        Items.Add(item);
-        Renumber();
-        RefreshController();
-        Save();
-    }
+    // ── Add / remove ──────────────────────────────────────────────────────────
 
     /// <summary>Adds an empty button for each input the controller has beyond the list.</summary>
     [RelayCommand]
@@ -343,25 +298,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         Renumber();
         RefreshController();
         Save();
-    }
-
-    public void Reset(ButtonItemViewModel item)
-    {
-        var before = CloneJson(item.Config, ConfigJsonContext.Default.ButtonConfig);
-        item.Config.Actions.Clear();
-        item.Config.LongPressMs = new ButtonConfig().LongPressMs;
-        item.Config.DoublePressWindowMs = new ButtonConfig().DoublePressWindowMs;
-        item.IsAdvancedOpen = false;
-        item.Reload();
-        Save();
-        _toast.Show($"{item.Title} reset", () =>
-        {
-            item.Config.Actions = before.Actions;
-            item.Config.LongPressMs = before.LongPressMs;
-            item.Config.DoublePressWindowMs = before.DoublePressWindowMs;
-            item.Reload();
-            Save();
-        });
     }
 
     public void RemoveLast()
@@ -386,20 +322,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
     // ── Reordering ────────────────────────────────────────────────────────────
 
-    public int Count => Items.Count;
-
-    public void MoveUp(ButtonItemViewModel item)
-    {
-        var i = Items.IndexOf(item);
-        if (i > 0) Move(i, i - 1);
-    }
-
-    public void MoveDown(ButtonItemViewModel item)
-    {
-        var i = Items.IndexOf(item);
-        if (i >= 0 && i < Items.Count - 1) Move(i, i + 1);
-    }
-
     public void Move(int from, int to)
     {
         if (from == to || from < 0 || to < 0 || from >= Items.Count || to >= Items.Count) { Renumber(); return; }
@@ -410,14 +332,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         Renumber();
         Save();
     }
-
-    public void PreviewMove(int from, int to)
-    {
-        for (int i = 0; i < Items.Count; i++)
-            Items[i].Index = SlidersViewModel.PreviewIndex(i, from, to);
-    }
-
-    public void CancelPreview() => Renumber();
 
     private void Renumber()
     {
@@ -430,7 +344,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
     // ── Live updates (UI thread) ──────────────────────────────────────────────
 
-    /// <summary>Flashes the card of the button at hardware input <paramref name="index"/>.</summary>
+    /// <summary>Flashes the tile of the button at hardware input <paramref name="index"/>.</summary>
     public void Pulse(int index)
     {
         if (index >= 0 && index < Items.Count) Items[index].Pulse();
@@ -446,12 +360,6 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
     public void RefreshActionState()
     {
         foreach (var item in Items) item.RefreshActionState();
-    }
-
-    /// <summary>The connection type changed: the "Runs only over USB" notes follow.</summary>
-    public void RefreshTransport()
-    {
-        foreach (var item in Items) item.RefreshTransport();
     }
 
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)

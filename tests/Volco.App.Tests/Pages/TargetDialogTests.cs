@@ -248,7 +248,7 @@ public class TargetDialogTests
         Done(s);
         Assert.Equal(new[] { "Discord.exe" }, s.Config.Sliders[0].Processes);
         Assert.Empty(s.Config.Sliders[1].Processes);
-        Assert.Empty(s.Vm.Sliders.Items[1].Apps);
+        Assert.Empty(s.Vm.Sliders.Items[1].AppNames);
         Assert.Equal(new[] { "game.exe" }, s.Config.Sliders[3].Processes);
     }
 

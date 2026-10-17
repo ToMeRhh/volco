@@ -16,20 +16,19 @@ public sealed record MediaAppChoice(string? Id, string Name, string Label)
     public override string ToString() => Label;
 }
 
-/// <summary>What an action row needs from its page beyond its own config: which custom actions
-/// this platform has, the live media apps, whether presses arrive over the network (programs and
-/// scripts then do not run), and whether a file exists.</summary>
+/// <summary>What an action slot needs from its page beyond its own config: which custom actions
+/// this platform has, the live media apps, and whether a file exists.</summary>
 internal sealed record ActionSlotHost(ActionAvailability Availability, Func<IReadOnlyList<MediaApp>> MediaApps,
-                                      Func<bool> PressesOverNetwork, Func<string, bool> FileExists)
+                                      Func<string, bool> FileExists)
 {
     public static ActionSlotHost Default { get; } =
-        new(ActionAvailability.All, () => Array.Empty<MediaApp>(), () => false, File.Exists);
+        new(ActionAvailability.All, () => Array.Empty<MediaApp>(), File.Exists);
 }
 
 /// <summary>
-/// One action row of a button card (Press, Double press or Hold) for the preset being edited:
-/// the grouped action picker, that action's settings, and Test. Re-pointed at another preset's
-/// <see cref="ButtonActionConfig"/> with <see cref="Bind"/> when the edited preset changes.
+/// One action slot of a button (Press, Double press or Hold) for the preset being edited: the
+/// inspector's row, Try, and (as a draft) the action dialog's settings. Re-pointed at another
+/// preset's <see cref="ButtonActionConfig"/> with <see cref="Bind"/> when the edited preset changes.
 /// </summary>
 public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabeler
 {
@@ -49,7 +48,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NeedsDevice), nameof(NeedsPair), nameof(NeedsPreset), nameof(CanTest),
                               nameof(NeedsMediaApp), nameof(NeedsCommand), nameof(NeedsWhileRunning),
-                              nameof(CommandHint), nameof(CommandPlaceholder), nameof(ShowUsbOnly),
+                              nameof(CommandPlaceholder),
                               nameof(IconKey), nameof(IsUsb))]
     private ActionChoice _selectedChoice = ActionCatalog.For(ButtonActionType.None);
 
@@ -97,10 +96,6 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     [ObservableProperty]
     private bool _startAnother;
 
-    /// <summary>The chosen file does not exist (URLs are never checked).</summary>
-    [ObservableProperty]
-    private bool _pathMissing;
-
     private ButtonActionType Type => SelectedChoice.Type ?? ButtonActionType.None;
     public bool NeedsDevice => ActionCatalog.NeedsDevice(Type);
     public bool NeedsPair => ActionCatalog.NeedsPair(Type);
@@ -109,9 +104,6 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     public bool NeedsCommand => ActionCatalog.NeedsCommand(Type);
     public bool NeedsWhileRunning => ActionCatalog.NeedsWhileRunning(Type);
     public bool CanTest => Type != ButtonActionType.None;
-
-    /// <summary>Programs and scripts run only for presses over USB (custom-actions spec §7).</summary>
-    public bool ShowUsbOnly => NeedsCommand && _host.PressesOverNetwork();
 
     // ── The Controls page's inspector row ─────────────────────────────────────
 
@@ -198,12 +190,6 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         _changed();
     }
 
-    public string CommandHint => Type == ButtonActionType.RunScript
-        ? "Runs hidden. .bat, .cmd and .exe start fastest; PowerShell takes a moment longer. " +
-          "The script gets VOLCO_BUTTON, VOLCO_GESTURE and VOLCO_PRESET."
-        : "An .exe, a shortcut, a document, or a link such as steam://rungameid/570. " +
-          "If the program already runs, its window comes to the front.";
-
     public string CommandPlaceholder => Type == ButtonActionType.RunScript ? @"C:\Scripts\lights.bat" : @"C:\Games\game.exe";
 
     internal ActionSlotViewModel(string label, IReadOnlyList<AudioDevice> devices,
@@ -243,7 +229,6 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
             CommandWorkingDirectory = cfg.Command?.WorkingDirectory ?? "";
             CommandName = cfg.Command?.Name ?? "";
             StartAnother = cfg.WhileRunning == WhileRunningPolicy.StartAnother;
-            UpdatePathMissing();
             RefreshMediaApps(force: true);
         }
         finally { _loading = false; }
@@ -288,9 +273,6 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         }
         finally { _loading = wasLoading; }
     }
-
-    /// <summary>The connection type changed: the "Runs only over USB" note follows.</summary>
-    internal void RefreshTransport() => OnPropertyChanged(nameof(ShowUsbOnly));
 
     [RelayCommand]
     private void Test() => _execute(_cfg);
@@ -341,7 +323,6 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
 
     partial void OnCommandPathChanged(string value)
     {
-        UpdatePathMissing();
         if (_loading) return;
         Command().Path = value.Trim();
         Edited();
@@ -376,12 +357,6 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     }
 
     private CommandConfig Command() => _cfg.Command ??= new CommandConfig();
-
-    private void UpdatePathMissing()
-    {
-        var path = CommandPath.Trim();
-        PathMissing = path.Length > 0 && !Volco.Core.Programs.CommandPath.IsUrl(path) && !_host.FileExists(path);
-    }
 
     /// <summary>Re-seeds the device pickers; keeps the current selections without saving.</summary>
     internal void RefreshDevices(IReadOnlyList<AudioDevice> devices)

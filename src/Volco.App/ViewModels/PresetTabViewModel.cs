@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>One preset tab on the Buttons page.</summary>
+/// <summary>One mode tab on the Controls page.</summary>
 public sealed partial class PresetTabViewModel : ObservableObject
 {
     private readonly Action<PresetTabViewModel> _select;
@@ -16,7 +16,7 @@ public sealed partial class PresetTabViewModel : ObservableObject
     [ObservableProperty]
     private string _name;
 
-    /// <summary>The preset whose actions the cards are showing.</summary>
+    /// <summary>The preset whose actions the buttons are showing.</summary>
     [ObservableProperty]
     private bool _isEditing;
 

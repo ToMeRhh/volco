@@ -28,7 +28,7 @@
       <Color x:Key="SuccessColor">#FF1F7A45</Color>
       <Color x:Key="WarningColor">#FF9A5B00</Color>
       <Color x:Key="DangerColor">#FFB42318</Color>
-      <!-- Preset tints (the Buttons page): a soft fill and its edge, one pair per preset -->
+      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
       <Color x:Key="PresetFill0Color">#FFEAF0FC</Color>
       <Color x:Key="PresetEdge0Color">#FF3358C4</Color>
       <Color x:Key="PresetFill1Color">#FFE2F3EF</Color>
@@ -62,7 +62,7 @@
       <Color x:Key="SuccessColor">#FF5CC98A</Color>
       <Color x:Key="WarningColor">#FFE7B04F</Color>
       <Color x:Key="DangerColor">#FFF4877C</Color>
-      <!-- Preset tints (the Buttons page): a soft fill and its edge, one pair per preset -->
+      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
       <Color x:Key="PresetFill0Color">#FF1C2335</Color>
       <Color x:Key="PresetEdge0Color">#FF8AA6F2</Color>
       <Color x:Key="PresetFill1Color">#FF152B28</Color>
@@ -96,7 +96,7 @@
       <Color x:Key="SuccessColor">#FF3FF23F</Color>
       <Color x:Key="WarningColor">#FFFFFF00</Color>
       <Color x:Key="DangerColor">#FFFF8A80</Color>
-      <!-- Preset tints (the Buttons page): a soft fill and its edge, one pair per preset -->
+      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
       <Color x:Key="PresetFill0Color">#FF00222A</Color>
       <Color x:Key="PresetEdge0Color">#FF1AEBFF</Color>
       <Color x:Key="PresetFill1Color">#FF002A10</Color>
@@ -130,7 +130,7 @@
       <Color x:Key="SuccessColor">#FF0A5C1E</Color>
       <Color x:Key="WarningColor">#FF6B3D00</Color>
       <Color x:Key="DangerColor">#FF8E0B0B</Color>
-      <!-- Preset tints (the Buttons page): a soft fill and its edge, one pair per preset -->
+      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
       <Color x:Key="PresetFill0Color">#FFE2EEF2</Color>
       <Color x:Key="PresetEdge0Color">#FF174F63</Color>
       <Color x:Key="PresetFill1Color">#FFE0EEDF</Color>

@@ -14,9 +14,9 @@ namespace Volco.App.ViewModels;
 public sealed record GestureLine(PressType Gesture, string Label, string IconKey);
 
 /// <summary>
-/// One button card. Its position (= <see cref="Index"/>) is the hardware input number. Timing is
-/// shared by every preset; the action rows and the light and screen previews show the preset being
-/// edited (when it is live, exactly what the controller shows).
+/// One button of the Controls page. Its position (= <see cref="Index"/>) is the hardware input
+/// number. Timing is shared by every preset; the action rows and the light and screen previews show
+/// the preset being edited (when it is live, exactly what the controller shows).
 /// </summary>
 public sealed partial class ButtonItemViewModel : ObservableObject
 {
@@ -29,8 +29,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Title), nameof(Heading))]
     private int _index;
 
-    // A drag preview renumbers cards without moving their config: only what depends on the
-    // input number changes here, so each step stays cheap.
+    // Only what depends on the input number changes here.
     partial void OnIndexChanged(int value)
     {
         Indicator = _owner.IndicatorFor(value);
@@ -41,8 +40,6 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         => LightDescription = IsScreen
             ? ActionCatalog.ScreenDescription(edited)
             : ActionCatalog.LightDescription(edited, IsLed, _owner.PresetName, _owner.DeviceName);
-
-    public bool ShowLightDescription => Indicator is not null && Indicator != IndicatorKind.None;
 
     public string Title => $"Button {Index}";
 
@@ -75,13 +72,6 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     // ── Derived display ───────────────────────────────────────────────────────
 
-    [ObservableProperty]
-    private string _summary = "";
-
-    /// <summary>No action in any preset: the card is drawn as "Not set up".</summary>
-    [ObservableProperty]
-    private bool _isNotSetUp;
-
     /// <summary>The edited preset's main action (the one the light follows), or "Not set".</summary>
     [ObservableProperty]
     private string _mainLabel = "Not set";
@@ -108,14 +98,12 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>What the controller reported for this input (spec §6.3); null before the first Hello.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLed), nameof(IsLedPair), nameof(IsScreen), nameof(IsIndicatorUnknown), nameof(IndicatorText), nameof(ShowLightDescription),
-                              nameof(KindText), nameof(HasLightRow), nameof(LightRowLabel))]
+    [NotifyPropertyChangedFor(nameof(IsLed), nameof(IsLedPair), nameof(IsScreen), nameof(KindText), nameof(HasLightRow), nameof(LightRowLabel))]
     private IndicatorKind? _indicator;
 
     public bool IsLed => Indicator == IndicatorKind.Led;
     public bool IsLedPair => Indicator == IndicatorKind.LedPair;
     public bool IsScreen => Indicator == IndicatorKind.Screen;
-    public bool IsIndicatorUnknown => Indicator is null;
 
     /// <summary>The inspector header's kind; empty before the first Hello.</summary>
     public string KindText => Indicator switch
@@ -142,15 +130,6 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         _ => "Press",
     };
 
-    public string IndicatorText => Indicator switch
-    {
-        null => "Connect your controller to see its lights and screens.",
-        IndicatorKind.Led => "Light: LED",
-        IndicatorKind.LedPair => "Light: LED pair",
-        IndicatorKind.Screen => "Light: Screen",
-        _ => "Light: None",
-    };
-
     /// <summary>What this button's screen shows in the edited preset.</summary>
     [ObservableProperty]
     private ScreenContent _screen = ScreenContent.Blank;
@@ -170,22 +149,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     private bool _isActive;
 
     [ObservableProperty]
-    private bool _isExpanded;
-
-    [ObservableProperty]
     private bool _isAdvancedOpen;
-
-    [RelayCommand]
-    private void ToggleExpanded() => IsExpanded = !IsExpanded;
-
-    [RelayCommand]
-    private void MoveUp() => _owner.MoveUp(this);
-
-    [RelayCommand]
-    private void MoveDown() => _owner.MoveDown(this);
-
-    [RelayCommand]
-    private void Reset() => _owner.Reset(this);
 
     [RelayCommand]
     private void RemoveLast() => _owner.RemoveLast();
@@ -209,7 +173,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         get { yield return Press; yield return DoublePress; yield return Hold; }
     }
 
-    /// <summary>Re-reads timing and the edited preset's actions (after a preset switch, Reset or Undo).</summary>
+    /// <summary>Re-reads timing and the edited preset's actions (after a preset switch).</summary>
     internal void Reload()
     {
         _loading = true;
@@ -228,14 +192,11 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         RefreshProblems();
     }
 
-    /// <summary>Recomputes the summary, the rows' labels and the light/screen preview. Cheap; safe
+    /// <summary>Recomputes the action lines, the rows' labels and the light/screen preview. Cheap; safe
     /// to call often (no file or device lookups).</summary>
     internal void Refresh()
     {
         var edited = Config.BindingFor(_owner.EditingPresetId);
-        IsNotSetUp = Config.Actions.Values.All(b => b is null || b.IsEmpty);
-        var summary = ActionCatalog.Summary(edited, _owner.PresetName, _owner.DeviceName);
-        Summary = summary.Length > 0 ? summary : IsNotSetUp ? "Not set up" : "Nothing in this preset";
         RefreshActionLines(edited);
 
         Indicator = _owner.IndicatorFor(Index);
@@ -243,8 +204,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
         // The previews show what the controller would show in the edited preset.
         LightValue = ControllerDisplay.LedValueFor(edited, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.EditingPresetId, _owner.Audio, _owner.ActionStatus);
-        // From this card's own config, not AppConfig.Buttons[Index]: during a drag preview the
-        // card's Index no longer matches its position in the list.
+        // From this button's own config, not AppConfig.Buttons[Index].
         Screen = ControllerDisplay.Screen(edited.All().FirstOrDefault(a => a.Action != ButtonActionType.None),
                                           _owner.AppConfig, _owner.EditingPresetId, _owner.Audio, _owner.ActionStatus);
     }
@@ -364,14 +324,9 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         foreach (var slot in Slots) slot.RefreshMediaApps();
         Refresh();
     }
-
-    internal void RefreshTransport()
-    {
-        foreach (var slot in Slots) slot.RefreshTransport();
-    }
 }
 
-/// <summary>What a button card asks of the Buttons page that owns it.</summary>
+/// <summary>What a button asks of the list that owns it.</summary>
 internal interface IButtonCardOwner
 {
     string EditingPresetId { get; }
@@ -386,9 +341,6 @@ internal interface IButtonCardOwner
     ActionSlotHost SlotHost { get; }
     IActionStatus ActionStatus { get; }
     void Changed(ButtonItemViewModel item);
-    void MoveUp(ButtonItemViewModel item);
-    void MoveDown(ButtonItemViewModel item);
-    void Reset(ButtonItemViewModel item);
     void RemoveLast();
     IndicatorKind? IndicatorFor(int index);
     string DeviceName(DeviceRefConfig? device);

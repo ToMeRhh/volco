@@ -13,6 +13,7 @@ using Volco.App.Views.Pages;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Input;
+using Volco.Core.Media;
 using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
 using Volco.Core.Tests.Fakes;
@@ -40,7 +41,8 @@ public class ActionDialogTests
     }
 
     /// <param name="services">Media, program and script services; false: those actions are unavailable.</param>
-    private static Shown Show(Action<AppConfig>? configure = null, bool services = true)
+    /// <param name="media">The media sessions, when a test needs their apps.</param>
+    private static Shown Show(Action<AppConfig>? configure = null, bool services = true, FakeMediaSessions? media = null)
     {
         var speakers = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true);
         var engine = new FakeAudioEngine
@@ -48,7 +50,7 @@ public class ActionDialogTests
             Devices = { speakers, new AudioDevice("dev-2", "Headphones", AudioFlow.Render, false) },
             DefaultRender = speakers,
         };
-        var custom = services ? new CustomActionServices(new FakeMediaSessions(), new FakeProgramLauncher(), new FakeProcessStarter()) : null;
+        var custom = services ? new CustomActionServices(media ?? new FakeMediaSessions(), new FakeProgramLauncher(), new FakeProcessStarter()) : null;
         var rig = new TestRig(engine, custom: custom);
         configure?.Invoke(rig.Config.Config);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -514,6 +516,143 @@ public class ActionDialogTests
         Assert.False(dialog.Done());   // a late Done writes nothing either
         Assert.All(s.Config.Buttons, b => Assert.False(b.Actions.ContainsKey("preset-2")));
         Assert.Equal(ButtonActionType.None, s.Config.Buttons[0].BindingFor(AppConfig.DefaultPresetId).SinglePress.Action);
+    }
+
+    // ── Each action's settings ────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void SavedDevices_AreSelected_ByNameToo_AndShowNicknames()
+    {
+        using var s = Show(c =>
+        {
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", Nickname = "Cans" });
+            // Saved by friendly name only: one plugged in, one not.
+            c.Buttons[0].Default().SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { Id = "", FriendlyName = "Speakers" },
+                DeviceB = new DeviceRefConfig { Id = "", FriendlyName = "Old Soundcard" },
+            };
+            c.Buttons[1].Default().SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.MuteSpecificDevice, Device = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" },
+            };
+        });
+        Open(s);
+        var a = In<ComboBox>(s.View, "DeviceACombo");
+        var b = In<ComboBox>(s.View, "DeviceBCombo");
+        Assert.Equal("Speakers", a.SelectedItem);
+        Assert.Equal("Old Soundcard", b.SelectedItem);
+        Assert.Equal(new[] { "Speakers", "Headphones", "Old Soundcard" }, Assert.IsAssignableFrom<IEnumerable<string>>(a.ItemsSource));
+        s.Dialog.Cancel();
+
+        // The picker shows the nickname, with the Windows name as secondary text.
+        Open(s, button: 1);
+        var combo = In<ComboBox>(s.View, "DeviceCombo");
+        Assert.Equal("Headphones", combo.SelectedItem);
+        Assert.Equal("Cans", In<TextBlock>(combo, "DeviceLabel").Text);
+        Assert.Equal("Headphones", In<TextBlock>(combo, "DeviceSecondary").Text);
+        combo.IsDropDownOpen = true;
+        Settle(s.Window);
+        var labels = Enumerable.Range(0, combo.ItemCount)
+            .Select(i => In<TextBlock>(Assert.IsAssignableFrom<Control>(combo.ContainerFromIndex(i)), "DeviceLabel").Text)
+            .ToList();
+        Assert.Equal(new[] { "Speakers", "Cans" }, labels);
+    }
+
+    [AvaloniaFact]
+    public void RunScript_ShowsTheCommandFields_AndTheUsbNote()
+    {
+        var script = $@"C:\volco-test-{Guid.NewGuid()}.bat";   // a Windows full path; on Linux a file by that name in the working directory
+        File.WriteAllText(script, "");
+        try
+        {
+            using var s = Show();
+            Open(s);
+            Click(ItemButton(s, "Run a script"));
+            Settle(s.Window);
+
+            Assert.True(In<StackPanel>(s.View, "CommandParams").IsEffectivelyVisible);
+            Assert.True(In<CheckBox>(s.View, "StartAnotherCheck").IsEffectivelyVisible);
+            Assert.True(In<StackPanel>(s.View, "UsbNote").IsEffectivelyVisible);
+            Assert.False(In<StackPanel>(s.View, "MediaParams").IsEffectivelyVisible);
+            Assert.False(In<StackPanel>(s.View, "DeviceParams").IsEffectivelyVisible);
+
+            s.Dialog.Draft.CommandPath = script;
+            s.Dialog.Draft.CommandArguments = "on";
+            s.Dialog.Draft.CommandName = "Lights";
+            s.Dialog.Draft.StartAnother = true;
+            Click(In<Button>(s.View, "DoneButton"));
+            Settle(s.Window);
+
+            Assert.False(s.Controls.HasDialog);
+            var saved = s.Config.Buttons[0].Default().SinglePress;
+            Assert.Equal(ButtonActionType.RunScript, saved.Action);
+            Assert.Equal(script, saved.Command!.Path);
+            Assert.Equal("on", saved.Command.Arguments);
+            Assert.Equal("Lights", saved.Command.Name);
+            Assert.Equal(WhileRunningPolicy.StartAnother, saved.WhileRunning);
+            Assert.Equal("Run Lights", s.Vm.Buttons.Items[0].MainLabel);
+        }
+        finally { File.Delete(script); }
+    }
+
+    [AvaloniaFact]
+    public void OpenProgram_HasNoRepeatChoice_RefusesAMissingFile_AcceptsALink()
+    {
+        using var s = Show();
+        Open(s);
+        Click(ItemButton(s, "Open a program"));
+        Settle(s.Window);
+        Assert.False(In<CheckBox>(s.View, "StartAnotherCheck").IsVisible);
+        Assert.True(In<StackPanel>(s.View, "UsbNote").IsEffectivelyVisible);
+
+        s.Dialog.Draft.CommandPath = $@"C:\Games\missing-{Guid.NewGuid()}.exe";
+        Click(In<Button>(s.View, "DoneButton"));
+        Settle(s.Window);
+        Assert.True(s.Controls.HasDialog);
+        Assert.Equal("This file doesn’t exist.", In<TextBlock>(s.View, "PathErrorText").Text);
+
+        s.Dialog.Draft.CommandPath = "steam://rungameid/570";
+        Settle(s.Window);
+        Assert.False(In<TextBlock>(s.View, "PathErrorText").IsVisible);
+        Click(In<Button>(s.View, "DoneButton"));
+        Settle(s.Window);
+        Assert.False(s.Controls.HasDialog);
+        Assert.Equal("steam://rungameid/570", s.Config.Buttons[0].Default().SinglePress.Command!.Path);
+    }
+
+    [AvaloniaFact]
+    public void MediaPicker_ListsCurrent_LiveApps_AndTheSavedMissingOne()
+    {
+        var media = new FakeMediaSessions();
+        media.SetApps(new[] { new MediaApp("chrome", "Google Chrome", MediaPlayback.Playing) });
+        using var s = Show(c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "Spotify.exe", Name = "Spotify" },
+        }, media: media);
+        Open(s);
+        var draft = s.Dialog.Draft;
+
+        Assert.True(In<StackPanel>(s.View, "MediaParams").IsEffectivelyVisible);
+        Assert.Equal(new[] { "Current app (whatever plays)", "Google Chrome", "Spotify (not running)" },
+                     draft.MediaAppChoices.Select(c => c.Label));
+        Assert.Equal("Spotify.exe", draft.SelectedMediaApp!.Id);
+        Assert.Same(draft.SelectedMediaApp, In<ComboBox>(s.View, "MediaAppCombo").SelectedItem);
+
+        draft.SelectedMediaApp = draft.MediaAppChoices[1];
+        Click(In<Button>(s.View, "DoneButton"));
+        Settle(s.Window);
+        var saved = s.Config.Buttons[0].Default().SinglePress;
+        Assert.Equal("chrome", saved.MediaApp!.Id);
+        Assert.Equal("Google Chrome", saved.MediaApp.Name);
+        Assert.Equal("Play/pause Google Chrome", s.Vm.Buttons.Items[0].MainLabel);
+
+        Open(s);
+        s.Dialog.Draft.SelectedMediaApp = s.Dialog.Draft.MediaAppChoices[0];
+        Click(In<Button>(s.View, "DoneButton"));
+        Settle(s.Window);
+        Assert.Null(s.Config.Buttons[0].Default().SinglePress.MediaApp);
     }
 
     // ── Focus and live devices ────────────────────────────────────────────────

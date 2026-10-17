@@ -8,18 +8,23 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
+using Volco.App.Views.Dialogs;
 using Volco.App.Views.Pages;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Media;
+using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
+using Volco.Core.Tests.Fakes;
 using Xunit;
 
 namespace Volco.App.Tests;
 
 /// <summary>
 /// Every setting the earlier pages edited (the UX spec's §1 inventory) is still
-/// editable through the redesigned UI, and what the UI writes survives a save and a fresh load.
+/// editable through the redesigned UI (sliders and buttons through the Controls page, its
+/// inspector and dialogs), and what the UI writes survives a save and a fresh load.
 /// Each test edits through the controls, saves, reloads config.json with a new ConfigManager and
 /// checks the property.
 /// </summary>
@@ -75,96 +80,208 @@ public class SettingsCoverageTests
         Assert.Equal(9876, c.WebSocket.Port);
     }
 
+    // ── The Controls page ─────────────────────────────────────────────────────
+
+    private static Border Inspector(ControlsPage page) => page.FindControl<Border>("Inspector")!;
+
+    private static void Settle(Window window)
+    {
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    /// <summary>Selects the slider and opens its target dialog from the inspector's Controls row.</summary>
+    private static TargetDialog OpenTarget(ControlsPage page, Window window, SettingsViewModel vm, int slider)
+    {
+        vm.Controls.Select(vm.Sliders.Items[slider]);
+        Settle(window);
+        var row = Named<Button>(Inspector(page), "ControlsRow");
+        row.Command!.Execute(row.CommandParameter);
+        Settle(window);
+        return page.GetVisualDescendants().OfType<TargetDialog>().Single();
+    }
+
+    private static void ClickTarget(TargetDialog dialog, Window window, string name)
+    {
+        Click(dialog.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "TargetRowButton" && ((TargetItem)b.DataContext!).Name == name));
+        Settle(window);
+    }
+
     [AvaloniaFact]
-    public void Sliders_TypeAppsDeviceAndTuning()
+    public void Sliders_NameTargetAndResponse()
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new SlidersPage(vm.Sliders);
+        var page = new ControlsPage(vm.Controls);
         var window = Host(page);
-        foreach (var item in vm.Sliders.Items) { item.IsExpanded = true; item.IsAdvancedOpen = true; }
-        Dispatcher.UIThread.RunJobs();
 
-        // Slider 0: apps, typed into the chip box.
-        Named<RadioButton>(page, "AppsOption", 0).IsChecked = true;             // Sliders[i].Type = Processes
-        Dispatcher.UIThread.RunJobs();
-        var box = Named<AutoCompleteBox>(page, "ProcessBox", 0);
-        box.Focus();
-        window.KeyTextInput("vlc.exe");
-        box.IsDropDownOpen = false;
-        window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.None, null);
-        Dispatcher.UIThread.RunJobs();                                         // Sliders[i].Processes
+        // Slider 0: apps, one playing and one picked as an .exe.
+        var dialog = OpenTarget(page, window, vm, 0);
+        ClickTarget(dialog, window, "spotify");                                // Sliders[i].Type = Processes
+        ((TargetDialogViewModel)vm.Controls.Dialog!).PickExe = () => Task.FromResult<string?>(@"C:\Program Files\VLC\vlc.exe");
+        ClickTarget(dialog, window, "Other app…");                             // Sliders[i].Processes
+        Click(Named<Button>(dialog, "DoneButton"));
+        Settle(window);
 
-        // Slider 1: all other apps.
-        Named<RadioButton>(page, "OtherAppsOption", 1).IsChecked = true;       // Sliders[i].Type = Unmapped
+        // Slider 1: everything else.
+        dialog = OpenTarget(page, window, vm, 1);
+        ClickTarget(dialog, window, "Everything else");                        // Sliders[i].Type = Unmapped
+        Click(Named<Button>(dialog, "DoneButton"));
+        Settle(window);
 
-        // Slider 2: a device, plus every tuning control.
-        Named<RadioButton>(page, "DeviceOption", 2).IsChecked = true;          // Sliders[i].Type = Device
-        Dispatcher.UIThread.RunJobs();
-        Named<ComboBox>(page, "DeviceCombo", 2).SelectedItem = "Headphones";   // Sliders[i].Device
-        Named<ToggleSwitch>(page, "InvertSwitch", 2).IsChecked = true;         // Sliders[i].Invert
-        Named<ComboBox>(page, "CurveCombo", 2).SelectedIndex = 2;              // Sliders[i].Curve
-        Named<Slider>(page, "DeadZoneSlider", 2).Value = 0.1;                  // Sliders[i].DeadZonePercent
-        Named<Slider>(page, "SmoothingSlider", 2).Value = 0.5;                 // Sliders[i].SmoothingFactor
+        // Slider 2: a device, a name, and every response control.
+        dialog = OpenTarget(page, window, vm, 2);
+        ClickTarget(dialog, window, "Headphones");                             // Sliders[i].Type = Device
+        Click(Named<Button>(dialog, "DoneButton"));                            // Sliders[i].Device
+        Settle(window);
+        var inspector = Inspector(page);
+        Named<TextBox>(inspector, "NameBox").Text = "Music";                   // Sliders[i].Name
+        Assert.False(Named<StackPanel>(inspector, "ResponseBody").IsEffectivelyVisible);   // starts closed
+        Named<ToggleButton>(inspector, "ResponseToggle").IsChecked = true;
+        Settle(window);
+        Named<ToggleSwitch>(inspector, "InvertSwitch").IsChecked = true;       // Sliders[i].Invert
+        Named<ListBox>(inspector, "CurveList").SelectedIndex = 2;              // Sliders[i].Curve
+        Named<Slider>(inspector, "DeadZoneSlider").Value = 0.1;                // Sliders[i].DeadZonePercent
+        Named<Slider>(inspector, "SmoothingSlider").Value = 0.5;               // Sliders[i].SmoothingFactor
+
+        // Slider 3: the main output (no device).
+        dialog = OpenTarget(page, window, vm, 3);
+        ClickTarget(dialog, window, "Main output");
+        Click(Named<Button>(dialog, "DoneButton"));
+        Settle(window);
 
         var s = SaveAndReload(rig).Sliders;
         Assert.Equal(SliderMappingType.Processes, s[0].Type);
-        Assert.Equal(new[] { "vlc.exe" }, s[0].Processes);
+        Assert.Equal(new[] { "spotify.exe", "vlc.exe" }, s[0].Processes);
         Assert.Equal(SliderMappingType.Unmapped, s[1].Type);
         Assert.Equal(SliderMappingType.Device, s[2].Type);
         Assert.Equal("dev-2", s[2].Device!.Id);
+        Assert.Equal("Headphones", s[2].Device!.FriendlyName);
+        Assert.Equal("Music", s[2].Name);
         Assert.True(s[2].Invert);
         Assert.Equal(ResponseCurve.Exponential, s[2].Curve);
         Assert.Equal(0.1, s[2].DeadZonePercent);
         Assert.Equal(0.5, s[2].SmoothingFactor);
+        Assert.Equal(SliderMappingType.Device, s[3].Type);
+        Assert.Null(s[3].Device);
+    }
+
+    /// <summary>Selects the button and opens the action dialog of one row ("Press", "Double", "Hold"),
+    /// then picks <paramref name="action"/> from its list.</summary>
+    private static ActionDialog OpenAction(ControlsPage page, Window window, SettingsViewModel vm, int button, string row, string action)
+    {
+        vm.Controls.Select(vm.Buttons.Items[button]);
+        Settle(window);
+        var rowButton = Named<Button>(Named<ContentControl>(Inspector(page), $"ActionRow_{row}"), "RowButton");
+        rowButton.Command!.Execute(rowButton.CommandParameter);
+        Settle(window);
+        var dialog = page.GetVisualDescendants().OfType<ActionDialog>().Single();
+        Click(dialog.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "ActionItemButton" && ((ActionItem)b.DataContext!).Name == action));
+        Settle(window);
+        return dialog;
+    }
+
+    private static void Done(ActionDialog dialog, Window window, SettingsViewModel vm)
+    {
+        Click(Named<Button>(dialog, "DoneButton"));
+        Settle(window);
+        Assert.False(vm.Controls.HasDialog);   // Done accepted the action
     }
 
     [AvaloniaFact]
-    public void Buttons_ActionsDevicesTogglePairAndTiming()
+    public void Buttons_ActionsTheirSettingsAndTiming()
     {
-        using var rig = new TestRig(Engine());
-        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ButtonsPage(vm.Buttons);
-        Host(page);
-        foreach (var item in vm.Buttons.Items) { item.IsExpanded = true; item.IsAdvancedOpen = true; }
-        Dispatcher.UIThread.RunJobs();
+        var media = new FakeMediaSessions();
+        media.SetApps(new[] { new MediaApp("chrome", "Google Chrome", MediaPlayback.Playing) });
+        var custom = new CustomActionServices(media, new FakeProgramLauncher(), new FakeProcessStarter());
+        var script = $@"C:\volco-coverage-{Guid.NewGuid()}.bat";   // a Windows full path; on Linux a file by that name in the working directory
+        File.WriteAllText(script, "");
+        try
+        {
+            using var rig = new TestRig(Engine(), custom: custom);
+            rig.Config.Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+            var page = new ControlsPage(vm.Controls);
+            var window = Host(page);
 
-        ActionCombo(page, "PressRow", 0).SelectedItem = ActionCatalog.For(ButtonActionType.MuteSpecificDevice);
-        ActionCombo(page, "DoubleRow", 0).SelectedItem = ActionCatalog.For(ButtonActionType.MuteCurrentInput);
-        ActionCombo(page, "HoldRow", 0).SelectedItem = ActionCatalog.For(ButtonActionType.SetOutputDevice);
-        ActionCombo(page, "PressRow", 1).SelectedItem = ActionCatalog.For(ButtonActionType.ToggleOutputDevice);
-        Dispatcher.UIThread.RunJobs();
+            // Button 0: a device action on each gesture's own settings.
+            var d = OpenAction(page, window, vm, 0, "Press", "Mute a device");
+            Named<ComboBox>(d, "DeviceCombo").SelectedItem = "Speakers";                   // action Device
+            Done(d, window, vm);
+            d = OpenAction(page, window, vm, 0, "Double", "Mute microphone");
+            Done(d, window, vm);
+            d = OpenAction(page, window, vm, 0, "Hold", "Switch output");
+            Named<ComboBox>(d, "DeviceCombo").SelectedItem = "Headphones";
+            Done(d, window, vm);
 
-        InRow<ComboBox>(page, "PressRow", 0, "DeviceCombo").SelectedItem = "Speakers";    // action Device
-        InRow<ComboBox>(page, "HoldRow", 0, "DeviceCombo").SelectedItem = "Headphones";
-        InRow<ComboBox>(page, "PressRow", 1, "DeviceACombo").SelectedItem = "Speakers";   // toggle A (was OutputDevices.Device1)
-        InRow<ComboBox>(page, "PressRow", 1, "DeviceBCombo").SelectedItem = "Headphones"; // toggle B (was OutputDevices.Device2)
-        Named<NumericUpDown>(page, "LongPressBox", 0).Value = 700;                        // LongPressMs
-        Named<NumericUpDown>(page, "DoublePressBox", 0).Value = 350;                      // DoublePressWindowMs
+            // Button 1: the toggle pair, a mode and a media app.
+            d = OpenAction(page, window, vm, 1, "Press", "Toggle outputs");
+            Named<ComboBox>(d, "DeviceACombo").SelectedItem = "Speakers";                  // toggle A
+            Named<ComboBox>(d, "DeviceBCombo").SelectedItem = "Headphones";                // toggle B
+            Done(d, window, vm);
+            d = OpenAction(page, window, vm, 1, "Double", "Go to mode");
+            Named<ComboBox>(d, "PresetCombo").SelectedItem = new PresetChoice("gaming", "Gaming");   // PresetId
+            Done(d, window, vm);
+            d = OpenAction(page, window, vm, 1, "Hold", "Play / pause");
+            var apps = Named<ComboBox>(d, "MediaAppCombo");
+            apps.SelectedItem = ((IEnumerable<MediaAppChoice>)apps.ItemsSource!).Single(c => c.Id == "chrome");   // MediaApp
+            Done(d, window, vm);
 
-        var b = SaveAndReload(rig).Buttons;
-        var b0 = b[0].BindingFor(AppConfig.DefaultPresetId);
-        Assert.Equal(ButtonActionType.MuteSpecificDevice, b0.SinglePress.Action);
-        Assert.Equal("dev-1", b0.SinglePress.Device!.Id);
-        Assert.Equal(ButtonActionType.MuteCurrentInput, b0.DoublePress.Action);
-        Assert.Equal(ButtonActionType.SetOutputDevice, b0.LongPress.Action);
-        Assert.Equal("dev-2", b0.LongPress.Device!.Id);
-        var toggle = b[1].BindingFor(AppConfig.DefaultPresetId).SinglePress;
-        Assert.Equal(ButtonActionType.ToggleOutputDevice, toggle.Action);
-        Assert.Equal("dev-1", toggle.Device!.Id);
-        Assert.Equal("dev-2", toggle.DeviceB!.Id);
-        Assert.Equal(700, b[0].LongPressMs);
-        Assert.Equal(350, b[0].DoublePressWindowMs);
-    }
+            // Button 2: a script with every command field, and a program by link.
+            d = OpenAction(page, window, vm, 2, "Press", "Run a script");
+            Named<TextBox>(d, "CommandPathBox").Text = script;                             // Command.Path
+            Named<TextBox>(d, "CommandArgumentsBox").Text = "on";                          // Command.Arguments
+            Named<TextBox>(d, "CommandFolderBox").Text = @"C:\Scripts";                    // Command.WorkingDirectory
+            Named<TextBox>(d, "CommandNameBox").Text = "Lights";                           // Command.Name
+            Named<CheckBox>(d, "StartAnotherCheck").IsChecked = true;                      // WhileRunning
+            Done(d, window, vm);
+            d = OpenAction(page, window, vm, 2, "Double", "Open a program");
+            Named<TextBox>(d, "CommandPathBox").Text = "steam://rungameid/570";
+            Done(d, window, vm);
 
-    private static ComboBox ActionCombo(ButtonsPage page, string row, int button)
-        => InRow<ComboBox>(page, row, button, "ActionCombo");
+            // Timing, on button 0.
+            vm.Controls.Select(vm.Buttons.Items[0]);
+            Settle(window);
+            Named<ToggleButton>(Inspector(page), "TimingToggle").IsChecked = true;
+            Settle(window);
+            Named<NumericUpDown>(Inspector(page), "LongPressBox").Value = 700;              // LongPressMs
+            Named<NumericUpDown>(Inspector(page), "DoublePressBox").Value = 350;            // DoublePressWindowMs
 
-    private static T InRow<T>(ButtonsPage page, string row, int button, string name) where T : Control
-    {
-        var card = Named<Border>(page, "Card", button);
-        var actionRow = card.GetVisualDescendants().OfType<ActionRow>().First(r => r.Name == row);
-        return actionRow.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
+            var b = SaveAndReload(rig).Buttons;
+            var b0 = b[0].BindingFor(AppConfig.DefaultPresetId);
+            Assert.Equal(ButtonActionType.MuteSpecificDevice, b0.SinglePress.Action);
+            Assert.Equal("dev-1", b0.SinglePress.Device!.Id);
+            Assert.Equal("Speakers", b0.SinglePress.Device.FriendlyName);
+            Assert.Equal(ButtonActionType.MuteCurrentInput, b0.DoublePress.Action);
+            Assert.Equal(ButtonActionType.SetOutputDevice, b0.LongPress.Action);
+            Assert.Equal("dev-2", b0.LongPress.Device!.Id);
+            var b1 = b[1].BindingFor(AppConfig.DefaultPresetId);
+            Assert.Equal(ButtonActionType.ToggleOutputDevice, b1.SinglePress.Action);
+            Assert.Equal("dev-1", b1.SinglePress.Device!.Id);
+            Assert.Equal("dev-2", b1.SinglePress.DeviceB!.Id);
+            Assert.Equal(ButtonActionType.GoToPreset, b1.DoublePress.Action);
+            Assert.Equal("gaming", b1.DoublePress.PresetId);
+            Assert.Equal(ButtonActionType.MediaPlayPause, b1.LongPress.Action);
+            Assert.Equal("chrome", b1.LongPress.MediaApp!.Id);
+            Assert.Equal("Google Chrome", b1.LongPress.MediaApp.Name);
+            var b2 = b[2].BindingFor(AppConfig.DefaultPresetId);
+            Assert.Equal(ButtonActionType.RunScript, b2.SinglePress.Action);
+            Assert.Equal(script, b2.SinglePress.Command!.Path);
+            Assert.Equal("on", b2.SinglePress.Command.Arguments);
+            Assert.Equal(@"C:\Scripts", b2.SinglePress.Command.WorkingDirectory);
+            Assert.Equal("Lights", b2.SinglePress.Command.Name);
+            Assert.Equal(WhileRunningPolicy.StartAnother, b2.SinglePress.WhileRunning);
+            Assert.Equal(ButtonActionType.OpenProgram, b2.DoublePress.Action);
+            Assert.Equal("steam://rungameid/570", b2.DoublePress.Command!.Path);
+            Assert.Equal(700, b[0].LongPressMs);
+            Assert.Equal(350, b[0].DoublePressWindowMs);
+        }
+        finally { File.Delete(script); }
     }
 
     [AvaloniaFact]

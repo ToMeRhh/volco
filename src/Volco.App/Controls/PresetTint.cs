@@ -5,7 +5,7 @@ using Avalonia.Controls;
 namespace Volco.App.Controls;
 
 /// <summary>
-/// A preset's colour on the Buttons page. Setting <c>PresetTint.Index</c> on a control puts two
+/// A preset's colour on the Controls page. Setting <c>PresetTint.Index</c> on a control puts two
 /// resources in it, <c>PresetFill</c> and <c>PresetEdge</c>: the theme's <c>PresetFill{n}Brush</c> and
 /// <c>PresetEdge{n}Brush</c> (n = index mod <see cref="Count"/>), kept current when the theme changes.
 /// The control, its template and its content use them as <c>{DynamicResource PresetFill}</c>.
