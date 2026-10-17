@@ -12,7 +12,8 @@
 
 namespace {
 
-volco::BlobReceiver receiver;
+uint8_t receiveBuf[volco::kMaxConfigBlob];
+volco::BlobReceiver receiver(receiveBuf, volco::kMaxConfigBlob, volco::kMaxChunk);
 volco_config_ControllerConfig candidate;  // static: kept off the loop task's stack
 uint8_t replyBuf[volco::kMaxReadReply];
 

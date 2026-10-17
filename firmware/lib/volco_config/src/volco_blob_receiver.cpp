@@ -15,7 +15,7 @@ ReceiverEvent BlobReceiver::onBegin(uint8_t transport, uint8_t seq, uint16_t tot
   open_ = false;  // rule 1: a Begin always discards an open transfer
   transport_ = transport;
   seq_ = seq;
-  if (total == 0 || total > kMaxConfigBlob) return reply(CFG_TOO_LARGE);
+  if (total == 0 || total > capacity_) return reply(CFG_TOO_LARGE);
   open_ = true;
   total_ = total;
   received_ = 0;
@@ -28,7 +28,7 @@ ReceiverEvent BlobReceiver::onChunk(uint8_t transport, uint8_t seq, uint16_t off
                                     uint32_t now) {
   tick(now);  // rule 6 holds even if the caller hasn't ticked since a long pause
   if (!open_ || transport != transport_) return {ReceiverEvent::NONE, transport, seq, CFG_OK};  // rules 2-3
-  if (seq != seq_ || offset != received_ || len == 0 || len > kMaxChunk || received_ + len > total_)
+  if (seq != seq_ || offset != received_ || len == 0 || len > maxChunk_ || received_ + len > total_)
     return reply(CFG_BAD_SEQUENCE);  // rule 4
   memcpy(buf_ + received_, data, len);
   received_ = (uint16_t)(received_ + len);

@@ -10,7 +10,7 @@
 namespace volco {
 
 constexpr uint32_t kTransferTimeoutMs = 2000;
-constexpr size_t kMaxChunk = 240;
+constexpr size_t kMaxChunk = 240;  // the ESP32's chunk size
 
 struct ReceiverEvent {
   enum Kind : uint8_t { NONE, REPLY, COMPLETE };
@@ -20,6 +20,10 @@ struct ReceiverEvent {
 
 class BlobReceiver {
  public:
+  // buf: where a write lands, `capacity` bytes (the chip's maximum blob); maxChunk: the largest
+  // chunk accepted (the chip's chunk size).
+  BlobReceiver(uint8_t* buf, uint16_t capacity, uint8_t maxChunk)
+      : buf_(buf), capacity_(capacity), maxChunk_(maxChunk) {}
   ReceiverEvent onBegin(uint8_t transport, uint8_t seq, uint16_t total, uint32_t crc, uint32_t now);
   ReceiverEvent onChunk(uint8_t transport, uint8_t seq, uint16_t offset, const uint8_t* data, size_t len, uint32_t now);
   ReceiverEvent onEnd(uint8_t transport, uint8_t seq, uint32_t now);
@@ -30,11 +34,13 @@ class BlobReceiver {
 
  private:
   ReceiverEvent reply(uint8_t code);
+  uint8_t* buf_;
+  uint16_t capacity_;
+  uint8_t maxChunk_;
   bool open_ = false;
   uint8_t transport_ = 0, seq_ = 0;
   uint16_t total_ = 0, received_ = 0;
   uint32_t crc_ = 0, last_ = 0;
-  uint8_t buf_[kMaxConfigBlob] = {0};
 };
 
 }  // namespace volco

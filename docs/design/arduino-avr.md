@@ -120,11 +120,11 @@ The `native` environment builds both firmwares' pure parts.
   screens, `Link::Held` keeps only the LED value and Screen frames are ignored. The parser's
   payload buffer is `VOLCO_MAX_PAYLOAD` (AVR: the chunk frame, 112 bytes; longer frames are
   dropped).
-- **`volco_config` session parts:** `BlobReceiver` writes into, and the read reply reads from, a
-  `ConfigStorage` interface: `begin(total)`, `write(offset, data, len)`, `read(offset, buf, len)`,
-  `size()`. The ESP32 keeps a RAM buffer then NVS, as today; the AVR keeps a 384-byte RAM buffer
-  then an EEPROM slot. The read reply is built and sent one chunk at a time, so no 1 KB reply
-  buffer. `volco_crc32` gains an incremental form for EEPROM reads.
+- **`volco_config` session parts:** `BlobReceiver` writes into a caller-supplied buffer with the
+  chip's capacity and chunk limit (ESP32 1024/240, AVR 384/96; both buffer in RAM, §6.4). The read
+  reply streams frame by frame from a `BlobSource` (`emitReadReply`; EEPROM on AVR); the ESP32
+  keeps `buildReadReply`, which collects them into one buffer for one UDP datagram.
+  `volco_crc32` gains an incremental form for EEPROM reads (stage 3).
 - **`volco_input`** (new, pure C++, host-tested): slider smoothing and deadband, and button
   debounce, moved out of `main.cpp`. The EMA becomes fixed-point (weight in 1/256ths, value ×16)
   on both chips; its output must stay within one ADC unit of the float version in the tests. This

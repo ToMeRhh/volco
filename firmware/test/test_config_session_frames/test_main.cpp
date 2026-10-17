@@ -78,6 +78,60 @@ void test_too_small_buffer_gives_zero() {
   TEST_ASSERT_EQUAL(0, (int)buildReadReply(1, blob, sizeof blob, 0, buf, sizeof buf));
 }
 
+struct ArraySource : BlobSource {
+  const uint8_t* data;
+  explicit ArraySource(const uint8_t* d) : data(d) {}
+  void read(uint16_t offset, uint8_t* out, uint8_t n) override { memcpy(out, data + offset, n); }
+};
+struct Collect : FrameOut {
+  std::vector<uint8_t> bytes;
+  int frames = 0;
+  void frame(const uint8_t* f, size_t n) override {
+    bytes.insert(bytes.end(), f, f + n);
+    frames++;
+  }
+};
+
+void test_streamed_reply_in_96_byte_chunks() {
+  static uint8_t blob[250];
+  for (int i = 0; i < 250; i++) blob[i] = (uint8_t)(i * 5 + 3);
+  ArraySource src(blob);
+  Collect out;
+  emitReadReply(4, src, 250, 0xA1B2C3D4, 96, out);
+  TEST_ASSERT_EQUAL(3, out.frames);
+  auto frames = payloads(out.bytes.data(), out.bytes.size());
+  TEST_ASSERT_EQUAL(3, frames.size());
+  std::vector<uint8_t> joined;
+  const uint16_t offsets[] = {0, 96, 192};
+  for (size_t f = 0; f < 3; f++) {
+    TEST_ASSERT_EQUAL_HEX8(MSG_CONFIG_DATA, frames[f][0]);
+    TEST_ASSERT_EQUAL(4, frames[f][1]);
+    TEST_ASSERT_EQUAL(250, frames[f][2] << 8 | frames[f][3]);
+    TEST_ASSERT_EQUAL(offsets[f], frames[f][4] << 8 | frames[f][5]);
+    joined.insert(joined.end(), frames[f].begin() + 10, frames[f].end());
+  }
+  TEST_ASSERT_EQUAL(250, joined.size());
+  TEST_ASSERT_EQUAL_MEMORY(blob, joined.data(), 250);
+}
+
+void test_exact_multiple_has_no_trailing_frame() {
+  static uint8_t blob[192] = {0};
+  ArraySource src(blob);
+  Collect out;
+  emitReadReply(1, src, 192, 0, 96, out);
+  TEST_ASSERT_EQUAL(2, out.frames);
+}
+
+void test_streamed_empty_reply_is_the_golden_frame() {
+  ArraySource src(nullptr);
+  Collect out;
+  emitReadReply(7, src, 0, 0, 96, out);
+  auto g = golden("config_data_empty_seq7");
+  TEST_ASSERT_EQUAL(1, out.frames);
+  TEST_ASSERT_EQUAL(g.size(), out.bytes.size());
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out.bytes.data(), g.size());
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_small_blob_is_one_golden_frame);
@@ -85,5 +139,8 @@ int main(int, char**) {
   RUN_TEST(test_maximal_blob_is_five_ordered_chunks);
   RUN_TEST(test_two_chunk_reply_is_the_golden_frames);
   RUN_TEST(test_too_small_buffer_gives_zero);
+  RUN_TEST(test_streamed_reply_in_96_byte_chunks);
+  RUN_TEST(test_exact_multiple_has_no_trailing_frame);
+  RUN_TEST(test_streamed_empty_reply_is_the_golden_frame);
   return UNITY_END();
 }
