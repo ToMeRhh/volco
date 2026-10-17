@@ -76,7 +76,7 @@ The whole UI as portable Avalonia code: `VolcoApplication`, `CompositionRoot` (s
 
 ### ESP32 Firmware (`firmware/`)
 
-PlatformIO / Arduino framework / C++17. `src/esp32/` (`main.cpp`, `config.h` (fixed constants), `config_store.*`, `config_session.*`, `transport.*`, `screens.*`) plus libraries in `lib/`: pure-C++ ones (`volco_protocol`, `volco_config`, `volco_bidi`, `volco_screen_state`, `volco_render`) tested on the host with `pio test -e native`, and `volco_indicators` (LED rendering; Arduino code, not host-tested); `firmware/README.md` explains the code structure. Rendering uses Volco's own 1-bit canvas, with U8g2 only as the SSD1306 driver.
+PlatformIO / Arduino framework / C++17. `src/esp32/` (`main.cpp`, `config.h` (fixed constants), `config_store.*`, `config_session.*`, `transport.*`, `screens.*`) plus libraries in `lib/`: pure-C++ ones (`volco_protocol`, `volco_config`, `volco_bidi`, `volco_screen_state`, `volco_render`, `volco_input`) tested on the host with `pio test -e native`, and `volco_indicators` (LED rendering; Arduino code, not host-tested); `firmware/README.md` explains the code structure. Rendering uses Volco's own 1-bit canvas, with U8g2 only as the SSD1306 driver.
 
 The controller config schema is `proto/volco_config.proto` (proto2; limits in `proto/volco_config.options`; presets in `proto/presets/`). It generates nanopb code for `firmware/lib/volco_config` (decode, validation, chip table, CRC, chunked receiver) and C# for `Volco.Core/Controller` (codec, validator, presets). Both are checked against the same generated vectors, `firmware/test/golden/config.txt`. Deferred review findings are listed in the spec's §14.1. The app runs the config session (`ControllerConfigService`), driven by the Controller settings page.
 

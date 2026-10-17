@@ -126,7 +126,7 @@ The `native` environment builds both firmwares' pure parts.
   keeps `buildReadReply`, which collects them into one buffer for one UDP datagram.
   `volco_crc32` gains an incremental form for EEPROM reads (stage 3).
 - **`volco_input`** (new, pure C++, host-tested): slider smoothing and deadband, and button
-  debounce, moved out of `main.cpp`. The EMA becomes fixed-point (weight in 1/256ths, value ×16)
+  debounce, moved out of `main.cpp`. The EMA becomes fixed-point (value ×256, the config's weight in exact percent)
   on both chips; its output must stay within one ADC unit of the float version in the tests. This
   is the one behaviour change on the ESP32 and gets a hardware feel test (§9).
 - **`volco_indicators`:** `indicators.cpp` as is (`digitalWrite`), moved to `lib/`.

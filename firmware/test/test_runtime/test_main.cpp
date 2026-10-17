@@ -61,7 +61,7 @@ void test_defaults_converted_to_ms() {
   TEST_ASSERT_TRUE(r.screens.dimEnabled && r.screens.offEnabled && r.screens.pixelShiftEnabled && r.screens.wakeSwallowsPress);
   TEST_ASSERT_EQUAL_UINT(30, r.input.debounceMs);
   TEST_ASSERT_EQUAL_UINT(10, r.input.sliderIntervalMs);
-  TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.2f, r.input.filterWeight);
+  TEST_ASSERT_EQUAL_UINT8(20, r.input.filterWeightPct);
   TEST_ASSERT_EQUAL_UINT(25, r.input.sliderDeadband);
 }
 

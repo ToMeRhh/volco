@@ -42,7 +42,7 @@ struct RuntimeScreens {
 
 struct RuntimeInput {
   uint32_t debounceMs, sliderIntervalMs;
-  float filterWeight;  // EMA weight 0.01..1
+  uint8_t filterWeightPct;  // EMA weight, 1..100 %
   uint16_t sliderDeadband;
 };
 

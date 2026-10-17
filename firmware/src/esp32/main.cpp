@@ -5,6 +5,7 @@
 #include "config_store.h"
 #include "debug_log.h"
 #include "volco_indicators.h"
+#include "volco_input.h"
 #include "screens.h"
 #include "transport.h"
 #include "volco_protocol.h"
@@ -22,13 +23,9 @@ static_assert(sizeof(VOLCO_FW_VERSION) - 1 <= volco::kMaxFirmwareId, "VOLCO_FW_V
 static LoadedConfig loaded;
 static const volco::RuntimeConfig& rc = loaded.rc;
 
-static uint16_t lastSliderValues[volco::kMaxSliders];
-static float smoothedValues[volco::kMaxSliders] = {0};
+static volco::SliderFilter sliders[volco::kMaxSliders];
 static unsigned long lastSliderReadTime = 0;
-
-static bool buttonRawStates[volco::kMaxButtons];
-static bool buttonReportedStates[volco::kMaxButtons];
-static unsigned long buttonChangeTime[volco::kMaxButtons];
+static volco::ButtonDebouncer buttons[volco::kMaxButtons];
 
 // What Hello reports (wire values: 0 none, 1 LED, 2 LED pair, 3 screen).
 static uint8_t kinds[volco::kMaxButtons];
@@ -57,10 +54,7 @@ class HardwareSink : public volco::LinkSink {
     screens_host_lost(millis());
   }
   // Sent after every Hello (PR #68). The deadband then measures from the value just sent.
-  uint16_t sliderValue(uint8_t i) override {
-    lastSliderValues[i] = (uint16_t)smoothedValues[i];
-    return lastSliderValues[i];
-  }
+  uint16_t sliderValue(uint8_t i) override { return sliders[i].report(); }
 };
 
 static HardwareSink sink;
@@ -88,9 +82,7 @@ void setup() {
   for (uint8_t i = 0; i < rc.sliderCount; i++) pinMode(rc.sliderPins[i], INPUT);
   for (uint8_t i = 0; i < rc.buttonCount; i++) {
     pinMode(rc.buttons[i].pin, INPUT_PULLUP);
-    buttonRawStates[i] = HIGH;
-    buttonReportedStates[i] = HIGH;
-    buttonChangeTime[i] = 0;
+    buttons[i].reset();
     initIndicator(rc.buttons[i]);
     kinds[i] = rc.buttons[i].kind;  // Kind values are the wire values
   }
@@ -100,8 +92,7 @@ void setup() {
   for (uint8_t i = 0; i < rc.sliderCount; i++) {
     uint32_t sum = 0;
     for (uint8_t r = 0; r < SLIDER_SEED_READS; r++) sum += analogRead(rc.sliderPins[i]);
-    lastSliderValues[i] = sum / SLIDER_SEED_READS;
-    smoothedValues[i] = lastSliderValues[i];
+    sliders[i].seed(sum / SLIDER_SEED_READS);
   }
 
   transport_begin_udp(rc.udp);
@@ -121,35 +112,22 @@ void setup() {
 void loop() {
   const uint32_t now = millis();
 
-  // 1. Sliders: EMA smoothing, then a deadband.
+  // 1. Sliders: EMA smoothing, then a deadband (lib/volco_input).
   if (now - lastSliderReadTime >= rc.input.sliderIntervalMs) {
     lastSliderReadTime = now;
-    for (uint8_t i = 0; i < rc.sliderCount; i++) {
-      uint16_t raw = analogRead(rc.sliderPins[i]);
-      smoothedValues[i] = raw * rc.input.filterWeight + smoothedValues[i] * (1.0f - rc.input.filterWeight);
-      uint16_t filtered = (uint16_t)smoothedValues[i];
-      int16_t delta = (int16_t)filtered - (int16_t)lastSliderValues[i];
-      if (abs(delta) > rc.input.sliderDeadband) {
-        lastSliderValues[i] = filtered;
+    for (uint8_t i = 0; i < rc.sliderCount; i++)
+      if (sliders[i].update(analogRead(rc.sliderPins[i]), rc.input.filterWeightPct, rc.input.sliderDeadband)) {
         screens_activity(now);
-        pcLink->sendSlider(i, filtered, now);
+        pcLink->sendSlider(i, sliders[i].value(), now);
       }
-    }
   }
 
-  // 2. Buttons: debounce on timestamps, so a press is seen even when a redraw delayed this pass.
-  for (uint8_t i = 0; i < rc.buttonCount; i++) {
-    bool raw = digitalRead(rc.buttons[i].pin);
-    if (raw != buttonRawStates[i]) {
-      buttonRawStates[i] = raw;
-      buttonChangeTime[i] = now;
-    }
-    if (now - buttonChangeTime[i] >= rc.input.debounceMs && buttonRawStates[i] != buttonReportedStates[i]) {
-      buttonReportedStates[i] = buttonRawStates[i];
-      bool pressed = buttonReportedStates[i] == LOW;  // INPUT_PULLUP: LOW = pressed
+  // 2. Buttons: debounced on timestamps, so a press is seen even when a redraw delayed this pass.
+  for (uint8_t i = 0; i < rc.buttonCount; i++)
+    if (buttons[i].update(digitalRead(rc.buttons[i].pin) == HIGH, now, rc.input.debounceMs)) {
+      const bool pressed = buttons[i].pressed();
       if (screens_filter_button(i, pressed, now)) pcLink->sendButton(i, pressed, now);
     }
-  }
 
   // 3. Receive: drain each transport, frame by frame. Latch before the link replies (spec §5.5).
   uint8_t buf[256];

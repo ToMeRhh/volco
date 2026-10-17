@@ -22,13 +22,14 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `src/esp32/config.h` | Fixed constants: serial baud, buffer sizes, protocol timing. |
 | `src/esp32/config_store.*` | Loads the controller config from NVS, keeps its bytes for read replies, and saves new ones. |
 | `src/esp32/config_session.*` | The config session: read replies, chunked writes, validate, store, reboot (spec §5.3, §5.4, §6.7). |
-| `src/esp32/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
+| `src/esp32/main.cpp` | `setup()` and `loop()`: the glue between the PC link and the hardware. |
 | `src/esp32/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
 | `lib/volco_indicators` | LED and LED pair rendering, shared by every chip's firmware. |
 | `src/esp32/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
 | `src/esp32/debug_log.h` | The `DEBUG_LOG` macro. |
 | `lib/volco_protocol/` | Frame parser and encoder, message decoding, Hello, Begin/Commit holding, keepalive and host timeout, the active-transport rule. |
 | `lib/volco_config/` | The controller config: decode, validation, chip table, CRC, chunked receiver, `RuntimeConfig`. |
+| `lib/volco_input/` | Slider smoothing (fixed-point EMA, deadband) and button debounce, host-tested. |
 | `lib/volco_bidi/` | Logical to visual reordering of UTF-8 text, for Hebrew. |
 | `lib/volco_screen_state/` | The state machine of each screen: current, previous and pending content, slide progress, dim, off, pixel shift, wake handling. |
 | `lib/volco_render/` | Volco's own 1-bit canvas and layout 1 renderer, with the generated fonts and icons. U8g2 is only the SSD1306 driver underneath. |

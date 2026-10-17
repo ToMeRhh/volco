@@ -66,7 +66,7 @@ void toRuntime(const volco_config_ControllerConfig& c, RuntimeConfig& r) {
   const volco_config_InputTuning& in = c.input;
   r.input.debounceMs = in.debounce_ms;
   r.input.sliderIntervalMs = in.slider_interval_ms;
-  r.input.filterWeight = (float)in.filter_weight_pct / 100.0f;
+  r.input.filterWeightPct = (uint8_t)in.filter_weight_pct;
   r.input.sliderDeadband = (uint16_t)in.slider_deadband;
 }
 
