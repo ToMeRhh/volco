@@ -37,8 +37,12 @@ public class HighlightText : TextBlock
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == SourceProperty || change.Property == HighlightProperty
-            || change.Property == ActualThemeVariantProperty) Rebuild();
+        if (change.Property == SourceProperty || change.Property == HighlightProperty) Rebuild();
+    }
+
+    public HighlightText()
+    {
+        ActualThemeVariantChanged += (_, _) => Rebuild();   // the accent brush differs per theme
     }
 
     private void Rebuild()
