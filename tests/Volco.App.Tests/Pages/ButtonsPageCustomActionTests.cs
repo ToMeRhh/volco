@@ -151,7 +151,7 @@ public class ButtonsPageCustomActionTests
     [AvaloniaFact]
     public void Test_RunsTheScriptWithTheButtonAndGesture()
     {
-        var script = Path.Combine(Path.GetTempPath(), $"volco-test-{Guid.NewGuid()}.bat");
+        var script = $@"C:\volco-test-{Guid.NewGuid()}.bat";   // a Windows full path; on Linux a file by that name in the working directory
         File.WriteAllText(script, "");
         try
         {
@@ -172,7 +172,7 @@ public class ButtonsPageCustomActionTests
     [AvaloniaFact]
     public void ScriptPreview_FollowsTheRun()
     {
-        var script = Path.Combine(Path.GetTempPath(), $"volco-test-{Guid.NewGuid()}.bat");
+        var script = $@"C:\volco-test-{Guid.NewGuid()}.bat";   // a Windows full path; on Linux a file by that name in the working directory
         File.WriteAllText(script, "");
         try
         {
