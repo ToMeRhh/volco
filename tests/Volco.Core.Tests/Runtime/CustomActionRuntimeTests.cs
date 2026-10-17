@@ -110,6 +110,46 @@ public sealed class CustomActionRuntimeTests : IDisposable
         Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = _script },
     };
 
+    private static void EmptyScript(AppConfig c) => c.Buttons[0].Default().SinglePress = new ButtonActionConfig
+    {
+        Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = "" },
+    };
+
+    private static int LoggedRefusals()
+    {
+        Volco.Core.Diagnostics.AppLog.Flush();
+        var path = Volco.Core.Diagnostics.AppLog.LogPath;
+        return File.ReadAllLines(path).Count(l => l.Contains("Button 0") && l.Contains("Choose the script to run."));
+    }
+
+    [Fact]
+    public void Press_RunScriptWithoutPath_DoesNotStartAProcess()
+    {
+        Start(ConnectionType.Serial, EmptyScript);
+        Press(Connection(0), 0);
+        Assert.True(StaysFalse(() => _starter.Runs.Count > 0), "an invalid script action started a process");
+    }
+
+    [Fact]
+    public void Press_InvalidAction_LogsOnce()
+    {
+        var before = LoggedRefusals();
+        Start(ConnectionType.Serial, EmptyScript);
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => LoggedRefusals() == before + 1), "the refusal was not logged");
+        Press(Connection(0), 0);
+        Assert.True(StaysFalse(() => LoggedRefusals() > before + 1), "the refusal was logged twice");
+    }
+
+    [Fact]
+    public void Execute_Test_InvalidAction_DoesNothing()
+    {
+        var runtime = Start(ConnectionType.Serial, _ => { });
+        runtime.Execute(new ButtonActionConfig { Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = "" } },
+            new ActionOrigin(0, PressType.Single, "Default"));
+        Assert.True(StaysFalse(() => _starter.Runs.Count > 0), "an invalid action ran from Test");
+    }
+
     [Fact]
     public void ScriptPressOverSerial_Runs_WithTheEnvironment()
     {
