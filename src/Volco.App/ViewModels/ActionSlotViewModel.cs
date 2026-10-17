@@ -4,6 +4,7 @@ using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Input.Actions;
 using Volco.Core.Media;
+using Volco.Core.Programs;
 
 namespace Volco.App.ViewModels;
 
@@ -116,6 +117,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     /// the saved action, or null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProblem))]
+    [NotifyCanExecuteChangedFor(nameof(TestCommand))]
     private string? _problem;
 
     /// <summary>This slot holds the button's main action (the one its light follows).</summary>
@@ -274,7 +276,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         finally { _loading = wasLoading; }
     }
 
-    [RelayCommand]
+    /// <summary>Try is off for an action with a problem: the runtime refuses to run it.</summary>
+    private bool CanTry() => !HasProblem;
+
+    [RelayCommand(CanExecute = nameof(CanTry))]
     private void Test() => _execute(_cfg);
 
     partial void OnSelectedChoiceChanged(ActionChoice value)
@@ -324,7 +329,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     partial void OnCommandPathChanged(string value)
     {
         if (_loading) return;
-        Command().Path = value.Trim();
+        Command().Path = CommandPath.Unquote(value);   // "Copy as path" quotes it
         Edited();
     }
 
@@ -338,7 +343,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     partial void OnCommandWorkingDirectoryChanged(string value)
     {
         if (_loading) return;
-        Command().WorkingDirectory = value.Trim();
+        Command().WorkingDirectory = CommandPath.Unquote(value);
         Edited();
     }
 

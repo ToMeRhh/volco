@@ -164,6 +164,113 @@ public class ControlsPageTests
         narrow.Close();
     }
 
+    [AvaloniaFact]
+    public void LeavingThePage_OrHidingTheWindow_ClosesTheDialog()
+    {
+        using var rig = new TestRig(EngineWithAudio());
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var window = OpenWindow(rig, vm, 1100);
+        window.ShowPage("controls");
+        Settle(window);
+
+        vm.Controls.OpenTargetDialog(vm.Sliders.Items[0]);
+        Assert.True(vm.Controls.HasDialog);
+        window.ShowPage("general");
+        Settle(window);
+        Assert.False(vm.Controls.HasDialog);
+
+        window.ShowPage("controls");
+        vm.Controls.OpenActionDialog(vm.Buttons.Items[0], PressType.Single);
+        Assert.True(vm.Controls.HasDialog);
+        window.AllowClose = false;
+        window.Close();   // hides
+        Assert.False(window.IsVisible);
+        Assert.False(vm.Controls.HasDialog);
+        window.AllowClose = true;
+        window.Close();
+    }
+
+    // ── Modes ─────────────────────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void ModeRename_ThroughTheNameBox()
+    {
+        using var s = Show();
+        var rename = s.Page.FindControl<Button>("RenameModeButton")!;
+        var box = s.Page.FindControl<TextBox>("ModeNameBox")!;
+        Assert.True(rename.IsEffectivelyVisible);
+        Assert.Equal("Rename", rename.Content);
+        Assert.False(box.IsVisible);
+
+        rename.Command!.Execute(null);
+        Settle(s.Window);
+        Assert.True(box.IsEffectivelyVisible);
+        Assert.False(rename.IsVisible);
+        Assert.True(box.IsFocused);
+        Assert.Equal("Default", box.Text);
+
+        box.Text = "Everyday";
+        s.Window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+        Settle(s.Window);
+        Assert.False(box.IsVisible);
+        Assert.Equal("Everyday", s.Config.Presets[0].Name);
+        var tab = All<RadioButton>(s.Page, "ModeTab").Single();
+        Assert.Contains(tab.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Everyday");
+
+        // Escape leaves the name as it was.
+        rename.Command!.Execute(null);
+        Settle(s.Window);
+        box.Text = "Nope";
+        s.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        Settle(s.Window);
+        Assert.False(box.IsVisible);
+        Assert.Equal("Everyday", s.Config.Presets[0].Name);
+    }
+
+    [AvaloniaFact]
+    public void AddMode_OpensTheNameBoxFocused()
+    {
+        using var s = Show();
+        s.Page.FindControl<Button>("AddModeButton")!.Command!.Execute(null);
+        Settle(s.Window);
+
+        var box = s.Page.FindControl<TextBox>("ModeNameBox")!;
+        Assert.True(box.IsEffectivelyVisible);
+        Assert.True(box.IsFocused);
+        Assert.Equal("Mode 2", box.Text);
+        Assert.Equal(2, All<RadioButton>(s.Page, "ModeTab").Count);
+    }
+
+    [AvaloniaFact]
+    public void ModeDelete_WithUndo()
+    {
+        using var s = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
+        });
+        var delete = s.Page.FindControl<Button>("DeleteModeButton")!;
+        Assert.Equal("Delete", delete.Content);
+        s.Vm.Buttons.EditingPresetId = "gaming";
+        Settle(s.Window);
+
+        delete.Command!.Execute(null);
+        Settle(s.Window);
+        Assert.Single(s.Config.Presets);
+        Assert.Single(All<RadioButton>(s.Page, "ModeTab"));
+        Assert.Equal("Mode “Gaming” deleted", s.Vm.Toast.Message);
+        // The last mode can't be deleted.
+        Assert.False(delete.IsEffectivelyEnabled);
+
+        s.Vm.Toast.UndoCommand.Execute(null);
+        Settle(s.Window);
+        Assert.Equal(2, s.Config.Presets.Count);
+        Assert.Equal(2, All<RadioButton>(s.Page, "ModeTab").Count);
+        Assert.Equal("gaming", s.Vm.Buttons.EditingPresetId);
+        Assert.Equal(ButtonActionType.MuteCurrentInput, s.Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
+        Assert.True(delete.IsEffectivelyEnabled);
+    }
+
     // ── The drawing ───────────────────────────────────────────────────────────
 
     [AvaloniaFact]
@@ -188,6 +295,9 @@ public class ControlsPageTests
         foreach (var tile in buttons)
             foreach (var part in new[] { "Indicator", "Cap", "MainAction", "SecondaryActions", "Grip" })
                 Assert.NotEmpty(All<Control>(tile, part));
+        // The grips stay hidden until drag to swap ships (spec §13 step 4).
+        Assert.All(buttons, b => Assert.False(In<Border>(b, "Grip").IsVisible));
+        Assert.All(Tiles<SliderTile>(s.Page), t => Assert.False(In<Border>(t, "Grip").IsVisible));
         Assert.All(buttons, b => Assert.Equal("Not set", In<TextBlock>(b, "MainAction").Text));
         Assert.Equal("Not set", In<TextBlock>(Tiles<SliderTile>(s.Page)[0], "Label").Text);
     }
@@ -432,6 +542,7 @@ public class ControlsPageTests
         Assert.Equal(4, Tiles<SliderTile>(s.Page).Count);
         Assert.Same(s.Vm.Sliders.Items[0], s.Controls.Selected);
         Assert.True(s.Vm.Toast.IsOpen);
+        Assert.Equal("Slider 5 removed", s.Vm.Toast.Message);   // numbered as in the inspector
 
         s.Vm.Toast.UndoCommand.Execute(null);
         Settle(s.Window);
@@ -484,6 +595,14 @@ public class ControlsPageTests
         Assert.True(icon.IsEffectivelyVisible);
         Assert.Equal("Choose the script to run.", ToolTip.GetTip(icon));
         Assert.False(InRow<PathIcon>(s.Page, "Double", "InvalidIcon").IsEffectivelyVisible);
+        // The runtime refuses an invalid action, so Try is off.
+        Assert.True(InRow<Button>(s.Page, "Press", "TryButton").IsVisible);
+        Assert.False(InRow<Button>(s.Page, "Press", "TryButton").IsEffectivelyEnabled);
+
+        s.Vm.Buttons.Items[0].Press.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteCurrentOutput);
+        Settle(s.Window);
+        Assert.False(icon.IsEffectivelyVisible);
+        Assert.True(InRow<Button>(s.Page, "Press", "TryButton").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]

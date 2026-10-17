@@ -251,15 +251,15 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
     // ── Footer ────────────────────────────────────────────────────────────────
 
     /// <summary>Validates the draft and writes it. False, with the errors shown under their fields,
-    /// when it is invalid (or nothing is picked). An unchanged action just closes.</summary>
+    /// when it is invalid (or nothing is picked), even unchanged. A valid, unchanged action closes
+    /// without writing.</summary>
     public bool Done()
     {
         if (!HasPick) return false;
         if (!IsStillValid(((IButtonCardOwner)_buttons).AppConfig)) { _close(); return false; }
-        if (Same(Draft.Config, _original)) { _close(); return true; }
         Draft.ShowErrors = true;
         if (Draft.Check().Count > 0) return false;
-        _button.SetAction(_presetId, Gesture, Clone(Draft.Config));
+        if (!Same(Draft.Config, _original)) _button.SetAction(_presetId, Gesture, Clone(Draft.Config));
         _close();
         return true;
     }

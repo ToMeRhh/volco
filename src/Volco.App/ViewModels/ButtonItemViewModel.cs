@@ -26,7 +26,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     internal ButtonConfig Config { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title), nameof(Heading))]
+    [NotifyPropertyChangedFor(nameof(Heading))]
     private int _index;
 
     // Only what depends on the input number changes here.
@@ -41,9 +41,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
             ? ActionCatalog.ScreenDescription(edited)
             : ActionCatalog.LightDescription(edited, IsLed, _owner.PresetName, _owner.DeviceName);
 
-    public string Title => $"Button {Index}";
-
-    /// <summary>The inspector's heading, numbered from 1.</summary>
+    /// <summary>The button's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Button {Index + 1}";
 
     /// <summary>The Controls page's selected tile.</summary>

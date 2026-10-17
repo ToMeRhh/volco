@@ -446,15 +446,51 @@ public class ActionDialogTests
     }
 
     [AvaloniaFact]
-    public void Done_Unchanged_JustCloses()
+    public void Done_UnchangedInvalid_ShowsErrors_StaysOpen()
     {
-        // A saved action with a problem: an unchanged Done doesn't refuse it, and writes nothing.
+        // A saved action with a problem: Done validates even when nothing changed.
         using var s = Show(c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteSpecificDevice });
+        var saved = s.Config.Buttons[0].Default().SinglePress;
+        Open(s);
+        Click(In<Button>(s.View, "DoneButton"));
+        Settle(s.Window);
+
+        Assert.True(s.Controls.HasDialog);
+        Assert.Equal("Choose a device.", s.Dialog.Draft.DeviceError);
+        Assert.True(In<TextBlock>(s.View, "DeviceErrorText").IsEffectivelyVisible);
+        Assert.Same(saved, s.Config.Buttons[0].Default().SinglePress);
+    }
+
+    [AvaloniaFact]
+    public void Done_UnchangedValid_ClosesWithoutWriting()
+    {
+        using var s = Show(c => c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput });
         var saved = s.Config.Buttons[0].Default().SinglePress;
         Open(s);
         Assert.True(s.Dialog.Done());
         Assert.False(s.Controls.HasDialog);
         Assert.Same(saved, s.Config.Buttons[0].Default().SinglePress);
+    }
+
+    [AvaloniaFact]
+    public void QuotedPaths_AreSavedUnquoted()
+    {
+        var script = $@"C:\volco-test-{Guid.NewGuid()}.bat";   // a Windows full path; on Linux a file by that name in the working directory
+        File.WriteAllText(script, "");
+        try
+        {
+            using var s = Show();
+            Open(s);
+            s.Dialog.Pick(ButtonActionType.RunScript);
+            s.Dialog.Draft.CommandPath = $"\"{script}\"";   // Explorer's "Copy as path"
+            s.Dialog.Draft.CommandWorkingDirectory = "\"C:\\Scripts\"";
+            Assert.True(s.Dialog.Done());
+
+            var saved = s.Config.Buttons[0].Default().SinglePress.Command!;
+            Assert.Equal(script, saved.Path);
+            Assert.Equal(@"C:\Scripts", saved.WorkingDirectory);
+        }
+        finally { File.Delete(script); }
     }
 
     [AvaloniaFact]

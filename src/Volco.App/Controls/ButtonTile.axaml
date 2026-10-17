@@ -40,8 +40,9 @@
         <!-- 2. The cap -->
         <Ellipse Name="Cap" Grid.Row="1" Grid.ColumnSpan="3" Classes="Cap" HorizontalAlignment="Center"/>
 
-        <!-- The grip, beside the action rows: one drag moves all of this button's actions -->
-        <Border Name="Grip" Grid.Row="2" Grid.RowSpan="2" Classes="TileGrip" VerticalAlignment="Top">
+        <!-- The grip, beside the action rows: one drag moves all of this button’s actions. Hidden
+             until drag to reorder ships (spec §13 step 4). -->
+        <Border Name="Grip" Grid.Row="2" Grid.RowSpan="2" Classes="TileGrip" VerticalAlignment="Top" IsVisible="False">
           <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
         </Border>
 

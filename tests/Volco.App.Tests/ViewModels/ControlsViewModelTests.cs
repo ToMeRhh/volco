@@ -100,6 +100,7 @@ public sealed class ControlsViewModelTests : IDisposable
 
         // Removed from the config: the selection moves to slider 1.
         vm.Buttons.RemoveLast();
+        Assert.Equal("Button 3 removed", _toast.Message);   // numbered from 1, as in the inspector
         vm.OnHello();
         Assert.Same(vm.Sliders.Items[0], vm.Selected);
     }
@@ -209,7 +210,7 @@ public sealed class ControlsViewModelTests : IDisposable
 
         Assert.Equal("Mute mic", item.MainLabel);
         Assert.Equal(PressType.Double, item.MainGesture);
-        Assert.Equal(new[] { new GestureLine(PressType.Long, "Next preset", "NextPreset") }, item.Secondary.ToArray());
+        Assert.Equal(new[] { new GestureLine(PressType.Long, "Next mode", "NextPreset") }, item.Secondary.ToArray());
     }
 
     [Fact]
@@ -263,6 +264,11 @@ public sealed class ControlsViewModelTests : IDisposable
 
         item.IsOtherApps = true;
         Assert.Equal("All other apps", item.Label);
+
+        // The default output is "Main output" on the tile and the Controls row, as in the dialog.
+        item.IsDevice = true;
+        Assert.Equal("Main output", item.Label);
+        Assert.Equal("Main output", item.TargetLabel);
 
         item.Name = "Games";
         Assert.Equal("Games", item.Label);

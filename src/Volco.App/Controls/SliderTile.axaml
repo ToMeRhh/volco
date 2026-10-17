@@ -11,7 +11,9 @@
     <Border Name="TileBorder" Classes="Tile" Classes.selected="{Binding IsSelected}">
       <StackPanel Spacing="7" Margin="4,8,4,6">
         <Grid ColumnDefinitions="*,Auto,*">
-          <Border Name="Grip" Classes="TileGrip" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,4,0">
+          <!-- Hidden until drag to reorder ships (spec §13 step 4) -->
+          <Border Name="Grip" Classes="TileGrip" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,4,0"
+                  IsVisible="False">
             <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
           </Border>
           <Panel Name="Fader" Grid.Column="1" Classes="Fader" Width="32">

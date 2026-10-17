@@ -74,7 +74,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
         Renumber();
         AppsChanged();
         Save();
-        _toast.Show($"{item.Title} removed", () =>
+        _toast.Show($"{item.Heading} removed", () =>
         {
             Sliders.Add(cfg);
             Items.Add(item);

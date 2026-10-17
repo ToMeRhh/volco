@@ -75,6 +75,8 @@ with **Open a program** and **Run a script**. The action card adds, per action:
 
 Program and script cards say "Runs only over USB" when the connection type is not Serial (§7).
 A path that does not exist is marked on the card when the page is shown.
+The Controls page (`docs/design/controls-page.md` §2 item 15) replaced this note with a "USB" tag
+that program and script actions always show, whatever the connection type.
 
 ## 3. Media
 
@@ -193,7 +195,8 @@ are open to others:
 
 **Rule until this is solved:** `OpenProgram` and `RunScript` run **only when the press arrived over
 USB serial**. Over WebSocket or UDP the press is refused and logged; the card says "Runs only over
-USB" when the connection type is not Serial. Media actions, like the existing audio and preset
+USB" when the connection type is not Serial (now an always-shown "USB" tag on the Controls page,
+`docs/design/controls-page.md` §2 item 15). Media actions, like the existing audio and preset
 actions, run over every transport. A consequence: the simulator cannot trigger programs or
 scripts.
 
@@ -214,7 +217,8 @@ controller's config blob carries no actions, so a controller cannot define a com
   the transport rule (refused over WebSocket and UDP, allowed over serial); the runtime pushing
   state on media, program and script events; config v6 round trip.
 - **App (Avalonia headless):** picker groups; new actions unavailable without the services;
-  card fields per action; the "Runs only over USB" note; card summaries.
+  card fields per action; the "Runs only over USB" note (on the Controls page, the always-shown
+  "USB" tag); card summaries.
 - **Firmware and simulator:** new icons through `gen_assets.py`; regenerated render goldens;
   `icons.js`.
 - **Windows, manual checklist:** Spotify and a browser tab (Current vs a named app, playing state

@@ -71,6 +71,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public ControlsViewModel Controls =>
         _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast);
 
+    /// <summary>The Controls page's view model if the page was ever opened; null otherwise.</summary>
+    public ControlsViewModel? ControlsIfCreated => _controlsViewModel;
+
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config, _startWithSystem);
 

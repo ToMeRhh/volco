@@ -75,7 +75,7 @@ Left to right: the page title "Controls", then the drawing (§4), then the inspe
 
 - Counts and indicator kinds come from the last Hello (`AppConfig.Controller`).
 - Before the first Hello, the drawing comes from the config's lists, with indicators unknown. One line under the drawing says "Connect your controller to see its lights and screens."
-- **The controller has more controls than the config:** the extra controls are drawn "Not set". Their config entries are created on first edit. This replaces the "Add the missing N" hint.
+- **The controller has more controls than the config:** the extra controls are drawn "Not set". Their config entries are created when the page opens or a Hello arrives. This replaces the "Add the missing N" hint.
 - **The config has more controls than the controller:** the extra controls are drawn dashed, with "Not on this controller". Their inspector offers **Remove**, which removes the last one only (input number is position) and shows Undo.
 
 ### 4.2 Sliders

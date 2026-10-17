@@ -224,7 +224,10 @@ public class TargetDialogTests
         Assert.Equal(SliderMappingType.Processes, slider.Type);
         Assert.Equal(new[] { "Spotify.exe", "quest.exe" }, slider.Processes);
         Assert.Null(slider.Device);
-        Assert.Equal("Spotify.exe, quest.exe", s.Vm.Sliders.Items[0].Label);
+        // The tile and the Controls row name the apps as the dialog does.
+        Assert.Equal("Spotify, quest", s.Vm.Sliders.Items[0].Label);
+        Assert.Equal("Spotify, quest", In<TextBlock>(s.Page.GetVisualDescendants().OfType<SliderTile>().First(), "Label").Text);
+        Assert.Equal("Spotify, quest", In<TextBlock>(s.Page.FindControl<Border>("Inspector")!, "TargetText").Text);
         // The Everything else slider leaves them to this one.
         Assert.Contains("quest.exe", s.Vm.Sliders.Items[2].OtherAppsHint);
     }
@@ -306,6 +309,45 @@ public class TargetDialogTests
         Done(s);
         Assert.False(s.Controls.HasDialog);
         Assert.Equal("dev-1", s.Config.Sliders[0].Device!.Id);
+    }
+
+    [AvaloniaFact]
+    public void Done_UnchangedInvalid_ShowsError_StaysOpen()
+    {
+        // A saved apps slider with no apps: Done validates even when nothing changed.
+        using var s = Show(c => c.Sliders[3].Processes.Clear());
+        Open(s, 3);
+        Done(s);
+
+        Assert.True(s.Controls.HasDialog);
+        Assert.Equal("Tick at least one app, or choose a device.", s.Dialog.Error);
+        Assert.True(In<TextBlock>(s.View, "ErrorText").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Done_UnchangedValid_ClosesWithoutWriting()
+    {
+        using var s = Show();
+        var saved = s.Config.Sliders[1];
+        Open(s, 1);
+        Done(s);
+
+        Assert.False(s.Controls.HasDialog);
+        Assert.Same(saved, s.Config.Sliders[1]);
+        Assert.Equal(new[] { "Discord.exe" }, s.Config.Sliders[1].Processes);
+    }
+
+    [AvaloniaFact]
+    public void OtherApp_PickerFails_IsLogged_DialogStays()
+    {
+        using var s = Show();
+        Open(s);
+        s.Dialog.PickExe = () => Task.FromException<string?>(new InvalidOperationException("no picker"));
+
+        Click(s, "Other app…");
+
+        Assert.True(s.Controls.HasDialog);
+        Assert.Equal(new[] { "Main output" }, On(s));
     }
 
     // ── Search ────────────────────────────────────────────────────────────────

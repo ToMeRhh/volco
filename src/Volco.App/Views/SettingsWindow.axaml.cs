@@ -137,6 +137,8 @@ public partial class SettingsWindow : Window
     {
         // Leaving the Controller page ends a running hardware test (spec §8.5).
         if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controller")) _vm.ControllerIfCreated?.OnPageLeft();
+        // Leaving the Controls page closes its dialog, which would otherwise hold off touch-to-select.
+        if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controls")) _vm.ControlsIfCreated?.CloseDialog();
         if (_navList.SelectedItem is not NavItem item) return;
         if (!_pages.TryGetValue(item.Tag, out var page))
             _pages[item.Tag] = page = item.CreatePage();
@@ -161,6 +163,7 @@ public partial class SettingsWindow : Window
         if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
         _vm.ControllerIfCreated?.OnPageLeft();   // hiding the window ends a running test too
+        _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controls page's dialog
         Hide();
     }
 

@@ -4,6 +4,7 @@ using Volco.App.ViewModels.Search;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Devices;
+using Volco.Core.Diagnostics;
 using Volco.Core.Programs;
 
 namespace Volco.App.ViewModels;
@@ -303,15 +304,23 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         else _apps.Add(app);
     }
 
-    /// <summary>"Other app…": the picked exe's file name is ticked.</summary>
+    /// <summary>"Other app…": the picked exe's file name is ticked. Nothing awaits it, so a
+    /// failure (the file picker's) is logged here.</summary>
     private async Task AddOtherAppAsync()
     {
-        if (PickExe is not { } pick || await pick() is not { } path) return;
-        var app = CommandPath.FileName(path);
-        if (app.Length == 0) return;
-        if (_type != SliderMappingType.Processes || !_apps.Exists(a => SameApp(a, app))) ToggleApp(app);
-        _current = $"app:{app}";
-        Changed();
+        try
+        {
+            if (PickExe is not { } pick || await pick() is not { } path) return;
+            var app = CommandPath.FileName(path);
+            if (app.Length == 0) return;
+            if (_type != SliderMappingType.Processes || !_apps.Exists(a => SameApp(a, app))) ToggleApp(app);
+            _current = $"app:{app}";
+            Changed();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Other app: could not add the app ({ex.GetType().Name}: {ex.Message})");
+        }
     }
 
     private void Changed()
@@ -342,16 +351,15 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
     // ── Footer ────────────────────────────────────────────────────────────────
 
     /// <summary>Validates the draft and writes it. False, with <see cref="Error"/> set, when it is
-    /// invalid. An unchanged target just closes.</summary>
+    /// invalid, even unchanged. A valid, unchanged target closes without writing.</summary>
     public bool Done()
     {
         if (!IsStillValid()) { _close(); return false; }
-        if (Unchanged()) { _close(); return true; }
         _tried = true;
         var draft = Draft();
         Error = SliderTargetValidator.Validate(draft);
         if (Error is not null) return false;
-        _sliders.SetTarget(_slider, draft);
+        if (!Unchanged()) _sliders.SetTarget(_slider, draft);
         _close();
         return true;
     }

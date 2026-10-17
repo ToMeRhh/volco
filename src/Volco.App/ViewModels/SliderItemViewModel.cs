@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Programs;
 
 namespace Volco.App.ViewModels;
 
@@ -13,7 +14,7 @@ namespace Volco.App.ViewModels;
 public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 {
     /// <summary>The device picker's first entry: a null <see cref="SliderConfig.Device"/>.</summary>
-    public const string CurrentDefaultOutput = "Current default output";
+    public const string CurrentDefaultOutput = "Main output";
 
     private readonly Action _save;
     private readonly ISliderCardOwner _owner;
@@ -25,12 +26,10 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     /// <summary>The hardware input number (= list position). Relabelled live while dragging.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title), nameof(Heading))]
+    [NotifyPropertyChangedFor(nameof(Heading))]
     private int _index;
 
-    public string Title => $"Slider {Index}";
-
-    /// <summary>The inspector's heading, numbered from 1.</summary>
+    /// <summary>The slider's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Slider {Index + 1}";
 
     /// <summary>The Controls page's selected tile.</summary>
@@ -100,7 +99,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     /// <summary>The apps (image names) an Apps slider controls.</summary>
     public IReadOnlyList<string> AppNames => Config.Processes;
 
-    /// <summary>"Current default output" followed by every render device.</summary>
+    /// <summary>"Main output" followed by every render device.</summary>
     [ObservableProperty]
     private List<string> _deviceChoices = new();
 
@@ -114,7 +113,8 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     public string Summary => MappingType switch
     {
-        SliderMappingType.Processes => AppNames.Count > 0 ? string.Join(", ", AppNames) : "No apps yet",
+        // The apps as the target dialog names them: "spotify.exe" reads "spotify".
+        SliderMappingType.Processes => AppNames.Count > 0 ? string.Join(", ", AppNames.Select(CommandPath.FileNameWithoutExtension)) : "No apps yet",
         SliderMappingType.Unmapped => "All other apps",
         SliderMappingType.Device => SelectedDevice,
         _ => "Not set up",
