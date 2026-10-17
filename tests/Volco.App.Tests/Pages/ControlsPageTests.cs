@@ -328,8 +328,8 @@ public class ControlsPageTests
         Settle(s.Window);
 
         Assert.True(s.Controls.HasDialog);
-        var request = Assert.IsType<PendingDialogRequest>(s.Controls.Dialog);
-        Assert.Same(button, request.Control);
+        var request = Assert.IsType<ActionDialogViewModel>(s.Controls.Dialog);
+        Assert.Same(button, request.Button);
         Assert.Equal(PressType.Double, request.Gesture);
         Assert.True(overlay.IsVisible);
 
@@ -338,8 +338,9 @@ public class ControlsPageTests
 
         var controls = In<Button>(s.Page, "RowButton");   // the Press row
         controls.Command!.Execute(controls.CommandParameter);
-        Assert.Equal(PressType.Single, Assert.IsType<PendingDialogRequest>(s.Controls.Dialog).Gesture);
-        s.Page.FindControl<Button>("CloseDialogButton")!.Command!.Execute(null);
+        Settle(s.Window);
+        Assert.Equal(PressType.Single, Assert.IsType<ActionDialogViewModel>(s.Controls.Dialog).Gesture);
+        In<Button>(s.Page, "CancelButton").Command!.Execute(null);
         Assert.False(s.Controls.HasDialog);
 
         // The slider's Controls row opens the target dialog.

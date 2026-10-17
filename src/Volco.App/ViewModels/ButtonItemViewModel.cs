@@ -289,6 +289,43 @@ public sealed partial class ButtonItemViewModel : ObservableObject
                 : ActionValidator.Validate(slot.Config, context).Values.FirstOrDefault();
     }
 
+    /// <summary>The row of one gesture.</summary>
+    internal ActionSlotViewModel SlotFor(PressType gesture) => gesture switch
+    {
+        PressType.Double => DoublePress,
+        PressType.Long => Hold,
+        _ => Press,
+    };
+
+    /// <summary>A row for the action dialog's settings pane, over <paramref name="draft"/> (a copy;
+    /// nothing is saved): this button's devices, presets and services, and the real validation.</summary>
+    internal ActionSlotViewModel CreateDraft(PressType gesture, ButtonActionConfig draft)
+    {
+        var slot = new ActionSlotViewModel(GestureName(gesture), SlotFor(gesture).Devices, _owner.PresetChoices,
+                                           _ => { }, () => { }, name => _owner.Describe(name), _owner.SlotHost)
+        {
+            Validation = _owner.ValidationContext,
+        };
+        slot.Bind(draft);
+        return slot;
+    }
+
+    /// <summary>The action dialog's Done or Remove: <paramref name="action"/> becomes
+    /// <paramref name="gesture"/>'s action in <paramref name="presetId"/>, then the row, the
+    /// previews and the problems follow and the config is saved, as after an edit on the row.</summary>
+    internal void SetAction(string presetId, PressType gesture, ButtonActionConfig action)
+    {
+        var binding = Config.GetOrAddBinding(presetId);
+        switch (gesture)
+        {
+            case PressType.Double: binding.DoublePress = action; break;
+            case PressType.Long: binding.LongPress = action; break;
+            default: binding.SinglePress = action; break;
+        }
+        if (presetId == _owner.EditingPresetId) SlotFor(gesture).Bind(action);
+        OnActionChanged();
+    }
+
     private void OnActionChanged()
     {
         Refresh();

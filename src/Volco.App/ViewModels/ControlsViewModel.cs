@@ -74,6 +74,7 @@ public sealed partial class ControlsViewModel : ObservableObject
         // Add, Remove last and their Undo change the lists: the counts and the selection follow.
         Sliders.Items.CollectionChanged += OnItemsChanged;
         Buttons.Items.CollectionChanged += OnItemsChanged;
+        Buttons.Presets.CollectionChanged += (_, _) => CloseStaleDialog();
         RefreshCounts();
         FixSelection();
     }
@@ -123,9 +124,20 @@ public sealed partial class ControlsViewModel : ObservableObject
     [RelayCommand]
     public void CloseDialog() => Dialog = null;
 
+    // A closed dialog stops following the page (device changes).
+    partial void OnDialogChanged(ObservableObject? oldValue, ObservableObject? newValue)
+        => (oldValue as IDisposable)?.Dispose();
+
     /// <summary>Opens the action dialog for one gesture of a button (spec §6.1).</summary>
     public void OpenActionDialog(ButtonItemViewModel button, PressType gesture)
-        => OpenDialog(new PendingDialogRequest(button, gesture));
+        => OpenDialog(new ActionDialogViewModel(button, gesture, Buttons, CollapsedSections, CloseDialog));
+
+    /// <summary>The action dialog's mode or button went away (a delete, an Undo): it closes
+    /// without writing.</summary>
+    private void CloseStaleDialog()
+    {
+        if (Dialog is ActionDialogViewModel action && !action.IsStillValid(_config.Config)) CloseDialog();
+    }
 
     /// <summary>Opens the target dialog for a slider (spec §6.2).</summary>
     public void OpenTargetDialog(SliderItemViewModel slider)
@@ -191,6 +203,7 @@ public sealed partial class ControlsViewModel : ObservableObject
     {
         RefreshCounts();
         FixSelection();
+        CloseStaleDialog();
     }
 
     /// <summary>Marks the controls the last Hello doesn't have, and the dense layout.</summary>
@@ -226,7 +239,7 @@ public sealed partial class ControlsViewModel : ObservableObject
 }
 
 /// <summary>A dialog the Controls page asked for: the control and, for a button, the gesture.
-/// A placeholder until the action and target dialogs replace it.</summary>
+/// A placeholder until the target dialog replaces it.</summary>
 public sealed class PendingDialogRequest(ObservableObject control, PressType? gesture) : ObservableObject
 {
     public ObservableObject Control { get; } = control;

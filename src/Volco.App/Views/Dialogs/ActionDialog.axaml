@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Dialogs.ActionDialog"
+             x:DataType="vm:ActionDialogViewModel">
+  <!-- The action dialog (spec §6.1): the gesture and "Button N · Mode", a search box, the action
+       list in sections (left), the picked action's settings (right), and Remove / Cancel / Done. -->
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" Classes="DialogHeader" ColumnDefinitions="*,Auto">
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <TextBlock Name="TitleText" Classes="DialogTitle" Text="{Binding Title}"/>
+        <TextBlock Name="SubtitleText" Classes="DialogSubtitle" Text="{Binding Subtitle}"/>
+      </StackPanel>
+      <Button Name="CloseButton" Grid.Column="1" Classes="Icon" Command="{Binding CancelCommand}"
+              ToolTip.Tip="Close">
+        <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12"/>
+      </Button>
+    </Grid>
+
+    <Border DockPanel.Dock="Top" Classes="DialogSearch">
+      <TextBox Name="SearchBox" Classes="Search" PlaceholderText="Search actions" Text="{Binding Query, Mode=TwoWay}"/>
+    </Border>
+
+    <Grid DockPanel.Dock="Bottom" Classes="DialogFooter" ColumnDefinitions="*,Auto,Auto">
+      <Button Name="RemoveButton" Classes="Danger" Content="Remove" HorizontalAlignment="Left"
+              IsVisible="{Binding CanRemove}" Command="{Binding RemoveCommand}"/>
+      <Button Name="CancelButton" Grid.Column="1" Content="Cancel" Command="{Binding CancelCommand}"/>
+      <Button Name="DoneButton" Grid.Column="2" Classes="Primary" Content="Done" IsEnabled="{Binding HasPick}"
+              Click="DoneButton_Click"/>
+    </Grid>
+
+    <Grid ColumnDefinitions="230,*">
+      <Border Classes="ActionListPane">
+        <ScrollViewer Name="ActionListScroll" VerticalScrollBarVisibility="Auto">
+          <StackPanel Margin="8,6">
+            <ItemsControl Name="SectionList" ItemsSource="{Binding Sections}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ActionSection">
+                  <StackPanel>
+                    <Button Name="SectionHeader" Classes="ActionSectionHeader" Classes.open="{Binding IsOpen}"
+                            Command="{Binding $parent[ItemsControl].((vm:ActionDialogViewModel)DataContext).ToggleSectionCommand}"
+                            CommandParameter="{Binding Name}">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                        <PathIcon Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
+                        <TextBlock Grid.Column="1" Name="SectionName" Text="{Binding Name}"/>
+                        <TextBlock Grid.Column="2" Name="MatchCountText" Text="{Binding MatchCount}"
+                                   IsVisible="{Binding IsSearching}"/>
+                      </Grid>
+                    </Button>
+                    <ItemsControl Name="ItemList" ItemsSource="{Binding Items}" IsVisible="{Binding IsOpen}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ActionItem">
+                          <Button Name="ActionItemButton" Classes="ActionItem" Classes.picked="{Binding IsPicked}"
+                                  Classes.current="{Binding IsCurrent}" IsEnabled="{Binding IsEnabled}"
+                                  Click="ActionItem_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="9">
+                              <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconConverters.Action}}"/>
+                              <controls:HighlightText Name="ItemName" Source="{Binding Name}" Highlight="{Binding Highlight}"/>
+                            </StackPanel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Name="NoMatchText" Classes="NoMatch" Text="{Binding NoMatchesText}" IsVisible="{Binding HasNoMatches}"/>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+
+      <ScrollViewer Grid.Column="1" Name="SettingsScroll" VerticalScrollBarVisibility="Auto">
+        <Panel Margin="18">
+          <TextBlock Name="EmptyPaneText" Classes="Secondary" Text="Choose an action." IsVisible="{Binding !HasPick}"/>
+          <StackPanel Name="SettingsPane" Spacing="14" IsVisible="{Binding HasPick}">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Border Classes="RowIcon">
+                <PathIcon Data="{Binding PickedIconKey, Converter={x:Static conv:IconConverters.Action}}"/>
+              </Border>
+              <TextBlock Name="PickedNameText" Classes="Subtitle" VerticalAlignment="Center" Text="{Binding PickedName}"/>
+            </StackPanel>
+            <controls:ActionSettings Name="Settings" DataContext="{Binding Draft}"/>
+          </StackPanel>
+        </Panel>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</UserControl>

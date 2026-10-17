@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Input.Actions;
 using Volco.Core.Media;
 
 namespace Volco.App.ViewModels;
@@ -147,6 +148,56 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         IsMain = isMain;
     }
 
+    // ── The action dialog's validation (spec §6.4) ────────────────────────────
+
+    private static readonly IReadOnlyDictionary<string, string> NoErrors = new Dictionary<string, string>();
+
+    /// <summary>Builds the context <see cref="Errors"/> is checked against; null checks structure only.</summary>
+    internal Func<ActionValidationContext>? Validation { get; init; }
+
+    /// <summary>Field key (<see cref="ActionValidator"/>'s) to message; empty until <see cref="ShowErrors"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DeviceError), nameof(DeviceBError), nameof(PresetError), nameof(PathError),
+                              nameof(WorkingDirectoryError), nameof(FirstErrorKey))]
+    private IReadOnlyDictionary<string, string> _errors = NoErrors;
+
+    /// <summary>Set by the dialog's first Done: from then on every change re-checks <see cref="Errors"/>.</summary>
+    [ObservableProperty]
+    private bool _showErrors;
+
+    public string? DeviceError => Errors.GetValueOrDefault(ActionValidator.Device);
+    public string? DeviceBError => Errors.GetValueOrDefault(ActionValidator.DeviceB);
+    public string? PresetError => Errors.GetValueOrDefault(ActionValidator.Preset);
+    public string? PathError => Errors.GetValueOrDefault(ActionValidator.Path);
+    public string? WorkingDirectoryError => Errors.GetValueOrDefault(ActionValidator.WorkingDirectory);
+
+    /// <summary>The first field with an error, in the settings pane's order; null when valid.</summary>
+    public string? FirstErrorKey
+        => new[] { ActionValidator.Device, ActionValidator.DeviceB, ActionValidator.Preset, ActionValidator.Path,
+                   ActionValidator.WorkingDirectory }.FirstOrDefault(Errors.ContainsKey);
+
+    /// <summary>Checks the action now (whatever <see cref="ShowErrors"/> says) and returns the problems.</summary>
+    internal IReadOnlyDictionary<string, string> Check()
+    {
+        var context = Validation?.Invoke() ?? new ActionValidationContext(PresetChoices.Select(p => p.Id).ToList(), _ => null, _ => true);
+        var errors = ActionValidator.Validate(_cfg, context);
+        Errors = errors.Count == 0 ? NoErrors : errors;
+        return errors;
+    }
+
+    partial void OnShowErrorsChanged(bool value)
+    {
+        if (value) Check();
+        else Errors = NoErrors;
+    }
+
+    /// <summary>A user edit was written to the config.</summary>
+    private void Edited()
+    {
+        if (ShowErrors) Check();
+        _changed();
+    }
+
     public string CommandHint => Type == ButtonActionType.RunScript
         ? "Runs hidden. .bat, .cmd and .exe start fastest; PowerShell takes a moment longer. " +
           "The script gets VOLCO_BUTTON, VOLCO_GESTURE and VOLCO_PRESET."
@@ -256,7 +307,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
             return;
         }
         _cfg.Action = value.Type!.Value;
-        _changed();
+        Edited();
     }
 
     partial void OnDeviceChanged(string value)
@@ -264,28 +315,28 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         // A swapped ItemsSource can null the two-way-bound selection for a moment; never user intent.
         if (_loading || string.IsNullOrEmpty(value)) return;
         _cfg.Device = DeviceRefLookup.DeviceRefFromName(_devices, value);
-        _changed();
+        Edited();
     }
 
     partial void OnDeviceBChanged(string value)
     {
         if (_loading || string.IsNullOrEmpty(value)) return;
         _cfg.DeviceB = DeviceRefLookup.DeviceRefFromName(_devices, value);
-        _changed();
+        Edited();
     }
 
     partial void OnSelectedPresetChanged(PresetChoice? value)
     {
         if (_loading || value is null) return;
         _cfg.PresetId = value.Id;
-        _changed();
+        Edited();
     }
 
     partial void OnSelectedMediaAppChanged(MediaAppChoice? value)
     {
         if (_loading || value is null) return;
         _cfg.MediaApp = value.Id is null ? null : new MediaAppConfig { Id = value.Id, Name = value.Name };
-        _changed();
+        Edited();
     }
 
     partial void OnCommandPathChanged(string value)
@@ -293,35 +344,35 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         UpdatePathMissing();
         if (_loading) return;
         Command().Path = value.Trim();
-        _changed();
+        Edited();
     }
 
     partial void OnCommandArgumentsChanged(string value)
     {
         if (_loading) return;
         Command().Arguments = value;
-        _changed();
+        Edited();
     }
 
     partial void OnCommandWorkingDirectoryChanged(string value)
     {
         if (_loading) return;
         Command().WorkingDirectory = value.Trim();
-        _changed();
+        Edited();
     }
 
     partial void OnCommandNameChanged(string value)
     {
         if (_loading) return;
         Command().Name = value;
-        _changed();
+        Edited();
     }
 
     partial void OnStartAnotherChanged(bool value)
     {
         if (_loading) return;
         _cfg.WhileRunning = value ? WhileRunningPolicy.StartAnother : WhileRunningPolicy.Ignore;
-        _changed();
+        Edited();
     }
 
     private CommandConfig Command() => _cfg.Command ??= new CommandConfig();
@@ -351,9 +402,13 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         finally { _loading = false; }
         OnPropertyChanged(nameof(Device));
         OnPropertyChanged(nameof(DeviceB));
+        if (ShowErrors) Check();   // a device may now be an input, or gone
     }
 
     private IReadOnlyList<AudioDevice> _devices = Array.Empty<AudioDevice>();
+
+    /// <summary>The render devices the pickers list.</summary>
+    internal IReadOnlyList<AudioDevice> Devices => _devices;
 
     private void SetDevices(IReadOnlyList<AudioDevice>? devices)
     {

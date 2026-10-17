@@ -3,10 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
+using Volco.Core.Input;
 
 namespace Volco.App.Views.Pages;
 
@@ -24,12 +26,55 @@ public partial class ControlsPage : UserControl
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Bubble);
         var overlay = this.FindControl<Border>("DialogOverlay")!;
         overlay.PointerPressed += OnOverlayPressed;
-        // Focus moves into an opened dialog, so Escape reaches the page.
         overlay.PropertyChanged += (_, e) =>
         {
-            if (e.Property == IsVisibleProperty && overlay.IsVisible)
-                this.FindControl<Button>("CloseDialogButton")!.Focus(NavigationMethod.Tab);
+            if (e.Property != IsVisibleProperty) return;
+            if (overlay.IsVisible) OnDialogOpened();
+            else OnDialogClosed();
         };
+    }
+
+    // What had the focus when the dialog opened, and the dialog.
+    private IInputElement? _focusBeforeDialog;
+    private object? _openDialog;
+
+    /// <summary>Focus moves into the dialog, so Escape reaches the page (a dialog may focus its
+    /// own first field, such as the action dialog's search box).</summary>
+    private void OnDialogOpened()
+    {
+        _focusBeforeDialog = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        _openDialog = Vm?.Dialog;
+        Dispatcher.UIThread.Post(() =>
+        {
+            var card = this.FindControl<Border>("DialogCard")!;
+            if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
+            card.GetVisualDescendants().OfType<InputElement>()
+                .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled)
+                ?.Focus(NavigationMethod.Tab);
+        });
+    }
+
+    /// <summary>The focus goes back to the row that opened the dialog (spec §11).</summary>
+    private void OnDialogClosed()
+    {
+        var opener = _openDialog is ActionDialogViewModel action ? ActionRowButton(action.Gesture) : null;
+        var before = _focusBeforeDialog;
+        _focusBeforeDialog = null;
+        _openDialog = null;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (opener is { IsEffectivelyVisible: true }) opener.Focus(NavigationMethod.Tab);
+            else if (before is InputElement element && TopLevel.GetTopLevel(element) is not null) element.Focus(NavigationMethod.Tab);
+        });
+    }
+
+    /// <summary>The inspector's row button for a gesture of the selected button.</summary>
+    private Button? ActionRowButton(PressType gesture)
+    {
+        var row = gesture switch { PressType.Double => "ActionRow_Double", PressType.Long => "ActionRow_Hold", _ => "ActionRow_Press" };
+        return this.FindControl<Border>("Inspector")?.GetVisualDescendants().OfType<ContentControl>()
+            .FirstOrDefault(c => c.Name == row)?.GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(b => b.Name == "RowButton");
     }
 
     public ControlsPage(ControlsViewModel viewModel) : this()

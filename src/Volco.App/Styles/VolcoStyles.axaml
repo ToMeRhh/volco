@@ -902,4 +902,101 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
   </Style>
 
+  <!-- ── Controls page dialogs (spec §6) ───────────────────────────────── -->
+  <!-- Up to 640 × 560, smaller in a small window, centred over the page. -->
+  <Style Selector="Border.DialogCard">
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Margin" Value="24"/>
+    <Setter Property="MaxWidth" Value="640"/>
+    <Setter Property="MaxHeight" Value="560"/>
+    <Setter Property="ClipToBounds" Value="True"/>
+    <Setter Property="BoxShadow" Value="0 8 28 0 #40000000"/>
+  </Style>
+  <Style Selector="Grid.DialogHeader">
+    <Setter Property="Margin" Value="16,12,10,12"/>
+  </Style>
+  <Style Selector="TextBlock.DialogTitle">
+    <Setter Property="FontSize" Value="15"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="TextBlock.DialogSubtitle">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.DialogSearch">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,1"/>
+    <Setter Property="Padding" Value="16,10"/>
+  </Style>
+  <Style Selector="TextBox.Search">
+    <Setter Property="FontSize" Value="14"/>
+  </Style>
+  <Style Selector="Grid.DialogFooter">
+    <Setter Property="Margin" Value="16,10"/>
+    <Setter Property="ColumnSpacing" Value="8"/>
+  </Style>
+  <Style Selector="Border.ActionListPane">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+  </Style>
+  <Style Selector="Button.ActionSectionHeader">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="6,8,6,4"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionSectionHeader PathIcon.SectionChevron">
+    <Setter Property="RenderTransform" Value="none"/>
+  </Style>
+  <Style Selector="Button.ActionSectionHeader.open PathIcon.SectionChevron">
+    <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+  </Style>
+  <Style Selector="Button.ActionItem">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+  </Style>
+  <Style Selector="Button.ActionItem PathIcon">
+    <Setter Property="Width" Value="14"/>
+    <Setter Property="Height" Value="14"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ActionItem.current /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionItem.picked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionItem.picked PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.NoMatch">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+    <Setter Property="Margin" Value="8,10"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+  <Style Selector="StackPanel.Field">
+    <Setter Property="Spacing" Value="4"/>
+  </Style>
+  <Style Selector="StackPanel.Field ComboBox">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="TextBlock.FieldLabel">
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.FieldError">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+
 </Styles>

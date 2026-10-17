@@ -3,6 +3,8 @@
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:controls="using:Volco.App.Controls"
              xmlns:inspector="using:Volco.App.Views.Inspector"
+             xmlns:dialogs="using:Volco.App.Views.Dialogs"
+             xmlns:pages="using:Volco.App.Views.Pages"
              x:Class="Volco.App.Views.Pages.ControlsPage"
              x:DataType="vm:ControlsViewModel">
   <!-- The Controls page (spec docs/design/controls-page.md): the title, a drawing of the
@@ -106,21 +108,24 @@
       </Border>
     </Grid>
 
-    <!-- The page's dialogs: a modal card over the page; Escape or a click outside closes it -->
+    <!-- The page's dialogs: a modal card over the page; Escape or a click outside closes it, and
+         Tab stays inside it -->
     <Border Name="DialogOverlay" Background="#66000000" IsVisible="{Binding HasDialog}">
-      <Border Name="DialogCard" Classes="Panel" Padding="24" Margin="24" MaxWidth="640" MaxHeight="560"
-              HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 8 28 0 #40000000">
-        <DockPanel>
-          <Button Name="CloseDialogButton" DockPanel.Dock="Bottom" HorizontalAlignment="Right" Content="Close"
-                  Command="{Binding CloseDialogCommand}"/>
-          <ContentControl Name="DialogHost" Content="{Binding Dialog}">
-            <ContentControl.DataTemplates>
-              <DataTemplate DataType="{x:Type vm:PendingDialogRequest}" x:DataType="vm:PendingDialogRequest">
+      <Border Name="DialogCard" Classes="Panel DialogCard" KeyboardNavigation.TabNavigation="Cycle">
+        <ContentControl Name="DialogHost" Content="{Binding Dialog}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type vm:ActionDialogViewModel}" x:DataType="vm:ActionDialogViewModel">
+              <dialogs:ActionDialog/>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:PendingDialogRequest}" x:DataType="vm:PendingDialogRequest">
+              <DockPanel Margin="24">
+                <Button Name="CloseDialogButton" DockPanel.Dock="Bottom" HorizontalAlignment="Right" Content="Close"
+                        Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).CloseDialogCommand}"/>
                 <Panel/>
-              </DataTemplate>
-            </ContentControl.DataTemplates>
-          </ContentControl>
-        </DockPanel>
+              </DockPanel>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
       </Border>
     </Border>
   </Panel>

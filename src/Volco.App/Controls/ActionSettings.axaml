@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
+             x:Class="Volco.App.Controls.ActionSettings"
+             x:DataType="vm:ActionSlotViewModel">
+  <UserControl.Resources>
+    <DataTemplate x:Key="DeviceItem" x:DataType="x:String">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Name="DeviceLabel">
+          <TextBlock.Text>
+            <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="label">
+              <Binding/>
+              <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
+            </MultiBinding>
+          </TextBlock.Text>
+        </TextBlock>
+        <TextBlock Name="DeviceSecondary" Classes="Caption" VerticalAlignment="Center">
+          <TextBlock.Text>
+            <MultiBinding Converter="{x:Static conv:DeviceLabelConverter.Instance}" ConverterParameter="secondary">
+              <Binding/>
+              <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ComboBox}"/>
+              <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ComboBoxItem}"/>
+            </MultiBinding>
+          </TextBlock.Text>
+        </TextBlock>
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <!-- The picked action's settings in the action dialog (spec §6.1), each field with its label
+       above and its error under it (§6.4). -->
+  <StackPanel Spacing="14">
+    <StackPanel Name="DeviceParams" Classes="Field" IsVisible="{Binding NeedsDevice}">
+      <TextBlock Classes="FieldLabel" Text="Device"/>
+      <ComboBox Name="DeviceCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
+                PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
+                SelectedItem="{Binding Device, Mode=TwoWay}" Classes.Invalid="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <TextBlock Name="DeviceErrorText" Classes="FieldError" Text="{Binding DeviceError}"
+                 IsVisible="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </StackPanel>
+
+    <StackPanel Name="PairParams" Spacing="14" IsVisible="{Binding NeedsPair}">
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="A"/>
+        <ComboBox Name="DeviceACombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
+                  PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
+                  SelectedItem="{Binding Device, Mode=TwoWay}" Classes.Invalid="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <TextBlock Name="DeviceAErrorText" Classes="FieldError" Text="{Binding DeviceError}"
+                   IsVisible="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      </StackPanel>
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="B"/>
+        <ComboBox Name="DeviceBCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
+                  PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
+                  SelectedItem="{Binding DeviceB, Mode=TwoWay}" Classes.Invalid="{Binding DeviceBError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <TextBlock Name="DeviceBErrorText" Classes="FieldError" Text="{Binding DeviceBError}"
+                   IsVisible="{Binding DeviceBError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      </StackPanel>
+    </StackPanel>
+
+    <StackPanel Name="PresetParams" Classes="Field" IsVisible="{Binding NeedsPreset}">
+      <TextBlock Classes="FieldLabel" Text="Mode"/>
+      <ComboBox Name="PresetCombo" PlaceholderText="Choose a mode" ItemsSource="{Binding PresetChoices}"
+                SelectedItem="{Binding SelectedPreset, Mode=TwoWay}" Classes.Invalid="{Binding PresetError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <TextBlock Name="PresetErrorText" Classes="FieldError" Text="{Binding PresetError}"
+                 IsVisible="{Binding PresetError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </StackPanel>
+
+    <StackPanel Name="MediaParams" Classes="Field" IsVisible="{Binding NeedsMediaApp}">
+      <TextBlock Classes="FieldLabel" Text="App"/>
+      <ComboBox Name="MediaAppCombo" ItemsSource="{Binding MediaAppChoices}"
+                SelectedItem="{Binding SelectedMediaApp, Mode=TwoWay}"/>
+    </StackPanel>
+
+    <StackPanel Name="CommandParams" Spacing="14" IsVisible="{Binding NeedsCommand}">
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="File"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+          <TextBox Name="CommandPathBox" PlaceholderText="{Binding CommandPlaceholder}"
+                   Text="{Binding CommandPath, Mode=TwoWay}" Classes.Invalid="{Binding PathError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          <Button Name="BrowseButton" Grid.Column="1" Content="Browse…" Click="BrowseButton_Click"/>
+        </Grid>
+        <TextBlock Name="PathErrorText" Classes="FieldError" Text="{Binding PathError}"
+                   IsVisible="{Binding PathError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      </StackPanel>
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="Arguments"/>
+        <TextBox Name="CommandArgumentsBox" Text="{Binding CommandArguments, Mode=TwoWay}"/>
+      </StackPanel>
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="Start in"/>
+        <TextBox Name="CommandFolderBox" PlaceholderText="The file’s folder"
+                 Text="{Binding CommandWorkingDirectory, Mode=TwoWay}" Classes.Invalid="{Binding WorkingDirectoryError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <TextBlock Name="WorkingDirectoryErrorText" Classes="FieldError" Text="{Binding WorkingDirectoryError}"
+                   IsVisible="{Binding WorkingDirectoryError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      </StackPanel>
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="Name"/>
+        <TextBox Name="CommandNameBox" PlaceholderText="The file name" Text="{Binding CommandName, Mode=TwoWay}"/>
+      </StackPanel>
+      <CheckBox Name="StartAnotherCheck" IsVisible="{Binding NeedsWhileRunning}"
+                IsChecked="{Binding StartAnother, Mode=TwoWay}" Content="Start another run if it’s still running"/>
+      <StackPanel Name="UsbNote" Orientation="Horizontal" Spacing="6">
+        <Border Classes="UsbTag" Margin="0">
+          <TextBlock Text="USB"/>
+        </Border>
+        <TextBlock Classes="Caption" VerticalAlignment="Center" Text="Runs only for presses over the USB cable."/>
+      </StackPanel>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

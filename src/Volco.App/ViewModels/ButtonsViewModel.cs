@@ -461,7 +461,11 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         foreach (var item in Items) item.RefreshDevices(devices);
         RefreshLights();
         foreach (var item in Items) item.RefreshProblems();   // an output may now be an input, or gone
+        DevicesRefreshed?.Invoke(devices);
     }
+
+    /// <summary>After <see cref="RefreshDevices"/>: an open action dialog's pickers follow.</summary>
+    internal event Action<IReadOnlyList<AudioDevice>>? DevicesRefreshed;
 
     private static T CloneJson<T>(T value, JsonTypeInfo<T> type)
         => JsonSerializer.Deserialize(JsonSerializer.Serialize(value, type), type)!;
