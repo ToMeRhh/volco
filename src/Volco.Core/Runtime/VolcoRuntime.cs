@@ -577,8 +577,12 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     public void Execute(ButtonActionConfig action, ActionOrigin? origin)
     {
         if (IsDisposed) return;
+        if (ActionValidator.Validate(action, ActionValidationContext.Structural(Config.Config)).Count > 0) return;
         ActionFactory.Create(action, Services, origin)?.Execute();
     }
+
+    /// <summary>The invalid actions already logged, so a held-down or repeated press logs once.</summary>
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<ButtonActionConfig, object> _loggedInvalid = new();
 
     /// <summary>
     /// Migrates v1→v2 config if needed and audioReady; subscribes to the engine; creates
@@ -943,6 +947,20 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         };
 
         if (actionConfig == null) return;
+        // An action with a missing or bad setting never runs, and starts no feedback.
+        var problems = ActionValidator.Validate(actionConfig, ActionValidationContext.Structural(config));
+        if (problems.Count > 0)
+        {
+            lock (_loggedInvalid)
+            {
+                if (!_loggedInvalid.TryGetValue(actionConfig, out _))
+                {
+                    _loggedInvalid.Add(actionConfig, new object());
+                    AppLog.Info($"Button {e.ButtonIndex}: {e.PressType} not run: {problems.First().Value}");
+                }
+            }
+            return;
+        }
         // Custom-actions spec §7: a press over UDP or WebSocket could be forged, so it never runs code.
         if (ButtonActionTypes.RunsCode(actionConfig.Action)
             && !(_pressOverUsb.TryGetValue(e.ButtonIndex, out var overUsb) && overUsb))
