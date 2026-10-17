@@ -114,7 +114,11 @@ public partial class ControlsPage : UserControl
         if (vm.HasDialog)
         {
             if (e.Key != Key.Escape) return;
-            vm.CloseDialog();
+            // Escape first closes an open dropdown in the dialog; only the next one closes the dialog.
+            var open = this.FindControl<Border>("DialogCard")!.GetVisualDescendants().OfType<ComboBox>()
+                .FirstOrDefault(c => c.IsDropDownOpen);
+            if (open is not null) open.IsDropDownOpen = false;
+            else vm.CloseDialog();
             e.Handled = true;
             return;
         }

@@ -307,6 +307,28 @@ public class ActionDialogTests
         Assert.Equal(ButtonActionType.MuteSpecificDevice, saved.Action);
     }
 
+    [AvaloniaFact]
+    public void Escape_WithDropdownOpen_ClosesOnlyTheDropdown()
+    {
+        using var s = Show();
+        Open(s);
+        s.Dialog.Pick(ButtonActionType.SetOutputDevice);
+        Settle(s.Window);
+        s.Dialog.Draft.Device = "Headphones";
+        var combo = In<ComboBox>(s.View, "DeviceCombo");
+        combo.Focus(NavigationMethod.Pointer);
+        combo.IsDropDownOpen = true;
+        Settle(s.Window);
+
+        PressKey(s.Window, Key.Escape, PhysicalKey.Escape);
+        Assert.False(combo.IsDropDownOpen);
+        Assert.True(s.Controls.HasDialog);
+        Assert.Equal("Headphones", s.Dialog.Draft.Device);   // the draft is kept
+
+        PressKey(s.Window, Key.Escape, PhysicalKey.Escape);
+        Assert.False(s.Controls.HasDialog);
+    }
+
     // ── Validation ────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
