@@ -153,8 +153,8 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             .ToList();
         // A saved device that is not plugged in keeps its row.
         if (_original.Type == SliderMappingType.Device && _original.Device is { } saved && !rows.Exists(r => Matches(saved, r.Ref))
-            && DeviceDisplay.For(config, audio, saved) is { } look)
-            rows.Add((saved, look));
+            && DeviceDisplay.For(config, audio, saved) is { } savedLook)
+            rows.Add((saved, savedLook));
         foreach (var (reference, look) in rows)
         {
             var key = $"device:{(reference.Id.Length > 0 ? reference.Id : reference.FriendlyName)}";
