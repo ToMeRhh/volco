@@ -10,7 +10,7 @@ public class FillWrapPanelTests
 {
     private static (FillWrapPanel Panel, List<Border> Items) Host(int count, double width, double min = 84)
     {
-        var panel = new FillWrapPanel { MinItemWidth = min, Spacing = 6 };
+        var panel = new FillWrapPanel { MinItemWidth = min, Spacing = 6, UseLayoutRounding = false };
         var items = new List<Border>();
         for (var i = 0; i < count; i++)
         {
