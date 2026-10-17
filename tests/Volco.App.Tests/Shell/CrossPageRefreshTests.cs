@@ -78,7 +78,7 @@ public class CrossPageRefreshTests
     }
 
     [AvaloniaFact]
-    public void NicknameSetOnDevices_SliderKeepsItsDevice()
+    public void NicknameSetOnDevices_ReachesTheSliderLabels()
     {
         var (window, rig, vm) = Open(c =>
         {
@@ -87,12 +87,17 @@ public class CrossPageRefreshTests
         });
         using var _ = rig; using var __ = vm;
         Show(window, "controls");
+        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.Equal("Headphones", In<TextBlock>(page, "TargetText").Text);   // slider 1 is selected
 
         Show(window, "general");   // Devices is a section of General
         vm.Devices.Outputs.Single(d => d.Id == "dev-2").Nickname = "Arctis";
         Dispatcher.UIThread.RunJobs();
         Show(window, "controls");
 
+        Assert.Equal("Arctis", In<TextBlock>(page, "TargetText").Text);
+        Assert.Equal("Arctis", In<TextBlock>(page.GetVisualDescendants().OfType<Volco.App.Controls.SliderTile>().First(), "Label").Text);
+        Assert.Equal("Arctis", In<TextBox>(page, "NameBox").PlaceholderText);
         Assert.Equal("Headphones", vm.Sliders.Items[0].SelectedDevice);
         Assert.Equal(Headphones.Id, rig.Config.Config.Sliders[0].Device?.Id);   // the re-seed saved nothing new
     }

@@ -225,9 +225,11 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         DoublePress.Bind(binding.DoublePress);
         Hold.Bind(binding.LongPress);
         Refresh();
+        RefreshProblems();
     }
 
-    /// <summary>Recomputes the summary and the light/screen preview. Cheap; safe to call often.</summary>
+    /// <summary>Recomputes the summary, the rows' labels and the light/screen preview. Cheap; safe
+    /// to call often (no file or device lookups).</summary>
     internal void Refresh()
     {
         var edited = Config.BindingFor(_owner.EditingPresetId);
@@ -266,20 +268,31 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         HasEditedActions = main is not null;
         if (!others.SequenceEqual(Secondary)) Secondary = others;
 
-        // The inspector's rows: label, the saved action's first problem (spec §6.4, on load), main.
-        var context = _owner.ValidationContext();
+        // The inspector's rows: label and main. Problems are checked in RefreshProblems.
         foreach (var (slot, gesture) in new[] { (Press, PressType.Single), (DoublePress, PressType.Double), (Hold, PressType.Long) })
         {
             var action = slot.Config;
             var set = action.Action != ButtonActionType.None;
-            var problem = set ? ActionValidator.Validate(action, context).Values.FirstOrDefault() : null;
-            slot.SetRow(set ? ActionCatalog.ShortLabel(action, _owner.PresetName, _owner.DeviceName) : "—", problem, gesture == main);
+            slot.SetRow(set ? ActionCatalog.ShortLabel(action, _owner.PresetName, _owner.DeviceName) : "—", gesture == main);
         }
+    }
+
+    /// <summary>Checks each saved action (spec §6.4, on load) for the inspector's warning. It may
+    /// probe files, so it runs only when an action, the presets or the devices change, never from
+    /// <see cref="Refresh"/>, which every volume change calls.</summary>
+    internal void RefreshProblems()
+    {
+        var context = _owner.ValidationContext();
+        foreach (var slot in Slots)
+            slot.Problem = slot.Config.Action == ButtonActionType.None
+                ? null
+                : ActionValidator.Validate(slot.Config, context).Values.FirstOrDefault();
     }
 
     private void OnActionChanged()
     {
         Refresh();
+        RefreshProblems();
         _owner.Changed(this);
     }
 

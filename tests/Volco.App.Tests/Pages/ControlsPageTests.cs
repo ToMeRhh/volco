@@ -444,8 +444,17 @@ public class ControlsPageTests
         var button = s.Vm.Buttons.Items[0];
         s.Controls.Select(button);
         Settle(s.Window);
-        var before = Inspector(s.Page).Bounds.Height;
-        Assert.True(before > 0);
+        // The inspector itself fills its column, so measure what it holds: the body's own height
+        // and where the rows below the actions start.
+        var inspector = Inspector(s.Page);
+        StackPanel Body() => inspector.GetVisualDescendants().OfType<StackPanel>().First(p => p.Classes.Contains("InspectorBody"));
+        double LightTop() => In<Border>(inspector, "LightRow").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
+        double TimingTop() => In<Border>(inspector, "TimingSection").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
+        var bodyBefore = Body().DesiredSize.Height;
+        var lightBefore = LightTop();
+        var timingBefore = TimingTop();
+        Assert.True(bodyBefore > 0);
+        Assert.True(In<Border>(inspector, "LightRow").IsEffectivelyVisible);
 
         button.Press.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteCurrentOutput);
         button.DoublePress.SelectedChoice = ActionCatalog.For(ButtonActionType.NextPreset);
@@ -454,7 +463,9 @@ public class ControlsPageTests
         Assert.Equal("Mute output", InRow<TextBlock>(s.Page, "Press", "ActionText").Text);
         Assert.Equal("Follows Press", In<TextBlock>(Inspector(s.Page), "LightText").Text);
         Assert.Equal("Screen", In<TextBlock>(Inspector(s.Page), "LightLabel").Text);
-        Assert.Equal(before, Inspector(s.Page).Bounds.Height);
+        Assert.Equal(bodyBefore, Body().DesiredSize.Height, 1);
+        Assert.Equal(lightBefore, LightTop(), 1);
+        Assert.Equal(timingBefore, TimingTop(), 1);
     }
 
     [AvaloniaFact]
@@ -487,6 +498,33 @@ public class ControlsPageTests
         Assert.True(tag.IsEffectivelyVisible);
         Assert.Equal("Runs only for presses over the USB cable", ToolTip.GetTip(tag));
         Assert.False(InRow<Border>(s.Page, "Double", "UsbTag").IsEffectivelyVisible);
+    }
+
+    [Fact]
+    public void VolumeRefresh_DoesNotProbeFiles_ActionChangeRevalidates()
+    {
+        using var rig = new TestRig(EngineWithAudio());
+        rig.Config.Config.Buttons[0].Default().SinglePress = new ButtonActionConfig
+        {
+            Action = ButtonActionType.OpenProgram, Command = new CommandConfig { Path = @"C:\Games\game.exe" },
+        };
+        var probes = 0;
+        var toast = new UndoToastViewModel();
+        var buttons = new ButtonsViewModel(rig.Config, rig.Engine, rig.Runtime, (_, _) => { }, toast,
+                                           fileExists: _ => { probes++; return false; });
+        var press = buttons.Items[0].Press;
+        Assert.True(probes > 0);
+        Assert.Equal("This file doesn’t exist.", press.Problem);
+
+        // What every volume or mute change and every media or script change runs.
+        probes = 0;
+        buttons.RefreshLights();
+        buttons.RefreshActionState();
+        Assert.Equal(0, probes);
+        Assert.Equal("This file doesn’t exist.", press.Problem);
+
+        press.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteCurrentOutput);
+        Assert.Null(press.Problem);
     }
 
     // ── Routing from the runtime (Task 6 review) ──────────────────────────────

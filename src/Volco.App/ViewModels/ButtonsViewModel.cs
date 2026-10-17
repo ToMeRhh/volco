@@ -81,13 +81,13 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
     public ButtonsViewModel(ConfigManager config, IAudioEngine audio, IPresetController presets,
                             Action<ButtonActionConfig, ActionOrigin?> execute, UndoToastViewModel toast,
-                            ActionCapabilities? capabilities = null)
+                            ActionCapabilities? capabilities = null, Func<string, bool>? fileExists = null)
     {
         _capabilities = capabilities ?? ActionCapabilities.None;
         _slotHost = new ActionSlotHost(_capabilities.Availability,
                                        () => _capabilities.Media?.GetApps() ?? Array.Empty<MediaApp>(),
                                        () => config.Config.Connection.Type != ConnectionType.Serial,
-                                       File.Exists);
+                                       fileExists ?? File.Exists);
         _config = config;
         _audio = audio;
         _presets = presets;
@@ -310,6 +310,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         {
             foreach (var slot in item.Slots) slot.RefreshPresets();
             item.Refresh();
+            item.RefreshProblems();   // Go to preset checks that its preset exists
         }
     }
 
@@ -459,6 +460,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         _captureDevices = _audio.GetDevices(AudioFlow.Capture);
         foreach (var item in Items) item.RefreshDevices(devices);
         RefreshLights();
+        foreach (var item in Items) item.RefreshProblems();   // an output may now be an input, or gone
     }
 
     private static T CloneJson<T>(T value, JsonTypeInfo<T> type)

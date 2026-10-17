@@ -47,8 +47,9 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     /// <summary>The tile's label: the name, else what it controls, else "Not set".</summary>
     public string Label => Name?.Trim() is { Length: > 0 } name ? name : TargetLabel;
 
-    /// <summary>What it controls, or "Not set": the Controls row, and the name box's placeholder.</summary>
-    public string TargetLabel => IsNotSetUp ? "Not set" : Summary;
+    /// <summary>What it controls, or "Not set": the Controls row, and the name box's placeholder.
+    /// A device reads as its display name (its nickname, else the short automatic name).</summary>
+    public string TargetLabel => IsNotSetUp ? "Not set" : IsDevice ? Describe(SelectedDevice).Label : Summary;
 
     /// <summary>No name and nothing to control: the label "Not set" is drawn quieter.</summary>
     public bool IsUnset => string.IsNullOrWhiteSpace(Name) && IsNotSetUp;
@@ -382,6 +383,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         }
         finally { _loading = false; }
         OnPropertyChanged(nameof(SelectedDevice));
+        OnPropertyChanged(nameof(Summary));   // a nickname may have changed: the labels follow
     }
 
     private IReadOnlyList<AudioDevice> _devices = Array.Empty<AudioDevice>();

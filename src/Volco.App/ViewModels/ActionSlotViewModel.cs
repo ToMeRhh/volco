@@ -140,11 +140,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     /// <summary>"Press: Mute mic", for the dense drawing's icons.</summary>
     public string RowTip => $"{Label}: {RowText}";
 
-    /// <summary>Set by the button after each change.</summary>
-    internal void SetRow(string text, string? problem, bool isMain)
+    /// <summary>Set by the button after each change (<see cref="Problem"/> separately).</summary>
+    internal void SetRow(string text, bool isMain)
     {
         RowText = text;
-        Problem = problem;
         IsMain = isMain;
     }
 
