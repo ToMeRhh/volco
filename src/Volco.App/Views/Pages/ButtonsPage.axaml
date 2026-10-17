@@ -51,12 +51,14 @@
           </Button>
         </StackPanel>
 
-        <!-- The tabs overlap the frame's top edge by a pixel, so the checked one joins it. -->
-        <WrapPanel Name="PresetTabStrip" ZIndex="1" Margin="0,0,0,-1" IsVisible="{Binding HasMultiplePresets}">
+        <!-- The tabs overlap the frame's top edge by a pixel, so the checked one joins it; too many
+             for one line wrap onto more. -->
+        <Grid Name="PresetTabStrip" ColumnDefinitions="*,Auto" ZIndex="1" Margin="0,0,0,-1"
+              IsVisible="{Binding HasMultiplePresets}">
           <ItemsControl Name="PresetTabs" ItemsSource="{Binding Presets}" VerticalAlignment="Bottom">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
-                <StackPanel Orientation="Horizontal" Spacing="4"/>
+                <WrapPanel/>
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
@@ -75,36 +77,39 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <Button Name="AddPresetButton" Classes="Ghost" Margin="6,0,0,4" VerticalAlignment="Bottom"
+          <Button Name="AddPresetButton" Grid.Column="1" Classes="Ghost" Margin="6,0,0,4" VerticalAlignment="Bottom"
                   Command="{Binding AddPresetCommand}" ToolTip.Tip="Add a preset that starts as a copy of this one">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
               <TextBlock Text="Add preset"/>
             </StackPanel>
           </Button>
-        </WrapPanel>
+        </Grid>
 
         <Border Name="PresetBody" Classes="PresetBody" Classes.framed="{Binding HasMultiplePresets}"
                 controls:PresetTint.Index="{Binding EditingTintIndex}">
           <StackPanel Spacing="12">
-            <Grid Name="Banner" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="4,0,0,0"
-                  IsVisible="{Binding HasMultiplePresets}">
-              <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
-                       Fill="{DynamicResource SuccessBrush}" IsVisible="{Binding IsEditingLive}"/>
-              <TextBlock Name="BannerText" Grid.Column="1" Classes="Secondary" TextWrapping="Wrap"
-                         VerticalAlignment="Center" Text="{Binding BannerText}"/>
-              <Button Name="MakeLiveButton" Grid.Column="2" Margin="12,0,0,0"
-                      Content="{Binding MakeLiveText}" Command="{Binding MakeLiveCommand}"
-                      IsVisible="{Binding !IsEditingLive}"/>
-              <Panel Grid.Column="3" Margin="8,0,0,0">
+            <!-- A wrap, not a grid: when narrow, the buttons go under the text rather than
+                 squeezing it to a letter per line. -->
+            <WrapPanel Name="Banner" Margin="4,0,0,0" IsVisible="{Binding HasMultiplePresets}">
+              <DockPanel Margin="0,4,16,4" VerticalAlignment="Center">
+                <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
+                         Fill="{DynamicResource SuccessBrush}" IsVisible="{Binding IsEditingLive}"/>
+                <TextBlock Name="BannerText" Classes="Secondary" TextWrapping="Wrap"
+                           VerticalAlignment="Center" Text="{Binding BannerText}"/>
+              </DockPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Name="MakeLiveButton"
+                        Content="{Binding MakeLiveText}" Command="{Binding MakeLiveCommand}"
+                        IsVisible="{Binding !IsEditingLive}"/>
                 <Button Name="RenamePresetButton" Classes="Ghost" Content="Rename"
                         Command="{Binding StartRenameCommand}" IsVisible="{Binding !IsRenaming}"/>
                 <TextBox Name="PresetNameBox" Width="180" IsVisible="{Binding IsRenaming}"
                          Text="{Binding RenameText, Mode=TwoWay}"/>
-              </Panel>
-              <Button Name="DeletePresetButton" Grid.Column="4" Classes="Ghost Danger" Content="Delete"
-                      Command="{Binding DeletePresetCommand}"/>
-            </Grid>
+                <Button Name="DeletePresetButton" Classes="Ghost Danger" Content="Delete"
+                        Command="{Binding DeletePresetCommand}"/>
+              </StackPanel>
+            </WrapPanel>
 
             <!-- Button cards -->
             <ItemsControl Name="ButtonList" ItemsSource="{Binding Items}">

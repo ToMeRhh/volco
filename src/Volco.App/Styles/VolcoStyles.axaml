@@ -232,7 +232,8 @@
   <Style Selector="RadioButton.PresetTab">
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     <Setter Property="VerticalAlignment" Value="Bottom"/>
-    <Setter Property="Margin" Value="0,0,0,1"/>
+    <!-- 4 between tabs and between wrapped lines; unchecked tabs stop a pixel short of the frame. -->
+    <Setter Property="Margin" Value="0,4,4,1"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="RadioButton">
         <Border Name="PART_Tab"
@@ -255,7 +256,7 @@
   </Style>
   <Style Selector="RadioButton.PresetTab:checked">
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-    <Setter Property="Margin" Value="0"/>
+    <Setter Property="Margin" Value="0,4,4,0"/>
   </Style>
   <Style Selector="RadioButton.PresetTab:checked /template/ Border#PART_Tab">
     <Setter Property="BorderBrush" Value="{DynamicResource PresetEdge}"/>

@@ -495,6 +495,22 @@ public class ButtonsPageTests
     }
 
     [AvaloniaFact]
+    public void ButtonsPage_ManyPresets_TheTabsWrapOntoMoreLines()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            for (int i = 2; i <= 12; i++) c.Presets.Add(new PresetConfig { Id = $"p{i}", Name = $"Preset number {i}" });
+        });
+        using var _ = rig; using var __ = vm;
+        var strip = page.FindControl<Grid>("PresetTabStrip")!;
+        var tabs = All<RadioButton>(page, "PresetTab");
+
+        Assert.Equal(12, tabs.Count);
+        Assert.True(tabs.Select(t => t.TranslatePoint(new Point(0, 0), strip)!.Value.Y).Distinct().Count() > 1);
+        Assert.All(tabs, t => Assert.True(t.TranslatePoint(new Point(t.Bounds.Width, 0), strip)!.Value.X <= strip.Bounds.Width + 0.5));
+    }
+
+    [AvaloniaFact]
     public void ButtonsPage_OnePreset_DrawsNoFrame()
     {
         var (page, rig, vm) = Show();
@@ -503,7 +519,7 @@ public class ButtonsPageTests
 
         Assert.False(body.Classes.Contains("framed"));
         Assert.Null(body.Background);
-        Assert.False(page.FindControl<Grid>("Banner")!.IsVisible);
+        Assert.False(page.FindControl<WrapPanel>("Banner")!.IsVisible);
     }
 
     [AvaloniaFact]
@@ -523,6 +539,30 @@ public class ButtonsPageTests
         Assert.Equal(new[] { 0, 1 }, buttons.Presets.Select(p => p.TintIndex));
         buttons.Presets[1].SelectCommand.Execute(null);
         Assert.Equal(1, buttons.EditingTintIndex);
+    }
+
+    [AvaloniaFact]
+    public void ButtonsPage_DeletingAPreset_EditsThePresetBeforeIt()
+    {
+        var (page, rig, vm) = Show(c =>
+        {
+            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        });
+        using var _ = rig; using var __ = vm;
+        var buttons = vm.Buttons;
+
+        buttons.EditingPresetId = "work";
+        buttons.DeletePresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("gaming", buttons.EditingPresetId);
+        Assert.True(buttons.Presets.Single(p => p.Id == "gaming").IsEditing);
+
+        // The first has none before it: the new first is edited.
+        buttons.EditingPresetId = AppConfig.DefaultPresetId;
+        buttons.DeletePresetCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("gaming", buttons.EditingPresetId);
     }
 
     [AvaloniaFact]

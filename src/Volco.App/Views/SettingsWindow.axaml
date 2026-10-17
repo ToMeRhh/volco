@@ -6,7 +6,7 @@
         x:Class="Volco.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Volco Settings"
-        Width="860" Height="660" MinWidth="680" MinHeight="520"
+        Width="860" Height="660" MinWidth="820" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
         WindowDecorations="Full"

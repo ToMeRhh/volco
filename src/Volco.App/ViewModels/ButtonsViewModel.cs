@@ -263,7 +263,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
 
         RebuildPresetTabs();
         RefreshPresetPickers();
-        EditingPresetId = presets[0].Id;
+        // Edit the tab before the deleted one (the new first one when the first is deleted).
+        EditingPresetId = presets[Math.Max(0, index - 1)].Id;
         // The runtime already falls back to the first preset once the live one is gone (and so
         // raises no change); read it back rather than wait for an event.
         if (wasLive) _presets.SetActivePreset(presets[0].Id);
