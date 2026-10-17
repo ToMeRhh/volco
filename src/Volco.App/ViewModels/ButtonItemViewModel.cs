@@ -8,10 +8,14 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
 
+/// <summary>One action of a button tile's "other actions" list: its gesture, label and icon
+/// (<see cref="IconKey"/> is the action's <see cref="ButtonActionType"/> name).</summary>
+public sealed record GestureLine(PressType Gesture, string Label, string IconKey);
+
 /// <summary>
 /// One button card. Its position (= <see cref="Index"/>) is the hardware input number. Timing is
-/// shared by every preset; the three action rows show the preset being edited, and the light
-/// preview shows what the controller shows now, for the live preset.
+/// shared by every preset; the action rows and the light and screen previews show the preset being
+/// edited (when it is live, exactly what the controller shows).
 /// </summary>
 public sealed partial class ButtonItemViewModel : ObservableObject
 {
@@ -64,6 +68,26 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     /// <summary>No action in any preset: the card is drawn as "Not set up".</summary>
     [ObservableProperty]
     private bool _isNotSetUp;
+
+    /// <summary>The edited preset's main action (the one the light follows), or "Not set".</summary>
+    [ObservableProperty]
+    private string _mainLabel = "Not set";
+
+    /// <summary>Which gesture the main action is on; null when the edited preset has none.</summary>
+    [ObservableProperty]
+    private PressType? _mainGesture;
+
+    /// <summary>The edited preset's other actions, in Press, Double press, Hold order.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<GestureLine> _secondary = Array.Empty<GestureLine>();
+
+    /// <summary>The edited preset has an action, so Clear is offered.</summary>
+    [ObservableProperty]
+    private bool _hasEditedActions;
+
+    /// <summary>The config has this button but the controller's last Hello doesn't (spec §4.1).</summary>
+    [ObservableProperty]
+    private bool _isMissing;
 
     [ObservableProperty]
     private string _lightDescription = "";
@@ -170,18 +194,37 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         IsNotSetUp = Config.Actions.Values.All(b => b is null || b.IsEmpty);
         var summary = ActionCatalog.Summary(edited, _owner.PresetName, _owner.DeviceName);
         Summary = summary.Length > 0 ? summary : IsNotSetUp ? "Not set up" : "Nothing in this preset";
+        RefreshActionLines(edited);
 
         Indicator = _owner.IndicatorFor(Index);
         UpdateLightDescription(edited);
 
-        // LEDs show what the controller shows now (the live preset); a screen preview shows the
-        // preset being edited, so editing it is visible.
-        var live = Config.BindingFor(_owner.LivePresetId);
-        LightValue = ControllerDisplay.LedValueFor(live, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.LivePresetId, _owner.Audio, _owner.ActionStatus);
+        // The previews show what the controller would show in the edited preset.
+        LightValue = ControllerDisplay.LedValueFor(edited, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.EditingPresetId, _owner.Audio, _owner.ActionStatus);
         // From this card's own config, not AppConfig.Buttons[Index]: during a drag preview the
         // card's Index no longer matches its position in the list.
         Screen = ControllerDisplay.Screen(edited.All().FirstOrDefault(a => a.Action != ButtonActionType.None),
                                           _owner.AppConfig, _owner.EditingPresetId, _owner.Audio, _owner.ActionStatus);
+    }
+
+    /// <summary>The main action (the first set one, Press → Double press → Hold, as the light
+    /// follows it) and the others.</summary>
+    private void RefreshActionLines(ButtonBindingConfig edited)
+    {
+        var others = new List<GestureLine>();
+        PressType? main = null;
+        var mainLabel = "Not set";
+        foreach (var (gesture, action) in new[] { (PressType.Single, edited.SinglePress), (PressType.Double, edited.DoublePress), (PressType.Long, edited.LongPress) })
+        {
+            if (action.Action == ButtonActionType.None) continue;
+            var label = ActionCatalog.ShortLabel(action, _owner.PresetName, _owner.DeviceName);
+            if (main is null) { main = gesture; mainLabel = label; }
+            else others.Add(new GestureLine(gesture, label, action.Action.ToString()));
+        }
+        MainGesture = main;
+        MainLabel = mainLabel;
+        HasEditedActions = main is not null;
+        if (!others.SequenceEqual(Secondary)) Secondary = others;
     }
 
     private void OnActionChanged()

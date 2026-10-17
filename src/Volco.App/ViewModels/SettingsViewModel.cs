@@ -26,10 +26,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     // coalescing timer, transport threads). Every handler posts through this first.
     private readonly IUiDispatcher _ui;
     private bool _disposed;
+    private bool _wasConnected;
 
     private ConnectionViewModel? _connectionViewModel;
     private SlidersViewModel? _slidersViewModel;
     private ButtonsViewModel? _buttonsViewModel;
+    private ControlsViewModel? _controlsViewModel;
     private GeneralViewModel? _generalViewModel;
     private ControllerViewModel? _controllerViewModel;
 
@@ -64,6 +66,11 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast,
                                                    ActionCapabilities.Of(_runtime));
 
+    /// <summary>The Controls page: the drawing and inspector over <see cref="Sliders"/> and
+    /// <see cref="Buttons"/>.</summary>
+    public ControlsViewModel Controls =>
+        _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast);
+
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config, _startWithSystem);
 
@@ -94,6 +101,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ButtonActivity += OnButtonActivity;
         _runtime.ActivePresetChanged += OnActivePresetChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
+        _runtime.LinkStatusChanged += OnLinkStatusChanged;
+        _wasConnected = _runtime.LinkStatus.IsConnected;
         _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
         _runtime.ActionStateChanged += OnActionStateChanged;
@@ -134,13 +143,17 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private void OnSliderLevelChanged(object? sender, SliderLevelEventArgs e)
         => _ui.Post(() =>
         {
-            if (!_disposed) Sliders.UpdateLiveLevel(e.SliderIndex, e.Level);
+            if (_disposed) return;
+            if (_controlsViewModel is { } controls) controls.OnSliderLevel(e.SliderIndex, e.Level);
+            else Sliders.UpdateLiveLevel(e.SliderIndex, e.Level);
         });
 
     private void OnButtonActivity(object? sender, int index)
         => _ui.Post(() =>
         {
-            if (!_disposed) _buttonsViewModel?.Pulse(index);
+            if (_disposed) return;
+            if (_controlsViewModel is { } controls) controls.OnButtonActivity(index);
+            else _buttonsViewModel?.Pulse(index);
         });
 
     private void OnActivePresetChanged(object? sender, string presetId)
@@ -155,6 +168,18 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             if (_disposed) return;
             _buttonsViewModel?.RefreshController();
             _slidersViewModel?.RefreshController();
+            _controlsViewModel?.OnHello();
+        });
+
+    /// <summary>Every Hello connects the link, and the Hello's slider sync follows it; the
+    /// hardware summary (above) changes only when the controller does.</summary>
+    private void OnLinkStatusChanged(object? sender, LinkStatus status)
+        => _ui.Post(() =>
+        {
+            if (_disposed) return;
+            var connected = status.IsConnected;
+            if (connected && !_wasConnected) _controlsViewModel?.OnHello();
+            _wasConnected = connected;
         });
 
     private void OnBannerChanged(object? sender, EventArgs e)
@@ -194,6 +219,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.ButtonActivity -= OnButtonActivity;
         _runtime.ActivePresetChanged -= OnActivePresetChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
+        _runtime.LinkStatusChanged -= OnLinkStatusChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
         _runtime.ActionStateChanged -= OnActionStateChanged;

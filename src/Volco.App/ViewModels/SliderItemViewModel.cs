@@ -32,9 +32,21 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     public string Title => $"Slider {Index}";
 
+    /// <summary>The user's name for the slider; "" means unnamed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Label))]
+    private string _name = "";
+
+    /// <summary>The tile's label: the name, else what it controls, else "Not set".</summary>
+    public string Label => Name?.Trim() is { Length: > 0 } name ? name : IsNotSetUp ? "Not set" : Summary;
+
     /// <summary>True for the last card: only it offers "Remove last slider".</summary>
     [ObservableProperty]
     private bool _isLast;
+
+    /// <summary>The config has this slider but the controller's last Hello doesn't (spec §4.1).</summary>
+    [ObservableProperty]
+    private bool _isMissing;
 
     // ── What it controls ──────────────────────────────────────────────────────
 
@@ -193,6 +205,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         _loading = true;
         try
         {
+            Name = Config.Name ?? "";
             MappingType = Config.Type;
             Apps.Clear();
             foreach (var process in Config.Processes) Apps.Add(new AppChip(process, RemoveApp));
@@ -236,6 +249,20 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
             .ToList();
 
     // ── Write-through ─────────────────────────────────────────────────────────
+
+    // Label reads Summary, which is raised from several places.
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName == nameof(Summary)) OnPropertyChanged(nameof(Label));
+    }
+
+    partial void OnNameChanged(string value)
+    {
+        if (_loading) return;
+        Config.Name = value ?? "";
+        Persist();
+    }
 
     partial void OnMappingTypeChanged(SliderMappingType value)
     {

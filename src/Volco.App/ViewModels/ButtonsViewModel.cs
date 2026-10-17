@@ -312,10 +312,12 @@ public sealed partial class ButtonsViewModel : ObservableObject, IReorderableLis
         Save();
     }
 
+    /// <summary>Adds an empty button for each input the controller has beyond the list.</summary>
     [RelayCommand]
-    private void AddMissing()
+    public void AddMissing()
     {
         var target = _config.Config.Controller?.Buttons.Count ?? 0;
+        if (Items.Count >= target) return;
         while (Items.Count < target)
         {
             var cfg = new ButtonConfig();

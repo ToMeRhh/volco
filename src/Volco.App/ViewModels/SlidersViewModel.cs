@@ -79,10 +79,12 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         Save();
     }
 
+    /// <summary>Adds a "Not set up" slider for each input the controller has beyond the list.</summary>
     [RelayCommand]
-    private void AddMissing()
+    public void AddMissing()
     {
         var target = _config.Config.Controller?.Sliders ?? 0;
+        if (Items.Count >= target) return;
         while (Items.Count < target)
         {
             var cfg = new SliderConfig { Type = SliderMappingType.None };
@@ -240,6 +242,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
     internal static SliderConfig Clone(SliderConfig s) => new()
     {
         Index = s.Index,
+        Name = s.Name,
         Type = s.Type,
         Processes = new List<string>(s.Processes),
         Device = s.Device is null ? null : new DeviceRefConfig { Id = s.Device.Id, FriendlyName = s.Device.FriendlyName },
@@ -252,6 +255,7 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
     private static void CopyInto(SliderConfig target, SliderConfig source)
     {
         var copy = Clone(source);
+        target.Name = copy.Name;
         target.Type = copy.Type;
         target.Processes = copy.Processes;
         target.Device = copy.Device;
