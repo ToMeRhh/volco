@@ -117,12 +117,8 @@
             <DataTemplate DataType="{x:Type vm:ActionDialogViewModel}" x:DataType="vm:ActionDialogViewModel">
               <dialogs:ActionDialog/>
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:PendingDialogRequest}" x:DataType="vm:PendingDialogRequest">
-              <DockPanel Margin="24">
-                <Button Name="CloseDialogButton" DockPanel.Dock="Bottom" HorizontalAlignment="Right" Content="Close"
-                        Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).CloseDialogCommand}"/>
-                <Panel/>
-              </DockPanel>
+            <DataTemplate DataType="{x:Type vm:TargetDialogViewModel}" x:DataType="vm:TargetDialogViewModel">
+              <dialogs:TargetDialog/>
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>

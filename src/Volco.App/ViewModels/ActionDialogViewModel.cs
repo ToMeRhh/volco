@@ -38,7 +38,7 @@ public sealed record ActionSection(string Name, bool IsCollapsed, IReadOnlyList<
 /// it and writes it to the mode it was opened for, Remove empties the slot, and Cancel, Escape or a
 /// click outside close without writing.
 /// </summary>
-public sealed partial class ActionDialogViewModel : ObservableObject, IDisposable
+public sealed partial class ActionDialogViewModel : ObservableObject, ISearchList, IDisposable
 {
     private sealed record Entry(ButtonActionType Type, string Name, string Keywords);
 

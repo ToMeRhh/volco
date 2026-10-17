@@ -57,6 +57,13 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
 
     private List<SliderConfig> Sliders => _config.Config.Sliders;
 
+    internal AppConfig AppConfig => _config.Config;
+
+    internal IAudioEngine Audio => _audio;
+
+    /// <summary>The render devices, as of the last <see cref="RefreshDevices"/>.</summary>
+    internal IReadOnlyList<AudioDevice> Devices => _devices;
+
     private SliderItemViewModel NewItem(SliderConfig cfg, int index)
         => new(cfg, index, _audio, _devices, this, Save);
 
@@ -235,6 +242,45 @@ public partial class SlidersViewModel : ObservableObject, IReorderableList, ISli
         _devices = devices;
         foreach (var item in Items)
             item.RefreshDevices(devices);
+        DevicesRefreshed?.Invoke(devices);
+    }
+
+    /// <summary>After <see cref="RefreshDevices"/>: an open target dialog's device rows follow.</summary>
+    internal event Action<IReadOnlyList<AudioDevice>>? DevicesRefreshed;
+
+    // ── Target dialog ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The target dialog's Done (spec controls-page §6.2): <paramref name="item"/> takes the type,
+    /// device and apps of <paramref name="target"/>. Its apps leave every other slider, and another
+    /// slider set to everything else becomes an apps slider with no apps.
+    /// </summary>
+    internal void SetTarget(SliderItemViewModel item, SliderConfig target)
+    {
+        foreach (var other in Items)
+        {
+            if (other == item) continue;
+            var cfg = other.Config;
+            if (target.Type == SliderMappingType.Processes && cfg.Type == SliderMappingType.Processes)
+            {
+                var kept = cfg.Processes.Where(p => !target.Processes.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (kept.Count == cfg.Processes.Count) continue;
+                cfg.Processes = kept;
+            }
+            else if (target.Type == SliderMappingType.Unmapped && cfg.Type == SliderMappingType.Unmapped)
+            {
+                cfg.Type = SliderMappingType.Processes;
+                cfg.Processes = new List<string>();
+            }
+            else continue;
+            other.Reload();
+        }
+        item.Config.Type = target.Type;
+        item.Config.Device = target.Type == SliderMappingType.Device ? target.Device : null;
+        item.Config.Processes = target.Type == SliderMappingType.Processes ? new List<string>(target.Processes) : new List<string>();
+        item.Reload();
+        AppsChanged();
+        Save();
     }
 
     // ── Config copies (for Undo) ──────────────────────────────────────────────

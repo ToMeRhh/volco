@@ -132,16 +132,17 @@ public sealed partial class ControlsViewModel : ObservableObject
     public void OpenActionDialog(ButtonItemViewModel button, PressType gesture)
         => OpenDialog(new ActionDialogViewModel(button, gesture, Buttons, CollapsedSections, CloseDialog));
 
-    /// <summary>The action dialog's mode or button went away (a delete, an Undo): it closes
+    /// <summary>The dialog's mode, button or slider went away (a delete, an Undo): it closes
     /// without writing.</summary>
     private void CloseStaleDialog()
     {
         if (Dialog is ActionDialogViewModel action && !action.IsStillValid(_config.Config)) CloseDialog();
+        else if (Dialog is TargetDialogViewModel target && !target.IsStillValid()) CloseDialog();
     }
 
     /// <summary>Opens the target dialog for a slider (spec §6.2).</summary>
     public void OpenTargetDialog(SliderItemViewModel slider)
-        => OpenDialog(new PendingDialogRequest(slider, null));
+        => OpenDialog(new TargetDialogViewModel(slider, Sliders, CollapsedSections, CloseDialog));
 
     /// <summary>An inspector action row: the slot's button and gesture.</summary>
     [RelayCommand]
@@ -236,12 +237,4 @@ public sealed partial class ControlsViewModel : ObservableObject
             _config.RequestSave();
         });
     }
-}
-
-/// <summary>A dialog the Controls page asked for: the control and, for a button, the gesture.
-/// A placeholder until the target dialog replaces it.</summary>
-public sealed class PendingDialogRequest(ObservableObject control, PressType? gesture) : ObservableObject
-{
-    public ObservableObject Control { get; } = control;
-    public PressType? Gesture { get; } = gesture;
 }

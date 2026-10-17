@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Dialogs.TargetDialog"
+             x:DataType="vm:TargetDialogViewModel">
+  <!-- The target dialog (spec §6.2): "Slider N controls", a search box, the Devices / Apps / Other
+       sections (radio rows for one choice, check rows for apps), and the error with Cancel / Done. -->
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" Classes="DialogHeader" ColumnDefinitions="*,Auto">
+      <TextBlock Name="TitleText" Classes="DialogTitle" Text="{Binding Title}"/>
+      <Button Name="CloseButton" Grid.Column="1" Classes="Icon" Command="{Binding CancelCommand}"
+              ToolTip.Tip="Close">
+        <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12"/>
+      </Button>
+    </Grid>
+
+    <Border DockPanel.Dock="Top" Classes="DialogSearch">
+      <TextBox Name="SearchBox" Classes="Search" PlaceholderText="Search devices and apps" Text="{Binding Query, Mode=TwoWay}"/>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Classes="TargetFooter">
+      <Grid Classes="DialogFooter" ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Name="ErrorText" Classes="FieldError" VerticalAlignment="Center" Text="{Binding Error}"
+                   IsVisible="{Binding HasError}"/>
+        <Button Name="CancelButton" Grid.Column="1" Content="Cancel" Command="{Binding CancelCommand}"/>
+        <Button Name="DoneButton" Grid.Column="2" Classes="Primary" Content="Done" Click="DoneButton_Click"/>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Name="TargetListScroll" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="8,6">
+        <ItemsControl Name="SectionList" ItemsSource="{Binding Sections}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TargetSection">
+              <StackPanel>
+                <Button Name="SectionHeader" Classes="ActionSectionHeader" Classes.open="{Binding IsOpen}"
+                        Command="{Binding $parent[ItemsControl].((vm:TargetDialogViewModel)DataContext).ToggleSectionCommand}"
+                        CommandParameter="{Binding Name}">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                    <PathIcon Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
+                    <TextBlock Grid.Column="1" Name="SectionName" Text="{Binding Name}"/>
+                    <TextBlock Grid.Column="2" Name="MatchCountText" Text="{Binding MatchCount}"
+                               IsVisible="{Binding IsSearching}"/>
+                  </Grid>
+                </Button>
+                <ItemsControl Name="ItemList" ItemsSource="{Binding Items}" IsVisible="{Binding IsOpen}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TargetItem">
+                      <Button Name="TargetRowButton" Classes="TargetRow" Classes.on="{Binding IsOn}"
+                              Classes.current="{Binding IsCurrent}" Click="TargetRow_Click">
+                        <Grid ColumnDefinitions="16,Auto,*,Auto" ColumnSpacing="10">
+                          <Border Name="Mark" Classes="Mark" Classes.radio="{Binding IsRadio}" Classes.check="{Binding IsCheck}"
+                                  IsVisible="{Binding HasMark}">
+                            <Panel>
+                              <Ellipse Classes="RadioDot" IsVisible="{Binding IsRadio}"/>
+                              <Path Classes="CheckGlyph" IsVisible="{Binding IsCheck}" Data="M0,3 L2.5,5.5 L7,0.5"/>
+                            </Panel>
+                          </Border>
+                          <Border Grid.Column="1" Classes="RowIcon">
+                            <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconConverters.Resource}}"/>
+                          </Border>
+                          <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                            <controls:HighlightText Name="ItemName" Source="{Binding Name}" Highlight="{Binding Highlight}"
+                                                    TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Name="ItemSecondary" Classes="RowSecondary" Text="{Binding Secondary}"
+                                       IsVisible="{Binding HasSecondary}" TextTrimming="CharacterEllipsis"/>
+                          </StackPanel>
+                          <Border Grid.Column="3" Name="OwnerPill" Classes="Pill" IsVisible="{Binding HasOwner}">
+                            <TextBlock Text="{Binding OwnedBy}"/>
+                          </Border>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Name="NoMatchText" Classes="NoMatch" Text="{Binding NoMatchesText}" IsVisible="{Binding HasNoMatches}"/>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

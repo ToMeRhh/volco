@@ -44,9 +44,10 @@ public partial class ControlsPage : UserControl
     {
         _focusBeforeDialog = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
         _openDialog = Vm?.Dialog;
+        var card = this.FindControl<Border>("DialogCard")!;
+        card.Classes.Set("Narrow", _openDialog is TargetDialogViewModel);
         Dispatcher.UIThread.Post(() =>
         {
-            var card = this.FindControl<Border>("DialogCard")!;
             if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
             card.GetVisualDescendants().OfType<InputElement>()
                 .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled)
@@ -57,7 +58,12 @@ public partial class ControlsPage : UserControl
     /// <summary>The focus goes back to the row that opened the dialog (spec §11).</summary>
     private void OnDialogClosed()
     {
-        var opener = _openDialog is ActionDialogViewModel action ? ActionRowButton(action.Gesture) : null;
+        var opener = _openDialog switch
+        {
+            ActionDialogViewModel action => ActionRowButton(action.Gesture),
+            TargetDialogViewModel => InspectorButton("ControlsRow"),
+            _ => null,
+        };
         var before = _focusBeforeDialog;
         _focusBeforeDialog = null;
         _openDialog = null;
@@ -67,6 +73,9 @@ public partial class ControlsPage : UserControl
             else if (before is InputElement element && TopLevel.GetTopLevel(element) is not null) element.Focus(NavigationMethod.Tab);
         });
     }
+
+    private Button? InspectorButton(string name)
+        => this.FindControl<Border>("Inspector")?.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == name);
 
     /// <summary>The inspector's row button for a gesture of the selected button.</summary>
     private Button? ActionRowButton(PressType gesture)

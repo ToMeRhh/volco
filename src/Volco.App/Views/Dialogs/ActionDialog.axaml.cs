@@ -1,9 +1,7 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using Avalonia.Threading;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
 
@@ -23,36 +21,10 @@ public partial class ActionDialog : UserControl
     {
         AvaloniaXamlLoader.Load(this);
         _search = this.FindControl<TextBox>("SearchBox")!;
-        _search.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
+        DialogSearch.Attach(this, _search);
     }
 
     private ActionDialogViewModel? Vm => DataContext as ActionDialogViewModel;
-
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        base.OnAttachedToVisualTree(e);
-        Dispatcher.UIThread.Post(() => _search.Focus(NavigationMethod.Tab));
-    }
-
-    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (Vm is not { } vm) return;
-        switch (e.Key)
-        {
-            case Key.Down:
-                vm.MoveSelection(+1);
-                e.Handled = true;
-                break;
-            case Key.Up:
-                vm.MoveSelection(-1);
-                e.Handled = true;
-                break;
-            case Key.Enter:
-                vm.PickCurrent();
-                e.Handled = true;
-                break;
-        }
-    }
 
     private void ActionItem_Click(object? sender, RoutedEventArgs e)
     {

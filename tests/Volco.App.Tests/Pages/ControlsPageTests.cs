@@ -348,8 +348,7 @@ public class ControlsPageTests
         Settle(s.Window);
         var target = In<Button>(Inspector(s.Page), "ControlsRow");
         target.Command!.Execute(target.CommandParameter);
-        Assert.Same(s.Vm.Sliders.Items[2], Assert.IsType<PendingDialogRequest>(s.Controls.Dialog).Control);
-        Assert.Null(((PendingDialogRequest)s.Controls.Dialog!).Gesture);
+        Assert.Same(s.Vm.Sliders.Items[2], Assert.IsType<TargetDialogViewModel>(s.Controls.Dialog).Slider);
     }
 
     [AvaloniaFact]

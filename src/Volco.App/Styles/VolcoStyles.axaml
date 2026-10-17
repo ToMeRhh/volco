@@ -983,6 +983,78 @@
     <Setter Property="Margin" Value="8,10"/>
     <Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
+  <!-- Target dialog rows: a radio or check mark, the icon, the name over its secondary text, and
+       the owner pill. -->
+  <Style Selector="Border.DialogCard.Narrow">
+    <Setter Property="MaxWidth" Value="520"/>
+  </Style>
+  <Style Selector="Border.TargetFooter">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,1,0,0"/>
+  </Style>
+  <Style Selector="Button.TargetRow">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="Button.TargetRow:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.TargetRow.current /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <Style Selector="Button.TargetRow.on /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+  </Style>
+  <Style Selector="Border.Mark">
+    <Setter Property="Width" Value="16"/>
+    <Setter Property="Height" Value="16"/>
+    <Setter Property="BorderThickness" Value="1.5"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.Mark.radio">
+    <Setter Property="CornerRadius" Value="8"/>
+  </Style>
+  <Style Selector="Border.Mark.check">
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <Style Selector="Button.TargetRow.on Border.Mark">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Ellipse.RadioDot">
+    <Setter Property="Width" Value="6"/>
+    <Setter Property="Height" Value="6"/>
+    <Setter Property="Fill" Value="{DynamicResource OnAccentBrush}"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Path.CheckGlyph">
+    <Setter Property="Stroke" Value="{DynamicResource OnAccentBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.8"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Button.TargetRow.on Ellipse.RadioDot, Button.TargetRow.on Path.CheckGlyph">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <Style Selector="TextBlock.RowSecondary">
+    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Border.Pill">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
+    <Setter Property="Padding" Value="7,1"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.Pill TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
   <Style Selector="StackPanel.Field">
     <Setter Property="Spacing" Value="4"/>
   </Style>
