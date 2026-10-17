@@ -73,8 +73,9 @@ public static partial class ActionValidator
         => device is not null && (device.Id.Length > 0 || device.FriendlyName.Length > 0);
 
     private static bool Same(DeviceRefConfig a, DeviceRefConfig b)
-        => a.Id.Length > 0 && a.Id == b.Id
-           || a.FriendlyName.Length > 0 && string.Equals(a.FriendlyName, b.FriendlyName, StringComparison.OrdinalIgnoreCase);
+        => a.Id.Length > 0 && b.Id.Length > 0
+            ? string.Equals(a.Id, b.Id, StringComparison.Ordinal)
+            : a.FriendlyName.Length > 0 && string.Equals(a.FriendlyName, b.FriendlyName, StringComparison.OrdinalIgnoreCase);
 
     private static void CheckOutput(DeviceRefConfig? device, string key, ActionValidationContext ctx,
                                     Dictionary<string, string> problems)

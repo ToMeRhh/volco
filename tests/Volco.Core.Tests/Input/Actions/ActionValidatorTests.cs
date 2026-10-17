@@ -42,6 +42,11 @@ public class ActionValidatorTests
             "deviceB", "Choose a different device from A.");
 
     [Fact]
+    public void Toggle_DifferentIdsSameName_IsValid()
+        => Assert.Empty(ActionValidator.Validate(
+            new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice, Device = Dev("a"), DeviceB = Dev("b") }, Ctx()));
+
+    [Fact]
     public void Toggle_MissingB()
         => AssertOnly(ActionValidator.Validate(
                 new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice, Device = Dev("a") }, Ctx()),
