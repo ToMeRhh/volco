@@ -184,6 +184,20 @@ public class ConfigManagerLoadSaveTests : IDisposable
     }
 
     [Fact]
+    public void SliderName_RoundTrips()
+    {
+        var manager = new ConfigManager(_configPath);
+        manager.Load();
+        manager.Config.Sliders[0].Name = "Music";
+        manager.Save();
+
+        var manager2 = new ConfigManager(_configPath);
+        manager2.Load();
+
+        Assert.Equal("Music", manager2.Config.Sliders[0].Name);
+    }
+
+    [Fact]
     public void Save_ThenLoad_PreservesConfig()
     {
         var manager = new ConfigManager(_configPath);
