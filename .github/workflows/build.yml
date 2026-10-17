@@ -70,6 +70,10 @@ jobs:
         pip install protobuf==7.36.2 grpcio-tools==1.84.0
         python firmware/tools/gen_config_vectors.py
         git diff --exit-code firmware/test/golden/config.txt
+    - name: Chip tables are up to date
+      run: |
+        python firmware/tools/gen_chips.py
+        git diff --exit-code firmware/lib/volco_config/src/volco_chip_table.cpp src/Volco.Core/Controller/ChipInfo.g.cs tools/simulator/chips.js
 
     - name: Native tests
       working-directory: firmware

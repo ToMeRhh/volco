@@ -204,3 +204,12 @@ test('the pin map lists every pin a config uses, worded as the Controller page a
   ]);
   assert.deepEqual(L.pinMap(null), []);
 });
+
+test('the ESP32 table from chips.js equals spec §6.4', () => {
+  const r = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  const usable = [0, 2, 4, 5, ...r(12, 19), 21, 22, 23, 25, 26, 27, ...r(32, 39)];
+  assert.deepEqual([...L.CHIP.usable].sort((a, b) => a - b), usable);
+  assert.deepEqual([...L.CHIP.inputOnly].sort((a, b) => a - b), r(34, 39));
+  assert.deepEqual([...L.CHIP.adc1].sort((a, b) => a - b), r(32, 39));
+  assert.deepEqual([...L.CHIP.adc2].sort((a, b) => a - b), [0, 2, 4, ...r(12, 15), 25, 26, 27]);
+});

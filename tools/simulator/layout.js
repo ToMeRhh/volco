@@ -7,14 +7,15 @@
 
   const KIND = { NONE: 0, LED: 1, LED_PAIR: 2, SCREEN: 3 };
   const LIMITS = { sliders: 16, buttons: 32, screens: 8 };
-  const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 
-  /** Classic ESP32, as Volco.Core.Controller.ChipInfo.Esp32: usable = exists minus reserved. */
+  /** The chip table from chips.js (generated from proto/chips.json): usable = exists minus reserved. */
+  const CHIPS = typeof module === 'object' && module.exports ? require('./chips.js') : root.VolcoChips;
+  const ESP32 = CHIPS.esp32;
   const CHIP = {
-    usable: new Set([0, 2, 4, 5, ...range(12, 19), 21, 22, 23, 25, 26, 27, ...range(32, 39)]),
-    inputOnly: new Set(range(34, 39)),
-    adc1: new Set(range(32, 39)),
-    adc2: new Set([0, 2, 4, ...range(12, 15), 25, 26, 27]),
+    usable: new Set(ESP32.exists.filter(p => !ESP32.reserved.includes(p))),
+    inputOnly: new Set(ESP32.inputOnly),
+    adc1: new Set(ESP32.adc1),
+    adc2: new Set(ESP32.adc2),
   };
   const usable = p => CHIP.usable.has(p);
   const outputCapable = p => usable(p) && !CHIP.inputOnly.has(p);

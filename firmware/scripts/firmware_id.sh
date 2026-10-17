@@ -12,6 +12,7 @@ PATHS=(
   firmware/scripts
   proto/volco_config.proto
   proto/volco_config.options
+  proto/chips.json
 )
 if [[ "${1:-}" == "--list" ]]; then
   printf '%s\n' "${PATHS[@]}"

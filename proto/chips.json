@@ -1,0 +1,15 @@
+{
+  "comment": "Chip families Volco supports (docs/design/arduino-avr.md §4). firmware/tools/gen_chips.py generates the C++, C# and simulator tables from this file. Pins: numbers or \"a-b\" ranges.",
+  "chips": [
+    {
+      "id": 1,
+      "key": "esp32",
+      "name": "ESP32",
+      "exists": ["0-19", "21-23", "25-27", "32-39"],
+      "reserved": [1, 3, "6-11"],
+      "inputOnly": ["34-39"],
+      "adc1": ["32-39"],
+      "adc2": [0, 2, 4, "12-15", "25-27"]
+    }
+  ]
+}

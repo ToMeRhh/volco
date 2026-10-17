@@ -127,6 +127,24 @@ void test_validate_counts_guard() {
   TEST_ASSERT_EQUAL_UINT(FIELD_SLIDER_PIN, r.field);
 }
 
+// The ESP32 table, as spec §6.4 lists it (and as volco_chip.cpp had it before generation).
+void test_esp32_chip_table() {
+  const ChipInfo& c = esp32Chip();
+  auto bit = [](int p) { return 1ull << p; };
+  uint64_t exists = 0, reserved = bit(1) | bit(3), inputOnly = 0, adc1 = 0, adc2 = bit(0) | bit(2) | bit(4);
+  for (int p = 0; p <= 19; p++) exists |= bit(p);
+  for (int p : {21, 22, 23, 25, 26, 27}) exists |= bit(p);
+  for (int p = 32; p <= 39; p++) exists |= bit(p), adc1 |= bit(p);
+  for (int p = 6; p <= 11; p++) reserved |= bit(p);
+  for (int p = 34; p <= 39; p++) inputOnly |= bit(p);
+  for (int p : {12, 13, 14, 15, 25, 26, 27}) adc2 |= bit(p);
+  TEST_ASSERT_EQUAL_HEX64(exists, c.exists);
+  TEST_ASSERT_EQUAL_HEX64(reserved, c.reserved);
+  TEST_ASSERT_EQUAL_HEX64(inputOnly, c.inputOnly);
+  TEST_ASSERT_EQUAL_HEX64(adc1, c.adc1);
+  TEST_ASSERT_EQUAL_HEX64(adc2, c.adc2);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_validate_cases);
@@ -138,5 +156,6 @@ int main(int, char**) {
   RUN_TEST(test_decode_rejects_oversized_blob);
   RUN_TEST(test_nul_prescan);
   RUN_TEST(test_chip_table);
+  RUN_TEST(test_esp32_chip_table);
   return UNITY_END();
 }
