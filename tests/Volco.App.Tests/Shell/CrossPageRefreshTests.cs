@@ -46,7 +46,7 @@ public class CrossPageRefreshTests
         => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void NicknameSetOnDevices_ReachesTheOpenControlsPage()
+    public void NicknameSetInTheDeviceDialog_ReachesTheControlsPage()
     {
         var (window, rig, vm) = Open(c =>
         {
@@ -65,10 +65,8 @@ public class CrossPageRefreshTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Toggle Speakers / Headphones", vm.Buttons.Items[0].MainLabel);
 
-        Show(window, "general");   // Devices is a section of General
-        vm.Devices.Outputs.Single(d => d.Id == "dev-2").Nickname = "Arctis";
+        vm.Devices.ItemFor("dev-2", AudioFlow.Render)!.Nickname = "Arctis";   // the device dialog's field
         Dispatcher.UIThread.RunJobs();
-        Show(window, "controls");
 
         Assert.Equal("Toggle Speakers / Arctis", vm.Buttons.Items[0].MainLabel);
         Assert.Equal("Arctis", vm.Buttons.Items[1].Screen.Main);   // the screen preview
@@ -78,7 +76,7 @@ public class CrossPageRefreshTests
     }
 
     [AvaloniaFact]
-    public void NicknameSetOnDevices_ReachesTheSliderLabels()
+    public void NicknameSetInTheDeviceDialog_ReachesTheSliderLabels()
     {
         var (window, rig, vm) = Open(c =>
         {
@@ -90,10 +88,8 @@ public class CrossPageRefreshTests
         var page = Assert.IsType<ControlsPage>(window.CurrentPage);
         Assert.Equal("Headphones", In<TextBlock>(page, "TargetText").Text);   // slider 1 is selected
 
-        Show(window, "general");   // Devices is a section of General
-        vm.Devices.Outputs.Single(d => d.Id == "dev-2").Nickname = "Arctis";
+        vm.Devices.ItemFor("dev-2", AudioFlow.Render)!.Nickname = "Arctis";   // the device dialog's field
         Dispatcher.UIThread.RunJobs();
-        Show(window, "controls");
 
         Assert.Equal("Arctis", In<TextBlock>(page, "TargetText").Text);
         Assert.Equal("Arctis", In<TextBlock>(page.GetVisualDescendants().OfType<Volco.App.Controls.SliderTile>().First(), "Label").Text);
@@ -103,25 +99,23 @@ public class CrossPageRefreshTests
     }
 
     [AvaloniaFact]
-    public void ActionEditedOnButtons_UpdatesUsedByWhenDevicesIsShownAgain()
+    public void ActionEdited_UsedByIsCurrentWhenTheDeviceDialogOpens()
     {
         var (window, rig, vm) = Open();
         using var _ = rig; using var __ = vm;
-        Show(window, "general");   // Devices is a section of General
-        var headphones = vm.Devices.Outputs.Single(d => d.Id == "dev-2");
+        Show(window, "controls");
+        var headphones = vm.Devices.ItemFor("dev-2", AudioFlow.Render)!;
         Assert.Equal("", headphones.UsedBy);
         var changed = new List<string?>();
         headphones.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
-        Show(window, "controls");
         var slot = vm.Buttons.Items[2].Press;
         slot.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteSpecificDevice);
         slot.Device = "Headphones";
         Dispatcher.UIThread.RunJobs();
-        Show(window, "general");   // Devices is a section of General
 
-        Assert.Same(headphones, vm.Devices.Outputs.Single(d => d.Id == "dev-2"));   // card kept
-        Assert.Equal("Used by Button 2", headphones.UsedBy);
+        Assert.Same(headphones, vm.Devices.ItemFor("dev-2", AudioFlow.Render));   // the item is kept
+        Assert.Equal("Used by: Button 3", headphones.UsedBy);
         Assert.Contains(nameof(DeviceItemViewModel.UsedBy), changed);
         Assert.Contains(nameof(DeviceItemViewModel.ShowUsedBy), changed);
     }

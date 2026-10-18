@@ -68,9 +68,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
                                                    ActionCapabilities.Of(_runtime));
 
     /// <summary>The Controls page: the drawing and inspector over <see cref="Sliders"/> and
-    /// <see cref="Buttons"/>.</summary>
+    /// <see cref="Buttons"/>, whose dialogs edit device names through <see cref="Devices"/>.</summary>
     public ControlsViewModel Controls =>
-        _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast, _appIcons);
+        _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast, _appIcons, Devices);
 
     /// <summary>The Controls page's view model if the page was ever opened; null otherwise.</summary>
     public ControlsViewModel? ControlsIfCreated => _controlsViewModel;
@@ -134,7 +134,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             _devicesViewModel?.Refresh();
         });
 
-    /// <summary>A nickname or icon changed on the Devices page (UI thread): the cached Controls
+    /// <summary>A nickname or icon changed in the device dialog (UI thread): the cached Controls
     /// page's sliders and buttons re-read their devices and recompute their labels and screen
     /// previews.</summary>
     private void OnDeviceSettingsChanged(object? sender, EventArgs e)

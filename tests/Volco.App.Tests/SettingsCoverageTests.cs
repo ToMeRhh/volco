@@ -324,15 +324,25 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new DevicesSection(vm.Devices);
-        Host(page);
-        var item = vm.Devices.Outputs.Single(d => d.Id == "dev-1");
-        item.IsExpanded = true;
-        Dispatcher.UIThread.RunJobs();
-        var card = page.GetVisualDescendants().OfType<Border>().First(b => b.Name == "DeviceCard" && b.DataContext == item);
+        var page = new ControlsPage(vm.Controls);
+        var window = Host(page);
 
-        Named<TextBox>(card, "NicknameBox").Text = "Desk";                                      // Devices[].Nickname
-        Named<Button>(card, "IconChoice", (int)ScreenIcon.Headphones).Command!.Execute(null);   // Devices[].Icon
+        // From a device row of the target dialog: ⋯ > Rename opens the device dialog.
+        var dialog = OpenTarget(page, window, vm, 0);
+        var menu = dialog.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "DeviceMenuButton" && ((TargetItem)b.DataContext!).Name == "Speakers");
+        ((MenuFlyout)menu.Flyout!).Items.OfType<MenuItem>().First(i => (string?)i.Header == "Rename")
+            .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Settle(window);
+        var card = page.FindControl<Border>("DeviceCard")!;
+
+        Named<TextBox>(card, "DeviceNameBox").Text = "Desk";                                    // Devices[].Nickname
+        card.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "IconChoice" && ((IconChoiceViewModel)b.DataContext!).Icon == ScreenIcon.Headphones)
+            .Command!.Execute(null);                                                            // Devices[].Icon
+        Named<Button>(card, "DeviceDoneButton").Command!.Execute(null);
+        Settle(window);
+        Assert.False(vm.Controls.HasDeviceDialog);
 
         var d = SaveAndReload(rig).FindDevice("dev-1")!;
         Assert.Equal("Desk", d.Nickname);

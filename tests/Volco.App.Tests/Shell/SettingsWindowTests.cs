@@ -86,17 +86,6 @@ public class SettingsWindowTests
     }
 
     [AvaloniaFact]
-    public void SettingsWindow_GeneralHoldsTheDevicesSection()
-    {
-        var window = Create();
-        window.Show();
-
-        var general = Assert.IsType<GeneralPage>(window.CurrentPage);
-        Assert.NotNull(general.Devices);
-        Assert.Same(window, TopLevel.GetTopLevel(general.Devices));
-    }
-
-    [AvaloniaFact]
     public void SettingsWindow_FooterShowsTheConnectionState()
     {
         var window = Create();

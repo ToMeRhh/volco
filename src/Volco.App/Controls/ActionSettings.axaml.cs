@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Volco.App.ViewModels;
@@ -41,6 +43,25 @@ public partial class ActionSettings : UserControl
 
     private void DeviceCombo_ContainerPrepared(object? sender, ContainerPreparedEventArgs e)
         => Converters.DeviceLabelConverter.Stamp(sender, e);
+
+    private void DeviceRename_Click(object? sender, RoutedEventArgs e) => OpenDevice(sender, focusIcon: false);
+
+    private void DeviceIcon_Click(object? sender, RoutedEventArgs e) => OpenDevice(sender, focusIcon: true);
+
+    /// <summary>A picker's ⋯ menu entry: the device dialog for that picker's device (A or B), opened
+    /// by the action dialog this pane is in. The focus goes to the ⋯ button, so the page gives it
+    /// back there when the device dialog closes.</summary>
+    private void OpenDevice(object? sender, bool focusIcon)
+    {
+        var button = new[] { "DeviceMenuButton", "DeviceAMenuButton", "DeviceBMenuButton" }
+            .Select(name => this.FindControl<Button>(name))
+            .FirstOrDefault(b => b?.Flyout is MenuFlyout menu && menu.Items.Contains(sender));
+        var dialog = this.GetVisualAncestors().OfType<Control>().Select(c => c.DataContext)
+            .OfType<ActionDialogViewModel>().FirstOrDefault();
+        if (button is null || dialog is null) return;
+        button.Focus(NavigationMethod.Pointer);
+        dialog.OpenDeviceDialog(deviceB: Equals(button.Tag, "B"), focusIcon);
+    }
 
     /// <summary>Picks the program or script file; the path box takes its local path.</summary>
     private async void BrowseButton_Click(object? sender, RoutedEventArgs e)

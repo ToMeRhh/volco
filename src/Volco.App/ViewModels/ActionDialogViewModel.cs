@@ -38,7 +38,7 @@ public sealed record ActionSection(string Name, bool IsCollapsed, IReadOnlyList<
 /// it and writes it to the mode it was opened for, Remove empties the slot, and Cancel, Escape or a
 /// click outside close without writing.
 /// </summary>
-public sealed partial class ActionDialogViewModel : ObservableObject, ISearchList, IDisposable
+public sealed partial class ActionDialogViewModel : ObservableObject, ISearchList, IDisposable, IDeviceNamesListener
 {
     private sealed record Entry(ButtonActionType Type, string Name, string Keywords);
 
@@ -276,6 +276,20 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
     public void Cancel() => _close();
 
     private void OnDevicesRefreshed(IReadOnlyList<AudioDevice> devices) => Draft.RefreshDevices(devices);
+
+    /// <summary>Opens the device dialog (the page's); the page sets it.</summary>
+    internal Action<DeviceRefConfig, AudioFlow, bool>? OpenDevice { get; init; }
+
+    /// <summary>A device picker's "Rename" (<paramref name="focusIcon"/> false) or "Icon": the device
+    /// dialog for the picked device, A or B. Nothing without a pick.</summary>
+    public void OpenDeviceDialog(bool deviceB, bool focusIcon)
+    {
+        if ((deviceB ? Draft.Config.DeviceB : Draft.Config.Device) is { } device)
+            OpenDevice?.Invoke(device, AudioFlow.Render, focusIcon);
+    }
+
+    /// <summary>The device dialog closed: the pickers re-read the names.</summary>
+    void IDeviceNamesListener.DeviceNamesChanged() => Draft.RefreshDevices(Draft.Devices);
 
     public void Dispose() => _buttons.DevicesRefreshed -= OnDevicesRefreshed;
 }

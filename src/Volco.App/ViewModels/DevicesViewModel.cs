@@ -7,9 +7,10 @@ using Volco.Core.Devices;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The Devices page (spec §6.1): every enabled device, plus disconnected ones that have settings
-/// or are used by a slider or button action, in Outputs and Inputs; default device first, then by
-/// display name. Nicknames and icons save as they are edited.
+/// Device nicknames and icons (controls-page spec §8): every enabled device, plus disconnected ones
+/// that have settings or are used by a slider or button action, in Outputs and Inputs; default
+/// device first, then by display name. The device dialog edits one of them (<see cref="ItemFor"/>);
+/// nicknames and icons save as they are edited.
 /// </summary>
 public sealed partial class DevicesViewModel : ObservableObject
 {
@@ -82,6 +83,24 @@ public sealed partial class DevicesViewModel : ObservableObject
     }
 
 
+    /// <summary>The device's item, for the device dialog: a plugged device, or a saved or referenced
+    /// one that is unplugged; null for a reference without an id. The lists are refreshed first,
+    /// so "Used by" is current.</summary>
+    public DeviceItemViewModel? ItemFor(string id, AudioFlow flow)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        Refresh();
+        DeviceItemViewModel? Find(IEnumerable<DeviceItemViewModel> list)
+            => list.FirstOrDefault(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+        var item = flow == AudioFlow.Capture ? Find(Inputs) ?? Find(Outputs) : Find(Outputs) ?? Find(Inputs);
+        // An unplugged reference has no flow of its own (references are listed as outputs): the
+        // caller's flow wins until the device has settings.
+        if (item is { IsConnected: false } && item.Flow != flow && Config.FindDevice(id) is null)
+            item = new DeviceItemViewModel(this, item.Id, flow, item.WindowsName,
+                                           DeviceDisplay.IconFor(Volco.Core.Audio.DeviceFormFactor.Unknown, flow), false, false);
+        return item;
+    }
+
     /// <summary>Device references in sliders and button actions (all are outputs today).</summary>
     private IEnumerable<DeviceRefConfig> References(AudioFlow flow)
     {
@@ -95,17 +114,17 @@ public sealed partial class DevicesViewModel : ObservableObject
         }
     }
 
-    /// <summary>"Used by Slider 0, Button 2" (numbers as on the cards), or "".</summary>
+    /// <summary>"Used by: Slider 1, Button 3" (numbers as on the tiles), or "".</summary>
     internal string UsedBy(string id)
     {
         bool Is(DeviceRefConfig? r) => r is not null && string.Equals(r.Id, id, StringComparison.OrdinalIgnoreCase);
         var users = new List<string>();
         for (int i = 0; i < Config.Sliders.Count; i++)
-            if (Is(Config.Sliders[i].Device)) users.Add($"Slider {i}");
+            if (Is(Config.Sliders[i].Device)) users.Add($"Slider {i + 1}");
         for (int i = 0; i < Config.Buttons.Count; i++)
             if (Config.Buttons[i].Actions.Values.Where(b => b is not null).SelectMany(b => b.All()).Any(a => Is(a.Device) || Is(a.DeviceB)))
-                users.Add($"Button {i}");
-        return users.Count == 0 ? "" : "Used by " + string.Join(", ", users);
+                users.Add($"Button {i + 1}");
+        return users.Count == 0 ? "" : "Used by: " + string.Join(", ", users);
     }
 
     internal void Forget(DeviceItemViewModel item)

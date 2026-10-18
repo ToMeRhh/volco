@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.App.Platform;
+using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Input;
 
@@ -18,6 +19,7 @@ public sealed partial class ControlsViewModel : ObservableObject
     private readonly ConfigManager _config;
     private readonly UndoToastViewModel _toast;
     private readonly IAppIcons? _appIcons;
+    private readonly DevicesViewModel? _devices;
 
     public SlidersViewModel Sliders { get; }
     public ButtonsViewModel Buttons { get; }
@@ -43,18 +45,26 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     public bool HasDialog => Dialog is not null;
 
+    /// <summary>The device dialog over <see cref="Dialog"/>, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDeviceDialog))]
+    private DeviceDialogViewModel? _deviceDialog;
+
+    public bool HasDeviceDialog => DeviceDialog is not null;
+
     /// <summary>The dialogs' collapsed sections for this app run, keyed "action:{section}" or
     /// "target:{section}".</summary>
     public Dictionary<string, bool> CollapsedSections { get; } = new();
 
     public ControlsViewModel(SlidersViewModel sliders, ButtonsViewModel buttons, ConfigManager config,
-                             UndoToastViewModel toast, IAppIcons? appIcons = null)
+                             UndoToastViewModel toast, IAppIcons? appIcons = null, DevicesViewModel? devices = null)
     {
         Sliders = sliders;
         Buttons = buttons;
         _config = config;
         _toast = toast;
         _appIcons = appIcons;
+        _devices = devices;
 
         Sliders.AddMissing();
         Buttons.AddMissing();
@@ -109,13 +119,37 @@ public sealed partial class ControlsViewModel : ObservableObject
     [RelayCommand]
     public void CloseDialog() => Dialog = null;
 
-    // A closed dialog stops following the page (device changes).
+    // A closed dialog stops following the page (device changes), and takes the device dialog with it.
     partial void OnDialogChanged(ObservableObject? oldValue, ObservableObject? newValue)
-        => (oldValue as IDisposable)?.Dispose();
+    {
+        (oldValue as IDisposable)?.Dispose();
+        DeviceDialog = null;
+    }
+
+    partial void OnDeviceDialogChanged(DeviceDialogViewModel? oldValue, DeviceDialogViewModel? newValue)
+        => oldValue?.Dispose();
+
+    /// <summary>Opens the device dialog over the open dialog (spec §8): "Rename" focuses the
+    /// nickname, "Icon" the icon grid. A reference without an id has nothing to edit.</summary>
+    public void OpenDeviceDialog(DeviceRefConfig device, AudioFlow flow, bool focusIcon)
+    {
+        if (Dialog is null || _devices?.ItemFor(device.Id, flow) is not { } item) return;
+        DeviceDialog = new DeviceDialogViewModel(item, focusIcon, CloseDeviceDialog);
+    }
+
+    /// <summary>Closes the device dialog; the dialog under it re-reads the device names.</summary>
+    [RelayCommand]
+    public void CloseDeviceDialog()
+    {
+        if (DeviceDialog is null) return;
+        DeviceDialog = null;
+        (Dialog as IDeviceNamesListener)?.DeviceNamesChanged();
+    }
 
     /// <summary>Opens the action dialog for one gesture of a button (spec §6.1).</summary>
     public void OpenActionDialog(ButtonItemViewModel button, PressType gesture)
-        => OpenDialog(new ActionDialogViewModel(button, gesture, Buttons, CollapsedSections, CloseDialog));
+        => OpenDialog(new ActionDialogViewModel(button, gesture, Buttons, CollapsedSections, CloseDialog)
+                      { OpenDevice = OpenDeviceDialog });
 
     /// <summary>The dialog's mode, button or slider went away (a delete, an Undo): it closes
     /// without writing.</summary>
@@ -127,7 +161,8 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     /// <summary>Opens the target dialog for a slider (spec §6.2).</summary>
     public void OpenTargetDialog(SliderItemViewModel slider)
-        => OpenDialog(new TargetDialogViewModel(slider, Sliders, CollapsedSections, CloseDialog, _appIcons));
+        => OpenDialog(new TargetDialogViewModel(slider, Sliders, CollapsedSections, CloseDialog, _appIcons)
+                      { OpenDevice = OpenDeviceDialog });
 
     /// <summary>An inspector action row: the slot's button and gesture.</summary>
     [RelayCommand]

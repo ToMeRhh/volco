@@ -15,7 +15,7 @@ namespace Volco.App.Views.Pages;
 /// <summary>
 /// The drawing and the inspector. Bindings do the work; the code-behind selects a tile on a click,
 /// Enter or Space, moves the focus between tiles with the arrow keys (spec §4.5), closes the
-/// dialog on Escape or a click on the scrim, runs the mode tabs (ControlsPage.ModeTabs.cs), drag
+/// dialog on Escape or a click on the scrim (the device dialog over it first), runs the mode tabs (ControlsPage.ModeTabs.cs), drag
 /// to swap (<see cref="TileSwapDrag"/>) and the tiles' "Swap with" menu.
 /// </summary>
 public partial class ControlsPage : UserControl
@@ -32,6 +32,14 @@ public partial class ControlsPage : UserControl
             if (e.Property != IsVisibleProperty) return;
             if (overlay.IsVisible) OnDialogOpened();
             else OnDialogClosed();
+        };
+        var deviceOverlay = this.FindControl<Border>("DeviceOverlay")!;
+        deviceOverlay.PointerPressed += OnDeviceOverlayPressed;
+        deviceOverlay.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != IsVisibleProperty) return;
+            if (deviceOverlay.IsVisible) OnDeviceDialogOpened();
+            else OnDeviceDialogClosed();
         };
         InitModeTabs();
         SwapDrag = TileSwapDrag.Attach(this.FindControl<Border>("Case")!, () => Vm);
@@ -100,6 +108,63 @@ public partial class ControlsPage : UserControl
         });
     }
 
+    // What had the focus when the device dialog opened (the ⋯ button), and its row.
+    private IInputElement? _focusBeforeDeviceDialog;
+    private (string? Name, object? Row) _deviceOpener;
+
+    /// <summary>The focus moves into the device dialog: its nickname box with the text selected, or
+    /// after "Icon" the selected icon (else the first).</summary>
+    private void OnDeviceDialogOpened()
+    {
+        var before = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        _focusBeforeDeviceDialog = before;
+        _deviceOpener = ((before as Control)?.Name, (before as Control)?.DataContext);
+        var focusIcon = Vm?.DeviceDialog?.FocusIcon == true;
+        var card = this.FindControl<Border>("DeviceCard")!;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!card.IsEffectivelyVisible) return;
+            card.UpdateLayout();   // the dialog's view is created by the layout pass
+            if (focusIcon)
+            {
+                var icons = card.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "IconChoice").ToList();
+                (icons.FirstOrDefault(b => b.Classes.Contains("selected")) ?? icons.FirstOrDefault())?.Focus(NavigationMethod.Tab);
+            }
+            else if (card.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.Name == "DeviceNameBox") is { } box)
+            {
+                box.Focus(NavigationMethod.Tab);
+                box.SelectAll();
+            }
+        });
+    }
+
+    /// <summary>The focus goes back to the ⋯ button that opened the device dialog. A target dialog
+    /// row is rebuilt when a name changes, so its new ⋯ button is found by the row's key.</summary>
+    private void OnDeviceDialogClosed()
+    {
+        var before = _focusBeforeDeviceDialog;
+        var (name, row) = _deviceOpener;
+        _focusBeforeDeviceDialog = null;
+        _deviceOpener = default;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!HasDialogOpen()) return;
+            if (before is InputElement { IsEffectivelyVisible: true } element && TopLevel.GetTopLevel(element) is not null)
+            {
+                element.Focus(NavigationMethod.Tab);
+                return;
+            }
+            var card = this.FindControl<Border>("DialogCard")!;
+            var again = name is null ? null : card.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == name
+                && (row is not TargetItem item || (b.DataContext is TargetItem other && other.Key == item.Key)));
+            if (again is not null) again.Focus(NavigationMethod.Tab);
+            else card.GetVisualDescendants().OfType<InputElement>()
+                .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled)?.Focus(NavigationMethod.Tab);
+        });
+    }
+
+    private bool HasDialogOpen() => Vm?.HasDialog == true;
+
     private Button? InspectorButton(string name)
         => this.FindControl<Border>("Inspector")?.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == name);
 
@@ -146,6 +211,14 @@ public partial class ControlsPage : UserControl
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (Vm is not { } vm) return;
+        if (vm.HasDeviceDialog)
+        {
+            // The device dialog is over the other one: Escape closes it first.
+            if (e.Key != Key.Escape) return;
+            vm.CloseDeviceDialog();
+            e.Handled = true;
+            return;
+        }
         if (vm.HasDialog)
         {
             if (e.Key != Key.Escape) return;
@@ -188,6 +261,14 @@ public partial class ControlsPage : UserControl
     {
         if (!ReferenceEquals(e.Source, sender) || Vm is not { HasDialog: true } vm) return;   // a click inside the card
         vm.CloseDialog();
+        e.Handled = true;
+    }
+
+    /// <summary>A click on the device dialog's scrim closes only the device dialog.</summary>
+    private void OnDeviceOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, sender) || Vm is not { HasDeviceDialog: true } vm) return;
+        vm.CloseDeviceDialog();
         e.Handled = true;
     }
 }

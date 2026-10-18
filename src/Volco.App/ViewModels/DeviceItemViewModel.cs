@@ -8,7 +8,7 @@ using Volco.Core.Devices;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>One device card on the Devices page.</summary>
+/// <summary>One device's nickname and icon, as the device dialog edits them.</summary>
 public sealed partial class DeviceItemViewModel : ObservableObject
 {
     private readonly DevicesViewModel _owner;

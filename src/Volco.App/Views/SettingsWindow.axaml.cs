@@ -62,7 +62,7 @@ public partial class SettingsWindow : Window
 
         _navList.ItemsSource = new[]
         {
-            Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General, vm.Devices)),
+            Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
             Nav("Controls", "controls", "Icon.Sliders", () => new ControlsPage(vm.Controls)),
             _controllerNav = Nav("Hardware", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
         };

@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 
 namespace Volco.App.Views.Dialogs;
@@ -74,4 +75,19 @@ public partial class TargetDialog : UserControl
     }
 
     private void DoneButton_Click(object? sender, RoutedEventArgs e) => Vm?.Done();
+
+    private void DeviceRename_Click(object? sender, RoutedEventArgs e) => OpenDevice(sender, focusIcon: false);
+
+    private void DeviceIcon_Click(object? sender, RoutedEventArgs e) => OpenDevice(sender, focusIcon: true);
+
+    /// <summary>A device row's menu entry: the focus goes to the row's ⋯ button, so the page gives
+    /// it back there when the device dialog closes.</summary>
+    private void OpenDevice(object? sender, bool focusIcon)
+    {
+        var button = this.GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(b => b.Name == "DeviceMenuButton" && b.Flyout is MenuFlyout menu && menu.Items.Contains(sender));
+        if (Vm is not { } vm || button?.DataContext is not TargetItem item) return;
+        button.Focus(NavigationMethod.Pointer);
+        vm.OpenDeviceDialog(item, focusIcon);
+    }
 }

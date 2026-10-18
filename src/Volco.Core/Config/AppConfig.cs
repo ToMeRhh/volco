@@ -225,7 +225,7 @@ public class AppConfig
     /// <summary>Button presets, in tab order. The first one is live when the app starts.</summary>
     public List<PresetConfig> Presets { get; set; } = new();
 
-    /// <summary>Device nicknames and icons (Devices page). Only customized devices.</summary>
+    /// <summary>Device nicknames and icons (the device dialog). Only customized devices.</summary>
     public List<DeviceSettingsConfig> Devices { get; set; } = new();
 
     /// <summary>The last Hello the controller sent; null until the first one.</summary>

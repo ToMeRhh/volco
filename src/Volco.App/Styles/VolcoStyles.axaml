@@ -199,7 +199,7 @@
     <Setter Property="Padding" Value="10,2,4,2"/>
   </Style>
 
-  <!-- Device icon picker (Devices page). -->
+  <!-- Device icon picker (the device dialog). -->
   <Style Selector="Button.IconChoice">
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -972,6 +972,18 @@
        the owner pill. -->
   <Style Selector="Border.DialogCard.Narrow">
     <Setter Property="MaxWidth" Value="520"/>
+  </Style>
+  <!-- The device dialog: as tall as its fields. -->
+  <Style Selector="Border.DialogCard.Small">
+    <Setter Property="MaxWidth" Value="400"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <!-- A device row's ⋯ menu shows on hover or focus (and while its menu is open). -->
+  <Style Selector="Grid.TargetRowHost Button.DeviceMenu">
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Grid.TargetRowHost:pointerover Button.DeviceMenu, Grid.TargetRowHost:focus-within Button.DeviceMenu, Grid.TargetRowHost Button.DeviceMenu:flyout-open">
+    <Setter Property="Opacity" Value="1"/>
   </Style>
   <Style Selector="Border.TargetFooter">
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>

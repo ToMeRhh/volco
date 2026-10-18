@@ -162,5 +162,19 @@
         </ContentControl>
       </Border>
     </Border>
+
+    <!-- The device dialog, over the dialog that opened it, with its own scrim: Escape or a click
+         on that scrim closes only this one -->
+    <Border Name="DeviceOverlay" Background="#33000000" IsVisible="{Binding HasDeviceDialog}">
+      <Border Name="DeviceCard" Classes="Panel DialogCard Small" KeyboardNavigation.TabNavigation="Cycle">
+        <ContentControl Name="DeviceHost" Content="{Binding DeviceDialog}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type vm:DeviceDialogViewModel}" x:DataType="vm:DeviceDialogViewModel">
+              <dialogs:DeviceDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
   </Panel>
 </UserControl>

@@ -36,6 +36,12 @@ public sealed record TargetItem(string Key, string Name, string Secondary, Targe
     /// <summary>The live level of a running app; null for any other row.</summary>
     public AppMeterViewModel? Meter { get; init; }
 
+    /// <summary>A device row's flow (an input is listed after the outputs).</summary>
+    public AudioFlow Flow { get; init; } = AudioFlow.Render;
+
+    /// <summary>A device row: it has the device menu (Rename, Icon).</summary>
+    public bool IsDevice => Kind == TargetKind.Device;
+
     public bool ShowGlyph => Kind != TargetKind.App;
     public bool ShowAppIcon => Kind == TargetKind.App && AppIcon is not null;
     public bool ShowLetter => Kind == TargetKind.App && AppIcon is null;
@@ -64,7 +70,7 @@ public sealed record TargetSection(string Name, bool IsCollapsed, IReadOnlyList<
 /// <see cref="SlidersViewModel"/>, moving ticked apps off other sliders and turning another
 /// Everything else slider into an empty apps one. Cancel, Escape or a click outside write nothing.
 /// </summary>
-public sealed partial class TargetDialogViewModel : ObservableObject, ISearchList, IDisposable
+public sealed partial class TargetDialogViewModel : ObservableObject, ISearchList, IDisposable, IDeviceNamesListener
 {
     private const string Devices = "Devices";
     private const string Apps = "Apps";
@@ -192,7 +198,10 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             var secondary = !isInput ? windowsName : windowsName.Length > 0 ? $"Input · {windowsName}" : "Input";
             var on = _type == SliderMappingType.Device && _device is not null && Matches(_device, reference);
             yield return new Entry(new TargetItem(key, look.Name, secondary, TargetKind.Device, on, null, [])
-                                   { IconKey = $"Icon.Device.{look.Icon}" }, reference.FriendlyName);
+                                   {
+                                       IconKey = $"Icon.Device.{look.Icon}",
+                                       Flow = isInput ? AudioFlow.Capture : AudioFlow.Render,
+                                   }, reference.FriendlyName);
         }
     }
 
@@ -455,6 +464,21 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         _devices = devices;
         Rebuild();
     }
+
+    // ── Device names ──────────────────────────────────────────────────────────
+
+    /// <summary>Opens the device dialog (the page's); the page sets it.</summary>
+    internal Action<DeviceRefConfig, AudioFlow, bool>? OpenDevice { get; init; }
+
+    /// <summary>A device row's "Rename" (<paramref name="focusIcon"/> false) or "Icon".</summary>
+    public void OpenDeviceDialog(TargetItem item, bool focusIcon)
+    {
+        if (item.Kind == TargetKind.Device && _deviceRows.TryGetValue(item.Key, out var device))
+            OpenDevice?.Invoke(device, item.Flow, focusIcon);
+    }
+
+    /// <summary>The device dialog closed: the rows show the new names.</summary>
+    void IDeviceNamesListener.DeviceNamesChanged() => Rebuild();
 
     public void Dispose()
     {

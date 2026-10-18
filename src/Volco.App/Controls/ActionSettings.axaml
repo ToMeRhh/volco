@@ -34,9 +34,22 @@
   <StackPanel Spacing="14">
     <StackPanel Name="DeviceParams" Classes="Field" IsVisible="{Binding NeedsDevice}">
       <TextBlock Classes="FieldLabel" Text="Device"/>
-      <ComboBox Name="DeviceCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
-                PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
-                SelectedItem="{Binding Device, Mode=TwoWay}" Classes.Invalid="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+        <ComboBox Name="DeviceCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
+                  PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
+                  SelectedItem="{Binding Device, Mode=TwoWay}" Classes.Invalid="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <!-- The picked device's menu (spec §8): Rename and Icon open the device dialog -->
+        <Button Name="DeviceMenuButton" Grid.Column="1" Classes="Icon" Tag="A" VerticalAlignment="Center"
+                ToolTip.Tip="Device options" IsEnabled="{Binding Device, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <PathIcon Data="{StaticResource Icon.More}" Width="14" Height="14"/>
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Header="Rename" Click="DeviceRename_Click"/>
+              <MenuItem Header="Icon" Click="DeviceIcon_Click"/>
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </Grid>
       <TextBlock Name="DeviceErrorText" Classes="FieldError" Text="{Binding DeviceError}"
                  IsVisible="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </StackPanel>
@@ -44,17 +57,41 @@
     <StackPanel Name="PairParams" Spacing="14" IsVisible="{Binding NeedsPair}">
       <StackPanel Classes="Field">
         <TextBlock Classes="FieldLabel" Text="A"/>
-        <ComboBox Name="DeviceACombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
-                  PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
-                  SelectedItem="{Binding Device, Mode=TwoWay}" Classes.Invalid="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+          <ComboBox Name="DeviceACombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
+                    PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
+                    SelectedItem="{Binding Device, Mode=TwoWay}" Classes.Invalid="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          <Button Name="DeviceAMenuButton" Grid.Column="1" Classes="Icon" Tag="A" VerticalAlignment="Center"
+                  ToolTip.Tip="Device options" IsEnabled="{Binding Device, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <PathIcon Data="{StaticResource Icon.More}" Width="14" Height="14"/>
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="Rename" Click="DeviceRename_Click"/>
+                <MenuItem Header="Icon" Click="DeviceIcon_Click"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
         <TextBlock Name="DeviceAErrorText" Classes="FieldError" Text="{Binding DeviceError}"
                    IsVisible="{Binding DeviceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
       </StackPanel>
       <StackPanel Classes="Field">
         <TextBlock Classes="FieldLabel" Text="B"/>
-        <ComboBox Name="DeviceBCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
-                  PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
-                  SelectedItem="{Binding DeviceB, Mode=TwoWay}" Classes.Invalid="{Binding DeviceBError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+          <ComboBox Name="DeviceBCombo" ContainerPrepared="DeviceCombo_ContainerPrepared" ItemTemplate="{StaticResource DeviceItem}"
+                    PlaceholderText="Choose a device" ItemsSource="{Binding DeviceNames}"
+                    SelectedItem="{Binding DeviceB, Mode=TwoWay}" Classes.Invalid="{Binding DeviceBError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          <Button Name="DeviceBMenuButton" Grid.Column="1" Classes="Icon" Tag="B" VerticalAlignment="Center"
+                  ToolTip.Tip="Device options" IsEnabled="{Binding DeviceB, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <PathIcon Data="{StaticResource Icon.More}" Width="14" Height="14"/>
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="Rename" Click="DeviceRename_Click"/>
+                <MenuItem Header="Icon" Click="DeviceIcon_Click"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
         <TextBlock Name="DeviceBErrorText" Classes="FieldError" Text="{Binding DeviceBError}"
                    IsVisible="{Binding DeviceBError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
       </StackPanel>

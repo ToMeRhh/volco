@@ -40,7 +40,7 @@ internal static class ScreenIcons
     }
 
     /// <summary>The icon's vector art (Icon.Device.* in Styles/Icons.axaml, Icon.Preset for
-    /// <see cref="ScreenIcon.Presets"/>), for the OSD and the Devices page. Null when the app's
+    /// <see cref="ScreenIcon.Presets"/>), for the OSD and the device dialog. Null when the app's
     /// resources are not loaded.</summary>
     public static Geometry? Geometry(ScreenIcon icon)
     {

@@ -1,6 +1,6 @@
 # Controls page: one page for sliders and buttons
 
-Date: 2026-10-17. Status: approved design (pitch mock revision 7); implemented (steps 1–5).
+Date: 2026-10-17. Status: approved design (pitch mock revision 7); implemented (steps 1–6).
 
 The approved interactive mock is the reference for anything this text leaves visual: <https://claude.ai/artifact/TiSBFqTKEfThvVk7wr7CEe> (private to the owner). Related issues: #108 (double slider smoothing) and #109 (controller-wide button timing).
 

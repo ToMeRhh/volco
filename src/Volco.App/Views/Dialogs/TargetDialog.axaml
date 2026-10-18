@@ -48,43 +48,56 @@
                 <ItemsControl Name="ItemList" ItemsSource="{Binding Items}" IsVisible="{Binding IsOpen}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TargetItem">
-                      <Button Name="TargetRowButton" Classes="TargetRow" Classes.on="{Binding IsOn}"
-                              Classes.current="{Binding IsCurrent}" Click="TargetRow_Click">
-                        <Grid ColumnDefinitions="16,Auto,*,Auto,Auto" ColumnSpacing="10">
-                          <Border Name="Mark" Classes="Mark" Classes.radio="{Binding IsRadio}" Classes.check="{Binding IsCheck}"
-                                  IsVisible="{Binding HasMark}">
-                            <Panel>
-                              <Ellipse Classes="RadioDot" IsVisible="{Binding IsRadio}"/>
-                              <Path Classes="CheckGlyph" IsVisible="{Binding IsCheck}" Data="M0,3 L2.5,5.5 L7,0.5"/>
+                      <Grid Name="TargetRowHost" Classes="TargetRowHost" ColumnDefinitions="*,Auto">
+                        <Button Name="TargetRowButton" Classes="TargetRow" Classes.on="{Binding IsOn}"
+                                Classes.current="{Binding IsCurrent}" Click="TargetRow_Click">
+                          <Grid ColumnDefinitions="16,Auto,*,Auto,Auto" ColumnSpacing="10">
+                            <Border Name="Mark" Classes="Mark" Classes.radio="{Binding IsRadio}" Classes.check="{Binding IsCheck}"
+                                    IsVisible="{Binding HasMark}">
+                              <Panel>
+                                <Ellipse Classes="RadioDot" IsVisible="{Binding IsRadio}"/>
+                                <Path Classes="CheckGlyph" IsVisible="{Binding IsCheck}" Data="M0,3 L2.5,5.5 L7,0.5"/>
+                              </Panel>
+                            </Border>
+                            <Panel Grid.Column="1" Width="24" Height="24">
+                              <Border Classes="RowIcon" IsVisible="{Binding ShowGlyph}">
+                                <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconConverters.Resource}}"/>
+                              </Border>
+                              <Image Name="AppIconImage" Width="16" Height="16" Source="{Binding AppIcon}"
+                                     IsVisible="{Binding ShowAppIcon}"/>
+                              <Border Name="LetterTile" Width="16" Height="16" CornerRadius="4" Background="{DynamicResource SubtleBrush}"
+                                      IsVisible="{Binding ShowLetter}">
+                                <TextBlock Text="{Binding Letter}" FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                              </Border>
                             </Panel>
-                          </Border>
-                          <Panel Grid.Column="1" Width="24" Height="24">
-                            <Border Classes="RowIcon" IsVisible="{Binding ShowGlyph}">
-                              <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconConverters.Resource}}"/>
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                              <controls:HighlightText Name="ItemName" Source="{Binding Name}" Highlight="{Binding Highlight}"
+                                                      TextTrimming="CharacterEllipsis"/>
+                              <TextBlock Name="ItemSecondary" Classes="RowSecondary" Text="{Binding Secondary}"
+                                         IsVisible="{Binding HasSecondary}" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <ProgressBar Grid.Column="3" Name="AppMeter" Width="40" Height="3" MinHeight="3" Minimum="0" Maximum="1"
+                                         VerticalAlignment="Center" IsVisible="{Binding HasMeter}"
+                                         Value="{Binding Meter.Level}"/>
+                            <Border Grid.Column="4" Name="OwnerPill" Classes="Pill" IsVisible="{Binding HasOwner}">
+                              <TextBlock Text="{Binding OwnedBy}"/>
                             </Border>
-                            <Image Name="AppIconImage" Width="16" Height="16" Source="{Binding AppIcon}"
-                                   IsVisible="{Binding ShowAppIcon}"/>
-                            <Border Name="LetterTile" Width="16" Height="16" CornerRadius="4" Background="{DynamicResource SubtleBrush}"
-                                    IsVisible="{Binding ShowLetter}">
-                              <TextBlock Text="{Binding Letter}" FontSize="10" FontWeight="SemiBold"
-                                         Foreground="{DynamicResource TextSecondaryBrush}"
-                                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                          </Panel>
-                          <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                            <controls:HighlightText Name="ItemName" Source="{Binding Name}" Highlight="{Binding Highlight}"
-                                                    TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Name="ItemSecondary" Classes="RowSecondary" Text="{Binding Secondary}"
-                                       IsVisible="{Binding HasSecondary}" TextTrimming="CharacterEllipsis"/>
-                          </StackPanel>
-                          <ProgressBar Grid.Column="3" Name="AppMeter" Width="40" Height="3" MinHeight="3" Minimum="0" Maximum="1"
-                                       VerticalAlignment="Center" IsVisible="{Binding HasMeter}"
-                                       Value="{Binding Meter.Level}"/>
-                          <Border Grid.Column="4" Name="OwnerPill" Classes="Pill" IsVisible="{Binding HasOwner}">
-                            <TextBlock Text="{Binding OwnedBy}"/>
-                          </Border>
-                        </Grid>
-                      </Button>
+                          </Grid>
+                        </Button>
+                        <!-- A device row's menu (spec §8): Rename and Icon open the device dialog -->
+                        <Button Name="DeviceMenuButton" Grid.Column="1" Classes="Icon DeviceMenu" Margin="2,0,0,0"
+                                VerticalAlignment="Center" IsVisible="{Binding IsDevice}" ToolTip.Tip="Device options">
+                          <PathIcon Data="{StaticResource Icon.More}" Width="14" Height="14"/>
+                          <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                              <MenuItem Name="RenameMenuItem" Header="Rename" Click="DeviceRename_Click"/>
+                              <MenuItem Name="IconMenuItem" Header="Icon" Click="DeviceIcon_Click"/>
+                            </MenuFlyout>
+                          </Button.Flyout>
+                        </Button>
+                      </Grid>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>

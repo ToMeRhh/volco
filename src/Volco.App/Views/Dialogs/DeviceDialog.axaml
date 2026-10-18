@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             x:Class="Volco.App.Views.Dialogs.DeviceDialog"
+             x:DataType="vm:DeviceDialogViewModel">
+  <!-- The device dialog (spec §8): a device's nickname and screen icon, over the target or action
+       dialog. Edits save as they are made; Done only closes. -->
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" Classes="DialogHeader" ColumnDefinitions="*,Auto">
+      <TextBlock Name="DeviceTitleText" Classes="DialogTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+      <Button Name="DeviceCloseButton" Grid.Column="1" Classes="Icon" Command="{Binding CloseCommand}"
+              ToolTip.Tip="Close">
+        <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12"/>
+      </Button>
+    </Grid>
+
+    <Border DockPanel.Dock="Bottom" Classes="TargetFooter">
+      <Grid Classes="DialogFooter" ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Name="DeviceFooterText" Classes="Caption" VerticalAlignment="Center"
+                   Text="{Binding Device.FooterText}" TextTrimming="CharacterEllipsis"/>
+        <Button Name="ForgetButton" Grid.Column="1" Classes="Ghost Danger" Content="Forget"
+                IsVisible="{Binding Device.CanForget}" Command="{Binding ForgetCommand}"/>
+        <Button Name="DeviceDoneButton" Grid.Column="2" Classes="Primary" Content="Done" Command="{Binding DoneCommand}"/>
+      </Grid>
+    </Border>
+
+    <StackPanel Margin="16,4,16,14" Spacing="14">
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="Nickname"/>
+        <TextBox Name="DeviceNameBox" PlaceholderText="{Binding Device.AutoName}"
+                 Text="{Binding Device.Nickname, Mode=TwoWay}"
+                 FlowDirection="{Binding Device.NicknameFlowDirection}"/>
+      </StackPanel>
+      <StackPanel Classes="Field">
+        <TextBlock Classes="FieldLabel" Text="Icon"/>
+        <ItemsControl Name="DeviceIconGrid" ItemsSource="{Binding Device.IconChoices}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:IconChoiceViewModel">
+              <Button Name="IconChoice" Classes="IconChoice" Classes.selected="{Binding IsSelected}"
+                      Width="40" Height="40" Margin="0,0,6,6" Padding="0"
+                      ToolTip.Tip="{Binding Label}" Command="{Binding SelectCommand}">
+                <PathIcon Width="20" Height="20"
+                          Data="{Binding Icon, Converter={StaticResource ScreenIconToGeometry}}"/>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Name="ResetIconButton" Classes="Ghost" Content="Reset icon" HorizontalAlignment="Left"
+                Command="{Binding Device.ResetIconCommand}"/>
+      </StackPanel>
+      <TextBlock Name="UsedByText" Classes="Caption" TextWrapping="Wrap" Text="{Binding Device.UsedBy}"
+                 IsVisible="{Binding Device.UsedBy, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </StackPanel>
+  </DockPanel>
+</UserControl>
