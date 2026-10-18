@@ -161,6 +161,20 @@ public class ControlsPageTests
         // The drawing still sits beside the inspector.
         var drawing = page.FindControl<ScrollViewer>("DrawingScroll")!;
         Assert.True(drawing.Bounds.Width > 300, $"drawing is {drawing.Bounds.Width} wide");
+
+        // The mouse on the icons opens the sidebar over the page, which stays where it is.
+        var drawingWidth = drawing.Bounds.Width;
+        narrow.MouseMove(new Point(28, 200));
+        Settle(narrow);
+        Assert.Equal(168, narrow.FindControl<Border>("Sidebar")!.Bounds.Width);
+        Assert.All(labels, t => Assert.True(t.IsEffectivelyVisible));
+        Assert.Equal(drawingWidth, drawing.Bounds.Width);
+        Assert.Equal(56, narrow.FindControl<Border>("SidebarSpacer")!.Bounds.Width);
+
+        narrow.MouseMove(new Point(600, 300));
+        Settle(narrow);
+        Assert.Equal(56, narrow.FindControl<Border>("Sidebar")!.Bounds.Width);
+        Assert.All(labels, t => Assert.False(t.IsEffectivelyVisible));
         narrow.Close();
     }
 
@@ -400,7 +414,7 @@ public class ControlsPageTests
     // ── Slider inspector ──────────────────────────────────────────────────────
 
     [AvaloniaFact]
-    public void SliderName_Typed_ThenHardwarePress_NameSaved()
+    public void SliderName_Typed_HardwarePressKeepsIt_ThenSelectingAnotherSaves()
     {
         using var s = Show();
         var box = In<TextBox>(Inspector(s.Page), "NameBox");
@@ -409,8 +423,14 @@ public class ControlsPageTests
         s.Window.KeyTextInput("Desk");
         Dispatcher.UIThread.RunJobs();
 
-        // A press on the controller selects button 2 while the name box still has focus.
+        // A press on the controller only flashes button 2: the slider stays in the inspector.
         s.Controls.OnButtonActivity(1);
+        Settle(s.Window);
+        Assert.Same(s.Vm.Sliders.Items[0], s.Controls.Selected);
+        Assert.Equal("Desk", In<TextBox>(Inspector(s.Page), "NameBox").Text);
+
+        // Selecting button 2 while the name box still has focus keeps the name.
+        s.Controls.Select(s.Vm.Buttons.Items[1]);
         Settle(s.Window);
 
         Assert.Same(s.Vm.Buttons.Items[1], s.Controls.Selected);
@@ -482,12 +502,32 @@ public class ControlsPageTests
         var tryButton = InRow<Button>(page, "Press", "TryButton");
         Assert.True(tryButton.IsEffectivelyVisible);
         Assert.False(InRow<Button>(page, "Double", "TryButton").IsEffectivelyVisible);   // empty: a + instead
-        Assert.True(InRow<PathIcon>(page, "Double", "AddIcon").IsEffectivelyVisible);
+        Assert.True(InRow<Button>(page, "Double", "AddButton").IsEffectivelyVisible);
         tryButton.Command!.Execute(null);
 
         var run = Assert.Single(runs);
         Assert.Same(rig.Config.Config.Buttons[0].Default().SinglePress, run.Action);
         Assert.Equal(new ActionOrigin(0, PressType.Single, rig.Config.Config.Presets[0].Name), run.Origin);
+    }
+
+    [AvaloniaFact]
+    public void EmptyRow_ClickingThePlus_OpensTheActionDialog()
+    {
+        using var s = Show();
+        var button = s.Vm.Buttons.Items[0];
+        s.Controls.Select(button);
+        Settle(s.Window);
+
+        var add = InRow<Button>(s.Page, "Double", "AddButton");
+        Assert.True(add.IsEffectivelyVisible);
+        var point = add.TranslatePoint(new Point(add.Bounds.Width / 2, add.Bounds.Height / 2), s.Window)!.Value;
+        s.Window.MouseDown(point, MouseButton.Left);
+        s.Window.MouseUp(point, MouseButton.Left);
+        Settle(s.Window);
+
+        var dialog = Assert.IsType<ActionDialogViewModel>(s.Controls.Dialog);
+        Assert.Same(button, dialog.Button);
+        Assert.Equal(PressType.Double, dialog.Gesture);
     }
 
     [AvaloniaFact]
@@ -715,7 +755,7 @@ public class ControlsPageTests
     // ── Routing from the runtime (Task 6 review) ──────────────────────────────
 
     [Fact]
-    public void SettingsViewModel_ButtonActivitySelects_ReconnectStartsTheHelloWindow()
+    public void SettingsViewModel_ButtonActivityFlashes_WithoutSelecting_ReconnectAddsButtons()
     {
         using var rig = new TestRig(EngineWithAudio());
         var ui = new RecordingDispatcher();
@@ -725,23 +765,22 @@ public class ControlsPageTests
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(hello);
         ui.RunAll();
+        var selected = controls.Selected;
 
         rig.Connection.RaiseMessage(new ButtonMessage(1, ButtonState.Pressed));
         rig.Connection.RaiseMessage(new ButtonMessage(1, ButtonState.Released));
         ui.RunAll();
-        Assert.Same(vm.Buttons.Items[1], controls.Selected);
+        Assert.True(vm.Buttons.Items[1].IsActive);
+        Assert.Same(selected, controls.Selected);
 
-        // Past the first Hello's window, the link drops and comes back with the same controller:
-        // only the link's change to Connected tells the page about this Hello.
-        Thread.Sleep(1100);
+        // The link drops and comes back with a fourth button: the page draws it.
         rig.Connection.SetStatus(TransportStatus.Closed);
         ui.RunAll();
-        controls.OnSliderLevel(2, 0.20f);   // the slider's first report: its baseline
         rig.Connection.SetStatus(TransportStatus.Open);
-        rig.Connection.RaiseMessage(hello);
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 5,
+            new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.Led }));
         ui.RunAll();
-
-        controls.OnSliderLevel(2, 0.90f);   // the Hello's sync, not a move
-        Assert.Same(vm.Buttons.Items[1], controls.Selected);
+        Assert.Equal(4, vm.Buttons.Items.Count);
+        Assert.Same(selected, controls.Selected);
     }
 }

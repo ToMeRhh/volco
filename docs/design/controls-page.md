@@ -45,7 +45,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
 11. **Inspector "Clear"** removes all of a button's actions in the edited mode, with Undo.
 12. **The light or screen follows the main action** (§7), as today.
 13. **The controller works normally while the window is open.**
-    - A press or slider move acts as usual and also selects that control.
+    - A press or slider move acts as usual and flashes that control on the drawing. It does not select it.
     - Only the hardware test mode ignores input, as today.
 14. **The action and target dialogs:**
     - The search box is focused on open, and the full list shows.
@@ -62,7 +62,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
   - General loses its Devices section (§8).
 - `SettingsWindow` opens at **1100 × 720** (today 860 × 660). The minimum stays 820 × 520.
 - **1000 px wide and up:** a 168 px sidebar with labels, the drawing, and a 380 px inspector.
-- **Below 1000 px:** a 56 px icon-only sidebar (tooltips give the names), and a 300 px inspector, still beside the drawing.
+- **Below 1000 px:** a 56 px icon-only sidebar, and a 300 px inspector, still beside the drawing. With the mouse on it, the sidebar opens to full width over the page, which does not move.
 - In both layouts only the drawing scrolls. The inspector keeps its place and size.
 
 ### 3.2 Controls page layout
@@ -113,14 +113,12 @@ Caps, main actions and action lists therefore line up across a row whatever each
 - Faders are shorter, caps smaller, and screens text-only.
 - A button's rows 3–4 become one row of three action icons (Press, Double press, Hold). The main one is outlined, empty slots are faint, and each icon has a tooltip.
 
-### 4.5 Selection and touch-to-select
+### 4.5 Selection and touch highlight
 
-- **Selecting:** clicking a tile, or Enter or Space on a focused tile, selects it. The tile gets an accent outline.
-- **A button press on the controller** (`ButtonActivity`) selects that button and pulses it. The press still runs its action, from the runtime.
-- **A slider move on the controller** selects that slider and pulses it. Only real movement counts:
-  - a change of at least 2 % since the last selection by that slider;
-  - not within 1 s after a Hello, so the Hello's sync doesn't select a slider.
-- The selection never moves while a dialog or menu is open. The pulse still shows.
+- **Selecting:** clicking a tile, or Enter or Space on a focused tile, selects it. The tile gets an accent outline. Only this selects.
+- **A button press on the controller** (`ButtonActivity`) flashes that button's tile. The press still runs its action, from the runtime.
+- **A slider report** moves its fader and flashes its tile.
+- Neither moves the selection, so the inspector never changes under the user (changed after the first Windows test: selecting by touch was dropped).
 - Arrow keys move the focus between tiles.
 
 ## 5. The inspector
@@ -291,7 +289,7 @@ The pencil switches the strip into edit mode:
 
 ### 10.2 Runtime
 
-- **Touch-to-select needs no new runtime event.** `ButtonActivity` and `SliderLevelChanged` exist. The 2 % and 1 s rules (§4.5) live in the view model. `ControllerInfoChanged` marks the Hello.
+- **The touch highlight needs no new runtime event.** `ButtonActivity` and `SliderLevelChanged` exist. `ControllerInfoChanged` marks the Hello.
 - **The runtime refuses invalid actions** via `ActionValidator`, logging once per action.
 
 ### 10.3 Audio sessions (Windows engine, seam extension)
@@ -325,9 +323,7 @@ Headless tests in `Volco.App.Tests`, replacing `ButtonsPageTests`, `ButtonsPageC
   - row alignment (panel test).
 - **Selection:**
   - click and keyboard;
-  - `ButtonActivity` selects and still runs;
-  - a slider move of 2 % or more selects; the Hello sync does not;
-  - no selection change while a dialog is open.
+  - `ButtonActivity` and slider reports flash the tile and never select.
 - **Inspector:**
   - fixed rows;
   - Clear and Undo;
@@ -359,7 +355,7 @@ Headless tests in `Volco.App.Tests`, replacing `ButtonsPageTests`, `ButtonsPageC
 Windows manual checklist:
 - session names, icons and meters;
 - a capture device on a slider;
-- touch-to-select with the real controller;
+- the touch highlight with the real controller;
 - the window at 820 × 520 and at 1100 × 720.
 
 ## 13. Delivery
@@ -367,7 +363,7 @@ Windows manual checklist:
 These are separate PRs, in this order, each green on CI:
 
 1. **Core: validation and slider names.** `ActionValidator`, `SliderTargetValidator`, `sliders[i].name`, and runtime refusal of invalid actions.
-2. **The Controls page with its drawing and inspector.** Fuzzy dialogs, validation in the UI, Clear, touch-to-select, and the window sizes. The Sliders and Buttons pages are removed. Modes keep today's tab behaviour on the buttons frame, and the new UI's text already says "mode", while the code and config keep "preset" until step 7.
+2. **The Controls page with its drawing and inspector.** Fuzzy dialogs, validation in the UI, Clear, the touch highlight, and the window sizes. The Sliders and Buttons pages are removed. Modes keep today's tab behaviour on the buttons frame, and the new UI's text already says "mode", while the code and config keep "preset" until step 7.
 3. **Mode tabs:** Add mode, the menu, edit mode (reorder, rename, delete), and Make live.
 4. **Drag to swap** and Swap with.
 5. **Windows: session display names, icons and peak meters**, and capture devices on sliders.

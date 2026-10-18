@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Time.Testing;
 using Volco.App.ViewModels;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
@@ -13,7 +12,6 @@ namespace Volco.App.Tests.ViewModels;
 /// page's drawing model, selection and touch-to-select.</summary>
 public sealed class ControlsViewModelTests : IDisposable
 {
-    private readonly FakeTimeProvider _time = new();
     private readonly TestRig _rig;
     private readonly UndoToastViewModel _toast = new();
 
@@ -33,7 +31,7 @@ public sealed class ControlsViewModelTests : IDisposable
     {
         var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, _toast);
         var buttons = new ButtonsViewModel(_rig.Config, _rig.Engine, _rig.Runtime, _rig.Runtime.Execute, _toast);
-        return new ControlsViewModel(sliders, buttons, _rig.Config, _toast, _time);
+        return new ControlsViewModel(sliders, buttons, _rig.Config, _toast);
     }
 
     private void Hardware(int sliders, int buttons)
@@ -119,83 +117,48 @@ public sealed class ControlsViewModelTests : IDisposable
     // ── Touch-to-select ───────────────────────────────────────────────────────
 
     [Fact]
-    public void ButtonActivity_SelectsAndPulses()
+    public void ButtonActivity_PulsesWithoutSelecting()
     {
         var vm = Vm();
+        var selected = vm.Selected;
         var button = vm.Buttons.Items[1];
         var pulses = 0;
         button.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ButtonItemViewModel.IsActive) && button.IsActive) pulses++; };
 
         vm.OnButtonActivity(1);
+        vm.OnButtonActivity(1);
 
-        Assert.Same(button, vm.Selected);
-        Assert.Equal(1, pulses);
+        Assert.Same(selected, vm.Selected);
+        Assert.False(button.IsSelected);
+        Assert.Equal(2, pulses);
     }
 
     [Fact]
-    public void ButtonActivity_WhileDialogOpen_KeepsSelection()
+    public void ButtonActivity_OutOfRange_DoesNothing()
     {
         var vm = Vm();
         var selected = vm.Selected;
-        vm.OpenDialog(new UndoToastViewModel());
-        Assert.True(vm.HasDialog);
-
-        vm.OnButtonActivity(1);
+        vm.OnButtonActivity(-1);
+        vm.OnButtonActivity(vm.Buttons.Items.Count);
         Assert.Same(selected, vm.Selected);
-        Assert.True(vm.Buttons.Items[1].IsActive);   // the pulse still shows
-
-        vm.CloseDialog();
-        Assert.False(vm.HasDialog);
-        vm.OnButtonActivity(1);
-        Assert.Same(vm.Buttons.Items[1], vm.Selected);
     }
 
     [Fact]
-    public void SliderLevel_SmallChange_DoesNotSelect()
+    public void SliderLevel_MovesTheFaderAndPulses_WithoutSelecting()
     {
         var vm = Vm();
-        vm.OnSliderLevel(2, 0.50f);
-        vm.OnSliderLevel(2, 0.51f);
-        Assert.Same(vm.Sliders.Items[0], vm.Selected);
-        Assert.Equal(0.51, vm.Sliders.Items[2].LiveLevel, 3);
-    }
+        vm.Select(vm.Buttons.Items[0]);
+        var slider = vm.Sliders.Items[2];
+        var pulses = 0;
+        slider.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SliderItemViewModel.IsActive) && slider.IsActive) pulses++; };
 
-    [Fact]
-    public void SliderLevel_TwoPercent_Selects()
-    {
-        var vm = Vm();
-        vm.OnSliderLevel(2, 0.50f);
-        vm.OnSliderLevel(2, 0.52f);
-        Assert.Same(vm.Sliders.Items[2], vm.Selected);
-    }
+        vm.OnSliderLevel(2, 0.10f);
+        vm.OnSliderLevel(2, 0.90f);
 
-    [Fact]
-    public void SliderLevel_WithinOneSecondOfHello_DoesNotSelect()
-    {
-        Hardware(sliders: 5, buttons: 3);
-        var vm = Vm();
-        vm.OnSliderLevel(2, 0.50f);
-
-        vm.OnHello();
-        _time.Advance(TimeSpan.FromMilliseconds(900));
-        vm.OnSliderLevel(2, 0.80f);   // the Hello's sync
-        Assert.Same(vm.Sliders.Items[0], vm.Selected);
-
-        _time.Advance(TimeSpan.FromMilliseconds(200));
-        vm.OnSliderLevel(2, 0.81f);   // measured from the synced level
-        Assert.Same(vm.Sliders.Items[0], vm.Selected);
-        vm.OnSliderLevel(2, 0.85f);
-        Assert.Same(vm.Sliders.Items[2], vm.Selected);
-    }
-
-    [Fact]
-    public void SliderLevel_WhileMenuOpen_DoesNotSelect()
-    {
-        var vm = Vm();
-        vm.OnSliderLevel(2, 0.50f);
-        vm.IsMenuOpen = true;
-        vm.OnSliderLevel(2, 0.70f);
-        Assert.Same(vm.Sliders.Items[0], vm.Selected);
+        Assert.Same(vm.Buttons.Items[0], vm.Selected);
+        Assert.False(slider.IsSelected);
+        Assert.Equal(0.90, slider.LiveLevel, 3);
+        Assert.Equal(2, pulses);
     }
 
     // ── Button tiles ──────────────────────────────────────────────────────────

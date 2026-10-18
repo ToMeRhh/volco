@@ -10,7 +10,7 @@
     <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
 
     <!-- One gesture's row: its action (a click opens the action dialog), the USB tag, a warning
-         for a saved action with a problem, and Try. An empty row shows "—" and a +. -->
+         for a saved action with a problem, and Try. An empty row shows "—" and a +, which opens the dialog too. -->
     <DataTemplate x:Key="ActionRowTemplate" x:DataType="vm:ActionSlotViewModel">
       <Grid ColumnDefinitions="*,Auto" Classes="ActionRowGrid">
         <Button Name="RowButton" Classes="InspectorRow"
@@ -36,8 +36,11 @@
                   ToolTip.Tip="Try">
             <PathIcon Data="{StaticResource Icon.Device.Play}" Width="10" Height="10"/>
           </Button>
-          <PathIcon Name="AddIcon" Classes="RowAdd" Data="{StaticResource Icon.Plus}" IsVisible="{Binding !CanTest}"
-                    IsHitTestVisible="False"/>
+          <Button Name="AddButton" Classes="Try" IsVisible="{Binding !CanTest}" ToolTip.Tip="Set an action"
+                  Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).OpenActionCommand}"
+                  CommandParameter="{Binding}">
+            <PathIcon Classes="RowAdd" Data="{StaticResource Icon.Plus}"/>
+          </Button>
         </Panel>
       </Grid>
     </DataTemplate>

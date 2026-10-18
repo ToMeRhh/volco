@@ -10,23 +10,12 @@ namespace Volco.App.ViewModels;
 /// The Controls page (spec docs/design/controls-page.md): one drawing of the controller, its
 /// sliders and buttons, and an inspector for the selected one. It owns the Sliders and Buttons
 /// view models, which keep the lists and their edits, and adds the drawing's counts, the selection
-/// (with touch-to-select from the controller) and the page's dialog.
+/// and the page's dialog. The controller's presses and slider moves only flash their tiles.
 /// </summary>
 public sealed partial class ControlsViewModel : ObservableObject
 {
-    /// <summary>The smallest level change that counts as moving a slider (spec §4.5).</summary>
-    private const float MoveThreshold = 0.02f;
-
-    /// <summary>How long after a Hello slider reports are its sync, not a move.</summary>
-    private static readonly TimeSpan HelloSyncWindow = TimeSpan.FromSeconds(1);
-
     private readonly ConfigManager _config;
     private readonly UndoToastViewModel _toast;
-    private readonly TimeProvider _time;
-
-    // The level each slider had when it last selected itself (or was first seen).
-    private readonly Dictionary<int, float> _levelAtSelection = new();
-    private DateTimeOffset? _helloAt;
 
     public SlidersViewModel Sliders { get; }
     public ButtonsViewModel Buttons { get; }
@@ -52,22 +41,17 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     public bool HasDialog => Dialog is not null;
 
-    /// <summary>The mode menu is open; like a dialog, it keeps the selection where it is.</summary>
-    [ObservableProperty]
-    private bool _isMenuOpen;
-
     /// <summary>The dialogs' collapsed sections for this app run, keyed "action:{section}" or
     /// "target:{section}".</summary>
     public Dictionary<string, bool> CollapsedSections { get; } = new();
 
     public ControlsViewModel(SlidersViewModel sliders, ButtonsViewModel buttons, ConfigManager config,
-                             UndoToastViewModel toast, TimeProvider? time = null)
+                             UndoToastViewModel toast)
     {
         Sliders = sliders;
         Buttons = buttons;
         _config = config;
         _toast = toast;
-        _time = time ?? TimeProvider.System;
 
         Sliders.AddMissing();
         Buttons.AddMissing();
@@ -115,8 +99,6 @@ public sealed partial class ControlsViewModel : ObservableObject
         if (!present) Selected = DefaultSelection();
     }
 
-    private bool SelectionLocked => Dialog is not null || IsMenuOpen;
-
     // ── Dialog ────────────────────────────────────────────────────────────────
 
     public void OpenDialog(ObservableObject dialog) => Dialog = dialog;
@@ -162,38 +144,17 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     // ── Controller events (UI thread) ─────────────────────────────────────────
 
-    /// <summary>A button was pressed on the controller: it pulses, and is selected unless a dialog
-    /// or the menu is open.</summary>
-    public void OnButtonActivity(int index)
-    {
-        Buttons.Pulse(index);
-        if (index < 0 || index >= Buttons.Items.Count || SelectionLocked) return;
-        Selected = Buttons.Items[index];
-    }
+    /// <summary>A button was pressed on the controller: its tile flashes. It is not selected; only
+    /// a click selects (spec §4.5).</summary>
+    public void OnButtonActivity(int index) => Buttons.Pulse(index);
 
-    /// <summary>A slider reported a level. Its fader follows; it is selected only when it really
-    /// moved: by 2 % since it last selected itself, and not as the sync right after a Hello.</summary>
-    public void OnSliderLevel(int index, float level)
-    {
-        Sliders.UpdateLiveLevel(index, level);
-        if (index < 0 || index >= Sliders.Items.Count) return;
-
-        var inSync = _helloAt is { } hello && _time.GetUtcNow() - hello < HelloSyncWindow;
-        if (!_levelAtSelection.TryGetValue(index, out var last) || inSync)
-        {
-            _levelAtSelection[index] = level;
-            return;
-        }
-        // A hair under 2 %, so that 0.50 → 0.52 counts despite float rounding.
-        if (Math.Abs(level - last) < MoveThreshold - 1e-4f || SelectionLocked) return;
-        _levelAtSelection[index] = level;
-        Selected = Sliders.Items[index];
-    }
+    /// <summary>A slider reported a level: its fader follows and its tile flashes, without
+    /// selecting it.</summary>
+    public void OnSliderLevel(int index, float level) => Sliders.UpdateLiveLevel(index, level);
 
     /// <summary>A Hello arrived (<see cref="AppConfig.Controller"/> is already updated).</summary>
     public void OnHello()
     {
-        _helloAt = _time.GetUtcNow();
         Sliders.AddMissing();
         Buttons.AddMissing();
         RefreshCounts();

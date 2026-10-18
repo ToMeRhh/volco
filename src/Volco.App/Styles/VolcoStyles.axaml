@@ -681,8 +681,6 @@
   <Style Selector="PathIcon.RowAdd">
     <Setter Property="Width" Value="12"/>
     <Setter Property="Height" Value="12"/>
-    <Setter Property="HorizontalAlignment" Value="Left"/>
-    <Setter Property="Margin" Value="7,0,0,0"/>
     <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
   </Style>
   <Style Selector="Grid.LightRowGrid">
@@ -770,6 +768,27 @@
   </Style>
   <Style Selector=":is(Window).compact StackPanel.ConnectionFooter">
     <Setter Property="Margin" Value="4,8"/>
+  </Style>
+  <!-- The sidebar lies over the page, and its room in the layout (SidebarSpacer) keeps the page
+       beside it. In the compact layout, the mouse on the sidebar opens it to full width, over
+       the page; the icons keep their place. These come after the compact styles above, so they win. -->
+  <Style Selector="Grid.SidebarHost">
+    <Setter Property="Width" Value="168"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost">
+    <Setter Property="Width" Value="56"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover">
+    <Setter Property="Width" Value="168"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Border.Sidebar">
+    <Setter Property="BoxShadow" Value="4 0 16 0 #33000000"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover DockPanel.NavPane">
+    <Setter Property="Width" Value="148"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.FooterLabel">
+    <Setter Property="IsVisible" Value="True"/>
   </Style>
 
   <!-- ── Settings window chrome ────────────────────────────────────────── -->
