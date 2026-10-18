@@ -4,9 +4,12 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.Controls;
+using Volco.App.Platform;
 using Volco.App.ViewModels;
 using Volco.App.Views.Dialogs;
 using Volco.App.Views.Pages;
@@ -40,7 +43,8 @@ public class TargetDialogTests
     /// <summary>Speakers (the default) and nicknamed headphones; Spotify (twice), chrome and Discord
     /// playing. Slider 1 is the main output, slider 2 "Chat" has Discord, slider 3 is everything
     /// else, slider 4 has game.exe, which isn't running.</summary>
-    private static Shown Show(Action<AppConfig>? configure = null)
+    private static Shown Show(Action<AppConfig>? configure = null, IAppIcons? icons = null,
+                              Action<FakeAudioEngine>? setup = null)
     {
         var speakers = new AudioDevice("dev-1", "Speakers (Realtek Audio)", AudioFlow.Render, true);
         var engine = new FakeAudioEngine
@@ -49,6 +53,7 @@ public class TargetDialogTests
             DefaultRender = speakers,
             Sessions = { Session("Spotify.exe", 1), Session("chrome.exe", 2), Session("Spotify.exe", 3), Session("Discord.exe", 4) },
         };
+        setup?.Invoke(engine);
         var rig = new TestRig(engine);
         var c = rig.Config.Config;
         c.Devices.Add(new DeviceSettingsConfig { Id = "dev-2", FriendlyName = "Headphones (USB Audio)", Nickname = "Cans" });
@@ -60,7 +65,7 @@ public class TargetDialogTests
             new() { Type = SliderMappingType.Processes, Processes = { "game.exe" } },
         };
         configure?.Invoke(c);
-        var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var vm = rig.CreateSettings(new AvaloniaUiDispatcher(), icons);
         var page = new ControlsPage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
@@ -470,5 +475,126 @@ public class TargetDialogTests
         s.Rig.Engine.RaiseDeviceChanged(DeviceChangeKind.Added, gone);
         Settle(s.Window);
         Assert.DoesNotContain("Dock", closed.Sections[0].Items.Select(i => i.Name));
+    }
+
+    // ── App names, icons and meters ───────────────────────────────────────────
+
+    private sealed class FakeIcons : IAppIcons
+    {
+        public List<string> Requests { get; } = new();
+
+        public Task<Bitmap?> GetIconAsync(string iconSource, int size)
+        {
+            Requests.Add(iconSource);
+            return Task.FromResult<Bitmap?>(new WriteableBitmap(new PixelSize(1, 1), new Vector(96, 96),
+                                                                PixelFormat.Bgra8888, AlphaFormat.Premul));
+        }
+    }
+
+    private static void Named(FakeAudioEngine e)
+    {
+        e.Sessions[0] = Session("Spotify.exe", 1) with { DisplayName = "Spotify Music", IconPath = @"C:\Apps\Spotify.exe" };
+        e.Sessions[2] = Session("Spotify.exe", 3) with { DisplayName = "Spotify Music", IconPath = @"C:\Apps\Spotify.exe" };
+    }
+
+    [AvaloniaFact]
+    public void AppRow_UsesSessionDisplayName_SecondaryExe()
+    {
+        using var s = Show(setup: Named);
+        Open(s);
+
+        var row = Item(s, "Spotify Music");
+        Assert.Equal("Spotify.exe", row.Secondary);
+        Assert.Equal("app:Spotify.exe", row.Key);
+        Assert.Equal("chrome.exe", Item(s, "chrome").Secondary);   // no display name: the exe name above
+        Assert.Equal("Not running", Item(s, "game").Secondary);
+    }
+
+    [AvaloniaFact]
+    public void AppRow_SearchMatchesExeAndDisplayName()
+    {
+        using var s = Show(setup: Named);
+        Open(s);
+
+        s.Dialog.Query = "music";
+        Assert.Contains(s.Dialog.VisibleItems, i => i.Name == "Spotify Music");
+        s.Dialog.Query = "spotify.exe";
+        Assert.Contains(s.Dialog.VisibleItems, i => i.Name == "Spotify Music");
+    }
+
+    [AvaloniaFact]
+    public void AppRow_NoIconService_ShowsLetterTile()
+    {
+        using var s = Show(setup: Named);
+        Open(s);
+
+        var row = Item(s, "Spotify Music");
+        Assert.Null(row.AppIcon);
+        Assert.Equal("S", row.Letter);
+        Assert.True(row.ShowLetter);
+        Assert.Contains(Rows(s).Select(b => ((TargetItem)b.DataContext!).Name), n => n == "Spotify Music");
+        Assert.NotEmpty(s.View.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "LetterTile" && b.IsEffectivelyVisible));
+    }
+
+    [AvaloniaFact]
+    public void AppRow_IconLoaded_Shown()
+    {
+        var icons = new FakeIcons();
+        using var s = Show(icons: icons, setup: Named);
+        Open(s);
+
+        var row = Item(s, "Spotify Music");
+        Assert.NotNull(row.AppIcon);
+        Assert.True(row.ShowAppIcon);
+        Assert.False(row.ShowLetter);
+        Assert.Single(icons.Requests);   // once per distinct icon source, however many sessions
+        Assert.NotEmpty(s.View.GetVisualDescendants().OfType<Image>().Where(i => i.Name == "AppIconImage" && i.IsEffectivelyVisible));
+    }
+
+    [AvaloniaFact]
+    public void NoExePath_FallsBackToImageName_NoIcon()
+    {
+        var icons = new FakeIcons();
+        using var s = Show(icons: icons);   // the plain sessions have neither display name nor icon path
+        Open(s);
+
+        var row = Item(s, "Spotify");
+        Assert.Null(row.AppIcon);
+        Assert.Equal("S", row.Letter);
+        Assert.Empty(icons.Requests);
+    }
+
+    [AvaloniaFact]
+    public void PollMeters_MaxOverSessions_SameMeterAcrossRebuilds()
+    {
+        using var s = Show();
+        s.Rig.Engine.Peaks["s-1"] = 0.2f;
+        s.Rig.Engine.Peaks["s-3"] = 0.7f;
+        Open(s);
+
+        var meter = Item(s, "Spotify").Meter!;
+        Assert.Null(Item(s, "game").Meter);
+        s.Dialog.PollMeters();
+        Assert.Equal(0.7, meter.Level, 3);
+
+        s.Dialog.Query = "spot";   // rebuilds the rows
+        Assert.Same(meter, Item(s, "Spotify").Meter);
+        s.Rig.Engine.Peaks["s-3"] = 0.1f;
+        s.Dialog.PollMeters();
+        Assert.Equal(0.2, meter.Level, 3);
+    }
+
+    [AvaloniaFact]
+    public void Meters_TimerStopsWhenDialogCloses()
+    {
+        using var s = Show();
+        Open(s);
+        var view = s.View;
+        Assert.True(view.MetersRunning);
+
+        s.Controls.CloseDialog();
+        Settle(s.Window);
+
+        Assert.False(view.MetersRunning);
     }
 }

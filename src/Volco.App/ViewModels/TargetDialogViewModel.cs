@@ -1,5 +1,8 @@
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.App.Platform;
 using Volco.App.ViewModels.Search;
 using Volco.Core.Audio;
 using Volco.Core.Config;
@@ -23,6 +26,20 @@ public sealed record TargetItem(string Key, string Name, string Secondary, Targe
 
     /// <summary>The row's icon (a resource key).</summary>
     public string IconKey { get; init; } = "Icon.Plus";
+
+    /// <summary>An app row's icon, once loaded; else it shows <see cref="Letter"/>.</summary>
+    public Bitmap? AppIcon { get; init; }
+
+    /// <summary>The first letter of the name, upper-cased (the app row's tile without an icon).</summary>
+    public string Letter { get; init; } = "";
+
+    /// <summary>The live level of a running app; null for any other row.</summary>
+    public AppMeterViewModel? Meter { get; init; }
+
+    public bool ShowGlyph => Kind != TargetKind.App;
+    public bool ShowAppIcon => Kind == TargetKind.App && AppIcon is not null;
+    public bool ShowLetter => Kind == TargetKind.App && AppIcon is null;
+    public bool HasMeter => Meter is not null;
 
     public bool IsRadio => Kind is TargetKind.Main or TargetKind.Device or TargetKind.Rest;
     public bool IsCheck => Kind == TargetKind.App;
@@ -59,6 +76,14 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
     private readonly Action _close;
     private readonly SliderConfig _original;
     private IReadOnlyList<AudioDevice> _devices;
+    private readonly IAppIcons? _icons;
+    private bool _disposed;
+
+    // Per app key (the image name, any case): its meter, which survives rebuilds, and the icons
+    // loaded so far by icon source (null = failed).
+    private readonly Dictionary<string, AppMeterViewModel> _meters = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Bitmap?> _loaded = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _requested = new(StringComparer.OrdinalIgnoreCase);
 
     // The draft.
     private SliderMappingType _type;
@@ -102,8 +127,9 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
     public Func<Task<string?>>? PickExe { get; set; }
 
     internal TargetDialogViewModel(SliderItemViewModel slider, SlidersViewModel sliders,
-                                   Dictionary<string, bool> collapsed, Action close)
+                                   Dictionary<string, bool> collapsed, Action close, IAppIcons? icons = null)
     {
+        _icons = icons;
         _slider = slider;
         _sliders = sliders;
         _collapsed = collapsed;
@@ -116,6 +142,7 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         Title = $"Slider {slider.Index + 1} controls";
         _sliders.DevicesRefreshed += OnDevicesRefreshed;
         Rebuild();
+        RequestIcons();
     }
 
     private static string Key(string section) => $"target:{section}";
@@ -173,13 +200,13 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             ? string.Equals(saved.Id, device.Id, StringComparison.OrdinalIgnoreCase)
             : string.Equals(saved.FriendlyName, device.FriendlyName, StringComparison.OrdinalIgnoreCase);
 
+    private IReadOnlyList<AudioSessionInfo> LiveSessions()
+        => _sliders.Audio.GetSessions().Where(s => !s.IsSystemSounds && !string.IsNullOrEmpty(s.ImageName)).ToList();
+
     private IEnumerable<Entry> AppEntries()
     {
-        var live = _sliders.Audio.GetSessions()
-            .Where(s => !s.IsSystemSounds && !string.IsNullOrEmpty(s.ImageName))
-            .Select(s => s.ImageName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var sessions = LiveSessions();
+        var live = sessions.Select(s => s.ImageName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         // Then the apps saved on any slider (or ticked here) that aren't running.
         var saved = _apps.Concat(_sliders.Items.SelectMany(i => i.Config.Type == SliderMappingType.Processes ? i.Config.Processes : Enumerable.Empty<string>()))
             .Where(a => a.Trim().Length > 0 && !live.Contains(a, StringComparer.OrdinalIgnoreCase))
@@ -190,12 +217,66 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             var on = _type == SliderMappingType.Processes && _apps.Exists(a => SameApp(a, app));
             var owner = on ? null : _sliders.Items.FirstOrDefault(i => i != _slider && i.Config.Type == SliderMappingType.Processes
                                                                           && i.Config.Processes.Exists(p => SameApp(p, app)))?.Label;
-            yield return new Entry(new TargetItem($"app:{app}", CommandPath.FileNameWithoutExtension(app),
-                                                  running ? app : "Not running", TargetKind.App, on, owner, [])
-                                   { IconKey = "Icon.Device.App" }, app);
+            // A running app is named by its first session that has a display name; the exe name
+            // is the fallback (an app Volco cannot open) and a saved app's name.
+            var appSessions = running ? sessions.Where(s => SameApp(s.ImageName, app)).ToList() : [];
+            var display = appSessions.Select(s => s.DisplayName).FirstOrDefault(n => !string.IsNullOrEmpty(n));
+            var name = display ?? CommandPath.FileNameWithoutExtension(app);
+            var iconSource = appSessions.Select(s => s.IconPath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+            var icon = iconSource is not null && _loaded.TryGetValue(iconSource, out var bitmap) ? bitmap : null;
+            AppMeterViewModel? meter = null;
+            if (running && !_meters.TryGetValue(app, out meter)) _meters[app] = meter = new AppMeterViewModel();
+            yield return new Entry(new TargetItem($"app:{app}", name, running ? app : "Not running", TargetKind.App, on, owner, [])
+                                   {
+                                       IconKey = "Icon.Device.App",
+                                       AppIcon = icon,
+                                       Letter = name.Length > 0 ? name[..1].ToUpperInvariant() : "",
+                                       Meter = meter,
+                                   }, display is null ? app : $"{display} {app}");
         }
         yield return new Entry(new TargetItem("other-app", "Other app…", "", TargetKind.OtherApp, false, null, [])
                                { IconKey = "Icon.Plus" }, "browse exe");
+    }
+
+    /// <summary>Sets each running app's meter to its loudest session (the view's timer calls it).</summary>
+    public void PollMeters()
+    {
+        if (_disposed) return;
+        var audio = _sliders.Audio;
+        foreach (var group in LiveSessions().GroupBy(s => s.ImageName, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!_meters.TryGetValue(group.Key, out var meter)) continue;
+            meter.Level = group.Max(s => (double)audio.GetSessionPeak(s.InstanceId));
+        }
+    }
+
+    /// <summary>Asks for the icons of the running apps not asked for yet, all at once; when the
+    /// batch is done the list is rebuilt once, on the UI thread.</summary>
+    private void RequestIcons()
+    {
+        if (_icons is not { } icons) return;
+        var sources = LiveSessions().Select(s => s.IconPath).Where(p => p.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).Where(p => _requested.Add(p)).ToList();
+        if (sources.Count == 0) return;
+        _ = LoadIconsAsync(icons, sources);
+    }
+
+    private async Task LoadIconsAsync(IAppIcons icons, List<string> sources)
+    {
+        // Asked at 32 px for the 16 px slot, so it stays sharp at 200 % scale.
+        var loaded = await Task.WhenAll(sources.Select(async source =>
+        {
+            Bitmap? icon = null;
+            try { icon = await icons.GetIconAsync(source, 32); }
+            catch (Exception ex) { AppLog.Debug($"App icon: {source} failed ({ex.GetType().Name}: {ex.Message})"); }
+            return (Source: source, Icon: icon);
+        }));
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_disposed) return;
+            foreach (var (source, icon) in loaded) _loaded[source] = icon;
+            Rebuild();
+        });
     }
 
     private IEnumerable<Entry> OtherEntries()
@@ -373,5 +454,9 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         Rebuild();
     }
 
-    public void Dispose() => _sliders.DevicesRefreshed -= OnDevicesRefreshed;
+    public void Dispose()
+    {
+        _disposed = true;
+        _sliders.DevicesRefreshed -= OnDevicesRefreshed;
+    }
 }

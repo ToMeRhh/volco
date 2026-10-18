@@ -21,6 +21,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly VolcoRuntime _runtime;
     private readonly FirmwareService? _firmware;
     private readonly IStartWithSystem? _startWithSystem;
+    private readonly IAppIcons? _appIcons;
 
     // Runtime and engine events fire on arbitrary threads (audio thread, SliderProcessor's
     // coalescing timer, transport threads). Every handler posts through this first.
@@ -69,7 +70,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>The Controls page: the drawing and inspector over <see cref="Sliders"/> and
     /// <see cref="Buttons"/>.</summary>
     public ControlsViewModel Controls =>
-        _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast);
+        _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast, _appIcons);
 
     /// <summary>The Controls page's view model if the page was ever opened; null otherwise.</summary>
     public ControlsViewModel? ControlsIfCreated => _controlsViewModel;
@@ -90,10 +91,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _controllerNavDot;
 
     public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui,
-                             FirmwareService? firmware = null, IStartWithSystem? startWithSystem = null)
+                             FirmwareService? firmware = null, IStartWithSystem? startWithSystem = null,
+                             IAppIcons? appIcons = null)
     {
         _firmware = firmware;
         _startWithSystem = startWithSystem;
+        _appIcons = appIcons;
         _config = config;
         _audio = audio;
         _runtime = runtime;

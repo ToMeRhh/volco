@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.App.Platform;
 using Volco.Core.Config;
 using Volco.Core.Input;
 
@@ -16,6 +17,7 @@ public sealed partial class ControlsViewModel : ObservableObject
 {
     private readonly ConfigManager _config;
     private readonly UndoToastViewModel _toast;
+    private readonly IAppIcons? _appIcons;
 
     public SlidersViewModel Sliders { get; }
     public ButtonsViewModel Buttons { get; }
@@ -46,12 +48,13 @@ public sealed partial class ControlsViewModel : ObservableObject
     public Dictionary<string, bool> CollapsedSections { get; } = new();
 
     public ControlsViewModel(SlidersViewModel sliders, ButtonsViewModel buttons, ConfigManager config,
-                             UndoToastViewModel toast)
+                             UndoToastViewModel toast, IAppIcons? appIcons = null)
     {
         Sliders = sliders;
         Buttons = buttons;
         _config = config;
         _toast = toast;
+        _appIcons = appIcons;
 
         Sliders.AddMissing();
         Buttons.AddMissing();
@@ -124,7 +127,7 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     /// <summary>Opens the target dialog for a slider (spec §6.2).</summary>
     public void OpenTargetDialog(SliderItemViewModel slider)
-        => OpenDialog(new TargetDialogViewModel(slider, Sliders, CollapsedSections, CloseDialog));
+        => OpenDialog(new TargetDialogViewModel(slider, Sliders, CollapsedSections, CloseDialog, _appIcons));
 
     /// <summary>An inspector action row: the slot's button and gesture.</summary>
     [RelayCommand]

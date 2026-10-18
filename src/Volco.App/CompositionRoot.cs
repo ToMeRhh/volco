@@ -250,7 +250,7 @@ internal sealed class CompositionRoot : IDisposable
             if (_settingsWindow is null)
             {
                 _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher(), _firmware,
-                                                           _platform?.StartWithSystem);
+                                                           _platform?.StartWithSystem, _platform?.AppIcons);
                 _settingsWindow = new SettingsWindow(_settingsViewModel, _runtime);
                 _settingsWindow.Closed += (_, _) =>
                 {

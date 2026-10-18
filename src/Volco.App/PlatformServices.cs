@@ -11,7 +11,9 @@ namespace Volco.App;
 /// <param name="Media">The system's media sessions (media button actions); null = none.</param>
 /// <param name="Launcher">Starts and finds programs (Open a program); null = none.</param>
 /// <param name="StartWithSystem">Starts Volco at sign-in (General page); null = none, the toggle is hidden.</param>
+/// <param name="AppIcons">App icons for the target dialog; null = none, apps show a letter tile.</param>
 public sealed record PlatformServices(IAudioEngine Audio, bool AudioReady, IWindowEffects WindowEffects,
                                       IFirmwareFlasher? Flasher = null, IFirmwareSource? Firmware = null,
                                       IMediaSessions? Media = null, IProgramLauncher? Launcher = null,
-                                      IStartWithSystem? StartWithSystem = null);
+                                      IStartWithSystem? StartWithSystem = null,
+                                      IAppIcons? AppIcons = null);

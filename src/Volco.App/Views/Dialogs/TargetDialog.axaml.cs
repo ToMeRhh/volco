@@ -1,8 +1,10 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Volco.App.ViewModels;
 
 namespace Volco.App.Views.Dialogs;
@@ -18,12 +20,29 @@ public partial class TargetDialog : UserControl
     private static readonly FilePickerFileType Programs = new("Programs") { Patterns = new[] { "*.exe" } };
 
     private readonly TextBox _search;
+    private readonly DispatcherTimer _meters = new() { Interval = TimeSpan.FromMilliseconds(100) };
+
+    /// <summary>The apps' level meters are being polled (while the dialog is in the window).</summary>
+    internal bool MetersRunning => _meters.IsEnabled;
 
     public TargetDialog()
     {
         AvaloniaXamlLoader.Load(this);
         _search = this.FindControl<TextBox>("SearchBox")!;
         DialogSearch.Attach(this, _search);
+        _meters.Tick += (_, _) => Vm?.PollMeters();
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _meters.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        _meters.Stop();
+        base.OnDetachedFromVisualTree(e);
     }
 
     private TargetDialogViewModel? Vm => DataContext as TargetDialogViewModel;
