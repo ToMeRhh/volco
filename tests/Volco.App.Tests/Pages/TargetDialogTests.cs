@@ -533,7 +533,7 @@ public class TargetDialogTests
         Assert.Equal("S", row.Letter);
         Assert.True(row.ShowLetter);
         Assert.Contains(Rows(s).Select(b => ((TargetItem)b.DataContext!).Name), n => n == "Spotify Music");
-        Assert.NotEmpty(s.View.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "LetterTile" && b.IsEffectivelyVisible));
+        Assert.Contains(s.View.GetVisualDescendants().OfType<Border>(), b => b.Name == "LetterTile" && b.IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -548,7 +548,7 @@ public class TargetDialogTests
         Assert.True(row.ShowAppIcon);
         Assert.False(row.ShowLetter);
         Assert.Single(icons.Requests);   // once per distinct icon source, however many sessions
-        Assert.NotEmpty(s.View.GetVisualDescendants().OfType<Image>().Where(i => i.Name == "AppIconImage" && i.IsEffectivelyVisible));
+        Assert.Contains(s.View.GetVisualDescendants().OfType<Image>(), i => i.Name == "AppIconImage" && i.IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
