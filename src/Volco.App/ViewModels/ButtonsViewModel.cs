@@ -107,6 +107,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     public void RefreshController() => RefreshLights();
 
     private List<ButtonConfig> Buttons => _config.Config.Buttons;
+    // Ids deleted while this view model lives: a delete's Undo may still be on offer.
+    private readonly HashSet<string> _deletedModeIds = new();
     private void Save() => _config.RequestSave();
 
     // ── IButtonCardOwner ──────────────────────────────────────────────────────
@@ -209,9 +211,21 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         Save();
     }
 
+    /// <summary>A mode id never used before: not a mode's, not a key of any button's actions, not
+    /// any action's Go to mode target (a dangling one must not re-point to the new mode), and not
+    /// one deleted while this page lives.</summary>
     private string NewModeId()
     {
         var existing = new HashSet<string>(_config.Config.Modes.Select(p => p.Id));
+        existing.UnionWith(_deletedModeIds);
+        foreach (var button in Buttons)
+            foreach (var (key, binding) in button.Actions)
+            {
+                existing.Add(key);
+                if (binding is null) continue;
+                foreach (var action in binding.All())
+                    if (action.ModeId is { } target) existing.Add(target);
+            }
         for (int n = 2; ; n++)
             if (!existing.Contains($"mode-{n}")) return $"mode-{n}";
     }
@@ -281,6 +295,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
             if (button.Actions.Remove(mode.Id, out var binding) && binding is not null)
                 removedActions[button] = binding;
         modes.RemoveAt(index);
+        _deletedModeIds.Add(mode.Id);
         var wasLive = LiveModeId == mode.Id;
         var wasEditing = EditingModeId == mode.Id;
         if (MenuModeId == mode.Id) MenuModeId = null;
@@ -298,6 +313,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
         _toast.Show($"Mode “{mode.Name}” deleted", () =>
         {
+            // Never two modes with one id.
+            if (modes.Any(p => p.Id == mode.Id)) return;
             modes.Insert(Math.Min(index, modes.Count), mode);
             foreach (var (button, binding) in removedActions)
                 button.Actions[mode.Id] = binding;

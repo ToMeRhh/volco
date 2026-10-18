@@ -247,6 +247,38 @@ public sealed class ModesAndMovesTests : IDisposable
     }
 
     [Fact]
+    public void DeleteThenAddMode_DoesNotReuseId_UndoAddsNoDuplicate()
+    {
+        Config.Modes.Add(new ModeConfig { Id = "mode-3", Name = "Mode 3" });
+        var buttons = Buttons();
+
+        buttons.DeleteMode("mode-3");
+        buttons.AddModeCommand.Execute(null);
+        var added = Config.Modes[^1].Id;
+        Assert.NotEqual("mode-3", added);
+
+        _toast.UndoCommand.Execute(null);
+
+        Assert.Single(Config.Modes, m => m.Id == "mode-3");
+        Assert.Single(Config.Modes, m => m.Id == added);
+        Assert.Equal(Config.Modes.Count, Config.Modes.Select(m => m.Id).Distinct().Count());
+    }
+
+    [Fact]
+    public void NewModeId_SkipsDanglingGoToModeIds()
+    {
+        Config.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "mode-2" };
+        var buttons = Buttons();
+        Assert.True(buttons.Items[0].Press.HasProblem);
+
+        buttons.AddModeCommand.Execute(null);
+
+        Assert.NotEqual("mode-2", Config.Modes[^1].Id);
+        buttons.EditingModeId = AppConfig.DefaultModeId;
+        Assert.True(buttons.Items[0].Press.HasProblem);
+    }
+
+    [Fact]
     public void MoveMode_KeepsLiveAndEdited_RecoloursTabs()
     {
         Config.Modes.Add(new ModeConfig { Id = "work", Name = "Work" });
