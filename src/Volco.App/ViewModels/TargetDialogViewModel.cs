@@ -176,7 +176,7 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
                                               _type == SliderMappingType.Device && _device is null, null, [])
                                { IconKey = "Icon.Speaker" }, $"default {main}");
 
-        var rows = _devices.Select(device => (Ref: new DeviceRefConfig { Id = device.Id, FriendlyName = device.FriendlyName },
+        var rows = _devices.OrderBy(device => device.Flow).Select(device => (Ref: new DeviceRefConfig { Id = device.Id, FriendlyName = device.FriendlyName },
                                               Look: DeviceDisplay.For(config, device)))
             .ToList();
         // A saved device that is not plugged in keeps its row.
@@ -187,7 +187,9 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         {
             var key = $"device:{(reference.Id.Length > 0 ? reference.Id : reference.FriendlyName)}";
             _deviceRows[key] = reference;
-            var secondary = look.Name == reference.FriendlyName ? "" : reference.FriendlyName;
+            var isInput = _devices.Any(d => d.Flow == AudioFlow.Capture && Matches(reference, new DeviceRefConfig { Id = d.Id, FriendlyName = d.FriendlyName }));
+            var windowsName = look.Name == reference.FriendlyName ? "" : reference.FriendlyName;
+            var secondary = !isInput ? windowsName : windowsName.Length > 0 ? $"Input · {windowsName}" : "Input";
             var on = _type == SliderMappingType.Device && _device is not null && Matches(_device, reference);
             yield return new Entry(new TargetItem(key, look.Name, secondary, TargetKind.Device, on, null, [])
                                    { IconKey = $"Icon.Device.{look.Icon}" }, reference.FriendlyName);

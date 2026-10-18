@@ -460,6 +460,41 @@ public class SliderProcessorTests
         Assert.Equal("Cans", n.Label);
     }
 
+    private static FakeAudioEngine EngineWithMic()
+    {
+        var audio = EngineWithIconDevices();
+        audio.Devices.Add(new AudioDevice("mic", "Microphone (Blue Yeti)", AudioFlow.Capture, true, DeviceFormFactor.Microphone));
+        audio.DeviceStates["mic"] = (0.5f, false);
+        return audio;
+    }
+
+    private static readonly SliderConfig MicSlider = new()
+    {
+        Index = 0,
+        Type = SliderMappingType.Device,
+        Device = new DeviceRefConfig { Id = "mic", FriendlyName = "Microphone (Blue Yeti)" },
+    };
+
+    [Fact]
+    public async Task CaptureDeviceSlider_SetsThatDeviceVolume()
+    {
+        using var audio = EngineWithMic();
+        await MoveSliderAndCaptureOsd(audio, MicSlider);
+
+        var (device, _) = Assert.Single(audio.Snapshot(audio.DeviceVolumeCalls));
+        Assert.Equal(DeviceRefKind.ById, device.Kind);
+        Assert.Equal("mic", device.Id);
+    }
+
+    [Fact]
+    public async Task CaptureDeviceSlider_OsdIconIsMic()
+    {
+        using var audio = EngineWithMic();
+        var n = await MoveSliderAndCaptureOsd(audio, MicSlider);
+        Assert.Equal(ScreenIcon.Mic, n.Icon);
+        Assert.Equal("Microphone", n.Label);
+    }
+
     [Fact]
     public async Task DeviceSlider_ForTheCurrentOutput_CarriesTheCurrentOutputsIcon()
     {

@@ -197,6 +197,40 @@ public class TargetDialogTests
         Assert.Equal("Cans", s.Vm.Sliders.Items[0].Label);
     }
 
+    private static void AddMic(FakeAudioEngine e)
+        => e.Devices.Add(new AudioDevice("mic-1", "Microphone (Blue Yeti)", AudioFlow.Capture, true, DeviceFormFactor.Microphone));
+
+    [AvaloniaFact]
+    public void Devices_ListsInputsAfterOutputs_WithInputSecondary()
+    {
+        using var s = Show(setup: AddMic);
+        Open(s);
+
+        var devices = s.Dialog.Sections[0].Items;
+        Assert.Equal(new[] { "Main output", "Speakers", "Cans", "Microphone" }, devices.Select(i => i.Name));
+        var mic = devices[^1];
+        Assert.Equal("device:mic-1", mic.Key);
+        Assert.Equal("Input · Microphone (Blue Yeti)", mic.Secondary);
+        Assert.Equal("Icon.Device.Mic", mic.IconKey);
+        Assert.True(mic.IsRadio);
+    }
+
+    [AvaloniaFact]
+    public void PickInput_SavesDevice_LabelIsItsName()
+    {
+        using var s = Show(setup: AddMic);
+        Open(s);
+
+        Click(s, "Microphone");
+        Assert.Equal(new[] { "Microphone" }, On(s));
+        Done(s);
+
+        var slider = s.Config.Sliders[0];
+        Assert.Equal(SliderMappingType.Device, slider.Type);
+        Assert.Equal("mic-1", slider.Device!.Id);
+        Assert.Equal("Microphone", s.Vm.Sliders.Items[0].Label);
+    }
+
     private static void PressEnter(Shown s)
     {
         s.Window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);

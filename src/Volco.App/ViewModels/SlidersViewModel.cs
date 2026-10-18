@@ -24,7 +24,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
         _config = config;
         _audio = audio;
         _toast = toast;
-        _devices = audio.GetDevices(AudioFlow.Render);
+        _devices = AllDevices(audio, audio.GetDevices(AudioFlow.Render));
         for (int i = 0; i < config.Config.Sliders.Count; i++)
             Items.Add(NewItem(config.Config.Sliders[i], i));
         Renumber();
@@ -37,7 +37,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
 
     internal IAudioEngine Audio => _audio;
 
-    /// <summary>The render devices, as of the last <see cref="RefreshDevices"/>.</summary>
+    /// <summary>The render devices, then the capture devices, as of the last <see cref="RefreshDevices"/>.</summary>
     internal IReadOnlyList<AudioDevice> Devices => _devices;
 
     private SliderItemViewModel NewItem(SliderConfig cfg, int index)
@@ -160,13 +160,17 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
     }
 
     /// <summary>Re-reads every slider's devices. Callers are on the UI thread.</summary>
-    public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
+    public void RefreshDevices(IReadOnlyList<AudioDevice> renderDevices)
     {
+        var devices = AllDevices(_audio, renderDevices);
         _devices = devices;
         foreach (var item in Items)
             item.RefreshDevices(devices);
         DevicesRefreshed?.Invoke(devices);
     }
+
+    private static IReadOnlyList<AudioDevice> AllDevices(IAudioEngine audio, IReadOnlyList<AudioDevice> render)
+        => render.Where(d => d.Flow == AudioFlow.Render).Concat(audio.GetDevices(AudioFlow.Capture)).ToList();
 
     /// <summary>After <see cref="RefreshDevices"/>: an open target dialog's device rows follow.</summary>
     internal event Action<IReadOnlyList<AudioDevice>>? DevicesRefreshed;
