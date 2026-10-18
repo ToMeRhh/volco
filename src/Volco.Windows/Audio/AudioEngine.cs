@@ -251,11 +251,8 @@ public sealed class AudioEngine : IAudioEngine
         {
             // The queue has already had CompleteAdding() called (engine disposing/disposed);
             // drop the command rather than throw into a caller that has no reason to expect it.
-            return false;
-        }
-        catch (ObjectDisposedException)
-        {
-            // A late peak-timer tick after Dispose() disposed the queue; same as above.
+            // Also catches ObjectDisposedException (a subclass): a late peak-timer tick after
+            // Dispose() disposed the queue.
             return false;
         }
     }
