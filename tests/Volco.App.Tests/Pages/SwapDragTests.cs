@@ -149,6 +149,31 @@ public class SwapDragTests
     }
 
     [AvaloniaFact]
+    public void MoveWithoutHeldButton_AfterPress_DoesNotStartDrag()
+    {
+        using var s = Show();
+        var tiles = ButtonTiles(s);
+        var before = Snapshot(s);
+        var start = Centre(Grip(tiles[0]));
+        var end = Centre(tiles[2]);
+
+        s.Window.MouseDown(start, MouseButton.Left);
+        Settle(s.Window);
+        // The button went up unseen: moves past the threshold with no button held.
+        s.Window.MouseMove(new Point((start.X + end.X) / 2, (start.Y + end.Y) / 2), RawInputModifiers.None);
+        s.Window.MouseMove(end, RawInputModifiers.None);
+        Settle(s.Window);
+
+        Assert.False(s.Page.SwapDrag.IsDragging);
+        Assert.DoesNotContain("dragSource", tiles[0].Classes);
+        AssertCleared(s);
+
+        s.Window.MouseUp(end, MouseButton.Left);
+        Settle(s.Window);
+        Assert.Equal(before, Snapshot(s));
+    }
+
+    [AvaloniaFact]
     public void DragSliderGrip_OntoSlider2_SwapsSliders()
     {
         using var s = Show();

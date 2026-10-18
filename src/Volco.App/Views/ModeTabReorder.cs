@@ -32,7 +32,7 @@ internal sealed class ModeTabReorder
     private DragState? _drag;
 
     /// <summary>A left press on a tab, not yet a drag.</summary>
-    private sealed record Press(IPointer Pointer, Control Container, int From, Point Start);
+    private sealed record Press(IPointer Pointer, Control Container, int From, Point Start, InputElement? Captor);
 
     private sealed class DragState
     {
@@ -66,13 +66,27 @@ internal sealed class ModeTabReorder
 
     private void OnPressed(object? sender, PointerPressedEventArgs e)
     {
-        _press = null;
+        SetPress(null);
         if (_drag is not null || _model() is not { IsEditingModes: true }) return;
         if (!e.GetCurrentPoint(_tabs).Properties.IsLeftButtonPressed) return;
         if (TabSource(e.Source) is not { } container) return;
         var from = _tabs.IndexFromContainer(container);
         if (from < 0) return;
-        _press = new Press(e.Pointer, container, from, e.GetPosition(_tabs));
+        SetPress(new Press(e.Pointer, container, from, e.GetPosition(_tabs), e.Source as InputElement));
+    }
+
+    /// <summary>Replaces the pending press; a press ends when the element the press captured loses
+    /// the pointer.</summary>
+    private void SetPress(Press? press)
+    {
+        if (_press?.Captor is { } old) old.PointerCaptureLost -= OnPressCaptureLost;
+        _press = press;
+        if (press?.Captor is { } captor) captor.PointerCaptureLost += OnPressCaptureLost;
+    }
+
+    private void OnPressCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_press is { } press && e.Pointer == press.Pointer) SetPress(null);
     }
 
     private void OnMoved(object? sender, PointerEventArgs e)
@@ -85,10 +99,16 @@ internal sealed class ModeTabReorder
             return;
         }
         if (_press is not { } press || e.Pointer != press.Pointer) return;
+        // The button went up unseen (e.g. capture moved away): no drag from a stale press.
+        if (!e.GetCurrentPoint(_tabs).Properties.IsLeftButtonPressed)
+        {
+            SetPress(null);
+            return;
+        }
         var at = e.GetPosition(_tabs);
         var delta = at - press.Start;
         if (Math.Abs(delta.X) <= DragThreshold && Math.Abs(delta.Y) <= DragThreshold) return;
-        _press = null;
+        SetPress(null);
         if (_model() is not { IsEditingModes: true } model) return;
         Begin(model, press);
         if (_drag is { } started) Follow(started, at);
@@ -152,7 +172,7 @@ internal sealed class ModeTabReorder
 
     private void OnReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_press is { } press && e.Pointer == press.Pointer) _press = null;
+        if (_press is { } press && e.Pointer == press.Pointer) SetPress(null);
         if (_drag is { } drag && e.Pointer == drag.Pointer)
         {
             Finish(commit: true);

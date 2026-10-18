@@ -356,6 +356,29 @@ public class ModeTabsTests
     }
 
     [AvaloniaFact]
+    public void Editing_MoveWithoutHeldButton_DoesNotStartDrag()
+    {
+        using var s = Show("Gaming", "Work");
+        Click(s, s.Page.FindControl<Button>("EditModesButton")!);
+        var start = At(Tabs(s)[2], x: 14);
+        var end = At(Tabs(s)[0]);
+
+        s.Window.MouseDown(start, MouseButton.Left);
+        // The button went up unseen: moves past the threshold with no button held.
+        s.Window.MouseMove(new Point((start.X + end.X) / 2, (start.Y + end.Y) / 2), RawInputModifiers.None);
+        s.Window.MouseMove(end, RawInputModifiers.None);
+        Settle(s.Window);
+
+        Assert.False(s.Page.TabReorder.IsDragging);
+        Assert.All(Tabs(s), t => Assert.Null(t.GetVisualParent()!.RenderTransform));
+        Assert.All(Tabs(s), t => Assert.DoesNotContain("dragging", t.GetVisualParent()!.Classes));
+
+        s.Window.MouseUp(end, MouseButton.Left);
+        Settle(s.Window);
+        Assert.Equal(new[] { "Default", "Gaming", "Work" }, TabNames(s));
+    }
+
+    [AvaloniaFact]
     public void NotEditing_DragTab_DoesNothing()
     {
         using var s = Show("Gaming", "Work");

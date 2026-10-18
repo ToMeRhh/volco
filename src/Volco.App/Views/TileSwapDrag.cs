@@ -35,7 +35,8 @@ internal sealed class TileSwapDrag
 
     /// <summary>A left press on a grip, not yet a drag. <paramref name="Offset"/> is the press
     /// point within the drag image's source.</summary>
-    private sealed record Press(IPointer Pointer, Control Tile, Visual Source, Point Start, Point Offset);
+    private sealed record Press(IPointer Pointer, Control Tile, Visual Source, Point Start, Point Offset,
+                                InputElement? Captor);
 
     private sealed class DragState
     {
@@ -68,12 +69,27 @@ internal sealed class TileSwapDrag
 
     private void OnPressed(object? sender, PointerPressedEventArgs e)
     {
-        _press = null;
+        SetPress(null);
         if (_drag is not null || _model() is null) return;
         if (!e.GetCurrentPoint(_drawing).Properties.IsLeftButtonPressed) return;
         if (GripTile(e.Source) is not { } tile || IsMissing(tile)) return;
         if (ImageSource(tile) is not { } source) return;
-        _press = new Press(e.Pointer, tile, source, e.GetPosition(_drawing), e.GetPosition(source));
+        SetPress(new Press(e.Pointer, tile, source, e.GetPosition(_drawing), e.GetPosition(source),
+                           e.Source as InputElement));
+    }
+
+    /// <summary>Replaces the pending press; a press ends when the element the press captured loses
+    /// the pointer.</summary>
+    private void SetPress(Press? press)
+    {
+        if (_press?.Captor is { } old) old.PointerCaptureLost -= OnPressCaptureLost;
+        _press = press;
+        if (press?.Captor is { } captor) captor.PointerCaptureLost += OnPressCaptureLost;
+    }
+
+    private void OnPressCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_press is { } press && e.Pointer == press.Pointer) SetPress(null);
     }
 
     private void OnMoved(object? sender, PointerEventArgs e)
@@ -86,9 +102,15 @@ internal sealed class TileSwapDrag
             return;
         }
         if (_press is not { } press || e.Pointer != press.Pointer) return;
+        // The button went up unseen (e.g. capture moved away): no drag from a stale press.
+        if (!e.GetCurrentPoint(_drawing).Properties.IsLeftButtonPressed)
+        {
+            SetPress(null);
+            return;
+        }
         var delta = e.GetPosition(_drawing) - press.Start;
         if (Math.Abs(delta.X) <= DragThreshold && Math.Abs(delta.Y) <= DragThreshold) return;
-        _press = null;
+        SetPress(null);
         if (_model() is not { } model) return;
         Begin(model, press);
         if (_drag is { } started) Follow(started, e);
@@ -159,7 +181,7 @@ internal sealed class TileSwapDrag
 
     private void OnReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_press is { } press && e.Pointer == press.Pointer) _press = null;
+        if (_press is { } press && e.Pointer == press.Pointer) SetPress(null);
         if (_drag is { } drag && e.Pointer == drag.Pointer)
         {
             Follow(drag, e);
