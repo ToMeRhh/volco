@@ -93,7 +93,7 @@ public class ConfigMigrationV7Tests : IDisposable
     [Fact]
     public void V2_LoadsToV7Modes()
     {
-        var c = Load(ConfigManagerTests.V2Json).Config;
+        var c = Load(ConfigManagerLoadSaveTests.V2Json).Config;
 
         Assert.Equal(7, c.SchemaVersion);
         var mode = Assert.Single(c.Modes);
