@@ -15,7 +15,8 @@ namespace Volco.App.Views.Pages;
 /// <summary>
 /// The drawing and the inspector. Bindings do the work; the code-behind selects a tile on a click,
 /// Enter or Space, moves the focus between tiles with the arrow keys (spec §4.5), closes the
-/// dialog on Escape or a click on the scrim, and runs the mode tabs (ControlsPage.ModeTabs.cs).
+/// dialog on Escape or a click on the scrim, runs the mode tabs (ControlsPage.ModeTabs.cs), drag
+/// to swap (<see cref="TileSwapDrag"/>) and the tiles' "Swap with" menu.
 /// </summary>
 public partial class ControlsPage : UserControl
 {
@@ -33,6 +34,30 @@ public partial class ControlsPage : UserControl
             else OnDialogClosed();
         };
         InitModeTabs();
+        SwapDrag = TileSwapDrag.Attach(this.FindControl<Border>("Case")!, () => Vm);
+        // Tunnel, so "Swap with" is filled before the tile's own handler opens its menu.
+        AddHandler(ContextRequestedEvent, OnTileContextRequested, RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>Drag a tile's grip onto another tile of its kind to swap them (spec §2.9–10).</summary>
+    internal TileSwapDrag SwapDrag { get; }
+
+    /// <summary>Fills the tile menu's "Swap with" with the other controls of the tile's kind
+    /// (spec §11); a right-click, Shift+F10 or the Menu key opens it.</summary>
+    private void OnTileContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (TileOf(e.Source as Visual) is not { ContextMenu: { } menu } tile || Vm is not { } vm) return;
+        if (tile.DataContext is not ObservableObject item) return;
+        var swapWith = menu.Items.OfType<MenuItem>().First();
+        var missing = item is SliderItemViewModel { IsMissing: true } or ButtonItemViewModel { IsMissing: true };
+        var choices = missing ? Array.Empty<SwapChoice>() : vm.SwapChoices(item);
+        swapWith.ItemsSource = choices.Select(choice =>
+        {
+            var entry = new MenuItem { Header = choice.Label };
+            entry.Click += (_, _) => vm.Swap(item, choice.Target);
+            return entry;
+        }).ToList();
+        swapWith.IsEnabled = choices.Count > 0;
     }
 
     // What had the focus when the dialog opened, and the dialog.

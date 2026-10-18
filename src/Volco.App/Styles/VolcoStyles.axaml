@@ -351,6 +351,28 @@
   <Style Selector="controls|SliderTile:pointerover Border.TileGrip, controls|ButtonTile:pointerover Border.TileGrip">
     <Setter Property="Opacity" Value="1"/>
   </Style>
+  <!-- Drag to swap (spec §2.9–10, §11): the dragged tile is dimmed (the whole tile, so the live
+       VisualBrush of its action rows stays at full strength), and the tile it would swap with gets
+       a dashed accent outline -->
+  <Style Selector="controls|SliderTile.dragSource, controls|ButtonTile.dragSource">
+    <Setter Property="Opacity" Value="0.35"/>
+  </Style>
+  <Style Selector="Rectangle.DropOutline">
+    <Setter Property="IsVisible" Value="False"/>
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="StrokeDashArray" Value="4,3"/>
+    <Setter Property="RadiusX" Value="11"/>
+    <Setter Property="RadiusY" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <Style Selector="controls|SliderTile.dropTarget Rectangle.DropOutline, controls|ButtonTile.dropTarget Rectangle.DropOutline">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <Style Selector="Border.SwapDragImage">
+    <Setter Property="Opacity" Value="0.85"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
 
   <!-- Sliders: a track with the live level and a knob -->
   <Style Selector="Panel.Fader">

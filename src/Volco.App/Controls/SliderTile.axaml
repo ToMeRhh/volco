@@ -5,15 +5,21 @@
              x:Class="Volco.App.Controls.SliderTile"
              x:DataType="vm:SliderItemViewModel"
              Focusable="True">
+  <!-- The page fills "Swap with" when the menu opens (ControlsPage.OnTileContextRequested) -->
+  <UserControl.ContextMenu>
+    <ContextMenu>
+      <MenuItem Header="Swap with"/>
+    </ContextMenu>
+  </UserControl.ContextMenu>
   <!-- One slider on the Controls page's drawing (spec §4.2): the live level, a grip beside the
        track, and the name, else what it controls. -->
   <Panel Classes="TileRoot" Classes.active="{Binding IsActive}">
     <Border Name="TileBorder" Classes="Tile" Classes.selected="{Binding IsSelected}">
       <StackPanel Spacing="7" Margin="4,8,4,6">
         <Grid ColumnDefinitions="*,Auto,*">
-          <!-- Hidden until drag to reorder ships (spec §13 step 4) -->
+          <!-- A drag swaps the whole slider with another (spec §2.10) -->
           <Border Name="Grip" Classes="TileGrip" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,4,0"
-                  IsVisible="False">
+                  IsVisible="{Binding !IsMissing}" ToolTip.Tip="Drag onto another slider to swap">
             <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
           </Border>
           <Panel Name="Fader" Grid.Column="1" Classes="Fader" Width="32">
@@ -46,6 +52,7 @@
       </StackPanel>
     </Border>
     <Rectangle Classes="MissingOutline" IsVisible="{Binding IsMissing}"/>
+    <Rectangle Classes="DropOutline"/>
     <Border Classes="TileActive"/>
   </Panel>
 </UserControl>

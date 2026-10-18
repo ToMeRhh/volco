@@ -242,9 +242,8 @@ public class ControlsPageTests
         foreach (var tile in buttons)
             foreach (var part in new[] { "Indicator", "Cap", "MainAction", "SecondaryActions", "Grip" })
                 Assert.NotEmpty(All<Control>(tile, part));
-        // The grips stay hidden until drag to swap ships (spec §13 step 4).
-        Assert.All(buttons, b => Assert.False(In<Border>(b, "Grip").IsVisible));
-        Assert.All(Tiles<SliderTile>(s.Page), t => Assert.False(In<Border>(t, "Grip").IsVisible));
+        Assert.All(buttons, b => Assert.True(In<Border>(b, "Grip").IsEffectivelyVisible));
+        Assert.All(Tiles<SliderTile>(s.Page), t => Assert.True(In<Border>(t, "Grip").IsEffectivelyVisible));
         Assert.All(buttons, b => Assert.Equal("Not set", In<TextBlock>(b, "MainAction").Text));
         Assert.Equal("Not set", In<TextBlock>(Tiles<SliderTile>(s.Page)[0], "Label").Text);
     }
