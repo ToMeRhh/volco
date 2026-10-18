@@ -78,4 +78,25 @@ public class DeviceDisplayTests
     [Fact]
     public void NameOf_FallsBackWhenTheReferenceIsEmpty()
         => Assert.Equal("Output", DeviceDisplay.NameOf(AppConfig.CreateDefault(), _audio, null, "Output"));
+
+    [Fact]
+    public void CaptureDevice_WithUnknownFormFactor_GetsMic()
+    {
+        var line = new AudioDevice("line", "Line In (Realtek)", AudioFlow.Capture, false);
+        Assert.Equal(ScreenIcon.Mic, DeviceDisplay.For(new AppConfig(), line).Icon);
+        _audio.Devices.Add(line);
+        Assert.Equal(ScreenIcon.Mic, DeviceDisplay.For(new AppConfig(), _audio, new DeviceRefConfig { Id = "line" })!.Value.Icon);
+    }
+
+    [Fact]
+    public void RenderDevice_WithUnknownFormFactor_StaysGeneric()
+        => Assert.Equal(ScreenIcon.Generic, DeviceDisplay.For(new AppConfig(), new AudioDevice("x", "Thing", AudioFlow.Render, false)).Icon);
+
+    [Fact]
+    public void CaptureDevice_WithAChosenIcon_KeepsIt()
+    {
+        var config = new AppConfig();
+        config.Devices.Add(new DeviceSettingsConfig { Id = "line", Nickname = "Aux", Icon = ScreenIcon.Headset });
+        Assert.Equal(ScreenIcon.Headset, DeviceDisplay.For(config, new AudioDevice("line", "Line In", AudioFlow.Capture, false)).Icon);
+    }
 }

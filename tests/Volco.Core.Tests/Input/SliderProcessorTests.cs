@@ -496,6 +496,21 @@ public class SliderProcessorTests
     }
 
     [Fact]
+    public async Task CaptureDeviceSlider_UnknownFormFactor_OsdIconIsMic()
+    {
+        using var audio = EngineWithIconDevices();
+        audio.Devices.Add(new AudioDevice("line", "Line In (Realtek)", AudioFlow.Capture, true));
+        audio.DeviceStates["line"] = (0.5f, false);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "line", FriendlyName = "Line In (Realtek)" },
+        });
+        Assert.Equal(ScreenIcon.Mic, n.Icon);
+    }
+
+    [Fact]
     public async Task DeviceSlider_ForTheCurrentOutput_CarriesTheCurrentOutputsIcon()
     {
         using var audio = EngineWithIconDevices();

@@ -57,12 +57,12 @@ public sealed partial class DevicesViewModel : ObservableObject
         bool Known(string id) => items.Exists(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
 
         foreach (var d in live)
-            items.Add(new DeviceItemViewModel(this, d.Id, flow, d.FriendlyName, DeviceDisplay.IconFor(d.FormFactor),
+            items.Add(new DeviceItemViewModel(this, d.Id, flow, d.FriendlyName, DeviceDisplay.IconFor(d),
                 isConnected: true, isDefault: string.Equals(d.Id, defaultId, StringComparison.OrdinalIgnoreCase)));
         foreach (var s in Config.Devices.Where(s => s.Flow == flow && !Known(s.Id)))
-            items.Add(new DeviceItemViewModel(this, s.Id, flow, s.FriendlyName, ScreenIconDefault, false, false));
+            items.Add(new DeviceItemViewModel(this, s.Id, flow, s.FriendlyName, DeviceDisplay.IconFor(Volco.Core.Audio.DeviceFormFactor.Unknown, flow), false, false));
         foreach (var r in References(flow).Where(r => !string.IsNullOrEmpty(r.Id) && !Known(r.Id)))
-            items.Add(new DeviceItemViewModel(this, r.Id, flow, r.FriendlyName, ScreenIconDefault, false, false));
+            items.Add(new DeviceItemViewModel(this, r.Id, flow, r.FriendlyName, DeviceDisplay.IconFor(Volco.Core.Audio.DeviceFormFactor.Unknown, flow), false, false));
 
         static (string, bool, bool, string) Key(DeviceItemViewModel i)
             => (i.Id.ToUpperInvariant(), i.IsConnected, i.IsDefault, i.WindowsName);
@@ -81,7 +81,6 @@ public sealed partial class DevicesViewModel : ObservableObject
         }
     }
 
-    private const Volco.Core.Communication.ScreenIcon ScreenIconDefault = Volco.Core.Communication.ScreenIcon.Generic;
 
     /// <summary>Device references in sliders and button actions (all are outputs today).</summary>
     private IEnumerable<DeviceRefConfig> References(AudioFlow flow)
