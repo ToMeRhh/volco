@@ -63,7 +63,7 @@ public sealed class SwapTests : IDisposable
         buttons.SwapActions(0, 1);
 
         Assert.Equal(ButtonActionType.MuteCurrentInput, Config.Buttons[0].Default().SinglePress.Action);
-        Assert.False(Config.Buttons[1].Actions.ContainsKey(AppConfig.DefaultPresetId));
+        Assert.True(Config.Buttons[1].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
     }
 
     [Fact]
@@ -74,11 +74,11 @@ public sealed class SwapTests : IDisposable
         var buttons = Vm().Buttons;
 
         buttons.SwapActions(0, 1);
-        Assert.False(Config.Buttons[0].Actions.ContainsKey(AppConfig.DefaultPresetId));
+        Assert.True(Config.Buttons[0].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
         _toast.UndoCommand.Execute(null);
 
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].Default().SinglePress.Action);
-        Assert.False(Config.Buttons[1].Actions.ContainsKey(AppConfig.DefaultPresetId));
+        Assert.True(Config.Buttons[1].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public sealed class SwapTests : IDisposable
         Assert.Same(slider0, Config.Sliders[0]);
         Assert.Same(slider0, s[0].Config);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].Default().SinglePress.Action);
-        Assert.False(Config.Buttons[2].Actions.ContainsKey(AppConfig.DefaultPresetId));
+        Assert.True(Config.Buttons[2].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
     }
 
     [Fact]
