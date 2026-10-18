@@ -309,15 +309,13 @@ public class SettingsCoverageTests
 
         Named<Button>(page, "AddModeButton").Command!.Execute(null);           // Presets[] (added)
         Dispatcher.UIThread.RunJobs();
-        Named<TextBox>(page, "ModeNameBox").Text = "Gaming";
-        vm.Buttons.CommitRenameCommand.Execute(null);                          // Presets[].Name
-        Named<Button>(page, "RenameModeButton").Command!.Execute(null);
-        Named<TextBox>(page, "ModeNameBox").Text = "Play";
-        vm.Buttons.CommitRenameCommand.Execute(null);
+        vm.Buttons.RenameMode(vm.Buttons.EditingPresetId, "Gaming");           // Presets[].Name
+        vm.Buttons.RenameMode(vm.Buttons.EditingPresetId, "Play");
         Assert.Equal(new[] { "Default", "Play" }, SaveAndReload(rig).Presets.Select(p => p.Name));
 
-        vm.Buttons.EditingPresetId = AppConfig.DefaultPresetId;
-        Named<Button>(page, "DeleteModeButton").Command!.Execute(null);         // Presets[] (removed)
+        vm.Buttons.MoveMode(1, 0);                                             // Presets[] (order)
+        Assert.Equal(new[] { "Play", "Default" }, SaveAndReload(rig).Presets.Select(p => p.Name));
+        vm.Buttons.DeleteMode(AppConfig.DefaultPresetId);                      // Presets[] (removed)
         Assert.Equal(new[] { "Play" }, SaveAndReload(rig).Presets.Select(p => p.Name));
     }
 

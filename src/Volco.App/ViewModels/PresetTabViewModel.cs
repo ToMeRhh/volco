@@ -7,6 +7,7 @@ namespace Volco.App.ViewModels;
 public sealed partial class PresetTabViewModel : ObservableObject
 {
     private readonly Action<PresetTabViewModel> _select;
+    private readonly Action<string> _delete;
 
     public string Id { get; }
 
@@ -24,8 +25,20 @@ public sealed partial class PresetTabViewModel : ObservableObject
     [ObservableProperty]
     private bool _isLive;
 
-    internal PresetTabViewModel(string id, string name, int tintIndex, Action<PresetTabViewModel> select)
+    /// <summary>Being renamed inline.</summary>
+    [ObservableProperty]
+    private bool _isRenaming;
+
+    /// <summary>The first mode, which the controller starts in.</summary>
+    public bool IsFirst => TintIndex == 0;
+
+    /// <summary>The first mode can't be deleted.</summary>
+    public bool CanDelete => !IsFirst;
+
+    internal PresetTabViewModel(string id, string name, int tintIndex, Action<PresetTabViewModel> select,
+                                Action<string> delete)
     {
+        _delete = delete;
         Id = id;
         TintIndex = tintIndex;
         _name = name;
@@ -34,4 +47,7 @@ public sealed partial class PresetTabViewModel : ObservableObject
 
     [RelayCommand]
     private void Select() => _select(this);
+
+    [RelayCommand]
+    private void Delete() => _delete(Id);
 }

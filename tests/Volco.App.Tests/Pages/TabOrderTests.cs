@@ -47,10 +47,10 @@ public class TabOrderTests
             new[]
             {
                 "SliderTile", "SliderTile", "SliderTile", "SliderTile",
-                "ModeTab", "RenameModeButton", "AddModeButton",   // Delete is off with one mode
+                "ModeTab", "AddModeButton",
                 "ButtonTile", "ButtonTile", "ButtonTile",
                 "NameBox",
             },
-            TabSequence(window, first, 11));
+            TabSequence(window, first, 10));
     }
 }

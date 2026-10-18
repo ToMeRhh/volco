@@ -545,7 +545,7 @@ public class ActionDialogTests
         s.Dialog.Pick(ButtonActionType.MuteCurrentInput);
         var dialog = s.Dialog;
 
-        s.Vm.Buttons.DeletePresetCommand.Execute(null);
+        s.Vm.Buttons.DeleteMode("preset-2");
         Settle(s.Window);
 
         Assert.False(s.Controls.HasDialog);

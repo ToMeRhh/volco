@@ -207,82 +207,15 @@ public class ControlsPageTests
     // ── Modes ─────────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
-    public void ModeRename_ThroughTheNameBox()
-    {
-        using var s = Show();
-        var rename = s.Page.FindControl<Button>("RenameModeButton")!;
-        var box = s.Page.FindControl<TextBox>("ModeNameBox")!;
-        Assert.True(rename.IsEffectivelyVisible);
-        Assert.Equal("Rename", rename.Content);
-        Assert.False(box.IsVisible);
-
-        rename.Command!.Execute(null);
-        Settle(s.Window);
-        Assert.True(box.IsEffectivelyVisible);
-        Assert.False(rename.IsVisible);
-        Assert.True(box.IsFocused);
-        Assert.Equal("Default", box.Text);
-
-        box.Text = "Everyday";
-        s.Window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        Settle(s.Window);
-        Assert.False(box.IsVisible);
-        Assert.Equal("Everyday", s.Config.Presets[0].Name);
-        var tab = All<RadioButton>(s.Page, "ModeTab").Single();
-        Assert.Contains(tab.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Everyday");
-
-        // Escape leaves the name as it was.
-        rename.Command!.Execute(null);
-        Settle(s.Window);
-        box.Text = "Nope";
-        s.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
-        Settle(s.Window);
-        Assert.False(box.IsVisible);
-        Assert.Equal("Everyday", s.Config.Presets[0].Name);
-    }
-
-    [AvaloniaFact]
-    public void AddMode_OpensTheNameBoxFocused()
+    public void AddMode_AddsAnEmptyTab_AndEditsIt()
     {
         using var s = Show();
         s.Page.FindControl<Button>("AddModeButton")!.Command!.Execute(null);
         Settle(s.Window);
 
-        var box = s.Page.FindControl<TextBox>("ModeNameBox")!;
-        Assert.True(box.IsEffectivelyVisible);
-        Assert.True(box.IsFocused);
-        Assert.Equal("Mode 2", box.Text);
         Assert.Equal(2, All<RadioButton>(s.Page, "ModeTab").Count);
-    }
-
-    [AvaloniaFact]
-    public void ModeDelete_WithUndo()
-    {
-        using var s = Show(c =>
-        {
-            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
-            c.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
-        });
-        var delete = s.Page.FindControl<Button>("DeleteModeButton")!;
-        Assert.Equal("Delete", delete.Content);
-        s.Vm.Buttons.EditingPresetId = "gaming";
-        Settle(s.Window);
-
-        delete.Command!.Execute(null);
-        Settle(s.Window);
-        Assert.Single(s.Config.Presets);
-        Assert.Single(All<RadioButton>(s.Page, "ModeTab"));
-        Assert.Equal("Mode “Gaming” deleted", s.Vm.Toast.Message);
-        // The last mode can't be deleted.
-        Assert.False(delete.IsEffectivelyEnabled);
-
-        s.Vm.Toast.UndoCommand.Execute(null);
-        Settle(s.Window);
-        Assert.Equal(2, s.Config.Presets.Count);
-        Assert.Equal(2, All<RadioButton>(s.Page, "ModeTab").Count);
-        Assert.Equal("gaming", s.Vm.Buttons.EditingPresetId);
-        Assert.Equal(ButtonActionType.MuteCurrentInput, s.Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
-        Assert.True(delete.IsEffectivelyEnabled);
+        Assert.Equal("Mode 2", s.Vm.Buttons.EditingName);
+        Assert.Equal(AppConfig.DefaultPresetId, s.Vm.Buttons.LivePresetId);
     }
 
     // ── The drawing ───────────────────────────────────────────────────────────
