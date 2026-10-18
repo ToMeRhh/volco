@@ -12,6 +12,7 @@ IAudioSessionEnumerator
 IAudioSessionNotification
 IAudioSessionEvents
 ISimpleAudioVolume
+IAudioMeterInformation
 MMDeviceEnumerator
 EDataFlow
 ERole

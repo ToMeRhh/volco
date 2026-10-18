@@ -32,6 +32,9 @@ public sealed class FakeAudioEngine : IAudioEngine
     /// <summary>Endpoint id -> (level, muted). Seed this to drive TryGetDeviceState.</summary>
     public Dictionary<string, (float Level, bool Muted)> DeviceStates { get; } = new();
 
+    /// <summary>Session instance id -> peak. Seed this to drive GetSessionPeak.</summary>
+    public Dictionary<string, float> Peaks { get; } = new();
+
     public event EventHandler<DevicesChangedEventArgs>?      DevicesChanged;
     public event EventHandler<SessionsChangedEventArgs>?     SessionsChanged;
     public event EventHandler<DeviceVolumeChangedEventArgs>? DeviceVolumeChanged;
@@ -43,6 +46,9 @@ public sealed class FakeAudioEngine : IAudioEngine
         => flow == AudioFlow.Render ? DefaultRender : DefaultCapture;
 
     public IReadOnlyList<AudioSessionInfo> GetSessions() => Sessions;
+
+    public float GetSessionPeak(string instanceId)
+        => Peaks.TryGetValue(instanceId, out var peak) ? peak : 0f;
 
     public void SetDeviceVolume(DeviceRef device, float level)
     {

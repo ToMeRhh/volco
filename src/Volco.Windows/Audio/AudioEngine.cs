@@ -44,6 +44,20 @@ public sealed class AudioEngine : IAudioEngine
     private bool _started;
     private bool _disposed;
 
+    // ── Peak meters ──
+    // GetSessionPeak (any thread) returns the registry's cached value and stamps _peaksAskedAt.
+    // While something asked in the last PeakKeepAliveMs, a timer posts one RefreshPeaks command
+    // every PeakIntervalMs (never more than one queued, _peakRefreshQueued); the audio thread reads
+    // the meters and, once nobody has asked for PeakKeepAliveMs, parks the timer again. The timer
+    // only posts - all COM stays on the audio thread.
+    private const int PeakIntervalMs = 100;
+    private const long PeakKeepAliveMs = 1000;
+    private readonly object _peakLock = new();
+    private Timer? _peakTimer;          // created on the first ask, under _peakLock
+    private bool _peakTimerRunning;     // under _peakLock
+    private long _peaksAskedAt;         // Environment.TickCount64, under _peakLock
+    private int _peakRefreshQueued;     // 0/1, Interlocked
+
     public event EventHandler<DevicesChangedEventArgs>? DevicesChanged;
     public event EventHandler<SessionsChangedEventArgs>? SessionsChanged;
     public event EventHandler<DeviceVolumeChangedEventArgs>? DeviceVolumeChanged;
@@ -120,6 +134,73 @@ public sealed class AudioEngine : IAudioEngine
         => _sessionRegistry?.GetSessions() ?? Array.Empty<AudioSessionInfo>();
 
     /// <summary>
+    /// Returns the cached peak at once - no COM, never waits on the audio thread - and keeps the
+    /// meters refreshing (every <see cref="PeakIntervalMs"/>, on the audio thread) for
+    /// <see cref="PeakKeepAliveMs"/> after the last ask. The first ask after a quiet spell reads
+    /// the last cached value (0 for a new session) until the first refresh lands.
+    /// </summary>
+    public float GetSessionPeak(string instanceId)
+    {
+        var registry = _sessionRegistry;
+        if (registry is null || instanceId is null)
+        {
+            return 0f;
+        }
+
+        lock (_peakLock)
+        {
+            if (!_disposed)
+            {
+                _peaksAskedAt = Environment.TickCount64;
+                if (!_peakTimerRunning)
+                {
+                    _peakTimerRunning = true;
+                    _peakTimer ??= new Timer(static state => ((AudioEngine)state!).OnPeakTimer(), this, Timeout.Infinite, Timeout.Infinite);
+                    _peakTimer.Change(0, PeakIntervalMs);
+                }
+            }
+        }
+
+        return registry.GetCachedPeak(instanceId);
+    }
+
+    /// <summary>Thread-pool timer tick: posts one <see cref="AudioCommandKind.RefreshPeaks"/>
+    /// unless one is still waiting in the queue.</summary>
+    private void OnPeakTimer()
+    {
+        if (Interlocked.CompareExchange(ref _peakRefreshQueued, 1, 0) == 0)
+        {
+            if (!Post(AudioCommand.RefreshPeaks))
+            {
+                Volatile.Write(ref _peakRefreshQueued, 0);
+            }
+        }
+    }
+
+    /// <summary>Audio thread: reads every session's meter, or parks the timer when nobody has
+    /// asked for <see cref="PeakKeepAliveMs"/>.</summary>
+    private void DoRefreshPeaks()
+    {
+        Volatile.Write(ref _peakRefreshQueued, 0);
+
+        lock (_peakLock)
+        {
+            if (Environment.TickCount64 - _peaksAskedAt > PeakKeepAliveMs)
+            {
+                if (_peakTimerRunning)
+                {
+                    _peakTimerRunning = false;
+                    _peakTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                }
+
+                return;
+            }
+        }
+
+        _sessionRegistry!.RefreshPeaks();
+    }
+
+    /// <summary>
     /// Reads the cached snapshot on <see cref="DeviceRegistry.DeviceHandle"/> directly - never a
     /// COM call, never posted to the audio thread. This is what makes it safe to call from the UI
     /// thread and from <c>ControllerStateReporter</c> (task requirement 4 / spec).
@@ -159,16 +240,23 @@ public sealed class AudioEngine : IAudioEngine
     public void SetDefaultDevice(string endpointId, AudioFlow flow)
         => Post(AudioCommand.SetDefaultDevice(endpointId, flow));
 
-    private void Post(AudioCommand command)
+    private bool Post(AudioCommand command)
     {
         try
         {
             _queue.Add(command);
+            return true;
         }
         catch (InvalidOperationException)
         {
             // The queue has already had CompleteAdding() called (engine disposing/disposed);
             // drop the command rather than throw into a caller that has no reason to expect it.
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            // A late peak-timer tick after Dispose() disposed the queue; same as above.
+            return false;
         }
     }
 
@@ -284,6 +372,10 @@ public sealed class AudioEngine : IAudioEngine
                     DoSetDefaultDevice(command.Text, command.Flow);
                 }
 
+                break;
+
+            case AudioCommandKind.RefreshPeaks:
+                DoRefreshPeaks();
                 break;
         }
     }
@@ -489,7 +581,13 @@ public sealed class AudioEngine : IAudioEngine
             return;
         }
 
-        _disposed = true;
+        lock (_peakLock)
+        {
+            _disposed = true;
+            _peakTimer?.Dispose();
+            _peakTimer = null;
+            _peakTimerRunning = false;
+        }
 
         _queue.CompleteAdding();
 
@@ -514,6 +612,7 @@ public sealed class AudioEngine : IAudioEngine
         ToggleDeviceMute,
         SetSessionVolume,
         SetDefaultDevice,
+        RefreshPeaks,
     }
 
     /// <summary>
@@ -550,5 +649,8 @@ public sealed class AudioEngine : IAudioEngine
 
         public static AudioCommand SetDefaultDevice(string endpointId, AudioFlow flow) =>
             new(AudioCommandKind.SetDefaultDevice, default, default, default, null, endpointId, flow);
+
+        public static readonly AudioCommand RefreshPeaks =
+            new(AudioCommandKind.RefreshPeaks, default, default, default, null, null, default);
     }
 }

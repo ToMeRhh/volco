@@ -31,12 +31,16 @@ public sealed record AudioDevice(
     bool      IsDefault,
     DeviceFormFactor FormFactor = DeviceFormFactor.Unknown);
 
+/// <summary>One live audio session. <paramref name="DisplayName"/> and <paramref name="IconPath"/>
+/// are already resolved through <see cref="SessionNames"/> by the engine.</summary>
 public sealed record AudioSessionInfo(
     string InstanceId,
     uint   ProcessId,
     string ImageName,
     string DeviceId,
-    bool   IsSystemSounds);
+    bool   IsSystemSounds,
+    string DisplayName = "",
+    string IconPath    = "");
 
 /// <summary>Selects which live sessions a volume write applies to.</summary>
 public abstract record SessionFilter

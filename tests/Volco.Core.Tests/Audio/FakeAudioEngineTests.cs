@@ -44,6 +44,16 @@ public class FakeAudioEngineTests
     }
 
     [Fact]
+    public void GetSessionPeak_ReadsPeaks_UnknownIsZero()
+    {
+        using var fake = new FakeAudioEngine();
+        fake.Peaks["inst-1"] = 0.6f;
+
+        Assert.Equal(0.6f, fake.GetSessionPeak("inst-1"), 3);
+        Assert.Equal(0f, fake.GetSessionPeak("inst-2"));
+    }
+
+    [Fact]
     public void TryGetDeviceState_ReturnsSeededState()
     {
         using var fake = new FakeAudioEngine();
