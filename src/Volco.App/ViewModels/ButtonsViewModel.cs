@@ -401,15 +401,32 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
     // ── Reordering ────────────────────────────────────────────────────────────
 
-    public void Move(int from, int to)
+    /// <summary>Swaps the edited mode's actions between buttons <paramref name="a"/> and
+    /// <paramref name="b"/>; other modes and the timing stay with their positions. A mode a button
+    /// has no entry for moves as "missing".</summary>
+    public void SwapActions(int a, int b)
     {
-        if (from == to || from < 0 || to < 0 || from >= Items.Count || to >= Items.Count) { Renumber(); return; }
-        var cfg = Buttons[from];
-        Buttons.RemoveAt(from);
-        Buttons.Insert(to, cfg);
-        Items.Move(from, to);
-        Renumber();
+        if (a == b || a < 0 || b < 0 || a >= Items.Count || b >= Items.Count) return;
+        DoSwap(a, b);
         Save();
+        _toast.Show($"Swapped button {a + 1} and button {b + 1} in {EditingName}", () =>
+        {
+            DoSwap(a, b);
+            Save();
+        });
+    }
+
+    private void DoSwap(int a, int b)
+    {
+        var id = EditingPresetId;
+        var first = Items[a].Config.Actions;
+        var second = Items[b].Config.Actions;
+        first.TryGetValue(id, out var fromA);
+        second.TryGetValue(id, out var fromB);
+        if (fromB is null) first.Remove(id); else first[id] = fromB;
+        if (fromA is null) second.Remove(id); else second[id] = fromA;
+        Items[a].Reload();
+        Items[b].Reload();
     }
 
     private void Renumber()

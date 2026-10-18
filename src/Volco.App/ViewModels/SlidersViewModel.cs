@@ -86,15 +86,28 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
 
     // ── Reordering ────────────────────────────────────────────────────────────
 
-    public void Move(int from, int to)
+    /// <summary>Swaps two sliders whole (their configs and items); the position is the input.</summary>
+    public void Swap(int a, int b)
     {
-        if (from == to || from < 0 || to < 0 || from >= Items.Count || to >= Items.Count) { Renumber(); return; }
-        var cfg = Sliders[from];
-        Sliders.RemoveAt(from);
-        Sliders.Insert(to, cfg);
-        Items.Move(from, to);
-        Renumber();
+        if (a == b || a < 0 || b < 0 || a >= Items.Count || b >= Items.Count) return;
+        DoSwap(a, b);
         Save();
+        _toast.Show($"Swapped slider {a + 1} and slider {b + 1}", () =>
+        {
+            DoSwap(a, b);
+            Save();
+        });
+    }
+
+    private void DoSwap(int a, int b)
+    {
+        (Sliders[a], Sliders[b]) = (Sliders[b], Sliders[a]);
+        var (lo, hi) = a < b ? (a, b) : (b, a);
+        var first = Items[lo];
+        var second = Items[hi];
+        Items[lo] = second;
+        Items[hi] = first;
+        Renumber();
     }
 
     private void Renumber()

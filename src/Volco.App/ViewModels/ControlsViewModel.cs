@@ -180,6 +180,46 @@ public sealed partial class ControlsViewModel : ObservableObject
         IsDense = Sliders.Items.Count > 8 || Buttons.Items.Count > 8;
     }
 
+    // ── Swap ──────────────────────────────────────────────────────────────────
+
+    private static bool IsMissing(ObservableObject item)
+        => item is SliderItemViewModel { IsMissing: true } or ButtonItemViewModel { IsMissing: true };
+
+    /// <summary>Swaps two sliders, or two buttons' actions in the edited mode (spec §8). Mixed kinds,
+    /// the same control and missing ones do nothing. The target is selected afterwards, because
+    /// the dragged settings now live there.</summary>
+    public void Swap(ObservableObject source, ObservableObject target)
+    {
+        if (ReferenceEquals(source, target) || IsMissing(source) || IsMissing(target)) return;
+        if (source is SliderItemViewModel s && target is SliderItemViewModel t)
+        {
+            int a = Sliders.Items.IndexOf(s), b = Sliders.Items.IndexOf(t);
+            if (a < 0 || b < 0) return;
+            Sliders.Swap(a, b);
+            Select(Sliders.Items[b]);
+        }
+        else if (source is ButtonItemViewModel bs && target is ButtonItemViewModel bt)
+        {
+            int a = Buttons.Items.IndexOf(bs), b = Buttons.Items.IndexOf(bt);
+            if (a < 0 || b < 0) return;
+            Buttons.SwapActions(a, b);
+            Select(Buttons.Items[b]);
+        }
+    }
+
+    /// <summary>The context menu's "Swap with" entries: the other controls of the item's kind that
+    /// the controller has.</summary>
+    public IReadOnlyList<SwapChoice> SwapChoices(ObservableObject item)
+    {
+        if (item is SliderItemViewModel)
+            return Sliders.Items.Where(o => !ReferenceEquals(o, item) && !o.IsMissing)
+                .Select(o => new SwapChoice($"Slider {o.Index + 1}", o)).ToList();
+        if (item is ButtonItemViewModel)
+            return Buttons.Items.Where(o => !ReferenceEquals(o, item) && !o.IsMissing)
+                .Select(o => new SwapChoice($"Button {o.Index + 1}", o)).ToList();
+        return Array.Empty<SwapChoice>();
+    }
+
     // ── Clear ─────────────────────────────────────────────────────────────────
 
     /// <summary>Clears the button's actions in the edited preset only, with Undo.</summary>
@@ -199,3 +239,6 @@ public sealed partial class ControlsViewModel : ObservableObject
         });
     }
 }
+
+/// <summary>One entry of the swap menu.</summary>
+public sealed record SwapChoice(string Label, ObservableObject Target);

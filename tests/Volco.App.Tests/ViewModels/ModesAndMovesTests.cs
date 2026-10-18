@@ -6,9 +6,8 @@ using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
 
-/// <summary>The modes (presets in code) and the moves of <see cref="ButtonsViewModel"/> and
-/// <see cref="SlidersViewModel"/>, which the Controls page reuses: Add mode, copy, Make live, Rename,
-/// Delete and reorder, drag to swap once its control comes back (spec controls-page §13 step 4).</summary>
+/// <summary>The modes (presets in code) of <see cref="ButtonsViewModel"/>, which the Controls page reuses: Add mode, copy, Make live, Rename,
+/// Delete and reorder (swaps are in SwapTests).</summary>
 public sealed class ModesAndMovesTests : IDisposable
 {
     private readonly TestRig _rig;
@@ -278,39 +277,5 @@ public sealed class ModesAndMovesTests : IDisposable
         buttons.MoveMode(-1, 0);
         buttons.MoveMode(0, 5);
         Assert.Equal(new[] { "gaming", AppConfig.DefaultPresetId }, Config.Presets.Select(p => p.Id));
-    }
-
-    // ── Moves: position is the hardware input ─────────────────────────────────
-
-    [Fact]
-    public void ButtonMove_CarriesTheActionsOfEveryPreset()
-    {
-        Config.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
-        Config.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
-        var buttons = Buttons();
-        var moved = buttons.Items[0];
-
-        buttons.Move(0, 2);
-
-        Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[2].Default().SinglePress.Action);
-        Assert.Equal(ButtonActionType.MuteCurrentInput, Config.Buttons[2].BindingFor("gaming").SinglePress.Action);
-        Assert.Same(moved, buttons.Items[2]);
-        Assert.Equal(new[] { 0, 1, 2 }, buttons.Items.Select(i => i.Index));
-        Assert.Equal("Mute output", buttons.Items[2].MainLabel);
-        Assert.True(buttons.Items[2].IsLast);
-    }
-
-    [Fact]
-    public void SliderMove_MovesTheConfigToAnotherInput()
-    {
-        Config.Sliders[0].Type = SliderMappingType.Unmapped;
-        var moved = Config.Sliders[0];
-        var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, _toast);
-
-        sliders.Move(0, 1);
-
-        Assert.Same(moved, Config.Sliders[1]);
-        Assert.Equal("All other apps", sliders.Items[1].Label);
-        Assert.Equal(new[] { 0, 1, 2, 3, 4 }, sliders.Items.Select(i => i.Index));
     }
 }
