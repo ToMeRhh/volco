@@ -117,6 +117,6 @@ public class CrossPageRefreshTests
         Assert.Same(headphones, vm.Devices.ItemFor("dev-2", AudioFlow.Render));   // the item is kept
         Assert.Equal("Used by: Button 3", headphones.UsedBy);
         Assert.Contains(nameof(DeviceItemViewModel.UsedBy), changed);
-        Assert.Contains(nameof(DeviceItemViewModel.ShowUsedBy), changed);
+        Assert.Contains(nameof(DeviceItemViewModel.CanForget), changed);
     }
 }

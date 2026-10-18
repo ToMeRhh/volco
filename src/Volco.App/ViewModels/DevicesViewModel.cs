@@ -39,18 +39,16 @@ public sealed partial class DevicesViewModel : ObservableObject
         DeviceSettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Rebuilds both lists (device plugged in or out, default changed); keeps open cards
-    /// open. When the same devices are listed with the same status, the cards are kept (so a
-    /// nickname being typed keeps its text box) and only their "Used by" lines are re-read.</summary>
+    /// <summary>Rebuilds both lists (device plugged in or out, default changed). When the same
+    /// devices are listed with the same status, the items are kept (so a nickname being typed
+    /// keeps its text box) and only their "Used by" lines are re-read.</summary>
     public void Refresh()
     {
-        var open = Outputs.Concat(Inputs).Where(i => i.IsExpanded).Select(i => i.Id)
-                          .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Fill(Outputs, AudioFlow.Render, open);
-        Fill(Inputs, AudioFlow.Capture, open);
+        Fill(Outputs, AudioFlow.Render);
+        Fill(Inputs, AudioFlow.Capture);
     }
 
-    private void Fill(ObservableCollection<DeviceItemViewModel> list, AudioFlow flow, HashSet<string> open)
+    private void Fill(ObservableCollection<DeviceItemViewModel> list, AudioFlow flow)
     {
         var live = _audio.GetDevices(flow);
         var defaultId = _audio.GetDefaultDevice(flow)?.Id;
@@ -76,10 +74,7 @@ public sealed partial class DevicesViewModel : ObservableObject
         list.Clear();
         foreach (var item in items.OrderByDescending(i => i.IsDefault)
                                   .ThenBy(i => i.DisplayName, StringComparer.CurrentCultureIgnoreCase))
-        {
-            item.IsExpanded = open.Contains(item.Id);
             list.Add(item);
-        }
     }
 
 
