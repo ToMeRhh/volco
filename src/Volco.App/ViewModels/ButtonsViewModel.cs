@@ -407,18 +407,18 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     public void SwapActions(int a, int b)
     {
         if (a == b || a < 0 || b < 0 || a >= Items.Count || b >= Items.Count) return;
-        DoSwap(a, b);
+        var id = EditingPresetId;
+        DoSwap(a, b, id);
         Save();
         _toast.Show($"Swapped button {a + 1} and button {b + 1} in {EditingName}", () =>
         {
-            DoSwap(a, b);
+            DoSwap(a, b, id);
             Save();
         });
     }
 
-    private void DoSwap(int a, int b)
+    private void DoSwap(int a, int b, string id)
     {
-        var id = EditingPresetId;
         var first = Items[a].Config.Actions;
         var second = Items[b].Config.Actions;
         first.TryGetValue(id, out var fromA);

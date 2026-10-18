@@ -6,8 +6,8 @@ using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
 
-/// <summary>The modes (presets in code) of <see cref="ButtonsViewModel"/>, which the Controls page reuses: Add mode, copy, Make live, Rename,
-/// Delete and reorder (swaps are in SwapTests).</summary>
+/// <summary>The modes (presets in code) of <see cref="ButtonsViewModel"/>, which the Controls page reuses: Add mode, copy,
+/// Make live, Rename, Delete and reorder (swaps are in SwapTests).</summary>
 public sealed class ModesAndMovesTests : IDisposable
 {
     private readonly TestRig _rig;

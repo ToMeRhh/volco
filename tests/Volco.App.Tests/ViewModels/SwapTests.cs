@@ -82,6 +82,24 @@ public sealed class SwapTests : IDisposable
     }
 
     [Fact]
+    public void SwapActions_Undo_AfterSwitchingMode_StillUsesTheSwappedMode()
+    {
+        Config.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+        Config.Buttons[1].Default().SinglePress.Action = ButtonActionType.MediaPlayPause;
+        Config.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
+        var buttons = Vm().Buttons;
+
+        buttons.SwapActions(0, 1);
+        buttons.EditingPresetId = "gaming";
+        _toast.UndoCommand.Execute(null);
+
+        Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].Default().SinglePress.Action);
+        Assert.Equal(ButtonActionType.MediaPlayPause, Config.Buttons[1].Default().SinglePress.Action);
+        Assert.Equal(ButtonActionType.MuteCurrentInput, Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
+        Assert.True(Config.Buttons[1].BindingFor("gaming").IsEmpty);
+    }
+
+    [Fact]
     public void SliderSwap_MovesWholeConfig_Undo()
     {
         Config.Sliders[0].Type = SliderMappingType.Unmapped;
