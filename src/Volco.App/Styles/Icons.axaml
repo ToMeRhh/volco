@@ -18,7 +18,8 @@
     Icon.Device.* (one per ScreenIcon, see the comment above them).
     Drawn for Volco (not Fluent): Icon.Speaker (a loudspeaker, for output-device switches, so it
     no longer duplicates Icon.Volume), Icon.Grip, Icon.More, Icon.Plus, Icon.Preset,
-    Icon.Status.* (StatusLine), Icon.Close (the snackbar).
+    Icon.Status.* (StatusLine), Icon.Close (the snackbar), Icon.Pencil / Icon.Check (the mode
+    tabs' edit button and its Done state).
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -38,6 +39,8 @@
     <StreamGeometry x:Key="Icon.Grip">M5.75 5a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M11.75 5a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M5.75 10a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M11.75 10a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M5.75 15a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z M11.75 15a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.More">M3.5 10a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z M8.5 10a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z M13.5 10a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Plus">M9.25 4h1.5v5.25H16v1.5h-5.25V16h-1.5v-5.25H4v-1.5h5.25Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Pencil">F0 M13.4 3.1a2 2 0 0 1 2.8 0l0.7 0.7a2 2 0 0 1 0 2.8L7.3 16.2 3 17l0.8-4.3Z M12.6 5.4 4.9 13.1 4.5 15.5 6.9 15.1 14.6 7.4Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Check">M7.6 13.3 4.2 9.9 3.1 11 7.6 15.5 16.9 6.2 15.8 5.1Z</StreamGeometry>
     <!-- Status icons (drawn for Volco): a filled shape with the glyph cut out (even-odd). -->
     <StreamGeometry x:Key="Icon.Status.Good">F0 M10 2a8 8 0 1 1 0 16a8 8 0 1 1 0-16Z M8.6 11.8 6.2 9.4 5.1 10.5 8.6 14 14.9 7.7 13.8 6.6Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Status.Danger">F0 M10 2a8 8 0 1 1 0 16a8 8 0 1 1 0-16Z M6.6 7.6 7.6 6.6 10 9 12.4 6.6 13.4 7.6 11 10 13.4 12.4 12.4 13.4 10 11 7.6 13.4 6.6 12.4 9 10Z</StreamGeometry>

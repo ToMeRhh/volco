@@ -170,6 +170,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
             tab.IsEditing = tab.Id == EditingPresetId;
             tab.IsLive = tab.Id == LivePresetId;
             tab.IsRenaming = tab.Id == RenamingModeId;
+            tab.IsEditingModes = IsEditingModes;
         }
     }
 
@@ -186,6 +187,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     }
 
     partial void OnRenamingModeIdChanged(string? value) => UpdateTabFlags();
+
+    partial void OnIsEditingModesChanged(bool value) => UpdateTabFlags();
 
     /// <summary>Called (on the UI thread) when the runtime's live preset changed.</summary>
     public void OnRuntimePresetChanged(string presetId) => LivePresetId = presetId;

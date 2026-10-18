@@ -30,12 +30,15 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <!-- The buttons, framed in the edited mode's colour, with the mode tabs on its top edge -->
+              <!-- The buttons, framed in the edited mode's colour, with the mode tabs on its top edge
+                   (spec §9): a click edits a mode, a right-click opens its menu; the pencil turns on
+                   edit mode (drag to reorder, click to rename, × to delete). -->
               <Border Name="ButtonFrame" Classes="ModeFrame"
                       controls:PresetTint.Index="{Binding Buttons.EditingTintIndex}">
                 <StackPanel Spacing="8">
                   <Grid ColumnDefinitions="*,Auto">
-                    <ItemsControl Name="ModeTabs" ItemsSource="{Binding Buttons.Presets}">
+                    <ItemsControl Name="ModeTabs" ItemsSource="{Binding Buttons.Presets}"
+                                  Classes.editing="{Binding Buttons.IsEditingModes}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                           <WrapPanel/>
@@ -50,11 +53,37 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                               <Ellipse Name="LiveDot" Classes="LiveDot" IsVisible="{Binding IsLive}"
                                        ToolTip.Tip="Live on the controller"/>
-                              <TextBlock Text="{Binding Name}"/>
+                              <TextBlock Name="TabName" Text="{Binding Name}" IsVisible="{Binding ShowName}"
+                                         VerticalAlignment="Center"/>
+                              <TextBox Name="TabNameBox" Classes="TabNameBox" IsVisible="{Binding IsRenaming}"/>
+                              <TextBlock Name="StartLabel" Classes="StartLabel" Text="start"
+                                         IsVisible="{Binding ShowStartLabel}"/>
+                              <Button Name="DeleteTabButton" Classes="DeleteTab" Command="{Binding DeleteCommand}"
+                                      IsVisible="{Binding ShowDelete}" ToolTip.Tip="Delete mode">
+                                <PathIcon Data="{StaticResource Icon.Close}" Width="8" Height="8"/>
+                              </Button>
                             </StackPanel>
                           </RadioButton>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
+                      <FlyoutBase.AttachedFlyout>
+                        <!-- The mode's menu (spec §9.2); the code-behind fills it when it opens -->
+                        <Flyout Placement="BottomEdgeAlignedLeft">
+                          <StackPanel Name="ModeMenuPanel" Spacing="6" Width="200">
+                            <TextBox Name="MenuNameBox"/>
+                            <Button Name="MenuMakeLive" Classes="MenuItem" Content="Make live"/>
+                            <Button Name="MenuCopyFrom" Classes="MenuItem">
+                              <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="Copy actions from"/>
+                                <PathIcon Grid.Column="1" Data="{StaticResource Icon.ChevronRight}" Width="10" Height="10"/>
+                              </Grid>
+                              <Button.Flyout>
+                                <MenuFlyout Placement="RightEdgeAlignedTop"/>
+                              </Button.Flyout>
+                            </Button>
+                          </StackPanel>
+                        </Flyout>
+                      </FlyoutBase.AttachedFlyout>
                     </ItemsControl>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Top">
                       <Button Name="MakeLiveButton" Classes="ModeAction Live" Content="Make live"
@@ -66,6 +95,16 @@
                           <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
                           <TextBlock Text="Add mode"/>
                         </StackPanel>
+                      </Button>
+                      <Button Name="EditModesButton" Classes="ModeAction EditModes"
+                              Classes.editing="{Binding Buttons.IsEditingModes}"
+                              Command="{Binding Buttons.ToggleEditModesCommand}">
+                        <Panel>
+                          <PathIcon Name="PencilIcon" Data="{StaticResource Icon.Pencil}" Width="12" Height="12"
+                                    IsVisible="{Binding !Buttons.IsEditingModes}"/>
+                          <PathIcon Name="CheckIcon" Data="{StaticResource Icon.Check}" Width="12" Height="12"
+                                    IsVisible="{Binding Buttons.IsEditingModes}"/>
+                        </Panel>
                       </Button>
                     </StackPanel>
                   </Grid>

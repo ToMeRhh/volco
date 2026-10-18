@@ -419,7 +419,10 @@
     <Setter Property="Template">
       <ControlTemplate TargetType="RadioButton">
         <Border Name="PART_Tab" Background="{DynamicResource SubtleBrush}" CornerRadius="0,0,7,7" Padding="10,4,10,5">
-          <ContentPresenter Content="{TemplateBinding Content}"
+          <!-- A plain (square) background, so the tab is hit even where the rounded border's
+               geometry isn't (headless tests draw no geometry) -->
+          <ContentPresenter Background="Transparent"
+                            Content="{TemplateBinding Content}"
                             ContentTemplate="{TemplateBinding ContentTemplate}"
                             Foreground="{TemplateBinding Foreground}"
                             VerticalAlignment="Center"/>
@@ -457,6 +460,54 @@
   </Style>
   <Style Selector="Button.ModeAction.Live">
     <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
+  </Style>
+  <!-- The pencil, and its check mark while the tabs are in edit mode -->
+  <Style Selector="Button.EditModes">
+    <Setter Property="ToolTip.Tip" Value="Edit modes"/>
+  </Style>
+  <Style Selector="Button.EditModes.editing">
+    <Setter Property="ToolTip.Tip" Value="Done"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <!-- Edit mode: the inline rename box, the start-up mode's label, × and a picked-up tab -->
+  <Style Selector="TextBox.TabNameBox">
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MinWidth" Value="80"/>
+    <Setter Property="Padding" Value="4,0"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="TextBlock.StartLabel">
+    <Setter Property="FontSize" Value="10"/>
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.DeleteTab">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="3"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="ItemsControl.editing RadioButton.ModeTab">
+    <Setter Property="Cursor" Value="SizeAll"/>
+  </Style>
+  <Style Selector="ContentPresenter.dragging">
+    <Setter Property="Opacity" Value="0.85"/>
+  </Style>
+  <!-- The rows of the mode menu -->
+  <Style Selector="Button.MenuItem">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Padding" Value="8,5"/>
+  </Style>
+  <Style Selector="Button.MenuItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
   </Style>
   <Style Selector="Button.ModeAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>

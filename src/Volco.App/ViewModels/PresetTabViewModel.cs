@@ -27,7 +27,17 @@ public sealed partial class PresetTabViewModel : ObservableObject
 
     /// <summary>Being renamed inline.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowName))]
     private bool _isRenaming;
+
+    /// <summary>The strip is in edit mode (the pencil): the "start" label and × show.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowStartLabel), nameof(ShowDelete))]
+    private bool _isEditingModes;
+
+    public bool ShowName => !IsRenaming;
+    public bool ShowStartLabel => IsEditingModes && IsFirst;
+    public bool ShowDelete => IsEditingModes && CanDelete;
 
     /// <summary>The first mode, which the controller starts in.</summary>
     public bool IsFirst => TintIndex == 0;
@@ -48,6 +58,6 @@ public sealed partial class PresetTabViewModel : ObservableObject
     [RelayCommand]
     private void Select() => _select(this);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanDelete))]
     private void Delete() => _delete(Id);
 }

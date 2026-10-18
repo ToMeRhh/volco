@@ -15,7 +15,7 @@ namespace Volco.App.Views.Pages;
 /// <summary>
 /// The drawing and the inspector. Bindings do the work; the code-behind selects a tile on a click,
 /// Enter or Space, moves the focus between tiles with the arrow keys (spec §4.5), closes the
-/// dialog on Escape or a click on the scrim.
+/// dialog on Escape or a click on the scrim, and runs the mode tabs (ControlsPage.ModeTabs.cs).
 /// </summary>
 public partial class ControlsPage : UserControl
 {
@@ -32,6 +32,7 @@ public partial class ControlsPage : UserControl
             if (overlay.IsVisible) OnDialogOpened();
             else OnDialogClosed();
         };
+        InitModeTabs();
     }
 
     // What had the focus when the dialog opened, and the dialog.
