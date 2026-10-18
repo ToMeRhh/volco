@@ -48,10 +48,10 @@ public class ControllerDisplayCustomActionTests
     }
 
     private ScreenContent ScreenOf(ButtonActionConfig a)
-        => Assert.IsType<ScreenDisplay>(ControllerDisplay.Compute(Config(IndicatorKind.Screen, a), AppConfig.DefaultPresetId, _audio, null, _status)[0]).Content;
+        => Assert.IsType<ScreenDisplay>(ControllerDisplay.Compute(Config(IndicatorKind.Screen, a), AppConfig.DefaultModeId, _audio, null, _status)[0]).Content;
 
     private byte LedOf(ButtonActionConfig a, IndicatorKind kind = IndicatorKind.Led)
-        => Assert.IsType<LedDisplay>(ControllerDisplay.Compute(Config(kind, a), AppConfig.DefaultPresetId, _audio, null, _status)[0]).Value;
+        => Assert.IsType<LedDisplay>(ControllerDisplay.Compute(Config(kind, a), AppConfig.DefaultModeId, _audio, null, _status)[0]).Value;
 
     // ── Media ─────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ public class ControllerDisplayCustomActionTests
     public void WithoutStatus_MediaReadsAsIdle()
     {
         var c = Config(IndicatorKind.Screen, Media(ButtonActionType.MediaPlayPause, App("Spotify.exe", "Spotify")));
-        var screen = Assert.IsType<ScreenDisplay>(ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio)[0]).Content;
+        var screen = Assert.IsType<ScreenDisplay>(ControllerDisplay.Compute(c, AppConfig.DefaultModeId, _audio)[0]).Content;
         Assert.Equal(ScreenContent.Text("", ScreenIcon.Play, false, "Spotify"), screen);
     }
 

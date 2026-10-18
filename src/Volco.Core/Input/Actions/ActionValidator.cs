@@ -6,17 +6,17 @@ using Volco.Core.Programs;
 namespace Volco.Core.Input.Actions;
 
 /// <summary>What <see cref="ActionValidator"/> needs to know about the world.</summary>
-/// <param name="PresetIds">The ids of the existing presets.</param>
+/// <param name="ModeIds">The ids of the existing modes.</param>
 /// <param name="DeviceFlow">The flow of a plugged-in device; null for one that isn't plugged in.</param>
 /// <param name="FileExists">Whether a file exists on this PC.</param>
 public sealed record ActionValidationContext(
-    IReadOnlyCollection<string> PresetIds,
+    IReadOnlyCollection<string> ModeIds,
     Func<DeviceRefConfig, AudioFlow?> DeviceFlow,
     Func<string, bool> FileExists)
 {
     /// <summary>Only the rules that need no system: every device is unplugged, every file exists.</summary>
     public static ActionValidationContext Structural(AppConfig config)
-        => new(config.Presets.Select(p => p.Id).ToList(), _ => null, _ => true);
+        => new(config.Modes.Select(p => p.Id).ToList(), _ => null, _ => true);
 }
 
 /// <summary>The rules for a button action's settings, shared by the UI (to mark fields) and the
@@ -25,7 +25,7 @@ public static partial class ActionValidator
 {
     public const string Device = "device";
     public const string DeviceB = "deviceB";
-    public const string Preset = "preset";
+    public const string Mode = "mode";
     public const string Path = "path";
     public const string WorkingDirectory = "workingDirectory";
 
@@ -56,9 +56,9 @@ public static partial class ActionValidator
                 else CheckOutput(action.DeviceB, DeviceB, ctx, problems);
                 break;
 
-            case ButtonActionType.GoToPreset:
-                if (action.PresetId is null || !ctx.PresetIds.Contains(action.PresetId))
-                    problems[Preset] = "Choose a mode.";
+            case ButtonActionType.GoToMode:
+                if (action.ModeId is null || !ctx.ModeIds.Contains(action.ModeId))
+                    problems[Mode] = "Choose a mode.";
                 break;
 
             case ButtonActionType.OpenProgram:

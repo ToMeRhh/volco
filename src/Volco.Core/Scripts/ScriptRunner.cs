@@ -36,7 +36,7 @@ public sealed record ScriptStatus(bool Running, int? FlashStep)
 /// <see cref="WhileRunningPolicy.StartAnother"/>. A failed run (non-zero exit, or one that could
 /// not start) is logged with its output's last lines and flashes its button for
 /// <see cref="FlashSteps"/> × <see cref="FlashStepInterval"/>. Runs are never killed.
-/// State is kept per action object, which is one slot of one button in one preset. Thread-safe;
+/// State is kept per action object, which is one slot of one button in one mode. Thread-safe;
 /// <see cref="Changed"/> is raised on any thread.
 /// </summary>
 public sealed class ScriptRunner : IDisposable

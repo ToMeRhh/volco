@@ -38,7 +38,7 @@ public class ModeTabsTests
     {
         var rig = new TestRig();
         foreach (var name in extra)
-            rig.Config.Config.Presets.Add(new PresetConfig { Id = name.ToLowerInvariant(), Name = name });
+            rig.Config.Config.Modes.Add(new ModeConfig { Id = name.ToLowerInvariant(), Name = name });
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var page = new ControlsPage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
@@ -60,7 +60,7 @@ public class ModeTabsTests
     private static List<RadioButton> Tabs(Shown s)
         => s.Page.GetVisualDescendants().OfType<RadioButton>().Where(t => t.Name == "ModeTab").ToList();
 
-    private static List<string> TabNames(Shown s) => s.Buttons.Presets.Select(p => p.Name).ToList();
+    private static List<string> TabNames(Shown s) => s.Buttons.Modes.Select(p => p.Name).ToList();
 
     /// <summary>A point inside <paramref name="control"/> in its top level's coordinates; by
     /// default its centre.</summary>
@@ -112,7 +112,7 @@ public class ModeTabsTests
         Assert.False(makeLive.IsVisible);   // the edited mode is live
 
         ClickTab(s, Tabs(s)[1]);
-        Assert.Equal("gaming", s.Buttons.EditingPresetId);
+        Assert.Equal("gaming", s.Buttons.EditingModeId);
         Assert.True(makeLive.IsVisible);
         Assert.Equal("Make live", makeLive.Content);
         Assert.Equal("Make Gaming live", ToolTip.GetTip(makeLive));
@@ -187,7 +187,7 @@ public class ModeTabsTests
         Assert.True(s.Page.MenuMakeLive.IsVisible);
         Assert.Contains(s.Page.MenuCopyFrom.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "Copy actions from");
         Assert.Equal(new[] { "Default", "Work" }, CopyFromItems(s));
-        Assert.Equal("default", s.Buttons.EditingPresetId);   // a right-click doesn't edit the mode
+        Assert.Equal("default", s.Buttons.EditingModeId);   // a right-click doesn't edit the mode
 
         // Copy actions from replaces the mode's actions (with Undo) and closes the menu.
         s.Rig.Config.Config.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
@@ -228,9 +228,9 @@ public class ModeTabsTests
         s.Page.MenuMakeLive.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Settle(s.Window);
 
-        Assert.Equal("gaming", s.Rig.Runtime.ActivePresetId);
-        Assert.Equal("gaming", s.Buttons.LivePresetId);
-        Assert.Equal("default", s.Buttons.EditingPresetId);
+        Assert.Equal("gaming", s.Rig.Runtime.ActiveModeId);
+        Assert.Equal("gaming", s.Buttons.LiveModeId);
+        Assert.Equal("default", s.Buttons.EditingModeId);
         Assert.False(s.Page.ModeMenu.IsOpen);
         Assert.Null(s.Buttons.MenuModeId);
     }
@@ -260,7 +260,7 @@ public class ModeTabsTests
         Click(s, s.Page.FindControl<Button>("EditModesButton")!);
 
         ClickTab(s, Tabs(s)[1]);
-        Assert.Equal("gaming", s.Buttons.EditingPresetId);
+        Assert.Equal("gaming", s.Buttons.EditingModeId);
         Assert.Equal("gaming", s.Buttons.RenamingModeId);
         var box = In<TextBox>(Tabs(s)[1], "TabNameBox");
         Assert.True(box.IsEffectivelyVisible);
@@ -295,7 +295,7 @@ public class ModeTabsTests
         Assert.True(In<TextBlock>(tabs[0], "StartLabel").IsVisible);
         Assert.Equal("start", In<TextBlock>(tabs[0], "StartLabel").Text);
         Assert.False(In<Button>(tabs[0], "DeleteTabButton").IsVisible);
-        Assert.False(s.Buttons.Presets[0].DeleteCommand.CanExecute(null));
+        Assert.False(s.Buttons.Modes[0].DeleteCommand.CanExecute(null));
         Assert.False(In<TextBlock>(tabs[1], "StartLabel").IsVisible);
         Assert.True(In<Button>(tabs[1], "DeleteTabButton").IsVisible);
         Assert.Equal("Delete mode", ToolTip.GetTip(In<Button>(tabs[1], "DeleteTabButton")));
@@ -328,9 +328,9 @@ public class ModeTabsTests
         Drag(s, Tabs(s)[2], Tabs(s)[0]);
 
         Assert.Equal(new[] { "Work", "Default", "Gaming" }, TabNames(s));
-        Assert.Equal(new[] { "work", "default", "gaming" }, s.Rig.Config.Config.Presets.Select(p => p.Id));
-        Assert.Equal("gaming", s.Buttons.LivePresetId);
-        Assert.Equal("default", s.Buttons.EditingPresetId);   // a drop isn't a click
+        Assert.Equal(new[] { "work", "default", "gaming" }, s.Rig.Config.Config.Modes.Select(p => p.Id));
+        Assert.Equal("gaming", s.Buttons.LiveModeId);
+        Assert.Equal("default", s.Buttons.EditingModeId);   // a drop isn't a click
         Assert.Null(s.Buttons.RenamingModeId);
         Assert.True(In<TextBlock>(Tabs(s)[0], "StartLabel").IsVisible);   // the new start-up mode
         Assert.All(Tabs(s), t => Assert.Null(t.GetVisualParent()!.RenderTransform));
@@ -349,7 +349,7 @@ public class ModeTabsTests
         Assert.Equal(new[] { "Gaming", "Default", "Work" }, TabNames(s));
         var focused = s.Window.FocusManager!.GetFocusedElement() as RadioButton;
         Assert.NotNull(focused);
-        Assert.Equal("default", (focused!.DataContext as PresetTabViewModel)?.Id);
+        Assert.Equal("default", (focused!.DataContext as ModeTabViewModel)?.Id);
 
         Press(s, s.Window, Key.Left, PhysicalKey.ArrowLeft, RawInputModifiers.Alt);
         Assert.Equal(new[] { "Default", "Gaming", "Work" }, TabNames(s));

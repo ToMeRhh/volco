@@ -26,16 +26,16 @@ internal sealed record ActionSlotHost(ActionAvailability Availability, Func<IRea
 }
 
 /// <summary>
-/// One action slot of a button (Press, Double press or Hold) for the preset being edited: the
+/// One action slot of a button (Press, Double press or Hold) for the mode being edited: the
 /// inspector's row, Try, and (as a draft) the action dialog's settings. Re-pointed at another
-/// preset's <see cref="ButtonActionConfig"/> with <see cref="Bind"/> when the edited preset changes.
+/// mode's <see cref="ButtonActionConfig"/> with <see cref="Bind"/> when the edited mode changes.
 /// </summary>
 public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabeler
 {
     private readonly Action _changed;
     private readonly Func<string, DeviceChoice> _describe;
     private readonly Action<ButtonActionConfig> _execute;
-    private readonly Func<IReadOnlyList<PresetChoice>> _presets;
+    private readonly Func<IReadOnlyList<ModeChoice>> _modes;
     private readonly ActionSlotHost _host;
     private ButtonActionConfig _cfg = new();
     private bool _loading;
@@ -46,7 +46,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     public IReadOnlyList<ActionChoice> Choices { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(NeedsDevice), nameof(NeedsPair), nameof(NeedsPreset), nameof(CanTest),
+    [NotifyPropertyChangedFor(nameof(NeedsDevice), nameof(NeedsPair), nameof(NeedsMode), nameof(CanTest),
                               nameof(NeedsMediaApp), nameof(NeedsCommand), nameof(NeedsWhileRunning),
                               nameof(CommandPlaceholder),
                               nameof(IconKey), nameof(IsUsb))]
@@ -65,10 +65,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     private string _deviceB = "";
 
     [ObservableProperty]
-    private IReadOnlyList<PresetChoice> _presetChoices = Array.Empty<PresetChoice>();
+    private IReadOnlyList<ModeChoice> _modeChoices = Array.Empty<ModeChoice>();
 
     [ObservableProperty]
-    private PresetChoice? _selectedPreset;
+    private ModeChoice? _selectedMode;
 
     // ── Media ─────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     private ButtonActionType Type => SelectedChoice.Type ?? ButtonActionType.None;
     public bool NeedsDevice => ActionCatalog.NeedsDevice(Type);
     public bool NeedsPair => ActionCatalog.NeedsPair(Type);
-    public bool NeedsPreset => ActionCatalog.NeedsPreset(Type);
+    public bool NeedsMode => ActionCatalog.NeedsMode(Type);
     public bool NeedsMediaApp => ActionCatalog.NeedsMediaApp(Type);
     public bool NeedsCommand => ActionCatalog.NeedsCommand(Type);
     public bool NeedsWhileRunning => ActionCatalog.NeedsWhileRunning(Type);
@@ -150,7 +150,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
 
     /// <summary>Field key (<see cref="ActionValidator"/>'s) to message; empty until <see cref="ShowErrors"/>.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DeviceError), nameof(DeviceBError), nameof(PresetError), nameof(PathError),
+    [NotifyPropertyChangedFor(nameof(DeviceError), nameof(DeviceBError), nameof(ModeError), nameof(PathError),
                               nameof(WorkingDirectoryError), nameof(FirstErrorKey))]
     private IReadOnlyDictionary<string, string> _errors = NoErrors;
 
@@ -160,19 +160,19 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
 
     public string? DeviceError => Errors.GetValueOrDefault(ActionValidator.Device);
     public string? DeviceBError => Errors.GetValueOrDefault(ActionValidator.DeviceB);
-    public string? PresetError => Errors.GetValueOrDefault(ActionValidator.Preset);
+    public string? ModeError => Errors.GetValueOrDefault(ActionValidator.Mode);
     public string? PathError => Errors.GetValueOrDefault(ActionValidator.Path);
     public string? WorkingDirectoryError => Errors.GetValueOrDefault(ActionValidator.WorkingDirectory);
 
     /// <summary>The first field with an error, in the settings pane's order; null when valid.</summary>
     public string? FirstErrorKey
-        => new[] { ActionValidator.Device, ActionValidator.DeviceB, ActionValidator.Preset, ActionValidator.Path,
+        => new[] { ActionValidator.Device, ActionValidator.DeviceB, ActionValidator.Mode, ActionValidator.Path,
                    ActionValidator.WorkingDirectory }.FirstOrDefault(Errors.ContainsKey);
 
     /// <summary>Checks the action now (whatever <see cref="ShowErrors"/> says) and returns the problems.</summary>
     internal IReadOnlyDictionary<string, string> Check()
     {
-        var context = Validation?.Invoke() ?? new ActionValidationContext(PresetChoices.Select(p => p.Id).ToList(), _ => null, _ => true);
+        var context = Validation?.Invoke() ?? new ActionValidationContext(ModeChoices.Select(p => p.Id).ToList(), _ => null, _ => true);
         var errors = ActionValidator.Validate(_cfg, context);
         Errors = errors.Count == 0 ? NoErrors : errors;
         return errors;
@@ -194,13 +194,13 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     public string CommandPlaceholder => Type == ButtonActionType.RunScript ? @"C:\Scripts\lights.bat" : @"C:\Games\game.exe";
 
     internal ActionSlotViewModel(string label, IReadOnlyList<AudioDevice> devices,
-                                 Func<IReadOnlyList<PresetChoice>> presets,
+                                 Func<IReadOnlyList<ModeChoice>> modes,
                                  Action<ButtonActionConfig> execute, Action changed,
                                  Func<string, DeviceChoice> describe, ActionSlotHost? host = null)
     {
         _describe = describe;
         Label = label;
-        _presets = presets;
+        _modes = modes;
         _execute = execute;
         _changed = changed;
         _host = host ?? ActionSlotHost.Default;
@@ -213,7 +213,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
 
     internal ButtonActionConfig Config => _cfg;
 
-    /// <summary>Shows <paramref name="cfg"/> (another preset's action) without saving.</summary>
+    /// <summary>Shows <paramref name="cfg"/> (another mode's action) without saving.</summary>
     internal void Bind(ButtonActionConfig cfg)
     {
         _cfg = cfg;
@@ -224,7 +224,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
             SetDevices(null);
             Device = cfg.Device?.FriendlyName ?? "";
             DeviceB = cfg.DeviceB?.FriendlyName ?? "";
-            RefreshPresets();
+            RefreshModes();
             CommandPath = cfg.Command?.Path ?? "";
             CommandArguments = cfg.Command?.Arguments ?? "";
             CommandWorkingDirectory = cfg.Command?.WorkingDirectory ?? "";
@@ -235,15 +235,15 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         finally { _loading = false; }
     }
 
-    /// <summary>Re-reads the preset list (a preset was added, renamed or deleted).</summary>
-    internal void RefreshPresets()
+    /// <summary>Re-reads the mode list (a mode was added, renamed or deleted).</summary>
+    internal void RefreshModes()
     {
         var wasLoading = _loading;
         _loading = true;
         try
         {
-            PresetChoices = _presets();
-            SelectedPreset = PresetChoices.FirstOrDefault(p => p.Id == _cfg.PresetId);
+            ModeChoices = _modes();
+            SelectedMode = ModeChoices.FirstOrDefault(p => p.Id == _cfg.ModeId);
         }
         finally { _loading = wasLoading; }
     }
@@ -311,10 +311,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         Edited();
     }
 
-    partial void OnSelectedPresetChanged(PresetChoice? value)
+    partial void OnSelectedModeChanged(ModeChoice? value)
     {
         if (_loading || value is null) return;
-        _cfg.PresetId = value.Id;
+        _cfg.ModeId = value.Id;
         Edited();
     }
 

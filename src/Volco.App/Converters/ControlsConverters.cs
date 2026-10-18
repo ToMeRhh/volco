@@ -24,7 +24,7 @@ public static class IconConverters
         ButtonActionType.MuteCurrentInput => "Icon.Device.Mic",
         ButtonActionType.SetOutputDevice => "Icon.Speaker",
         ButtonActionType.ToggleOutputDevice => "Icon.Refresh",
-        ButtonActionType.NextPreset or ButtonActionType.GoToPreset => "Icon.Preset",
+        ButtonActionType.NextMode or ButtonActionType.GoToMode => "Icon.Mode",
         ButtonActionType.MediaPlayPause => "Icon.Device.Play",
         ButtonActionType.MediaNext => "Icon.Device.Next",
         ButtonActionType.MediaPrevious => "Icon.Device.Previous",

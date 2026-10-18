@@ -26,15 +26,15 @@ public sealed record ActionCapabilities(ActionAvailability Availability, IAction
 }
 
 /// <summary>
-/// The buttons of the Controls page: presets (only button actions change per preset) and the
+/// The buttons of the Controls page: modes (only button actions change per mode) and the
 /// buttons in hardware-input order. Position is identity, as for sliders; moving a button moves
-/// its actions in every preset.
+/// its actions in every mode.
 /// </summary>
 public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwner
 {
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
-    private readonly IPresetController _presets;
+    private readonly IModeController _modes;
     private readonly Action<ButtonActionConfig, ActionOrigin?> _execute;
     private readonly UndoToastViewModel _toast;
     private readonly ActionCapabilities _capabilities;
@@ -43,18 +43,18 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     private IReadOnlyList<AudioDevice> _captureDevices;
 
     public ObservableCollection<ButtonItemViewModel> Items { get; } = new();
-    public ObservableCollection<PresetTabViewModel> Presets { get; } = new();
+    public ObservableCollection<ModeTabViewModel> Modes { get; } = new();
 
-    /// <summary>The preset whose actions the buttons show and edit.</summary>
+    /// <summary>The mode whose actions the buttons show and edit.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditingLive), nameof(EditingName), nameof(MakeLiveText),
                               nameof(EditingTintIndex))]
-    private string _editingPresetId;
+    private string _editingModeId;
 
-    /// <summary>The preset the controller is using (from the runtime).</summary>
+    /// <summary>The mode the controller is using (from the runtime).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditingLive))]
-    private string _livePresetId;
+    private string _liveModeId;
 
     /// <summary>The mode whose menu is open (null = closed).</summary>
     [ObservableProperty]
@@ -71,15 +71,15 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     [ObservableProperty]
     private string _renameText = "";
 
-    public bool IsEditingLive => EditingPresetId == LivePresetId;
-    public string EditingName => PresetName(EditingPresetId) ?? "";
+    public bool IsEditingLive => EditingModeId == LiveModeId;
+    public string EditingName => ModeName(EditingModeId) ?? "";
 
-    /// <summary>The edited preset's colour (its tab's), which frames the buttons.</summary>
-    public int EditingTintIndex => Math.Max(0, _config.Config.Presets.FindIndex(p => p.Id == EditingPresetId));
+    /// <summary>The edited mode's colour (its tab's), which frames the buttons.</summary>
+    public int EditingTintIndex => Math.Max(0, _config.Config.Modes.FindIndex(p => p.Id == EditingModeId));
 
     public string MakeLiveText => $"Make {EditingName} live";
 
-    public ButtonsViewModel(ConfigManager config, IAudioEngine audio, IPresetController presets,
+    public ButtonsViewModel(ConfigManager config, IAudioEngine audio, IModeController modes,
                             Action<ButtonActionConfig, ActionOrigin?> execute, UndoToastViewModel toast,
                             ActionCapabilities? capabilities = null, Func<string, bool>? fileExists = null)
     {
@@ -89,14 +89,14 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
                                        fileExists ?? File.Exists);
         _config = config;
         _audio = audio;
-        _presets = presets;
+        _modes = modes;
         _execute = execute;
         _toast = toast;
         _devices = audio.GetDevices(AudioFlow.Render);
         _captureDevices = audio.GetDevices(AudioFlow.Capture);
-        _livePresetId = presets.ActivePresetId;
-        _editingPresetId = _livePresetId;
-        RebuildPresetTabs();
+        _liveModeId = modes.ActiveModeId;
+        _editingModeId = _liveModeId;
+        RebuildModeTabs();
         for (int i = 0; i < Buttons.Count; i++)
             Items.Add(new ButtonItemViewModel(Buttons[i], i, _devices, this));
         Renumber();
@@ -111,15 +111,15 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
     // ── IButtonCardOwner ──────────────────────────────────────────────────────
 
-    string IButtonCardOwner.EditingPresetId => EditingPresetId;
-    string IButtonCardOwner.LivePresetId => LivePresetId;
+    string IButtonCardOwner.EditingModeId => EditingModeId;
+    string IButtonCardOwner.LiveModeId => LiveModeId;
     AppConfig IButtonCardOwner.AppConfig => _config.Config;
     IAudioEngine IButtonCardOwner.Audio => _audio;
 
-    public IReadOnlyList<PresetChoice> PresetChoices()
-        => _config.Config.Presets.Select(p => new PresetChoice(p.Id, p.Name)).ToList();
+    public IReadOnlyList<ModeChoice> ModeChoices()
+        => _config.Config.Modes.Select(p => new ModeChoice(p.Id, p.Name)).ToList();
 
-    public string? PresetName(string? id) => _config.Config.Presets.Find(p => p.Id == id)?.Name;
+    public string? ModeName(string? id) => _config.Config.Modes.Find(p => p.Id == id)?.Name;
 
     public IndicatorKind? IndicatorFor(int index)
         => _config.Config.Controller is not { } c ? null
@@ -130,7 +130,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     public string DeviceName(DeviceRefConfig? device) => DeviceDisplay.NameOf(_config.Config, _audio, device, "?");
 
     ActionValidationContext IButtonCardOwner.ValidationContext()
-        => new(_config.Config.Presets.Select(p => p.Id).ToList(), DeviceFlow, _slotHost.FileExists);
+        => new(_config.Config.Modes.Select(p => p.Id).ToList(), DeviceFlow, _slotHost.FileExists);
 
     /// <summary>The flow of a plugged-in device (by id, else by name); null when it isn't plugged in.</summary>
     private AudioFlow? DeviceFlow(DeviceRefConfig device)
@@ -150,37 +150,37 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
     void IButtonCardOwner.Changed(ButtonItemViewModel item) => Save();
 
-    // ── Presets ───────────────────────────────────────────────────────────────
+    // ── Modes ───────────────────────────────────────────────────────────────
 
-    private void RebuildPresetTabs()
+    private void RebuildModeTabs()
     {
-        Presets.Clear();
-        var presets = _config.Config.Presets;
-        for (int i = 0; i < presets.Count; i++)
-            Presets.Add(new PresetTabViewModel(presets[i].Id, presets[i].Name, i, tab => EditingPresetId = tab.Id, DeleteMode));
-        // A delete, undo or move shifts the presets after it, and their colours with them.
+        Modes.Clear();
+        var modes = _config.Config.Modes;
+        for (int i = 0; i < modes.Count; i++)
+            Modes.Add(new ModeTabViewModel(modes[i].Id, modes[i].Name, i, tab => EditingModeId = tab.Id, DeleteMode));
+        // A delete, undo or move shifts the modes after it, and their colours with them.
         OnPropertyChanged(nameof(EditingTintIndex));
         UpdateTabFlags();
     }
 
     private void UpdateTabFlags()
     {
-        foreach (var tab in Presets)
+        foreach (var tab in Modes)
         {
-            tab.IsEditing = tab.Id == EditingPresetId;
-            tab.IsLive = tab.Id == LivePresetId;
+            tab.IsEditing = tab.Id == EditingModeId;
+            tab.IsLive = tab.Id == LiveModeId;
             tab.IsRenaming = tab.Id == RenamingModeId;
             tab.IsEditingModes = IsEditingModes;
         }
     }
 
-    partial void OnEditingPresetIdChanged(string value)
+    partial void OnEditingModeIdChanged(string value)
     {
         UpdateTabFlags();
         foreach (var item in Items) item.Reload();
     }
 
-    partial void OnLivePresetIdChanged(string value)
+    partial void OnLiveModeIdChanged(string value)
     {
         UpdateTabFlags();
         RefreshLights();
@@ -190,30 +190,30 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
     partial void OnIsEditingModesChanged(bool value) => UpdateTabFlags();
 
-    /// <summary>Called (on the UI thread) when the runtime's live preset changed.</summary>
-    public void OnRuntimePresetChanged(string presetId) => LivePresetId = presetId;
+    /// <summary>Called (on the UI thread) when the runtime's live mode changed.</summary>
+    public void OnRuntimeModeChanged(string modeId) => LiveModeId = modeId;
 
     /// <summary>Adds an empty mode at the end and edits it; the live mode stays. Its menu opens.</summary>
     [RelayCommand]
     private void AddMode()
     {
-        var presets = _config.Config.Presets;
-        var id = NewPresetId();
+        var modes = _config.Config.Modes;
+        var id = NewModeId();
         int n = 2;
-        while (presets.Any(p => p.Name == $"Mode {n}")) n++;
-        presets.Add(new PresetConfig { Id = id, Name = $"Mode {n}" });
-        RebuildPresetTabs();
-        RefreshPresetPickers();
-        EditingPresetId = id;
+        while (modes.Any(p => p.Name == $"Mode {n}")) n++;
+        modes.Add(new ModeConfig { Id = id, Name = $"Mode {n}" });
+        RebuildModeTabs();
+        RefreshModePickers();
+        EditingModeId = id;
         MenuModeId = id;
         Save();
     }
 
-    private string NewPresetId()
+    private string NewModeId()
     {
-        var existing = new HashSet<string>(_config.Config.Presets.Select(p => p.Id));
+        var existing = new HashSet<string>(_config.Config.Modes.Select(p => p.Id));
         for (int n = 2; ; n++)
-            if (!existing.Contains($"preset-{n}")) return $"preset-{n}";
+            if (!existing.Contains($"mode-{n}")) return $"mode-{n}";
     }
 
     public void OpenMenu(string modeId) => MenuModeId = modeId;
@@ -221,14 +221,14 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     public void RenameMode(string modeId, string name)
     {
         name = name.Trim();
-        var preset = _config.Config.Presets.Find(p => p.Id == modeId);
-        if (preset is null || name.Length == 0 || name == preset.Name) return;
-        preset.Name = name;
-        var tab = Presets.FirstOrDefault(t => t.Id == preset.Id);
+        var mode = _config.Config.Modes.Find(p => p.Id == modeId);
+        if (mode is null || name.Length == 0 || name == mode.Name) return;
+        mode.Name = name;
+        var tab = Modes.FirstOrDefault(t => t.Id == mode.Id);
         if (tab is not null) tab.Name = name;
         OnPropertyChanged(nameof(EditingName));
         OnPropertyChanged(nameof(MakeLiveText));
-        RefreshPresetPickers();
+        RefreshModePickers();
         Save();
     }
 
@@ -236,8 +236,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     /// <paramref name="fromId"/>'s.</summary>
     public void CopyActions(string fromId, string toId)
     {
-        var from = PresetName(fromId);
-        var to = PresetName(toId);
+        var from = ModeName(fromId);
+        var to = ModeName(toId);
         if (from is null || to is null || fromId == toId) return;
         var previous = new Dictionary<ButtonConfig, ButtonBindingConfig?>();
         foreach (var button in Buttons)
@@ -266,46 +266,46 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     private void ActionsReplaced()
     {
         foreach (var item in Items) item.Reload();
-        RefreshPresetPickers();
+        RefreshModePickers();
     }
 
     /// <summary>Deletes a mode (not the first, and not the last one left).</summary>
     public void DeleteMode(string modeId)
     {
-        var presets = _config.Config.Presets;
-        var index = presets.FindIndex(p => p.Id == modeId);
-        if (index <= 0 || presets.Count < 2) return;
-        var preset = presets[index];
+        var modes = _config.Config.Modes;
+        var index = modes.FindIndex(p => p.Id == modeId);
+        if (index <= 0 || modes.Count < 2) return;
+        var mode = modes[index];
         var removedActions = new Dictionary<ButtonConfig, ButtonBindingConfig>();
         foreach (var button in Buttons)
-            if (button.Actions.Remove(preset.Id, out var binding) && binding is not null)
+            if (button.Actions.Remove(mode.Id, out var binding) && binding is not null)
                 removedActions[button] = binding;
-        presets.RemoveAt(index);
-        var wasLive = LivePresetId == preset.Id;
-        var wasEditing = EditingPresetId == preset.Id;
-        if (MenuModeId == preset.Id) MenuModeId = null;
-        if (RenamingModeId == preset.Id) RenamingModeId = null;
+        modes.RemoveAt(index);
+        var wasLive = LiveModeId == mode.Id;
+        var wasEditing = EditingModeId == mode.Id;
+        if (MenuModeId == mode.Id) MenuModeId = null;
+        if (RenamingModeId == mode.Id) RenamingModeId = null;
 
-        RebuildPresetTabs();
-        RefreshPresetPickers();
+        RebuildModeTabs();
+        RefreshModePickers();
         // Edit the tab before the deleted one when it was the edited one.
-        if (wasEditing) EditingPresetId = presets[Math.Max(0, index - 1)].Id;
-        // The runtime already falls back to the first preset once the live one is gone (and so
+        if (wasEditing) EditingModeId = modes[Math.Max(0, index - 1)].Id;
+        // The runtime already falls back to the first mode once the live one is gone (and so
         // raises no change); read it back rather than wait for an event.
-        if (wasLive) _presets.SetActivePreset(presets[0].Id);
-        LivePresetId = _presets.ActivePresetId;
+        if (wasLive) _modes.SetActiveMode(modes[0].Id);
+        LiveModeId = _modes.ActiveModeId;
         Save();
 
-        _toast.Show($"Mode “{preset.Name}” deleted", () =>
+        _toast.Show($"Mode “{mode.Name}” deleted", () =>
         {
-            presets.Insert(Math.Min(index, presets.Count), preset);
+            modes.Insert(Math.Min(index, modes.Count), mode);
             foreach (var (button, binding) in removedActions)
-                button.Actions[preset.Id] = binding;
-            RebuildPresetTabs();
-            RefreshPresetPickers();
-            if (wasEditing) EditingPresetId = preset.Id;
-            if (wasLive) _presets.SetActivePreset(preset.Id);
-            LivePresetId = _presets.ActivePresetId;
+                button.Actions[mode.Id] = binding;
+            RebuildModeTabs();
+            RefreshModePickers();
+            if (wasEditing) EditingModeId = mode.Id;
+            if (wasLive) _modes.SetActiveMode(mode.Id);
+            LiveModeId = _modes.ActiveModeId;
             Save();
         });
     }
@@ -313,21 +313,21 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     /// <summary>Moves a mode to another position (the first is the start-up mode); colours follow positions.</summary>
     public void MoveMode(int from, int to)
     {
-        var presets = _config.Config.Presets;
-        if (from == to || from < 0 || to < 0 || from >= presets.Count || to >= presets.Count) return;
-        var preset = presets[from];
-        presets.RemoveAt(from);
-        presets.Insert(to, preset);
-        RebuildPresetTabs();
-        RefreshPresetPickers();
+        var modes = _config.Config.Modes;
+        if (from == to || from < 0 || to < 0 || from >= modes.Count || to >= modes.Count) return;
+        var mode = modes[from];
+        modes.RemoveAt(from);
+        modes.Insert(to, mode);
+        RebuildModeTabs();
+        RefreshModePickers();
         Save();
     }
 
     /// <summary>Makes the edited mode the one the controller uses.</summary>
     [RelayCommand]
-    private void MakeLive() => MakeLive(EditingPresetId);
+    private void MakeLive() => MakeLive(EditingModeId);
 
-    public void MakeLive(string modeId) => _presets.SetActivePreset(modeId);
+    public void MakeLive(string modeId) => _modes.SetActiveMode(modeId);
 
     [RelayCommand]
     private void ToggleEditModes()
@@ -338,7 +338,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
     public void StartRename(string modeId)
     {
-        RenameText = PresetName(modeId) ?? "";
+        RenameText = ModeName(modeId) ?? "";
         RenamingModeId = modeId;
     }
 
@@ -350,13 +350,13 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
     public void CancelRename() => RenamingModeId = null;
 
-    private void RefreshPresetPickers()
+    private void RefreshModePickers()
     {
         foreach (var item in Items)
         {
-            foreach (var slot in item.Slots) slot.RefreshPresets();
+            foreach (var slot in item.Slots) slot.RefreshModes();
             item.Refresh();
-            item.RefreshProblems();   // Go to preset checks that its preset exists
+            item.RefreshProblems();   // Go to mode checks that its mode exists
         }
     }
 
@@ -407,7 +407,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     public void SwapActions(int a, int b)
     {
         if (a == b || a < 0 || b < 0 || a >= Items.Count || b >= Items.Count) return;
-        var id = EditingPresetId;
+        var id = EditingModeId;
         DoSwap(a, b, id);
         Save();
         _toast.Show($"Swapped button {a + 1} and button {b + 1} in {EditingName}", () =>
@@ -446,7 +446,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         if (index >= 0 && index < Items.Count) Items[index].Pulse();
     }
 
-    /// <summary>Recomputes every light preview (audio state or the live preset changed).</summary>
+    /// <summary>Recomputes every light preview (audio state or the live mode changed).</summary>
     public void RefreshLights()
     {
         foreach (var item in Items) item.Refresh();

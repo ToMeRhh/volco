@@ -5,7 +5,7 @@ namespace Volco.App.ViewModels;
 
 /// <summary>
 /// The one "… removed · Undo" message the settings window shows after a destructive change
-/// (Reset, Remove last, Delete preset). Showing a new one replaces the old one, whose undo is
+/// (Reset, Remove last, Delete mode). Showing a new one replaces the old one, whose undo is
 /// then no longer offered. The window closes it after a timeout (<see cref="Version"/> tells it
 /// which message the timeout belongs to).
 /// </summary>

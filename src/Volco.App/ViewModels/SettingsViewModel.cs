@@ -105,7 +105,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.DevicesChanged += OnDevicesChanged;
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
         _runtime.ButtonActivity += OnButtonActivity;
-        _runtime.ActivePresetChanged += OnActivePresetChanged;
+        _runtime.ActiveModeChanged += OnActiveModeChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _runtime.LinkStatusChanged += OnLinkStatusChanged;
         _wasConnected = _runtime.LinkStatus.IsConnected;
@@ -161,10 +161,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             else _buttonsViewModel?.Pulse(index);
         });
 
-    private void OnActivePresetChanged(object? sender, string presetId)
+    private void OnActiveModeChanged(object? sender, string modeId)
         => _ui.Post(() =>
         {
-            if (!_disposed) _buttonsViewModel?.OnRuntimePresetChanged(presetId);
+            if (!_disposed) _buttonsViewModel?.OnRuntimeModeChanged(modeId);
         });
 
     private void OnControllerInfoChanged(object? sender, EventArgs e)
@@ -215,7 +215,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.DevicesChanged -= OnDevicesChanged;
         _runtime.SliderLevelChanged -= OnSliderLevelChanged;
         _runtime.ButtonActivity -= OnButtonActivity;
-        _runtime.ActivePresetChanged -= OnActivePresetChanged;
+        _runtime.ActiveModeChanged -= OnActiveModeChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.LinkStatusChanged -= OnLinkStatusChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;

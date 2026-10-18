@@ -34,7 +34,7 @@ public class ScreenPreviewTests
     }
 
     [AvaloniaFact]
-    public void Dots_OneFilledPerSelectedPreset()
+    public void Dots_OneFilledPerSelectedMode()
     {
         var p = Show(ScreenContent.Dots(1, 3, ScreenIcon.Presets, "Gaming"));
         var dots = Part<ItemsControl>(p, "TopDots");

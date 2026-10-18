@@ -98,7 +98,7 @@ internal sealed class ModeTabReorder
     private void Begin(ButtonsViewModel model, Press press)
     {
         var centers = new List<Point>();
-        for (int i = 0; i < model.Presets.Count; i++)
+        for (int i = 0; i < model.Modes.Count; i++)
         {
             var c = _tabs.ContainerFromIndex(i);
             var origin = c?.TranslatePoint(new Point(0, 0), _tabs);
@@ -202,7 +202,7 @@ internal sealed class ModeTabReorder
         var from = _tabs.IndexFromContainer(container);
         var to = e.Key == Key.Left ? from - 1 : from + 1;
         e.Handled = true;
-        if (from < 0 || to < 0 || to >= model.Presets.Count) return;
+        if (from < 0 || to < 0 || to >= model.Modes.Count) return;
         model.MoveMode(from, to);
         FocusLater(to);
     }

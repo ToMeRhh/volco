@@ -64,7 +64,7 @@ public class CustomActionConfigTests : IDisposable
     }
 
     [Fact]
-    public void Load_V5_StampsV6_WithBackup()
+    public void Load_V5_StampsCurrent_WithBackup()
     {
         const string v5 = """
         { "schemaVersion": 5, "connection": { "type": "Serial", "serial": { "comPort": "COM7" } },
@@ -76,12 +76,12 @@ public class CustomActionConfigTests : IDisposable
         var cm = new ConfigManager(_configPath);
         cm.Load();
 
-        Assert.Equal(6, cm.Config.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, cm.Config.SchemaVersion);
         var action = cm.Config.Buttons[0].Default().SinglePress;
         Assert.Equal(ButtonActionType.MuteCurrentOutput, action.Action);
         Assert.Null(action.Command);
         Assert.Null(action.MediaApp);
-        Assert.Contains("\"schemaVersion\": 6", File.ReadAllText(_configPath));
+        Assert.Contains($"\"schemaVersion\": {AppConfig.CurrentSchemaVersion}", File.ReadAllText(_configPath));
         Assert.Equal(v5, File.ReadAllText(Path.Combine(_tempDir, "config.v5.bak")));
     }
 
@@ -93,7 +93,7 @@ public class CustomActionConfigTests : IDisposable
     [InlineData(ButtonActionType.OpenProgram, false, true)]
     [InlineData(ButtonActionType.RunScript, false, true)]
     [InlineData(ButtonActionType.MuteCurrentOutput, false, false)]
-    [InlineData(ButtonActionType.NextPreset, false, false)]
+    [InlineData(ButtonActionType.NextMode, false, false)]
     public void ActionGroups(ButtonActionType type, bool media, bool runsCode)
     {
         Assert.Equal(media, ButtonActionTypes.IsMedia(type));

@@ -427,8 +427,8 @@
 
   <!-- Buttons: the frame in the edited mode's colour, its tabs, and the tiles -->
   <Style Selector="Border.ModeFrame">
-    <Setter Property="Background" Value="{DynamicResource PresetFill}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource PresetEdge}"/>
+    <Setter Property="Background" Value="{DynamicResource ModeFill}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ModeEdge}"/>
     <Setter Property="BorderThickness" Value="1.5"/>
     <Setter Property="CornerRadius" Value="12"/>
     <Setter Property="Padding" Value="8,0,8,8"/>
@@ -460,7 +460,7 @@
     <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
   <Style Selector="RadioButton.ModeTab:checked /template/ Border#PART_Tab">
-    <Setter Property="Background" Value="{DynamicResource PresetEdge}"/>
+    <Setter Property="Background" Value="{DynamicResource ModeEdge}"/>
   </Style>
   <Style Selector="RadioButton.ModeTab:focus-visible /template/ Border#PART_Tab">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -652,7 +652,7 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
   <Style Selector="Border.ModePill">
-    <Setter Property="Background" Value="{DynamicResource PresetEdge}"/>
+    <Setter Property="Background" Value="{DynamicResource ModeEdge}"/>
     <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
     <Setter Property="Padding" Value="7,0"/>
     <Setter Property="VerticalAlignment" Value="Center"/>

@@ -95,25 +95,25 @@ public class ColorTokenTests
         }
     }
 
-    /// <summary>The preset tints (Buttons page): every text token reads on each fill, at 4.5:1
+    /// <summary>The mode tints (Buttons page): every text token reads on each fill, at 4.5:1
     /// (7:1 in high contrast), and each edge stands out from the page and from its fill at 3:1.</summary>
     [AvaloniaFact]
-    public void PresetTints_MeetTheirContrastTargets_InEveryTheme()
+    public void ModeTints_MeetTheirContrastTargets_InEveryTheme()
     {
         foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark, VolcoThemes.HighContrastDark, VolcoThemes.HighContrastLight })
         {
             var text = theme == ThemeVariant.Light || theme == ThemeVariant.Dark ? 4.5 : 7.0;
-            for (int i = 0; i < PresetTint.Count; i++)
+            for (int i = 0; i < ModeTint.Count; i++)
             {
-                var fill = Token($"PresetFill{i}Color", theme);
-                var edge = Token($"PresetEdge{i}Color", theme);
+                var fill = Token($"ModeFill{i}Color", theme);
+                var edge = Token($"ModeEdge{i}Color", theme);
                 foreach (var key in new[] { "TextColor", "TextSecondaryColor", "TextTertiaryColor" })
                 {
                     var ratio = Contrast(Token(key, theme), fill);
-                    Assert.True(ratio >= text, $"{key} on PresetFill{i} ({theme}) is {ratio:F2}:1, needs {text}:1");
+                    Assert.True(ratio >= text, $"{key} on ModeFill{i} ({theme}) is {ratio:F2}:1, needs {text}:1");
                 }
-                Assert.True(Contrast(edge, Token("BgColor", theme)) >= 3.0, $"PresetEdge{i} on Bg ({theme})");
-                Assert.True(Contrast(edge, fill) >= 3.0, $"PresetEdge{i} on PresetFill{i} ({theme})");
+                Assert.True(Contrast(edge, Token("BgColor", theme)) >= 3.0, $"ModeEdge{i} on Bg ({theme})");
+                Assert.True(Contrast(edge, fill) >= 3.0, $"ModeEdge{i} on ModeFill{i} ({theme})");
             }
         }
     }

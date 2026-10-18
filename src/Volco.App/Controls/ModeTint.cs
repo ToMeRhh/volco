@@ -5,25 +5,25 @@ using Avalonia.Controls;
 namespace Volco.App.Controls;
 
 /// <summary>
-/// A preset's colour on the Controls page. Setting <c>PresetTint.Index</c> on a control puts two
-/// resources in it, <c>PresetFill</c> and <c>PresetEdge</c>: the theme's <c>PresetFill{n}Brush</c> and
-/// <c>PresetEdge{n}Brush</c> (n = index mod <see cref="Count"/>), kept current when the theme changes.
-/// The control, its template and its content use them as <c>{DynamicResource PresetFill}</c>.
+/// A mode's colour on the Controls page. Setting <c>ModeTint.Index</c> on a control puts two
+/// resources in it, <c>ModeFill</c> and <c>ModeEdge</c>: the theme's <c>ModeFill{n}Brush</c> and
+/// <c>ModeEdge{n}Brush</c> (n = index mod <see cref="Count"/>), kept current when the theme changes.
+/// The control, its template and its content use them as <c>{DynamicResource ModeFill}</c>.
 /// </summary>
-public static class PresetTint
+public static class ModeTint
 {
-    /// <summary>How many tints there are (Colors.axaml); presets past the last reuse them in turn.</summary>
+    /// <summary>How many tints there are (Colors.axaml); modes past the last reuse them in turn.</summary>
     public const int Count = 6;
 
-    public const string FillKey = "PresetFill";
-    public const string EdgeKey = "PresetEdge";
+    public const string FillKey = "ModeFill";
+    public const string EdgeKey = "ModeEdge";
 
     public static readonly AttachedProperty<int> IndexProperty =
-        AvaloniaProperty.RegisterAttached<Control, int>("Index", typeof(PresetTint), -1);
+        AvaloniaProperty.RegisterAttached<Control, int>("Index", typeof(ModeTint), -1);
 
     private static readonly ConditionalWeakTable<Control, IDisposable[]> Subscriptions = new();
 
-    static PresetTint()
+    static ModeTint()
     {
         IndexProperty.Changed.AddClassHandler<Control>((control, _) => Apply(control));
     }
@@ -48,8 +48,8 @@ public static class PresetTint
         var n = index % Count;
         Subscriptions.Add(control, new[]
         {
-            Mirror(control, $"PresetFill{n}Brush", FillKey),
-            Mirror(control, $"PresetEdge{n}Brush", EdgeKey),
+            Mirror(control, $"ModeFill{n}Brush", FillKey),
+            Mirror(control, $"ModeEdge{n}Brush", EdgeKey),
         });
     }
 

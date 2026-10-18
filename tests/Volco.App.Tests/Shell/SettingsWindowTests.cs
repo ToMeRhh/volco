@@ -226,7 +226,7 @@ public class SettingsWindowTests
     {
         var window = Create(c =>
         {
-            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "A preset with a rather long name" });
+            c.Modes.Add(new ModeConfig { Id = "gaming", Name = "A mode with a rather long name" });
             c.Buttons[0].Default().SinglePress.Action = ButtonActionType.OpenProgram;
             c.Buttons[0].Default().SinglePress.Command = new CommandConfig { Path = @"C:\Program Files\Some App\app.exe" };
             c.Buttons[1].Default().SinglePress.Action = ButtonActionType.ToggleOutputDevice;

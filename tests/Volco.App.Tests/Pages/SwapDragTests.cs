@@ -129,17 +129,17 @@ public class SwapDragTests
     {
         using var s = Show(c =>
         {
-            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            c.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
             c.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
-            c.Buttons[2].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.NextPreset;
+            c.Buttons[2].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.NextMode;
         });
-        s.Vm.Buttons.Presets.Single(p => p.Id == "gaming").SelectCommand.Execute(null);
+        s.Vm.Buttons.Modes.Single(p => p.Id == "gaming").SelectCommand.Execute(null);
         Settle(s.Window);
         var tiles = ButtonTiles(s);
 
         Drag(s, Grip(tiles[0]), Centre(tiles[2]));
 
-        Assert.Equal(ButtonActionType.NextPreset, s.Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
+        Assert.Equal(ButtonActionType.NextMode, s.Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
         Assert.Equal(ButtonActionType.MuteCurrentInput, s.Config.Buttons[2].BindingFor("gaming").SinglePress.Action);
         // Only the edited mode moves.
         Assert.Equal(ButtonActionType.MuteCurrentOutput, s.Config.Buttons[0].Default().SinglePress.Action);

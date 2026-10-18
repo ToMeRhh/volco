@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
 
-/// <summary>The modes (presets in code) of <see cref="ButtonsViewModel"/>, which the Controls page reuses: Add mode, copy,
+/// <summary>The modes of <see cref="ButtonsViewModel"/>, which the Controls page reuses: Add mode, copy,
 /// Make live, Rename, Delete and reorder (swaps are in SwapTests).</summary>
 public sealed class ModesAndMovesTests : IDisposable
 {
@@ -17,7 +17,7 @@ public sealed class ModesAndMovesTests : IDisposable
     {
         var speakers = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true);
         _rig = new TestRig(new FakeAudioEngine { Devices = { speakers }, DefaultRender = speakers });
-        Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
     }
 
     public void Dispose() => _rig.Dispose();
@@ -39,30 +39,30 @@ public sealed class ModesAndMovesTests : IDisposable
 
         buttons.AddModeCommand.Execute(null);
 
-        Assert.Equal(3, Config.Presets.Count);
-        var added = Config.Presets[2];
+        Assert.Equal(3, Config.Modes.Count);
+        var added = Config.Modes[2];
         Assert.Equal("Mode 2", added.Name);
         Assert.All(Config.Buttons, b => Assert.True(NoBinding(b, added.Id)));
-        Assert.Equal(added.Id, buttons.EditingPresetId);
-        Assert.Equal(AppConfig.DefaultPresetId, buttons.LivePresetId);
+        Assert.Equal(added.Id, buttons.EditingModeId);
+        Assert.Equal(AppConfig.DefaultModeId, buttons.LiveModeId);
         Assert.Equal(added.Id, buttons.MenuModeId);
-        Assert.Equal(3, buttons.Presets.Count);
-        Assert.True(buttons.Presets[2].IsEditing);
+        Assert.Equal(3, buttons.Modes.Count);
+        Assert.True(buttons.Modes[2].IsEditing);
     }
 
     [Fact]
     public void AddMode_NameSkipsTakenNumbers()
     {
-        Config.Presets.Add(new PresetConfig { Id = "m2", Name = "Mode 2" });
-        Config.Presets.Add(new PresetConfig { Id = "m3", Name = "Mode 3" });
+        Config.Modes.Add(new ModeConfig { Id = "m2", Name = "Mode 2" });
+        Config.Modes.Add(new ModeConfig { Id = "m3", Name = "Mode 3" });
         var buttons = Buttons();
 
         buttons.AddModeCommand.Execute(null);
-        Assert.Equal("Mode 4", Config.Presets[^1].Name);
+        Assert.Equal("Mode 4", Config.Modes[^1].Name);
 
         buttons.DeleteMode("m2");
         buttons.AddModeCommand.Execute(null);
-        Assert.Equal("Mode 2", Config.Presets[^1].Name);
+        Assert.Equal("Mode 2", Config.Modes[^1].Name);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class ModesAndMovesTests : IDisposable
         Config.Buttons[1].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MediaPlayPause;
         var buttons = Buttons();
 
-        buttons.CopyActions(AppConfig.DefaultPresetId, "gaming");
+        buttons.CopyActions(AppConfig.DefaultModeId, "gaming");
 
         Assert.Equal(ButtonActionType.MuteCurrentInput, Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
         Assert.True(NoBinding(Config.Buttons[1], "gaming"));
@@ -94,28 +94,28 @@ public sealed class ModesAndMovesTests : IDisposable
         };
         var buttons = Buttons();
 
-        buttons.CopyActions(AppConfig.DefaultPresetId, "gaming");
+        buttons.CopyActions(AppConfig.DefaultModeId, "gaming");
         Config.Buttons[0].BindingFor("gaming").SinglePress.Device = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Cans" };
 
         Assert.Equal("dev-1", Config.Buttons[0].Default().SinglePress.Device!.Id);
     }
 
     [Fact]
-    public void MakeLive_MakesTheEditedPresetTheControllers()
+    public void MakeLive_MakesTheEditedModeTheControllers()
     {
         var buttons = Buttons();
         Assert.True(buttons.IsEditingLive);
 
-        buttons.Presets.Single(p => p.Id == "gaming").SelectCommand.Execute(null);
+        buttons.Modes.Single(p => p.Id == "gaming").SelectCommand.Execute(null);
         Assert.False(buttons.IsEditingLive);
         Assert.Equal("Make Gaming live", buttons.MakeLiveText);
 
         buttons.MakeLiveCommand.Execute(null);
-        Assert.Equal("gaming", _rig.Runtime.ActivePresetId);
+        Assert.Equal("gaming", _rig.Runtime.ActiveModeId);
     }
 
     [Fact]
-    public void SwitchingTheEditedPreset_ShowsAndEditsThatPresetsActions()
+    public void SwitchingTheEditedMode_ShowsAndEditsThatModesActions()
     {
         Config.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
         Config.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
@@ -123,12 +123,12 @@ public sealed class ModesAndMovesTests : IDisposable
         var item = buttons.Items[0];
         Assert.Equal("Mute output", item.MainLabel);
 
-        buttons.EditingPresetId = "gaming";
+        buttons.EditingModeId = "gaming";
 
         Assert.Equal("Mute mic", item.MainLabel);
         Assert.Equal(ButtonActionType.MuteCurrentInput, item.Press.SelectedChoice.Type);
-        item.Press.SelectedChoice = ActionCatalog.For(ButtonActionType.NextPreset);
-        Assert.Equal(ButtonActionType.NextPreset, Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
+        item.Press.SelectedChoice = ActionCatalog.For(ButtonActionType.NextMode);
+        Assert.Equal(ButtonActionType.NextMode, Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].Default().SinglePress.Action);
     }
 
@@ -140,8 +140,8 @@ public sealed class ModesAndMovesTests : IDisposable
         buttons.RenameMode("gaming", "   ");
         buttons.RenameMode("gaming", "Gaming");
 
-        Assert.Equal("Gaming", Config.Presets[1].Name);
-        Assert.Equal("Gaming", buttons.Presets[1].Name);
+        Assert.Equal("Gaming", Config.Modes[1].Name);
+        Assert.Equal("Gaming", buttons.Modes[1].Name);
     }
 
     [Fact]
@@ -151,20 +151,20 @@ public sealed class ModesAndMovesTests : IDisposable
 
         buttons.StartRename("gaming");
         Assert.Equal("Gaming", buttons.RenameText);
-        Assert.True(buttons.Presets[1].IsRenaming);
+        Assert.True(buttons.Modes[1].IsRenaming);
         buttons.RenameText = "  Play ";
         buttons.CommitRename();
 
-        Assert.Equal("Play", Config.Presets[1].Name);
-        Assert.Equal("Play", buttons.Presets[1].Name);
-        Assert.Contains(buttons.PresetChoices(), c => c.Id == "gaming" && c.Name == "Play");
+        Assert.Equal("Play", Config.Modes[1].Name);
+        Assert.Equal("Play", buttons.Modes[1].Name);
+        Assert.Contains(buttons.ModeChoices(), c => c.Id == "gaming" && c.Name == "Play");
         Assert.Null(buttons.RenamingModeId);
-        Assert.False(buttons.Presets[1].IsRenaming);
+        Assert.False(buttons.Modes[1].IsRenaming);
 
         buttons.StartRename("gaming");
         buttons.CancelRename();
         Assert.Null(buttons.RenamingModeId);
-        Assert.Equal("Play", Config.Presets[1].Name);
+        Assert.Equal("Play", Config.Modes[1].Name);
     }
 
     [Fact]
@@ -180,20 +180,20 @@ public sealed class ModesAndMovesTests : IDisposable
 
         Assert.False(buttons.IsEditingModes);
         Assert.Null(buttons.RenamingModeId);
-        Assert.False(buttons.Presets[1].IsRenaming);
+        Assert.False(buttons.Modes[1].IsRenaming);
     }
 
     [Fact]
     public void DeletingAMode_EditsTheModeBefore_AndMovesTheColoursAfter()
     {
-        Config.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        Config.Modes.Add(new ModeConfig { Id = "work", Name = "Work" });
         var buttons = Buttons();
 
-        buttons.EditingPresetId = "gaming";
+        buttons.EditingModeId = "gaming";
         buttons.DeleteMode("gaming");
-        Assert.Equal(AppConfig.DefaultPresetId, buttons.EditingPresetId);
-        Assert.Equal(new[] { 0, 1 }, buttons.Presets.Select(p => p.TintIndex));
-        buttons.EditingPresetId = "work";
+        Assert.Equal(AppConfig.DefaultModeId, buttons.EditingModeId);
+        Assert.Equal(new[] { 0, 1 }, buttons.Modes.Select(p => p.TintIndex));
+        buttons.EditingModeId = "work";
         Assert.Equal(1, buttons.EditingTintIndex);
     }
 
@@ -202,42 +202,42 @@ public sealed class ModesAndMovesTests : IDisposable
     {
         var buttons = Buttons();
 
-        buttons.DeleteMode(AppConfig.DefaultPresetId);
+        buttons.DeleteMode(AppConfig.DefaultModeId);
 
-        Assert.Equal(2, Config.Presets.Count);
-        Assert.False(buttons.Presets[0].CanDelete);
-        Assert.True(buttons.Presets[0].IsFirst);
-        Assert.True(buttons.Presets[1].CanDelete);
+        Assert.Equal(2, Config.Modes.Count);
+        Assert.False(buttons.Modes[0].CanDelete);
+        Assert.True(buttons.Modes[0].IsFirst);
+        Assert.True(buttons.Modes[1].CanDelete);
     }
 
     [Fact]
     public void DeleteMode_Live_FallsBackToFirst_UndoRestoresLive()
     {
         Config.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
-        _rig.Runtime.SetActivePreset("gaming");
+        _rig.Runtime.SetActiveMode("gaming");
         var buttons = Buttons();
-        Assert.Equal("gaming", buttons.EditingPresetId);
+        Assert.Equal("gaming", buttons.EditingModeId);
 
-        buttons.Presets[1].DeleteCommand.Execute(null);
+        buttons.Modes[1].DeleteCommand.Execute(null);
 
-        Assert.Single(Config.Presets);
+        Assert.Single(Config.Modes);
         Assert.False(Config.Buttons[0].Actions.ContainsKey("gaming"));
-        Assert.Equal(AppConfig.DefaultPresetId, _rig.Runtime.ActivePresetId);
-        Assert.Equal(AppConfig.DefaultPresetId, buttons.LivePresetId);
+        Assert.Equal(AppConfig.DefaultModeId, _rig.Runtime.ActiveModeId);
+        Assert.Equal(AppConfig.DefaultModeId, buttons.LiveModeId);
         Assert.Equal("Mode “Gaming” deleted", _toast.Message);
 
         _toast.UndoCommand.Execute(null);
 
-        Assert.Equal(2, Config.Presets.Count);
+        Assert.Equal(2, Config.Modes.Count);
         Assert.Equal(ButtonActionType.MuteCurrentInput, Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
-        Assert.Equal("gaming", _rig.Runtime.ActivePresetId);
-        Assert.Equal("gaming", buttons.EditingPresetId);
+        Assert.Equal("gaming", _rig.Runtime.ActiveModeId);
+        Assert.Equal("gaming", buttons.EditingModeId);
     }
 
     [Fact]
     public void GoToMode_TargetDeleted_ShowsProblem()
     {
-        Config.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "gaming" };
+        Config.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "gaming" };
         var buttons = Buttons();
         Assert.False(buttons.Items[0].Press.HasProblem);
 
@@ -249,19 +249,19 @@ public sealed class ModesAndMovesTests : IDisposable
     [Fact]
     public void MoveMode_KeepsLiveAndEdited_RecoloursTabs()
     {
-        Config.Presets.Add(new PresetConfig { Id = "work", Name = "Work" });
+        Config.Modes.Add(new ModeConfig { Id = "work", Name = "Work" });
         var buttons = Buttons();
-        buttons.EditingPresetId = "gaming";
+        buttons.EditingModeId = "gaming";
 
         buttons.MoveMode(2, 0);
 
-        Assert.Equal(AppConfig.DefaultPresetId, buttons.LivePresetId);
-        Assert.Equal("gaming", buttons.EditingPresetId);
-        Assert.Equal("work", buttons.Presets[0].Id);
-        Assert.Equal(new[] { 0, 1, 2 }, buttons.Presets.Select(p => p.TintIndex));
+        Assert.Equal(AppConfig.DefaultModeId, buttons.LiveModeId);
+        Assert.Equal("gaming", buttons.EditingModeId);
+        Assert.Equal("work", buttons.Modes[0].Id);
+        Assert.Equal(new[] { 0, 1, 2 }, buttons.Modes.Select(p => p.TintIndex));
         Assert.Equal(2, buttons.EditingTintIndex);
-        Assert.True(buttons.Presets[2].IsEditing);
-        Assert.True(buttons.Presets[1].IsLive);
+        Assert.True(buttons.Modes[2].IsEditing);
+        Assert.True(buttons.Modes[1].IsLive);
     }
 
     [Fact]
@@ -270,12 +270,12 @@ public sealed class ModesAndMovesTests : IDisposable
         var buttons = Buttons();
 
         buttons.MoveMode(1, 0);
-        Assert.Equal("gaming", Config.Presets[0].Id);
-        Assert.True(buttons.Presets[0].IsFirst);
+        Assert.Equal("gaming", Config.Modes[0].Id);
+        Assert.True(buttons.Modes[0].IsFirst);
 
         buttons.MoveMode(0, 0);
         buttons.MoveMode(-1, 0);
         buttons.MoveMode(0, 5);
-        Assert.Equal(new[] { "gaming", AppConfig.DefaultPresetId }, Config.Presets.Select(p => p.Id));
+        Assert.Equal(new[] { "gaming", AppConfig.DefaultModeId }, Config.Modes.Select(p => p.Id));
     }
 }

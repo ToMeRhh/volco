@@ -91,7 +91,7 @@ public partial class ControlsPage
         }
     }
 
-    private int TabIndexOf(string id) => _buttons?.Presets.ToList().FindIndex(t => t.Id == id) ?? -1;
+    private int TabIndexOf(string id) => _buttons?.Modes.ToList().FindIndex(t => t.Id == id) ?? -1;
 
     // ── The menu ──────────────────────────────────────────────────────────────
 
@@ -112,10 +112,10 @@ public partial class ControlsPage
         buttons.MenuModeId = id;                 // closing it cleared the id
 
         _menuShownFor = id;
-        _menuNameShown = buttons.PresetName(id) ?? "";
+        _menuNameShown = buttons.ModeName(id) ?? "";
         MenuNameBox.Text = _menuNameShown;
-        MenuMakeLive.IsVisible = buttons.LivePresetId != id;
-        var others = buttons.PresetChoices().Where(p => p.Id != id).ToList();
+        MenuMakeLive.IsVisible = buttons.LiveModeId != id;
+        var others = buttons.ModeChoices().Where(p => p.Id != id).ToList();
         MenuCopyFrom.IsVisible = others.Count > 0;
         ((MenuFlyout)MenuCopyFrom.Flyout!).ItemsSource = others.Select(p =>
         {
@@ -144,8 +144,8 @@ public partial class ControlsPage
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
 
-    private static PresetTabViewModel? TabModel(object? source)
-        => (source as StyledElement)?.DataContext as PresetTabViewModel;
+    private static ModeTabViewModel? TabModel(object? source)
+        => (source as StyledElement)?.DataContext as ModeTabViewModel;
 
     /// <summary>The nearest ancestor-or-self of <paramref name="source"/> of type <typeparamref name="T"/>
     /// with that name, or null.</summary>

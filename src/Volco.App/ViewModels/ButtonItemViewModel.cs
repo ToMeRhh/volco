@@ -15,8 +15,8 @@ public sealed record GestureLine(PressType Gesture, string Label, string IconKey
 
 /// <summary>
 /// One button of the Controls page. Its position (= <see cref="Index"/>) is the hardware input
-/// number. Timing is shared by every preset; the action rows and the light and screen previews show
-/// the preset being edited (when it is live, exactly what the controller shows).
+/// number. Timing is shared by every mode; the action rows and the light and screen previews show
+/// the mode being edited (when it is live, exactly what the controller shows).
 /// </summary>
 public sealed partial class ButtonItemViewModel : ObservableObject
 {
@@ -33,13 +33,13 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     partial void OnIndexChanged(int value)
     {
         Indicator = _owner.IndicatorFor(value);
-        UpdateLightDescription(Config.BindingFor(_owner.EditingPresetId));
+        UpdateLightDescription(Config.BindingFor(_owner.EditingModeId));
     }
 
     private void UpdateLightDescription(ButtonBindingConfig edited)
         => LightDescription = IsScreen
             ? ActionCatalog.ScreenDescription(edited)
-            : ActionCatalog.LightDescription(edited, IsLed, _owner.PresetName, _owner.DeviceName);
+            : ActionCatalog.LightDescription(edited, IsLed, _owner.ModeName, _owner.DeviceName);
 
     /// <summary>The button's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Button {Index + 1}";
@@ -55,7 +55,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     public ActionSlotViewModel DoublePress { get; }
     public ActionSlotViewModel Hold { get; }
 
-    // ── Timing (shared by every preset) ───────────────────────────────────────
+    // ── Timing (shared by every mode) ───────────────────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TimingSummary))]
@@ -70,20 +70,20 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     // ── Derived display ───────────────────────────────────────────────────────
 
-    /// <summary>The edited preset's main action (the one the light follows), or "Not set".</summary>
+    /// <summary>The edited mode's main action (the one the light follows), or "Not set".</summary>
     [ObservableProperty]
     private string _mainLabel = "Not set";
 
-    /// <summary>Which gesture the main action is on; null when the edited preset has none.</summary>
+    /// <summary>Which gesture the main action is on; null when the edited mode has none.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LightRowText))]
     private PressType? _mainGesture;
 
-    /// <summary>The edited preset's other actions, in Press, Double press, Hold order.</summary>
+    /// <summary>The edited mode's other actions, in Press, Double press, Hold order.</summary>
     [ObservableProperty]
     private IReadOnlyList<GestureLine> _secondary = Array.Empty<GestureLine>();
 
-    /// <summary>The edited preset has an action, so Clear is offered.</summary>
+    /// <summary>The edited mode has an action, so Clear is offered.</summary>
     [ObservableProperty]
     private bool _hasEditedActions;
 
@@ -118,7 +118,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     public string LightRowLabel => IsScreen ? "Screen" : "Light";
 
-    /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited preset.</summary>
+    /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited mode.</summary>
     public string LightRowText => MainGesture is { } gesture ? $"Follows {GestureName(gesture)}" : "Off";
 
     public static string GestureName(PressType gesture) => gesture switch
@@ -128,7 +128,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         _ => "Press",
     };
 
-    /// <summary>What this button's screen shows in the edited preset.</summary>
+    /// <summary>What this button's screen shows in the edited mode.</summary>
     [ObservableProperty]
     private ScreenContent _screen = ScreenContent.Blank;
 
@@ -157,11 +157,11 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         Config = cfg;
         _owner = owner;
         _index = index;
-        Press = new ActionSlotViewModel("Press", devices, owner.PresetChoices, a => owner.Execute(a, Index, PressType.Single),
+        Press = new ActionSlotViewModel("Press", devices, owner.ModeChoices, a => owner.Execute(a, Index, PressType.Single),
                                         OnActionChanged, name => owner.Describe(name), owner.SlotHost);
-        DoublePress = new ActionSlotViewModel("Double press", devices, owner.PresetChoices, a => owner.Execute(a, Index, PressType.Double),
+        DoublePress = new ActionSlotViewModel("Double press", devices, owner.ModeChoices, a => owner.Execute(a, Index, PressType.Double),
                                               OnActionChanged, name => owner.Describe(name), owner.SlotHost);
-        Hold = new ActionSlotViewModel("Hold", devices, owner.PresetChoices, a => owner.Execute(a, Index, PressType.Long),
+        Hold = new ActionSlotViewModel("Hold", devices, owner.ModeChoices, a => owner.Execute(a, Index, PressType.Long),
                                        OnActionChanged, name => owner.Describe(name), owner.SlotHost);
         Reload();
     }
@@ -171,7 +171,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         get { yield return Press; yield return DoublePress; yield return Hold; }
     }
 
-    /// <summary>Re-reads timing and the edited preset's actions (after a preset switch).</summary>
+    /// <summary>Re-reads timing and the edited mode's actions (after a mode switch).</summary>
     internal void Reload()
     {
         _loading = true;
@@ -182,7 +182,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         }
         finally { _loading = false; }
 
-        var binding = Config.GetOrAddBinding(_owner.EditingPresetId);
+        var binding = Config.GetOrAddBinding(_owner.EditingModeId);
         Press.Bind(binding.SinglePress);
         DoublePress.Bind(binding.DoublePress);
         Hold.Bind(binding.LongPress);
@@ -194,17 +194,17 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     /// to call often (no file or device lookups).</summary>
     internal void Refresh()
     {
-        var edited = Config.BindingFor(_owner.EditingPresetId);
+        var edited = Config.BindingFor(_owner.EditingModeId);
         RefreshActionLines(edited);
 
         Indicator = _owner.IndicatorFor(Index);
         UpdateLightDescription(edited);
 
-        // The previews show what the controller would show in the edited preset.
-        LightValue = ControllerDisplay.LedValueFor(edited, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.EditingPresetId, _owner.Audio, _owner.ActionStatus);
+        // The previews show what the controller would show in the edited mode.
+        LightValue = ControllerDisplay.LedValueFor(edited, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.EditingModeId, _owner.Audio, _owner.ActionStatus);
         // From this button's own config, not AppConfig.Buttons[Index].
         Screen = ControllerDisplay.Screen(edited.All().FirstOrDefault(a => a.Action != ButtonActionType.None),
-                                          _owner.AppConfig, _owner.EditingPresetId, _owner.Audio, _owner.ActionStatus);
+                                          _owner.AppConfig, _owner.EditingModeId, _owner.Audio, _owner.ActionStatus);
     }
 
     /// <summary>The main action (the first set one, Press → Double press → Hold, as the light
@@ -217,7 +217,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         foreach (var (gesture, action) in new[] { (PressType.Single, edited.SinglePress), (PressType.Double, edited.DoublePress), (PressType.Long, edited.LongPress) })
         {
             if (action.Action == ButtonActionType.None) continue;
-            var label = ActionCatalog.ShortLabel(action, _owner.PresetName, _owner.DeviceName);
+            var label = ActionCatalog.ShortLabel(action, _owner.ModeName, _owner.DeviceName);
             if (main is null) { main = gesture; mainLabel = label; }
             else others.Add(new GestureLine(gesture, label, action.Action.ToString()));
         }
@@ -231,12 +231,12 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         {
             var action = slot.Config;
             var set = action.Action != ButtonActionType.None;
-            slot.SetRow(set ? ActionCatalog.ShortLabel(action, _owner.PresetName, _owner.DeviceName) : "—", gesture == main);
+            slot.SetRow(set ? ActionCatalog.ShortLabel(action, _owner.ModeName, _owner.DeviceName) : "—", gesture == main);
         }
     }
 
     /// <summary>Checks each saved action (spec §6.4, on load) for the inspector's warning. It may
-    /// probe files, so it runs only when an action, the presets or the devices change, never from
+    /// probe files, so it runs only when an action, the modes or the devices change, never from
     /// <see cref="Refresh"/>, which every volume change calls.</summary>
     internal void RefreshProblems()
     {
@@ -256,10 +256,10 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     };
 
     /// <summary>A row for the action dialog's settings pane, over <paramref name="draft"/> (a copy;
-    /// nothing is saved): this button's devices, presets and services, and the real validation.</summary>
+    /// nothing is saved): this button's devices, modes and services, and the real validation.</summary>
     internal ActionSlotViewModel CreateDraft(PressType gesture, ButtonActionConfig draft)
     {
-        var slot = new ActionSlotViewModel(GestureName(gesture), SlotFor(gesture).Devices, _owner.PresetChoices,
+        var slot = new ActionSlotViewModel(GestureName(gesture), SlotFor(gesture).Devices, _owner.ModeChoices,
                                            _ => { }, () => { }, name => _owner.Describe(name), _owner.SlotHost)
         {
             Validation = _owner.ValidationContext,
@@ -269,18 +269,18 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     }
 
     /// <summary>The action dialog's Done or Remove: <paramref name="action"/> becomes
-    /// <paramref name="gesture"/>'s action in <paramref name="presetId"/>, then the row, the
+    /// <paramref name="gesture"/>'s action in <paramref name="modeId"/>, then the row, the
     /// previews and the problems follow and the config is saved, as after an edit on the row.</summary>
-    internal void SetAction(string presetId, PressType gesture, ButtonActionConfig action)
+    internal void SetAction(string modeId, PressType gesture, ButtonActionConfig action)
     {
-        var binding = Config.GetOrAddBinding(presetId);
+        var binding = Config.GetOrAddBinding(modeId);
         switch (gesture)
         {
             case PressType.Double: binding.DoublePress = action; break;
             case PressType.Long: binding.LongPress = action; break;
             default: binding.SinglePress = action; break;
         }
-        if (presetId == _owner.EditingPresetId) SlotFor(gesture).Bind(action);
+        if (modeId == _owner.EditingModeId) SlotFor(gesture).Bind(action);
         OnActionChanged();
     }
 
@@ -327,12 +327,12 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 /// <summary>What a button asks of the list that owns it.</summary>
 internal interface IButtonCardOwner
 {
-    string EditingPresetId { get; }
-    string LivePresetId { get; }
+    string EditingModeId { get; }
+    string LiveModeId { get; }
     AppConfig AppConfig { get; }
     IAudioEngine Audio { get; }
-    IReadOnlyList<PresetChoice> PresetChoices();
-    string? PresetName(string? id);
+    IReadOnlyList<ModeChoice> ModeChoices();
+    string? ModeName(string? id);
     /// <summary>Test: runs <paramref name="action"/> once, as button <paramref name="button"/>'s
     /// <paramref name="gesture"/> would.</summary>
     void Execute(ButtonActionConfig action, int button, PressType gesture);

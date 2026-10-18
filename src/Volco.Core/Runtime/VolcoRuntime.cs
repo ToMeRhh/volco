@@ -26,12 +26,12 @@ namespace Volco.Core.Runtime;
 /// thread, the SliderProcessor coalescing timer, the ButtonPressDetector timers, or the
 /// controller link's keepalive timer. Subscribers marshal to their UI thread themselves.
 /// </remarks>
-public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessionLink
+public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionLink
 {
-    /// <summary>The live preset's id as last set; null until the first set. Read through
-    /// <see cref="ActivePresetId"/>, which falls back to the first preset when this one is gone
+    /// <summary>The live mode's id as last set; null until the first set. Read through
+    /// <see cref="ActiveModeId"/>, which falls back to the first mode when this one is gone
     /// (deleted in the settings UI) or was never set.</summary>
-    private string? _activePresetId;
+    private string? _activeModeId;
 
     private readonly bool _audioReady;
     private readonly Func<ConnectionConfig, IControllerConnection?> _connectionFactory;
@@ -138,9 +138,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         _scripts = custom?.Processes is { } processes ? new ScriptRunner(processes, _options.Time) : null;
         ActionStatus = new ActionStatus(_media, _programs, _scripts);
         // In test mode the same delegate shows the test state and ignores the announce step
-        // (spec §8.5), so no preset blink or flash appears during a test.
+        // (spec §8.5), so no mode blink or flash appears during a test.
         _link = new ControllerLink(
-            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActivePresetId, Audio, step, ActionStatus, FeedbackSnapshot()),
+            step => InTestMode ? TestDisplays() : ControllerDisplay.Compute(Config.Config, ActiveModeId, Audio, step, ActionStatus, FeedbackSnapshot()),
             ControllerDisplay.AnnounceSteps, _options.Link);
         _link.StateChanged += (_, state) =>
         {
@@ -453,64 +453,64 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     /// <summary>Every <see cref="IAudioEngine.DevicesChanged"/>, of every kind, forwarded.</summary>
     public event EventHandler<DevicesChangedEventArgs>? DevicesChanged;
 
-    /// <summary>The live preset changed (argument: its id), from a button or from <see cref="SetActivePreset"/>.</summary>
-    public event EventHandler<string>? ActivePresetChanged;
+    /// <summary>The live mode changed (argument: its id), from a button or from <see cref="SetActiveMode"/>.</summary>
+    public event EventHandler<string>? ActiveModeChanged;
 
     /// <summary>A button on the controller was pressed down (argument: its hardware input),
     /// whether or not it is configured. Lets a UI show which card is which physical button.</summary>
     public event EventHandler<int>? ButtonActivity;
 
     /// <inheritdoc/>
-    public string ActivePresetId
+    public string ActiveModeId
     {
         get
         {
-            var presets = Config.Config.Presets;
-            var id = Volatile.Read(ref _activePresetId);
-            if (id != null && presets.Exists(p => p.Id == id)) return id;
-            return presets.Count > 0 ? presets[0].Id : AppConfig.DefaultPresetId;
+            var modes = Config.Config.Modes;
+            var id = Volatile.Read(ref _activeModeId);
+            if (id != null && modes.Exists(p => p.Id == id)) return id;
+            return modes.Count > 0 ? modes[0].Id : AppConfig.DefaultModeId;
         }
     }
 
     /// <inheritdoc/>
-    public void SetActivePreset(string presetId) => SetActivePreset(presetId, transition: null);
+    public void SetActiveMode(string modeId) => SetActiveMode(modeId, transition: null);
 
     /// <inheritdoc/>
-    public void NextPreset()
+    public void NextMode()
     {
-        var presets = Config.Config.Presets;
-        if (presets.Count == 0) return;
-        var index = presets.FindIndex(p => p.Id == ActivePresetId);
-        // Next always slides left, including the wrap from the last preset to the first (spec §2.3).
-        SetActivePreset(presets[(index + 1) % presets.Count].Id, ScreenTransition.SlideLeft);
+        var modes = Config.Config.Modes;
+        if (modes.Count == 0) return;
+        var index = modes.FindIndex(p => p.Id == ActiveModeId);
+        // Next always slides left, including the wrap from the last mode to the first (spec §2.3).
+        SetActiveMode(modes[(index + 1) % modes.Count].Id, ScreenTransition.SlideLeft);
     }
 
-    private void SetActivePreset(string presetId, ScreenTransition? transition)
+    private void SetActiveMode(string modeId, ScreenTransition? transition)
     {
         if (IsDisposed) return;
-        var presets = Config.Config.Presets;
-        if (!presets.Exists(p => p.Id == presetId)) return;
-        var stored = Volatile.Read(ref _activePresetId);
-        var previous = ActivePresetId;
-        Volatile.Write(ref _activePresetId, presetId);
-        if (previous == presetId)
+        var modes = Config.Config.Modes;
+        if (!modes.Exists(p => p.Id == modeId)) return;
+        var stored = Volatile.Read(ref _activeModeId);
+        var previous = ActiveModeId;
+        Volatile.Write(ref _activeModeId, modeId);
+        if (previous == modeId)
         {
-            // The live preset was deleted and ActivePresetId already fell back to this one (also
+            // The live mode was deleted and ActiveModeId already fell back to this one (also
             // when none was ever set explicitly, so the deleted one was itself the fallback):
             // nothing slides, but the controller must catch up now (spec §2.3).
-            if (stored is null || !presets.Exists(p => p.Id == stored)) _link.PushAll();
+            if (stored is null || !modes.Exists(p => p.Id == stored)) _link.PushAll();
             return;
         }
 
-        AppLog.Info($"Active preset: {presetId}");
-        ClearFeedback();   // the other preset's actions: nothing pressed there yet
+        AppLog.Info($"Active mode: {modeId}");
+        ClearFeedback();   // the other mode's actions: nothing pressed there yet
         WatchPrograms();
-        ActivePresetChanged?.Invoke(this, presetId);
+        ActiveModeChanged?.Invoke(this, modeId);
 
-        var from = presets.FindIndex(p => p.Id == previous);
-        var to = presets.FindIndex(p => p.Id == presetId);
+        var from = modes.FindIndex(p => p.Id == previous);
+        var to = modes.FindIndex(p => p.Id == modeId);
         var slide = transition ?? (to > from ? ScreenTransition.SlideLeft : ScreenTransition.SlideRight);
-        _link.PushPresetChange(slide, _options.SynchronizedPresetTransitions);
+        _link.PushModeChange(slide, _options.SynchronizedModeTransitions);
     }
 
     /// <summary>Drops the current transport and starts a fresh one from the current connection
@@ -569,7 +569,7 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
     }
 
     /// <summary>Runs one action now, as a button press would (the settings UI's Test button).
-    /// Preset actions change the live preset.</summary>
+    /// Mode actions change the live mode.</summary>
     public void Execute(ButtonActionConfig action) => Execute(action, null);
 
     /// <summary>As <see cref="Execute(ButtonActionConfig)"/>, for a button and gesture (a script's
@@ -916,10 +916,10 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
                     ButtonActivity?.Invoke(this, button.ButtonIndex);
                 }
                 var bcfg = Config.Config.Buttons.ElementAtOrDefault(button.ButtonIndex);
-                // Fix A: no double-press action configured (in the live preset) -> pass 0, which
+                // Fix A: no double-press action configured (in the live mode) -> pass 0, which
                 // makes ButtonPressDetector fire Single synchronously on release instead of waiting
                 // out a double-press window that can never be satisfied. Long-press is unaffected.
-                var doublePressWindowMs = bcfg != null && bcfg.BindingFor(ActivePresetId).DoublePress.Action == ButtonActionType.None
+                var doublePressWindowMs = bcfg != null && bcfg.BindingFor(ActiveModeId).DoublePress.Action == ButtonActionType.None
                     ? 0
                     : bcfg?.DoublePressWindowMs ?? 300;
                 _buttonPressDetector?.HandleButtonEvent(button.ButtonIndex, button.State,
@@ -936,8 +936,8 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         var config = Config.Config;
         if (e.ButtonIndex < 0 || e.ButtonIndex >= config.Buttons.Count) return;
 
-        var presetId = ActivePresetId;
-        var binding = config.Buttons[e.ButtonIndex].BindingFor(presetId);
+        var modeId = ActiveModeId;
+        var binding = config.Buttons[e.ButtonIndex].BindingFor(modeId);
         var actionConfig = e.PressType switch
         {
             PressType.Single => binding.SinglePress,
@@ -969,9 +969,9 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
             StartFeedback(e.ButtonIndex, binding, actionConfig, ControllerDisplay.UsbOnly);
             return;
         }
-        var presetName = config.Presets.Find(p => p.Id == presetId)?.Name ?? presetId;
+        var modeName = config.Modes.Find(p => p.Id == modeId)?.Name ?? modeId;
         var button = e.ButtonIndex;
-        var action = ActionFactory.Create(actionConfig, Services, new ActionOrigin(button, e.PressType, presetName)
+        var action = ActionFactory.Create(actionConfig, Services, new ActionOrigin(button, e.PressType, modeName)
         {
             ReportError = why => StartFeedback(button, binding, actionConfig, why),
         });
@@ -1020,20 +1020,20 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         else if (action is not null)
             StartFeedback(button, binding, actionConfig, error: null);
 
-        var presetBefore = ActivePresetId;
+        var modeBefore = ActiveModeId;
         action?.Execute();
 
         if (alreadyCurrent is not null) ShowDeviceOsd(alreadyCurrent.Id, alreadyCurrent.FriendlyName);
 
-        // Preset actions run synchronously (no audio-thread round trip), so the new preset is
+        // Mode actions run synchronously (no audio-thread round trip), so the new mode is
         // already live here.
-        if (actionConfig.Action is ButtonActionType.NextPreset or ButtonActionType.GoToPreset)
+        if (actionConfig.Action is ButtonActionType.NextMode or ButtonActionType.GoToMode)
         {
-            var now = ActivePresetId;
-            if (now != presetBefore)
+            var now = ActiveModeId;
+            if (now != modeBefore)
             {
-                var name = config.Presets.Find(p => p.Id == now)?.Name ?? now;
-                RaiseVolumeChanged(new VolumeChangeNotification(name, 0f, false, OsdKind.Preset));
+                var name = config.Modes.Find(p => p.Id == now)?.Name ?? now;
+                RaiseVolumeChanged(new VolumeChangeNotification(name, 0f, false, OsdKind.Mode));
             }
         }
     }
@@ -1322,13 +1322,13 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         ActionStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Polls the programs that Open a program actions in the live preset name.</summary>
+    /// <summary>Polls the programs that Open a program actions in the live mode name.</summary>
     private void WatchPrograms()
     {
         if (_programs is null || IsDisposed) return;
-        var presetId = ActivePresetId;
+        var modeId = ActiveModeId;
         _programs.Watch(Config.Config.Buttons
-            .SelectMany(b => b.BindingFor(presetId).All())
+            .SelectMany(b => b.BindingFor(modeId).All())
             .Where(a => a.Action == ButtonActionType.OpenProgram && a.Command is not null)
             .Select(a => a.Command!)
             .ToList());
@@ -1359,17 +1359,17 @@ public sealed class VolcoRuntime : IDisposable, IPresetController, IConfigSessio
         if (!IsDisposed) ControllerInfoChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Any non-connection save (actions, presets, nicknames, icons): the controller
-    /// follows. A deleted live preset falls back to the first one and is pushed instantly.</summary>
+    /// <summary>Any non-connection save (actions, modes, nicknames, icons): the controller
+    /// follows. A deleted live mode falls back to the first one and is pushed instantly.</summary>
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
         if (IsDisposed) return;
         WatchPrograms();
-        var stored = Volatile.Read(ref _activePresetId);
-        if (stored is not null && !Config.Config.Presets.Exists(p => p.Id == stored)
-            && Interlocked.CompareExchange(ref _activePresetId, null, stored) == stored)
+        var stored = Volatile.Read(ref _activeModeId);
+        if (stored is not null && !Config.Config.Modes.Exists(p => p.Id == stored)
+            && Interlocked.CompareExchange(ref _activeModeId, null, stored) == stored)
         {
-            ActivePresetChanged?.Invoke(this, ActivePresetId);
+            ActiveModeChanged?.Invoke(this, ActiveModeId);
             _link.PushAll();
             return;
         }

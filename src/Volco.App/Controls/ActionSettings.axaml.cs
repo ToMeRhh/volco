@@ -33,7 +33,7 @@ public partial class ActionSettings : UserControl
         {
             ActionValidator.Device => DataContext is ActionSlotViewModel { NeedsPair: true } ? "DeviceACombo" : "DeviceCombo",
             ActionValidator.DeviceB => "DeviceBCombo",
-            ActionValidator.Preset => "PresetCombo",
+            ActionValidator.Mode => "ModeCombo",
             ActionValidator.Path => "CommandPathBox",
             ActionValidator.WorkingDirectory => "CommandFolderBox",
             _ => null,

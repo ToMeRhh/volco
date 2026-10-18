@@ -18,7 +18,7 @@ public sealed class SwapTests : IDisposable
     {
         var speakers = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true);
         _rig = new TestRig(new FakeAudioEngine { Devices = { speakers }, DefaultRender = speakers });
-        Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
     }
 
     public void Dispose() => _rig.Dispose();
@@ -56,29 +56,29 @@ public sealed class SwapTests : IDisposable
     [Fact]
     public void SwapActions_MissingKeyMoves()
     {
-        Config.Buttons[0].Actions.Remove(AppConfig.DefaultPresetId);
+        Config.Buttons[0].Actions.Remove(AppConfig.DefaultModeId);
         Config.Buttons[1].Default().SinglePress.Action = ButtonActionType.MuteCurrentInput;
         var buttons = Vm().Buttons;
 
         buttons.SwapActions(0, 1);
 
         Assert.Equal(ButtonActionType.MuteCurrentInput, Config.Buttons[0].Default().SinglePress.Action);
-        Assert.True(Config.Buttons[1].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
+        Assert.True(Config.Buttons[1].BindingFor(AppConfig.DefaultModeId).IsEmpty);
     }
 
     [Fact]
     public void SwapActions_Undo_SwapsBack()
     {
         Config.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
-        Config.Buttons[1].Actions.Remove(AppConfig.DefaultPresetId);
+        Config.Buttons[1].Actions.Remove(AppConfig.DefaultModeId);
         var buttons = Vm().Buttons;
 
         buttons.SwapActions(0, 1);
-        Assert.True(Config.Buttons[0].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
+        Assert.True(Config.Buttons[0].BindingFor(AppConfig.DefaultModeId).IsEmpty);
         _toast.UndoCommand.Execute(null);
 
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].Default().SinglePress.Action);
-        Assert.True(Config.Buttons[1].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
+        Assert.True(Config.Buttons[1].BindingFor(AppConfig.DefaultModeId).IsEmpty);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class SwapTests : IDisposable
         var buttons = Vm().Buttons;
 
         buttons.SwapActions(0, 1);
-        buttons.EditingPresetId = "gaming";
+        buttons.EditingModeId = "gaming";
         _toast.UndoCommand.Execute(null);
 
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].Default().SinglePress.Action);
@@ -153,7 +153,7 @@ public sealed class SwapTests : IDisposable
         Assert.Same(slider0, Config.Sliders[0]);
         Assert.Same(slider0, s[0].Config);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].Default().SinglePress.Action);
-        Assert.True(Config.Buttons[2].BindingFor(AppConfig.DefaultPresetId).IsEmpty);
+        Assert.True(Config.Buttons[2].BindingFor(AppConfig.DefaultModeId).IsEmpty);
     }
 
     [Fact]

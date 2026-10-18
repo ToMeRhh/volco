@@ -36,7 +36,7 @@ public sealed partial class VolumeOsdWindow : Window
     private readonly PathIcon _volumeIcon;
     private readonly PathIcon _mutedIcon;
     private readonly PathIcon _speakerIcon;
-    private readonly PathIcon _presetIcon;
+    private readonly PathIcon _modeIcon;
     private readonly PathIcon _deviceIcon;
     private readonly Panel _deviceMuteSlash;
     private readonly DispatcherTimer _hideTimer;
@@ -67,7 +67,7 @@ public sealed partial class VolumeOsdWindow : Window
         _volumeIcon = this.FindControl<PathIcon>("VolumeIcon")!;
         _mutedIcon = this.FindControl<PathIcon>("MutedIcon")!;
         _speakerIcon = this.FindControl<PathIcon>("SpeakerIcon")!;
-        _presetIcon = this.FindControl<PathIcon>("PresetIcon")!;
+        _modeIcon = this.FindControl<PathIcon>("ModeIcon")!;
         _deviceIcon = this.FindControl<PathIcon>("DeviceIcon")!;
         _deviceMuteSlash = this.FindControl<Panel>("DeviceMuteSlash")!;
 
@@ -100,7 +100,7 @@ public sealed partial class VolumeOsdWindow : Window
     internal PathIcon VolumeGlyph => _volumeIcon;
     internal PathIcon MutedGlyph => _mutedIcon;
     internal PathIcon SpeakerGlyph => _speakerIcon;
-    internal PathIcon PresetGlyph => _presetIcon;
+    internal PathIcon ModeGlyph => _modeIcon;
     internal PathIcon DeviceGlyph => _deviceIcon;
     internal Panel MuteSlash => _deviceMuteSlash;
 
@@ -173,7 +173,7 @@ public sealed partial class VolumeOsdWindow : Window
         _mutedIcon.IsVisible = _vm.Glyph == OsdGlyph.Muted;
         _speakerIcon.IsVisible = _vm.Glyph == OsdGlyph.Speaker;
         _volumeIcon.IsVisible = _vm.Glyph == OsdGlyph.Volume;
-        _presetIcon.IsVisible = _vm.Glyph == OsdGlyph.Preset;
+        _modeIcon.IsVisible = _vm.Glyph == OsdGlyph.Mode;
         _deviceIcon.Data = _vm.DeviceIcon is { } icon ? ScreenIcons.Geometry(icon) : null;
         _deviceIcon.IsVisible = _vm.Glyph == OsdGlyph.Device;
         _deviceIcon.Opacity = _vm.DeviceIconMuted ? 0.4 : 1.0;

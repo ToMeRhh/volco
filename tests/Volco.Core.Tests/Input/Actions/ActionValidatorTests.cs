@@ -53,10 +53,10 @@ public class ActionValidatorTests
             "deviceB", "Choose a device.");
 
     [Fact]
-    public void GoToPreset_UnknownId()
+    public void GoToMode_UnknownId()
         => AssertOnly(ActionValidator.Validate(
-                new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "gone" }, Ctx()),
-            "preset", "Choose a mode.");
+                new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "gone" }, Ctx()),
+            "mode", "Choose a mode.");
 
     [Fact]
     public void OpenProgram_EmptyPath()

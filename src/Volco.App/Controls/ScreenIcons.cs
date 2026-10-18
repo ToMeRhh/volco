@@ -39,13 +39,13 @@ internal static class ScreenIcons
         }
     }
 
-    /// <summary>The icon's vector art (Icon.Device.* in Styles/Icons.axaml, Icon.Preset for
+    /// <summary>The icon's vector art (Icon.Device.* in Styles/Icons.axaml, Icon.Mode for
     /// <see cref="ScreenIcon.Presets"/>), for the OSD and the device dialog. Null when the app's
     /// resources are not loaded.</summary>
     public static Geometry? Geometry(ScreenIcon icon)
     {
         if (!Enum.IsDefined(icon)) icon = ScreenIcon.Generic;
-        var key = icon == ScreenIcon.Presets ? "Icon.Preset" : $"Icon.Device.{icon}";
+        var key = icon == ScreenIcon.Presets ? "Icon.Mode" : $"Icon.Device.{icon}";
         return Application.Current is { } app && app.TryFindResource(key, out var value) ? value as Geometry : null;
     }
 }

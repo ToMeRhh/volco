@@ -71,7 +71,7 @@ public sealed partial class ControlsViewModel : ObservableObject
         // Add, Remove last and their Undo change the lists: the counts and the selection follow.
         Sliders.Items.CollectionChanged += OnItemsChanged;
         Buttons.Items.CollectionChanged += OnItemsChanged;
-        Buttons.Presets.CollectionChanged += (_, _) => CloseStaleDialog();
+        Buttons.Modes.CollectionChanged += (_, _) => CloseStaleDialog();
         RefreshCounts();
         FixSelection();
     }
@@ -260,18 +260,18 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     // ── Clear ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Clears the button's actions in the edited preset only, with Undo.</summary>
+    /// <summary>Clears the button's actions in the edited mode only, with Undo.</summary>
     public void ClearButton(ButtonItemViewModel item)
     {
-        var presetId = Buttons.EditingPresetId;
-        item.Config.Actions.TryGetValue(presetId, out var before);
-        item.Config.Actions[presetId] = new ButtonBindingConfig();
+        var modeId = Buttons.EditingModeId;
+        item.Config.Actions.TryGetValue(modeId, out var before);
+        item.Config.Actions[modeId] = new ButtonBindingConfig();
         item.Reload();
         _config.RequestSave();
         _toast.Show($"Cleared button {item.Index + 1} in {Buttons.EditingName}", () =>
         {
-            if (before is null) item.Config.Actions.Remove(presetId);
-            else item.Config.Actions[presetId] = before;
+            if (before is null) item.Config.Actions.Remove(modeId);
+            else item.Config.Actions[modeId] = before;
             item.Reload();
             _config.RequestSave();
         });

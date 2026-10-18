@@ -97,12 +97,12 @@
       </StackPanel>
     </StackPanel>
 
-    <StackPanel Name="PresetParams" Classes="Field" IsVisible="{Binding NeedsPreset}">
+    <StackPanel Name="ModeParams" Classes="Field" IsVisible="{Binding NeedsMode}">
       <TextBlock Classes="FieldLabel" Text="Mode"/>
-      <ComboBox Name="PresetCombo" PlaceholderText="Choose a mode" ItemsSource="{Binding PresetChoices}"
-                SelectedItem="{Binding SelectedPreset, Mode=TwoWay}" Classes.Invalid="{Binding PresetError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-      <TextBlock Name="PresetErrorText" Classes="FieldError" Text="{Binding PresetError}"
-                 IsVisible="{Binding PresetError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <ComboBox Name="ModeCombo" PlaceholderText="Choose a mode" ItemsSource="{Binding ModeChoices}"
+                SelectedItem="{Binding SelectedMode, Mode=TwoWay}" Classes.Invalid="{Binding ModeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <TextBlock Name="ModeErrorText" Classes="FieldError" Text="{Binding ModeError}"
+                 IsVisible="{Binding ModeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </StackPanel>
 
     <StackPanel Name="MediaParams" Classes="Field" IsVisible="{Binding NeedsMediaApp}">

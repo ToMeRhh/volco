@@ -4,24 +4,24 @@ using CommunityToolkit.Mvvm.Input;
 namespace Volco.App.ViewModels;
 
 /// <summary>One mode tab on the Controls page.</summary>
-public sealed partial class PresetTabViewModel : ObservableObject
+public sealed partial class ModeTabViewModel : ObservableObject
 {
-    private readonly Action<PresetTabViewModel> _select;
+    private readonly Action<ModeTabViewModel> _select;
     private readonly Action<string> _delete;
 
     public string Id { get; }
 
-    /// <summary>The preset's colour: its position in the list (<see cref="Controls.PresetTint"/>).</summary>
+    /// <summary>The mode's colour: its position in the list (<see cref="Controls.ModeTint"/>).</summary>
     public int TintIndex { get; }
 
     [ObservableProperty]
     private string _name;
 
-    /// <summary>The preset whose actions the buttons are showing.</summary>
+    /// <summary>The mode whose actions the buttons are showing.</summary>
     [ObservableProperty]
     private bool _isEditing;
 
-    /// <summary>The preset the controller is using right now.</summary>
+    /// <summary>The mode the controller is using right now.</summary>
     [ObservableProperty]
     private bool _isLive;
 
@@ -45,7 +45,7 @@ public sealed partial class PresetTabViewModel : ObservableObject
     /// <summary>The first mode can't be deleted.</summary>
     public bool CanDelete => !IsFirst;
 
-    internal PresetTabViewModel(string id, string name, int tintIndex, Action<PresetTabViewModel> select,
+    internal ModeTabViewModel(string id, string name, int tintIndex, Action<ModeTabViewModel> select,
                                 Action<string> delete)
     {
         _delete = delete;

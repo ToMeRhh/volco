@@ -154,11 +154,11 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_DeviceIcon_IsIgnoredForAPresetSwitch_AndAChangeIsReported()
+    public void OsdViewModel_DeviceIcon_IsIgnoredForAModeSwitch_AndAChangeIsReported()
     {
         var vm = new VolumeOsdViewModel();
-        vm.Apply(new VolumeChangeNotification("A", 0f, false, OsdKind.Preset, ScreenIcon.Speaker));
-        Assert.Equal(OsdGlyph.Preset, vm.Glyph);
+        vm.Apply(new VolumeChangeNotification("A", 0f, false, OsdKind.Mode, ScreenIcon.Speaker));
+        Assert.Equal(OsdGlyph.Mode, vm.Glyph);
         Assert.Null(vm.DeviceIcon);
 
         vm.Apply(new VolumeChangeNotification("A", 0.5f, false, OsdKind.Device, ScreenIcon.Speaker));
@@ -208,23 +208,23 @@ public class VolumeOsdViewModelTests
     }
 
     [Fact]
-    public void OsdViewModel_PresetKind_ShowsTheNameAndPreset_WithoutALevel()
+    public void OsdViewModel_ModeKind_ShowsTheNameAndMode_WithoutALevel()
     {
         var vm = new VolumeOsdViewModel();
 
-        vm.Apply(new VolumeChangeNotification("Gaming", 0f, false, OsdKind.Preset));
+        vm.Apply(new VolumeChangeNotification("Gaming", 0f, false, OsdKind.Mode));
 
         Assert.Equal("Gaming", vm.Label);
         Assert.Equal("Mode", vm.ValueText);
-        Assert.Equal(OsdGlyph.Preset, vm.Glyph);
+        Assert.Equal(OsdGlyph.Mode, vm.Glyph);
         Assert.False(vm.ShowsLevel);
     }
 
     [Fact]
-    public void OsdViewModel_VolumeAfterPreset_ShowsTheLevelAgain()
+    public void OsdViewModel_VolumeAfterMode_ShowsTheLevelAgain()
     {
         var vm = new VolumeOsdViewModel();
-        vm.Apply(new VolumeChangeNotification("Gaming", 0f, false, OsdKind.Preset));
+        vm.Apply(new VolumeChangeNotification("Gaming", 0f, false, OsdKind.Mode));
 
         vm.Apply(new VolumeChangeNotification("Spotify", 0.5f, false, OsdKind.Volume));
 

@@ -113,7 +113,7 @@ public sealed class ProgramOpener
         return false;
     }
 
-    /// <summary>Polls the executables of <paramref name="commands"/> (the live preset's programs).
+    /// <summary>Polls the executables of <paramref name="commands"/> (the live mode's programs).
     /// Shortcut targets are read again, in case a shortcut changed.</summary>
     public void Watch(IEnumerable<CommandConfig> commands)
     {

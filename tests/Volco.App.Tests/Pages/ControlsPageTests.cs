@@ -215,7 +215,7 @@ public class ControlsPageTests
 
         Assert.Equal(2, All<RadioButton>(s.Page, "ModeTab").Count);
         Assert.Equal("Mode 2", s.Vm.Buttons.EditingName);
-        Assert.Equal(AppConfig.DefaultPresetId, s.Vm.Buttons.LivePresetId);
+        Assert.Equal(AppConfig.DefaultModeId, s.Vm.Buttons.LiveModeId);
     }
 
     // ── The drawing ───────────────────────────────────────────────────────────
@@ -256,7 +256,7 @@ public class ControlsPageTests
             Hardware(c, 5, IndicatorKind.Led, IndicatorKind.Screen, IndicatorKind.Led);
             c.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
             c.Buttons[0].Default().LongPress.Action = ButtonActionType.MuteCurrentInput;
-            c.Buttons[1].Default().SinglePress.Action = ButtonActionType.NextPreset;
+            c.Buttons[1].Default().SinglePress.Action = ButtonActionType.NextMode;
         });
         var tiles = Tiles<ButtonTile>(s.Page);
         Assert.Single(s.Vm.Buttons.Items[0].Secondary);
@@ -439,7 +439,7 @@ public class ControlsPageTests
 
         var run = Assert.Single(runs);
         Assert.Same(rig.Config.Config.Buttons[0].Default().SinglePress, run.Action);
-        Assert.Equal(new ActionOrigin(0, PressType.Single, rig.Config.Config.Presets[0].Name), run.Origin);
+        Assert.Equal(new ActionOrigin(0, PressType.Single, rig.Config.Config.Modes[0].Name), run.Origin);
     }
 
     [AvaloniaFact]
@@ -542,7 +542,7 @@ public class ControlsPageTests
         Assert.True(In<Border>(inspector, "LightRow").IsEffectivelyVisible);
 
         button.Press.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteCurrentOutput);
-        button.DoublePress.SelectedChoice = ActionCatalog.For(ButtonActionType.NextPreset);
+        button.DoublePress.SelectedChoice = ActionCatalog.For(ButtonActionType.NextMode);
         Settle(s.Window);
 
         Assert.Equal("Mute output", InRow<TextBlock>(s.Page, "Press", "ActionText").Text);
@@ -674,7 +674,7 @@ public class ControlsPageTests
             var (spec, run) = Assert.Single(starter.Runs);
             Assert.Equal("0", spec.Environment["VOLCO_BUTTON"]);
             Assert.Equal("long", spec.Environment["VOLCO_GESTURE"]);
-            Assert.Equal("Default", spec.Environment["VOLCO_PRESET"]);
+            Assert.Equal("Default", spec.Environment["VOLCO_MODE"]);
             Assert.Equal("RUNNING", vm.Buttons.Items[0].Screen.TopText);
 
             run.End(0);

@@ -26,8 +26,8 @@ public sealed record ActionAvailability(bool Media, bool Programs, bool Scripts)
            : true;
 }
 
-/// <summary>A preset, as offered by the "Go to mode" picker.</summary>
-public sealed record PresetChoice(string Id, string Name)
+/// <summary>A mode, as offered by the "Go to mode" picker.</summary>
+public sealed record ModeChoice(string Id, string Name)
 {
     public override string ToString() => Name;
 }
@@ -49,8 +49,8 @@ public static class ActionCatalog
         new(ButtonActionType.SetOutputDevice, "Switch output to…"),
         new(ButtonActionType.ToggleOutputDevice, "Toggle between two outputs"),
         new(null, "Modes", IsHeader: true),
-        new(ButtonActionType.NextPreset, "Next mode"),
-        new(ButtonActionType.GoToPreset, "Go to mode…"),
+        new(ButtonActionType.NextMode, "Next mode"),
+        new(ButtonActionType.GoToMode, "Go to mode…"),
         new(null, "Media", IsHeader: true),
         new(ButtonActionType.MediaPlayPause, "Play / pause"),
         new(ButtonActionType.MediaNext, "Next track"),
@@ -76,7 +76,7 @@ public static class ActionCatalog
 
     public static bool NeedsDevice(ButtonActionType t) => t is ButtonActionType.MuteSpecificDevice or ButtonActionType.SetOutputDevice;
     public static bool NeedsPair(ButtonActionType t) => t is ButtonActionType.ToggleOutputDevice;
-    public static bool NeedsPreset(ButtonActionType t) => t is ButtonActionType.GoToPreset;
+    public static bool NeedsMode(ButtonActionType t) => t is ButtonActionType.GoToMode;
     public static bool NeedsMediaApp(ButtonActionType t) => ButtonActionTypes.IsMedia(t);
     public static bool NeedsCommand(ButtonActionType t) => ButtonActionTypes.RunsCode(t);
     public static bool NeedsWhileRunning(ButtonActionType t) => t is ButtonActionType.RunScript;
@@ -95,7 +95,7 @@ public static class ActionCatalog
     {
         if (LightSource(binding) is not { } source) return "Blank. None of this button’s actions is set in this mode.";
         var text = $"Shows the {source.Slot} action.";
-        if (ControllerDisplay.FlashesPresetName(binding) && PresetSlot(binding) is { } slot)
+        if (ControllerDisplay.FlashesModeName(binding) && ModeSlot(binding) is { } slot)
             text += $" Flashes the mode’s name when {slot} changes the mode.";
         if (binding.All().Any(a => ControllerDisplay.ShowsWhenPressed(binding, a)))
             text += " Shows another action for a moment after you use it.";
@@ -104,7 +104,7 @@ public static class ActionCatalog
 
     /// <summary>What a button's light shows, for one LED or an LED pair.</summary>
     public static string LightDescription(ButtonBindingConfig binding, bool singleLed,
-                                          Func<string?, string?> presetName, Func<DeviceRefConfig?, string>? deviceName = null)
+                                          Func<string?, string?> modeName, Func<DeviceRefConfig?, string>? deviceName = null)
     {
         if (LightSource(binding) is not { } source)
             return "No light. None of this button’s actions has an on/off state.";
@@ -114,9 +114,9 @@ public static class ActionCatalog
         {
             ButtonActionType.ToggleOutputDevice when singleLed => $"Dark on {name(a.Device)} (A), lit on {name(a.DeviceB)} (B).",
             ButtonActionType.ToggleOutputDevice => $"A lights for {name(a.Device)}, B for {name(a.DeviceB)}.",
-            ButtonActionType.NextPreset when singleLed => "Dark; blinks when the mode changes.",
-            ButtonActionType.GoToPreset when singleLed => $"On while {presetName(a.PresetId) ?? "that mode"} is live.",
-            ButtonActionType.NextPreset or ButtonActionType.GoToPreset => "Shows the live mode: the first lights A, the second B.",
+            ButtonActionType.NextMode when singleLed => "Dark; blinks when the mode changes.",
+            ButtonActionType.GoToMode when singleLed => $"On while {modeName(a.ModeId) ?? "that mode"} is live.",
+            ButtonActionType.NextMode or ButtonActionType.GoToMode => "Shows the live mode: the first lights A, the second B.",
             ButtonActionType.SetOutputDevice => "On while that device is the output.",
             ButtonActionType.MediaPlayPause or ButtonActionType.MediaStop => $"On while {MediaTarget(a)} plays.",
             ButtonActionType.MediaNext or ButtonActionType.MediaPrevious => "Dark; next and previous have no on/off state.",
@@ -126,25 +126,25 @@ public static class ActionCatalog
             _ => "On while muted.",
         };
         var text = $"{what} Follows the {source.Slot} action.";
-        if (singleLed && a.Action != ButtonActionType.NextPreset && ControllerDisplay.BlinksOnPresetChange(binding))
-            text += $" Blinks when {PresetSlot(binding)} changes the mode.";
+        if (singleLed && a.Action != ButtonActionType.NextMode && ControllerDisplay.BlinksOnModeChange(binding))
+            text += $" Blinks when {ModeSlot(binding)} changes the mode.";
         if (binding.All().Any(x => ControllerDisplay.ShowsWhenPressed(binding, x)))
             text += " Blinks twice when you use another of its actions.";
         return text;
     }
 
-    /// <summary>The first slot with a preset action, or null.</summary>
-    private static string? PresetSlot(ButtonBindingConfig binding)
+    /// <summary>The first slot with a mode action, or null.</summary>
+    private static string? ModeSlot(ButtonBindingConfig binding)
     {
-        static bool IsPreset(ButtonActionConfig a) => a.Action is ButtonActionType.NextPreset or ButtonActionType.GoToPreset;
-        if (IsPreset(binding.SinglePress)) return "Press";
-        if (IsPreset(binding.DoublePress)) return "Double press";
-        if (IsPreset(binding.LongPress)) return "Hold";
+        static bool IsMode(ButtonActionConfig a) => a.Action is ButtonActionType.NextMode or ButtonActionType.GoToMode;
+        if (IsMode(binding.SinglePress)) return "Press";
+        if (IsMode(binding.DoublePress)) return "Double press";
+        if (IsMode(binding.LongPress)) return "Hold";
         return null;
     }
 
     /// <summary>A short label for tiles and inspector rows, e.g. "Mute mic" or "Toggle Speakers / Headphones".</summary>
-    public static string ShortLabel(ButtonActionConfig a, Func<string?, string?> presetName,
+    public static string ShortLabel(ButtonActionConfig a, Func<string?, string?> modeName,
                                     Func<DeviceRefConfig?, string>? deviceName = null)
     {
         var name = deviceName ?? DeviceShort;
@@ -156,8 +156,8 @@ public static class ActionCatalog
             ButtonActionType.MuteSpecificDevice => $"Mute {name(a.Device)}",
             ButtonActionType.SetOutputDevice => $"Switch to {name(a.Device)}",
             ButtonActionType.ToggleOutputDevice => $"Toggle {name(a.Device)} / {name(a.DeviceB)}",
-            ButtonActionType.NextPreset => "Next mode",
-            ButtonActionType.GoToPreset => $"Go to {presetName(a.PresetId) ?? "a mode"}",
+            ButtonActionType.NextMode => "Next mode",
+            ButtonActionType.GoToMode => $"Go to {modeName(a.ModeId) ?? "a mode"}",
             ButtonActionType.MediaPlayPause => WithApp("Play/pause", a),
             ButtonActionType.MediaNext => WithApp("Next track", a),
             ButtonActionType.MediaPrevious => WithApp("Previous track", a),

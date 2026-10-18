@@ -28,8 +28,8 @@ public enum ButtonActionType
     MuteCurrentInput,
     ToggleOutputDevice,
     SetOutputDevice,
-    NextPreset,
-    GoToPreset,
+    NextMode,
+    GoToMode,
     MediaPlayPause,
     MediaNext,
     MediaPrevious,
@@ -135,8 +135,8 @@ public class ButtonActionConfig
     /// <summary>Output B for ToggleOutputDevice.</summary>
     public DeviceRefConfig? DeviceB { get; set; }
 
-    /// <summary>The target <see cref="PresetConfig.Id"/> for GoToPreset.</summary>
-    public string? PresetId { get; set; }
+    /// <summary>The target <see cref="ModeConfig.Id"/> for GoToMode.</summary>
+    public string? ModeId { get; set; }
 
     /// <summary>The app a media action controls; null = whatever Windows considers current.</summary>
     public MediaAppConfig? MediaApp { get; set; }
@@ -148,7 +148,7 @@ public class ButtonActionConfig
     public WhileRunningPolicy WhileRunning { get; set; } = WhileRunningPolicy.Ignore;
 }
 
-/// <summary>What one button does in one preset.</summary>
+/// <summary>What one button does in one mode.</summary>
 public class ButtonBindingConfig
 {
     public ButtonActionConfig SinglePress { get; set; } = new();
@@ -169,7 +169,7 @@ public class ButtonBindingConfig
     }
 }
 
-public class PresetConfig
+public class ModeConfig
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
@@ -181,33 +181,33 @@ public class ButtonConfig
     /// its hardware input number. Rewritten on save; never read for routing.</summary>
     public int Index { get; set; }
 
-    /// <summary>Per-preset actions, keyed by <see cref="PresetConfig.Id"/>. A missing key means the
-    /// button does nothing in that preset. Timing below is shared by every preset.</summary>
+    /// <summary>Per-mode actions, keyed by <see cref="ModeConfig.Id"/>. A missing key means the
+    /// button does nothing in that mode. Timing below is shared by every mode.</summary>
     public Dictionary<string, ButtonBindingConfig> Actions { get; set; } = new();
 
     public int LongPressMs { get; set; } = 500;
     public int DoublePressWindowMs { get; set; } = 300;
 
-    /// <summary>The binding for <paramref name="presetId"/>, or an empty one (not stored) when the
-    /// preset has none.</summary>
-    public ButtonBindingConfig BindingFor(string presetId)
-        => Actions.TryGetValue(presetId, out var b) && b != null ? b : new ButtonBindingConfig();
+    /// <summary>The binding for <paramref name="modeId"/>, or an empty one (not stored) when the
+    /// mode has none.</summary>
+    public ButtonBindingConfig BindingFor(string modeId)
+        => Actions.TryGetValue(modeId, out var b) && b != null ? b : new ButtonBindingConfig();
 
-    /// <summary>The stored binding for <paramref name="presetId"/>, created if missing.</summary>
-    public ButtonBindingConfig GetOrAddBinding(string presetId)
+    /// <summary>The stored binding for <paramref name="modeId"/>, created if missing.</summary>
+    public ButtonBindingConfig GetOrAddBinding(string modeId)
     {
-        if (!Actions.TryGetValue(presetId, out var b) || b == null)
-            Actions[presetId] = b = new ButtonBindingConfig();
+        if (!Actions.TryGetValue(modeId, out var b) || b == null)
+            Actions[modeId] = b = new ButtonBindingConfig();
         return b;
     }
 }
 
 public class AppConfig
 {
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
 
-    /// <summary>Id of the preset every migrated or new config starts with.</summary>
-    public const string DefaultPresetId = "default";
+    /// <summary>Id of the mode every migrated or new config starts with.</summary>
+    public const string DefaultModeId = "default";
 
     /// <summary>
     /// Absent or 0 means schema v1 (device references stored as bare names). Defaults to 0
@@ -222,8 +222,8 @@ public class AppConfig
     public List<SliderConfig> Sliders { get; set; } = new();
     public List<ButtonConfig> Buttons { get; set; } = new();
 
-    /// <summary>Button presets, in tab order. The first one is live when the app starts.</summary>
-    public List<PresetConfig> Presets { get; set; } = new();
+    /// <summary>Button modes, in tab order. The first one is live when the app starts.</summary>
+    public List<ModeConfig> Modes { get; set; } = new();
 
     /// <summary>Device nicknames and icons (the device dialog). Only customized devices.</summary>
     public List<DeviceSettingsConfig> Devices { get; set; } = new();
@@ -248,22 +248,22 @@ public class AppConfig
             config.Sliders.Add(new SliderConfig { Index = i, Type = SliderMappingType.None });
         for (int i = 0; i < 3; i++)
             config.Buttons.Add(new ButtonConfig { Index = i });
-        config.Presets.Add(new PresetConfig { Id = DefaultPresetId, Name = "Default" });
+        config.Modes.Add(new ModeConfig { Id = DefaultModeId, Name = "Default" });
         return config;
     }
 
-    /// <summary>Repairs invariants a hand-edited or older file may break: at least one preset,
+    /// <summary>Repairs invariants a hand-edited or older file may break: at least one mode,
     /// no null action maps, and Index equal to list position.</summary>
     public void Normalize()
     {
         // A hand-edited "sliders": null (etc.) deserialises to null despite the initialisers.
         Sliders ??= new();
         Buttons ??= new();
-        Presets ??= new();
+        Modes ??= new();
         Devices ??= new();
         Devices.RemoveAll(d => d is null || string.IsNullOrEmpty(d.Id));
-        if (Presets.Count == 0)
-            Presets.Add(new PresetConfig { Id = DefaultPresetId, Name = "Default" });
+        if (Modes.Count == 0)
+            Modes.Add(new ModeConfig { Id = DefaultModeId, Name = "Default" });
         for (int i = 0; i < Sliders.Count; i++)
             Sliders[i].Index = i;
         for (int i = 0; i < Buttons.Count; i++)

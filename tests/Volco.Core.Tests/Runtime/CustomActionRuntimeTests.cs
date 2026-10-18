@@ -162,7 +162,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
         var env = _starter.Runs[0].Spec.Environment;
         Assert.Equal("0", env["VOLCO_BUTTON"]);
         Assert.Equal("single", env["VOLCO_GESTURE"]);
-        Assert.Equal("Default", env["VOLCO_PRESET"]);
+        Assert.Equal("Default", env["VOLCO_MODE"]);
     }
 
     [Theory]
@@ -200,7 +200,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void LivePresetsPrograms_AreWatched()
+    public void LiveModesPrograms_AreWatched()
     {
         Start(ConnectionType.Serial, c => c.Buttons[1].Default().LongPress = new ButtonActionConfig
         {
@@ -305,7 +305,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
         }, options: Quiet with { Time = time });
         var binding = runtime.Config.Config.Buttons[0].Default();
         var first = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None,
-            ControllerDisplay.Screen(binding.SinglePress, runtime.Config.Config, runtime.ActivePresetId, _engine));
+            ControllerDisplay.Screen(binding.SinglePress, runtime.Config.Config, runtime.ActiveModeId, _engine));
         var expected = ScreenFrame("PLAYING", ScreenIcon.Equalizer, "Spotify");
         var real = ScreenFrame("PAUSED", ScreenIcon.EqualizerStill, "Spotify");
         Assert.True(WaitUntil(() => Count(first) == 1), "the first action's screen was not sent");

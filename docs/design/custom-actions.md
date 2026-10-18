@@ -150,7 +150,7 @@ Python and Node tens of ms, PowerShell hundreds of ms. The help text recommends 
 when speed matters.
 
 The script gets `VOLCO_BUTTON` (input number), `VOLCO_GESTURE` (`single`, `double`, `long`) and
-`VOLCO_PRESET` (the preset's name) in its environment.
+`VOLCO_MODE` (the mode's name) in its environment.
 
 ### 5.2 Repeat presses
 

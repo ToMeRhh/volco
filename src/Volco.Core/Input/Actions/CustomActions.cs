@@ -9,26 +9,26 @@ using Volco.Core.Scripts;
 
 namespace Volco.Core.Input.Actions;
 
-/// <summary>Where a press came from: the button's input number, the gesture, and the preset's
+/// <summary>Where a press came from: the button's input number, the gesture, and the mode's
 /// name. A Run a script action passes them to the script (custom-actions spec §5.1).</summary>
-public sealed record ActionOrigin(int Button, PressType Gesture, string PresetName)
+public sealed record ActionOrigin(int Button, PressType Gesture, string ModeName)
 {
     /// <summary>Told why a press did nothing (<see cref="ControllerDisplay.NotRunning"/> and the
     /// like), at once or later from another thread; the button shows it (custom-actions spec §11).</summary>
     public Action<string>? ReportError { get; init; }
 
-    /// <summary>The environment a script run gets: VOLCO_BUTTON, VOLCO_GESTURE, VOLCO_PRESET.</summary>
+    /// <summary>The environment a script run gets: VOLCO_BUTTON, VOLCO_GESTURE, VOLCO_MODE.</summary>
     public IReadOnlyDictionary<string, string> Environment() => new Dictionary<string, string>
     {
         ["VOLCO_BUTTON"] = Button.ToString(System.Globalization.CultureInfo.InvariantCulture),
         ["VOLCO_GESTURE"] = Gesture switch { PressType.Double => "double", PressType.Long => "long", _ => "single" },
-        ["VOLCO_PRESET"] = PresetName,
+        ["VOLCO_MODE"] = ModeName,
     };
 }
 
 /// <summary>What actions act on. Media, programs and scripts are null where the platform has
 /// none; their actions are then not created.</summary>
-public sealed record ActionServices(IAudioEngine Audio, IPresetController? Presets, IMediaSessions? Media = null,
+public sealed record ActionServices(IAudioEngine Audio, IModeController? Modes, IMediaSessions? Media = null,
                                     ProgramOpener? Programs = null, ScriptRunner? Scripts = null);
 
 /// <summary>Play/Pause, Next, Previous or Stop, to the chosen app or the current one.</summary>

@@ -19,9 +19,9 @@ public sealed record ScreenDisplay(ScreenContent Content) : ButtonDisplay;
 /// button with no card is "Not set up", and cards beyond the controller's count are ignored.
 /// A button shows its first action that is not "Do nothing", in the order press → double → hold.
 /// <para>
-/// For <see cref="AnnounceSteps"/> link ticks after a preset change, a button with a preset action
-/// announces it: a screen that shows another action flashes the live preset instead
-/// (<see cref="FlashesPresetName"/>), and a single LED blinks (<see cref="BlinksOnPresetChange"/>).
+/// For <see cref="AnnounceSteps"/> link ticks after a mode change, a button with a mode action
+/// announces it: a screen that shows another action flashes the live mode instead
+/// (<see cref="FlashesModeName"/>), and a single LED blinks (<see cref="BlinksOnModeChange"/>).
 /// </para>
 /// <para>
 /// For <see cref="FeedbackSteps"/> × <see cref="FeedbackStep"/> after a press (a
@@ -40,7 +40,7 @@ public static class ControllerDisplay
     public const string Active = "ACTIVE";
     public const string ChooseDevice = "Choose a device";
     public const string NoDevice = "No device";
-    public const string ChoosePreset = "Choose a preset";
+    public const string ChooseMode = "Choose a mode";
     public const string Playing = "PLAYING";
     public const string Paused = "PAUSED";
     public const string Stopped = "STOPPED";
@@ -69,16 +69,16 @@ public static class ControllerDisplay
     /// <summary>A media button's name when it follows the current app and there is none.</summary>
     public const string MediaName = "Media";
 
-    /// <summary>How many link ticks a preset change is announced for (6 × 250 ms ≈ 1.5 s): a
+    /// <summary>How many link ticks a mode change is announced for (6 × 250 ms ≈ 1.5 s): a
     /// single LED is on in the even steps, so it blinks 3 times.</summary>
     public const int AnnounceSteps = 6;
 
     /// <summary>One entry per controller button; null where the kind is None or unknown. Empty
     /// until the controller has said hello. <paramref name="announceStep"/> is the link tick since
-    /// the last preset change (0 = the change itself), or null when no change is being announced.
+    /// the last mode change (0 = the change itself), or null when no change is being announced.
     /// <paramref name="status"/> is the live state of media, program and script actions (null: idle).
     /// <paramref name="feedback"/> maps a button to its feedback for a press just made.</summary>
-    public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string presetId, IAudioEngine audio, int? announceStep = null,
+    public static IReadOnlyList<ButtonDisplay?> Compute(AppConfig config, string modeId, IAudioEngine audio, int? announceStep = null,
                                                         IActionStatus? status = null,
                                                         IReadOnlyDictionary<int, PressFeedback>? feedback = null)
     {
@@ -86,18 +86,18 @@ public static class ControllerDisplay
         if (info is null) return Array.Empty<ButtonDisplay?>();
         var result = new ButtonDisplay?[info.Buttons.Count];
         for (int i = 0; i < result.Length; i++)
-            result[i] = For(config, i, info.Buttons[i], presetId, audio, announceStep, status,
+            result[i] = For(config, i, info.Buttons[i], modeId, audio, announceStep, status,
                             feedback is not null && feedback.TryGetValue(i, out var f) ? f : null);
         return result;
     }
 
-    public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string presetId, IAudioEngine audio,
+    public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string modeId, IAudioEngine audio,
                                      int? announceStep = null, IActionStatus? status = null, PressFeedback? feedback = null)
     {
-        var binding = button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(presetId) : null;
+        var binding = button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(modeId) : null;
         var primary = binding is null ? null : Primary(binding);
         var failing = binding is null ? null : FailingScript(binding, status);
-        // Feedback for one of this binding's actions only (a preset change replaced the binding).
+        // Feedback for one of this binding's actions only (a mode change replaced the binding).
         var fb = feedback is not null && feedback.Step is >= 0 and < FeedbackSteps && binding is not null
                  && binding.All().Any(a => ReferenceEquals(a, feedback.Action)) ? feedback : null;
         if (fb is { ExpectFrom: { } from, Expect: { } expect })
@@ -105,16 +105,16 @@ public static class ControllerDisplay
         var announcing = announceStep is >= 0 and < AnnounceSteps && binding is not null;
         return kind switch
         {
-            IndicatorKind.Led when announcing && BlinksOnPresetChange(binding!) => new LedDisplay(Bit(announceStep % 2 == 0)),
+            IndicatorKind.Led when announcing && BlinksOnModeChange(binding!) => new LedDisplay(Bit(announceStep % 2 == 0)),
             IndicatorKind.Led or IndicatorKind.LedPair when fb?.Error is not null => new LedDisplay(Bit(fb.Step % 2 == 0)),
-            IndicatorKind.Led or IndicatorKind.LedPair when failing is not null => new LedDisplay(LedValue(failing, kind, config, presetId, audio, status)),
+            IndicatorKind.Led or IndicatorKind.LedPair when failing is not null => new LedDisplay(LedValue(failing, kind, config, modeId, audio, status)),
             IndicatorKind.Led or IndicatorKind.LedPair when fb is { Secondary: true } => new LedDisplay(Bit(fb.Step / 3 % 2 == 0)),
-            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(primary, kind, config, presetId, audio, status)),
-            IndicatorKind.Screen when announcing && FlashesPresetName(binding!) => new ScreenDisplay(LivePresetScreen(config, presetId)),
+            IndicatorKind.Led or IndicatorKind.LedPair => new LedDisplay(LedValue(primary, kind, config, modeId, audio, status)),
+            IndicatorKind.Screen when announcing && FlashesModeName(binding!) => new ScreenDisplay(LiveModeScreen(config, modeId)),
             IndicatorKind.Screen when fb?.Error is { } why => new ScreenDisplay(ErrorScreen(fb.Action, why, status)),
-            IndicatorKind.Screen when failing is not null => new ScreenDisplay(Screen(failing, config, presetId, audio, status)),
-            IndicatorKind.Screen when fb is { Secondary: true } => new ScreenDisplay(Screen(fb.Action, config, presetId, audio, status)),
-            IndicatorKind.Screen => new ScreenDisplay(Screen(primary, config, presetId, audio, status)),
+            IndicatorKind.Screen when failing is not null => new ScreenDisplay(Screen(failing, config, modeId, audio, status)),
+            IndicatorKind.Screen when fb is { Secondary: true } => new ScreenDisplay(Screen(fb.Action, config, modeId, audio, status)),
+            IndicatorKind.Screen => new ScreenDisplay(Screen(primary, config, modeId, audio, status)),
             _ => null,
         };
     }
@@ -159,9 +159,9 @@ public static class ControllerDisplay
 
     /// <summary>Whether a press of <paramref name="pressed"/> makes the screen show it for a
     /// moment: one of the binding's actions (the same object), not its first one, and neither
-    /// "Do nothing" nor a preset action (a preset change is announced on its own).</summary>
+    /// "Do nothing" nor a mode action (a mode change is announced on its own).</summary>
     public static bool ShowsWhenPressed(ButtonBindingConfig binding, ButtonActionConfig pressed)
-        => pressed.Action != ButtonActionType.None && !IsPresetAction(pressed)
+        => pressed.Action != ButtonActionType.None && !IsModeAction(pressed)
            && !ReferenceEquals(pressed, Primary(binding))
            && binding.All().Any(a => ReferenceEquals(a, pressed));
 
@@ -170,35 +170,35 @@ public static class ControllerDisplay
         => status is null ? null
            : binding.All().FirstOrDefault(a => a.Action == ButtonActionType.RunScript && status.Script(a).FlashStep is not null);
 
-    /// <summary>A single LED blinks after a preset change when the button has a preset action,
-    /// unless its light follows "Go to preset" (that light already says whether its preset is live).</summary>
-    public static bool BlinksOnPresetChange(ButtonBindingConfig binding)
-        => HasPresetAction(binding) && Primary(binding)?.Action != ButtonActionType.GoToPreset;
+    /// <summary>A single LED blinks after a mode change when the button has a mode action,
+    /// unless its light follows "Go to mode" (that light already says whether its mode is live).</summary>
+    public static bool BlinksOnModeChange(ButtonBindingConfig binding)
+        => HasModeAction(binding) && Primary(binding)?.Action != ButtonActionType.GoToMode;
 
-    /// <summary>A screen flashes the live preset after a preset change when the button has a preset
+    /// <summary>A screen flashes the live mode after a mode change when the button has a mode
     /// action but its screen shows another action.</summary>
-    public static bool FlashesPresetName(ButtonBindingConfig binding)
-        => HasPresetAction(binding) && !IsPresetAction(Primary(binding));
+    public static bool FlashesModeName(ButtonBindingConfig binding)
+        => HasModeAction(binding) && !IsModeAction(Primary(binding));
 
-    private static bool HasPresetAction(ButtonBindingConfig binding) => binding.All().Any(IsPresetAction);
+    private static bool HasModeAction(ButtonBindingConfig binding) => binding.All().Any(IsModeAction);
 
-    private static bool IsPresetAction(ButtonActionConfig? a)
-        => a?.Action is ButtonActionType.NextPreset or ButtonActionType.GoToPreset;
+    private static bool IsModeAction(ButtonActionConfig? a)
+        => a?.Action is ButtonActionType.NextMode or ButtonActionType.GoToMode;
 
     private static ButtonActionConfig? Primary(ButtonBindingConfig binding)
         => binding.All().FirstOrDefault(a => a.Action != ButtonActionType.None);
 
     /// <summary>The LED value for a whole binding (used by the settings UI's light preview).</summary>
-    public static byte LedValueFor(ButtonBindingConfig binding, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio,
+    public static byte LedValueFor(ButtonBindingConfig binding, IndicatorKind kind, AppConfig config, string modeId, IAudioEngine audio,
                                    IActionStatus? status = null)
-        => LedValue(Primary(binding), kind, config, presetId, audio, status);
+        => LedValue(Primary(binding), kind, config, modeId, audio, status);
 
     /// <summary>The steady LED value. 0 = off; mute: 1 while muted; switch: 1 while active.
-    /// An LED pair: toggle 1 = A, 2 = B; presets 1 + the live preset's position. A single LED:
-    /// toggle lit on B, dark on A; "Go to preset" lit while that preset is live; "Next preset" dark
+    /// An LED pair: toggle 1 = A, 2 = B; modes 1 + the live mode's position. A single LED:
+    /// toggle lit on B, dark on A; "Go to mode" lit while that mode is live; "Next mode" dark
     /// (it blinks on a change instead). Media: on while the target plays (Play/Pause, Stop). Program:
     /// on while it runs. Script: on while it runs, blinking during the failure flash.</summary>
-    public static byte LedValue(ButtonActionConfig? action, IndicatorKind kind, AppConfig config, string presetId, IAudioEngine audio,
+    public static byte LedValue(ButtonActionConfig? action, IndicatorKind kind, AppConfig config, string modeId, IAudioEngine audio,
                                 IActionStatus? status = null)
     {
         var single = kind == IndicatorKind.Led;
@@ -234,14 +234,14 @@ public static class ControllerDisplay
                 if (IsCurrentOutput(audio, a)) return single ? (byte)0 : (byte)1;
                 return IsCurrentOutput(audio, b) ? (single ? (byte)1 : (byte)2) : (byte)0;
             }
-            case ButtonActionType.NextPreset when single:
+            case ButtonActionType.NextMode when single:
                 return 0;
-            case ButtonActionType.GoToPreset when single:
-                return Bit(action.PresetId == presetId);
-            case ButtonActionType.NextPreset:
-            case ButtonActionType.GoToPreset:
+            case ButtonActionType.GoToMode when single:
+                return Bit(action.ModeId == modeId);
+            case ButtonActionType.NextMode:
+            case ButtonActionType.GoToMode:
             {
-                var index = config.Presets.FindIndex(p => p.Id == presetId);
+                var index = config.Modes.FindIndex(p => p.Id == modeId);
                 return index < 0 ? (byte)0 : (byte)Math.Min(255, index + 1);
             }
             default:
@@ -251,7 +251,7 @@ public static class ControllerDisplay
 
     /// <summary>Layout 1 content for an action (spec §2.2's table; custom-actions spec §3.3–§5.4):
     /// the top line says the state, the main line names the device, app, program or script.</summary>
-    public static ScreenContent Screen(ButtonActionConfig? action, AppConfig config, string presetId, IAudioEngine audio,
+    public static ScreenContent Screen(ButtonActionConfig? action, AppConfig config, string modeId, IAudioEngine audio,
                                        IActionStatus? status = null)
     {
         status ??= ActionStatus.None;
@@ -320,10 +320,10 @@ public static class ControllerDisplay
                     return ScreenContent.Text("", active.Icon, false, active.Name);
                 return ScreenContent.Text($"NEXT: {other.Name}", active.Icon, false, active.Name);
             }
-            case ButtonActionType.NextPreset:
-                return LivePresetScreen(config, presetId);
-            case ButtonActionType.GoToPreset:
-                return PresetScreen(config, presetId, config.Presets.Find(p => p.Id == action.PresetId)?.Name ?? ChoosePreset);
+            case ButtonActionType.NextMode:
+                return LiveModeScreen(config, modeId);
+            case ButtonActionType.GoToMode:
+                return ModeScreen(config, modeId, config.Modes.Find(p => p.Id == action.ModeId)?.Name ?? ChooseMode);
             default:
                 return ScreenContent.Blank;
         }
@@ -337,13 +337,13 @@ public static class ControllerDisplay
         return ScreenContent.Text(muted ? Muted : Live, look.Icon, muted, look.Name);
     }
 
-    private static ScreenContent LivePresetScreen(AppConfig config, string presetId)
-        => PresetScreen(config, presetId, config.Presets.Find(p => p.Id == presetId)?.Name ?? "");
+    private static ScreenContent LiveModeScreen(AppConfig config, string modeId)
+        => ModeScreen(config, modeId, config.Modes.Find(p => p.Id == modeId)?.Name ?? "");
 
-    private static ScreenContent PresetScreen(AppConfig config, string presetId, string main)
+    private static ScreenContent ModeScreen(AppConfig config, string modeId, string main)
     {
-        var count = config.Presets.Count;
-        var index = Math.Max(0, config.Presets.FindIndex(p => p.Id == presetId));
+        var count = config.Modes.Count;
+        var index = Math.Max(0, config.Modes.FindIndex(p => p.Id == modeId));
         return count <= MaxDots
             ? ScreenContent.Dots((byte)index, (byte)count, ScreenIcon.Presets, main)
             : ScreenContent.Text($"{index + 1}/{count}", ScreenIcon.Presets, false, main);

@@ -8,7 +8,7 @@ using Volco.Core.Communication;
 
 namespace Volco.App.Controls;
 
-/// <summary>Fills a preset dot: lit for the selected preset.</summary>
+/// <summary>Fills a mode dot: lit for the selected mode.</summary>
 public static class ScreenDotFill
 {
     public static readonly IValueConverter Instance = new FuncValueConverter<bool, IBrush>(

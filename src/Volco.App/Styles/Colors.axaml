@@ -28,19 +28,19 @@
       <Color x:Key="SuccessColor">#FF1F7A45</Color>
       <Color x:Key="WarningColor">#FF9A5B00</Color>
       <Color x:Key="DangerColor">#FFB42318</Color>
-      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
-      <Color x:Key="PresetFill0Color">#FFEAF0FC</Color>
-      <Color x:Key="PresetEdge0Color">#FF3358C4</Color>
-      <Color x:Key="PresetFill1Color">#FFE2F3EF</Color>
-      <Color x:Key="PresetEdge1Color">#FF0F7566</Color>
-      <Color x:Key="PresetFill2Color">#FFFBF0DD</Color>
-      <Color x:Key="PresetEdge2Color">#FF9A5B00</Color>
-      <Color x:Key="PresetFill3Color">#FFF1EBFB</Color>
-      <Color x:Key="PresetEdge3Color">#FF7445BD</Color>
-      <Color x:Key="PresetFill4Color">#FFFBE9EF</Color>
-      <Color x:Key="PresetEdge4Color">#FFB12F5A</Color>
-      <Color x:Key="PresetFill5Color">#FFE7F3E9</Color>
-      <Color x:Key="PresetEdge5Color">#FF2E7A3C</Color>
+      <!-- Mode tints (the Controls page's modes): a soft fill and its edge, one pair per mode -->
+      <Color x:Key="ModeFill0Color">#FFEAF0FC</Color>
+      <Color x:Key="ModeEdge0Color">#FF3358C4</Color>
+      <Color x:Key="ModeFill1Color">#FFE2F3EF</Color>
+      <Color x:Key="ModeEdge1Color">#FF0F7566</Color>
+      <Color x:Key="ModeFill2Color">#FFFBF0DD</Color>
+      <Color x:Key="ModeEdge2Color">#FF9A5B00</Color>
+      <Color x:Key="ModeFill3Color">#FFF1EBFB</Color>
+      <Color x:Key="ModeEdge3Color">#FF7445BD</Color>
+      <Color x:Key="ModeFill4Color">#FFFBE9EF</Color>
+      <Color x:Key="ModeEdge4Color">#FFB12F5A</Color>
+      <Color x:Key="ModeFill5Color">#FFE7F3E9</Color>
+      <Color x:Key="ModeEdge5Color">#FF2E7A3C</Color>
       <!-- Older names, kept as aliases -->
       <Color x:Key="SurfaceCardColor">#FFFFFFFF</Color>
       <Color x:Key="SurfaceStrokeColor">#FFE4E4E7</Color>
@@ -62,19 +62,19 @@
       <Color x:Key="SuccessColor">#FF5CC98A</Color>
       <Color x:Key="WarningColor">#FFE7B04F</Color>
       <Color x:Key="DangerColor">#FFF4877C</Color>
-      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
-      <Color x:Key="PresetFill0Color">#FF1C2335</Color>
-      <Color x:Key="PresetEdge0Color">#FF8AA6F2</Color>
-      <Color x:Key="PresetFill1Color">#FF152B28</Color>
-      <Color x:Key="PresetEdge1Color">#FF4FC4B0</Color>
-      <Color x:Key="PresetFill2Color">#FF2D2516</Color>
-      <Color x:Key="PresetEdge2Color">#FFE7B04F</Color>
-      <Color x:Key="PresetFill3Color">#FF261F35</Color>
-      <Color x:Key="PresetEdge3Color">#FFB79AF0</Color>
-      <Color x:Key="PresetFill4Color">#FF33202A</Color>
-      <Color x:Key="PresetEdge4Color">#FFF08AA8</Color>
-      <Color x:Key="PresetFill5Color">#FF18291D</Color>
-      <Color x:Key="PresetEdge5Color">#FF6CCB84</Color>
+      <!-- Mode tints (the Controls page's modes): a soft fill and its edge, one pair per mode -->
+      <Color x:Key="ModeFill0Color">#FF1C2335</Color>
+      <Color x:Key="ModeEdge0Color">#FF8AA6F2</Color>
+      <Color x:Key="ModeFill1Color">#FF152B28</Color>
+      <Color x:Key="ModeEdge1Color">#FF4FC4B0</Color>
+      <Color x:Key="ModeFill2Color">#FF2D2516</Color>
+      <Color x:Key="ModeEdge2Color">#FFE7B04F</Color>
+      <Color x:Key="ModeFill3Color">#FF261F35</Color>
+      <Color x:Key="ModeEdge3Color">#FFB79AF0</Color>
+      <Color x:Key="ModeFill4Color">#FF33202A</Color>
+      <Color x:Key="ModeEdge4Color">#FFF08AA8</Color>
+      <Color x:Key="ModeFill5Color">#FF18291D</Color>
+      <Color x:Key="ModeEdge5Color">#FF6CCB84</Color>
       <!-- Older names, kept as aliases -->
       <Color x:Key="SurfaceCardColor">#FF1A1A1D</Color>
       <Color x:Key="SurfaceStrokeColor">#FF2C2C31</Color>
@@ -96,19 +96,19 @@
       <Color x:Key="SuccessColor">#FF3FF23F</Color>
       <Color x:Key="WarningColor">#FFFFFF00</Color>
       <Color x:Key="DangerColor">#FFFF8A80</Color>
-      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
-      <Color x:Key="PresetFill0Color">#FF00222A</Color>
-      <Color x:Key="PresetEdge0Color">#FF1AEBFF</Color>
-      <Color x:Key="PresetFill1Color">#FF002A10</Color>
-      <Color x:Key="PresetEdge1Color">#FF3FF23F</Color>
-      <Color x:Key="PresetFill2Color">#FF2A2A00</Color>
-      <Color x:Key="PresetEdge2Color">#FFFFFF00</Color>
-      <Color x:Key="PresetFill3Color">#FF22102E</Color>
-      <Color x:Key="PresetEdge3Color">#FFE0A0FF</Color>
-      <Color x:Key="PresetFill4Color">#FF2E1210</Color>
-      <Color x:Key="PresetEdge4Color">#FFFF8A80</Color>
-      <Color x:Key="PresetFill5Color">#FF1A1A1A</Color>
-      <Color x:Key="PresetEdge5Color">#FFFFFFFF</Color>
+      <!-- Mode tints (the Controls page's modes): a soft fill and its edge, one pair per mode -->
+      <Color x:Key="ModeFill0Color">#FF00222A</Color>
+      <Color x:Key="ModeEdge0Color">#FF1AEBFF</Color>
+      <Color x:Key="ModeFill1Color">#FF002A10</Color>
+      <Color x:Key="ModeEdge1Color">#FF3FF23F</Color>
+      <Color x:Key="ModeFill2Color">#FF2A2A00</Color>
+      <Color x:Key="ModeEdge2Color">#FFFFFF00</Color>
+      <Color x:Key="ModeFill3Color">#FF22102E</Color>
+      <Color x:Key="ModeEdge3Color">#FFE0A0FF</Color>
+      <Color x:Key="ModeFill4Color">#FF2E1210</Color>
+      <Color x:Key="ModeEdge4Color">#FFFF8A80</Color>
+      <Color x:Key="ModeFill5Color">#FF1A1A1A</Color>
+      <Color x:Key="ModeEdge5Color">#FFFFFFFF</Color>
       <!-- Older names, kept as aliases -->
       <Color x:Key="SurfaceCardColor">#FF000000</Color>
       <Color x:Key="SurfaceStrokeColor">#FFA0A0A0</Color>
@@ -130,19 +130,19 @@
       <Color x:Key="SuccessColor">#FF0A5C1E</Color>
       <Color x:Key="WarningColor">#FF6B3D00</Color>
       <Color x:Key="DangerColor">#FF8E0B0B</Color>
-      <!-- Preset tints (the Controls page's modes): a soft fill and its edge, one pair per preset -->
-      <Color x:Key="PresetFill0Color">#FFE2EEF2</Color>
-      <Color x:Key="PresetEdge0Color">#FF174F63</Color>
-      <Color x:Key="PresetFill1Color">#FFE0EEDF</Color>
-      <Color x:Key="PresetEdge1Color">#FF0A5C1E</Color>
-      <Color x:Key="PresetFill2Color">#FFF3E7D2</Color>
-      <Color x:Key="PresetEdge2Color">#FF6B3D00</Color>
-      <Color x:Key="PresetFill3Color">#FFEDE2F2</Color>
-      <Color x:Key="PresetEdge3Color">#FF5B1F7A</Color>
-      <Color x:Key="PresetFill4Color">#FFF5E1E1</Color>
-      <Color x:Key="PresetEdge4Color">#FF8E0B0B</Color>
-      <Color x:Key="PresetFill5Color">#FFEDE6D3</Color>
-      <Color x:Key="PresetEdge5Color">#FF000000</Color>
+      <!-- Mode tints (the Controls page's modes): a soft fill and its edge, one pair per mode -->
+      <Color x:Key="ModeFill0Color">#FFE2EEF2</Color>
+      <Color x:Key="ModeEdge0Color">#FF174F63</Color>
+      <Color x:Key="ModeFill1Color">#FFE0EEDF</Color>
+      <Color x:Key="ModeEdge1Color">#FF0A5C1E</Color>
+      <Color x:Key="ModeFill2Color">#FFF3E7D2</Color>
+      <Color x:Key="ModeEdge2Color">#FF6B3D00</Color>
+      <Color x:Key="ModeFill3Color">#FFEDE2F2</Color>
+      <Color x:Key="ModeEdge3Color">#FF5B1F7A</Color>
+      <Color x:Key="ModeFill4Color">#FFF5E1E1</Color>
+      <Color x:Key="ModeEdge4Color">#FF8E0B0B</Color>
+      <Color x:Key="ModeFill5Color">#FFEDE6D3</Color>
+      <Color x:Key="ModeEdge5Color">#FF000000</Color>
       <!-- Older names, kept as aliases -->
       <Color x:Key="SurfaceCardColor">#FFFFFAEF</Color>
       <Color x:Key="SurfaceStrokeColor">#FF6B6B6B</Color>

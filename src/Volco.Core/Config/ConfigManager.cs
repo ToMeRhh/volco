@@ -51,7 +51,7 @@ public class ConfigManager
                         }
                         json = root.ToJsonString();
                     }
-                    else if (version is 3 or 4 or 5)
+                    else if (version is 3 or 4 or 5 or 6)
                     {
                         // v3 → v4 only adds "devices" and "controller", v4 → v5 only adds
                         // "controllerConfigBlob" (and drops the baud rate, below), and v5 → v6 only
@@ -61,6 +61,8 @@ public class ConfigManager
                         root["schemaVersion"] = AppConfig.CurrentSchemaVersion;
                         migratedFrom = version;
                     }
+                    // v6 → v7 renames presets to modes; every older file passes through it too.
+                    if (version < 7) ConfigMigrator.RenamePresetsToModes(root);
                     // The serial baud rate is fixed at 115200 since v5 (spec §8.1).
                     if (root["connection"]?["serial"] is JsonObject serial) serial.Remove("baudRate");
                     json = root.ToJsonString();
@@ -91,7 +93,7 @@ public class ConfigManager
         }
 
         // The number of sliders and buttons is the user's (position == hardware input), so a short
-        // list is not padded; Normalize only repairs invariants (a preset exists, Index == position).
+        // list is not padded; Normalize only repairs invariants (a mode exists, Index == position).
         Config.Normalize();
 
         // Outside the try above: a failed write must not be mistaken for an unreadable file.

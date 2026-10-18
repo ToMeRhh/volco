@@ -5,7 +5,7 @@ namespace Volco.App.Osd;
 
 /// <summary>Which icon the OSD shows. <see cref="Device"/> is a device's own icon
 /// (<see cref="VolumeOsdViewModel.DeviceIcon"/>).</summary>
-internal enum OsdGlyph { Volume, Muted, Speaker, Preset, Device }
+internal enum OsdGlyph { Volume, Muted, Speaker, Mode, Device }
 
 /// <summary>
 /// Pure presentation state of the volume OSD (no Avalonia types, so plain [Fact]-testable).
@@ -38,8 +38,8 @@ internal sealed class VolumeOsdViewModel
 
     private bool Muted { get; set; }
 
-    /// <summary>False for a preset switch, which has no level to show.</summary>
-    public bool ShowsLevel => Glyph != OsdGlyph.Preset;
+    /// <summary>False for a mode switch, which has no level to show.</summary>
+    public bool ShowsLevel => Glyph != OsdGlyph.Mode;
 
     /// <summary>Level bar opacity: dimmed while muted.</summary>
     public double LevelBarOpacity { get; private set; } = 1.0;
@@ -49,16 +49,16 @@ internal sealed class VolumeOsdViewModel
     {
         var level = Math.Clamp(n.Level * 100.0, 0, 100);
 
-        var valueText = n.Kind == OsdKind.Preset ? ""
+        var valueText = n.Kind == OsdKind.Mode ? ""
             : (n.Kind is OsdKind.Mute or OsdKind.Device) && n.Muted
             ? "Muted"
             : $"{Math.Round(level, MidpointRounding.AwayFromZero):0}%";
-        // A preset switch has no level: the preset's name, "Mode" on the right, and no bar.
+        // A mode switch has no level: the mode's name, "Mode" on the right, and no bar.
         var label = n.Label;
-        if (n.Kind == OsdKind.Preset) valueText = "Mode";
+        if (n.Kind == OsdKind.Mode) valueText = "Mode";
 
         var deviceIcon = n.Kind is OsdKind.Device or OsdKind.Mute or OsdKind.Volume ? n.Icon : null;
-        var glyph = n.Kind == OsdKind.Preset ? OsdGlyph.Preset
+        var glyph = n.Kind == OsdKind.Mode ? OsdGlyph.Mode
             : deviceIcon is not null ? OsdGlyph.Device
             : n.Muted ? OsdGlyph.Muted
             : n.Kind == OsdKind.Device ? OsdGlyph.Speaker

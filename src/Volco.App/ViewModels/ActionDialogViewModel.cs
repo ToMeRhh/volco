@@ -61,8 +61,8 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
         }),
         ("Modes", new Entry[]
         {
-            new(ButtonActionType.NextPreset, "Next mode", "preset cycle layer"),
-            new(ButtonActionType.GoToPreset, "Go to mode", "preset layer"),
+            new(ButtonActionType.NextMode, "Next mode", "mode cycle layer"),
+            new(ButtonActionType.GoToMode, "Go to mode", "mode layer"),
         }),
         ("Programs", new Entry[]
         {
@@ -75,7 +75,7 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
     private readonly ButtonsViewModel _buttons;
     private readonly Dictionary<string, bool> _collapsed;
     private readonly Action _close;
-    private readonly string _presetId;
+    private readonly string _modeId;
     private readonly ButtonActionConfig _original;
     private ButtonActionType? _current;
 
@@ -126,10 +126,10 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
         _collapsed = collapsed;
         _close = close;
         Gesture = gesture;
-        _presetId = buttons.EditingPresetId;
+        _modeId = buttons.EditingModeId;
         Title = ButtonItemViewModel.GestureName(gesture);
         Subtitle = $"Button {button.Index + 1} · {buttons.EditingName}";
-        _original = Clone(Of(button.Config.BindingFor(_presetId), gesture));
+        _original = Clone(Of(button.Config.BindingFor(_modeId), gesture));
         CanRemove = _original.Action != ButtonActionType.None;
         Draft = button.CreateDraft(gesture, Clone(_original));
         _current = CanRemove ? _original.Action : null;
@@ -161,7 +161,7 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
 
     /// <summary>The mode and the button still exist (else the dialog has nothing to write to).</summary>
     internal bool IsStillValid(AppConfig config)
-        => config.Presets.Exists(p => p.Id == _presetId) && _buttons.Items.Contains(_button);
+        => config.Modes.Exists(p => p.Id == _modeId) && _buttons.Items.Contains(_button);
 
     // ── The list ──────────────────────────────────────────────────────────────
 
@@ -259,7 +259,7 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
         if (!IsStillValid(((IButtonCardOwner)_buttons).AppConfig)) { _close(); return false; }
         Draft.ShowErrors = true;
         if (Draft.Check().Count > 0) return false;
-        if (!Same(Draft.Config, _original)) _button.SetAction(_presetId, Gesture, Clone(Draft.Config));
+        if (!Same(Draft.Config, _original)) _button.SetAction(_modeId, Gesture, Clone(Draft.Config));
         _close();
         return true;
     }
@@ -268,7 +268,7 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
     [RelayCommand]
     public void Remove()
     {
-        if (IsStillValid(((IButtonCardOwner)_buttons).AppConfig)) _button.SetAction(_presetId, Gesture, new ButtonActionConfig());
+        if (IsStillValid(((IButtonCardOwner)_buttons).AppConfig)) _button.SetAction(_modeId, Gesture, new ButtonActionConfig());
         _close();
     }
 

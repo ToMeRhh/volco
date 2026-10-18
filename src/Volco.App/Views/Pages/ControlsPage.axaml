@@ -34,10 +34,10 @@
                    (spec §9): a click edits a mode, a right-click opens its menu; the pencil turns on
                    edit mode (drag to reorder, click to rename, × to delete). -->
               <Border Name="ButtonFrame" Classes="ModeFrame"
-                      controls:PresetTint.Index="{Binding Buttons.EditingTintIndex}">
+                      controls:ModeTint.Index="{Binding Buttons.EditingTintIndex}">
                 <StackPanel Spacing="8">
                   <Grid ColumnDefinitions="*,Auto">
-                    <ItemsControl Name="ModeTabs" ItemsSource="{Binding Buttons.Presets}"
+                    <ItemsControl Name="ModeTabs" ItemsSource="{Binding Buttons.Modes}"
                                   Classes.editing="{Binding Buttons.IsEditingModes}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -45,9 +45,9 @@
                         </ItemsPanelTemplate>
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:PresetTabViewModel">
+                        <DataTemplate x:DataType="vm:ModeTabViewModel">
                           <RadioButton Name="ModeTab" Classes="ModeTab" GroupName="ControlsModeTabs"
-                                       controls:PresetTint.Index="{Binding TintIndex}"
+                                       controls:ModeTint.Index="{Binding TintIndex}"
                                        IsChecked="{Binding IsEditing, Mode=OneWay}"
                                        Command="{Binding SelectCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="6">

@@ -412,31 +412,31 @@ public class ActionDialogTests
     }
 
     [AvaloniaFact]
-    public void Done_Valid_WritesEditedPresetSlot()
+    public void Done_Valid_WritesEditedModeSlot()
     {
-        using var s = Show(c => c.Presets.Add(new PresetConfig { Id = "preset-2", Name = "Gaming" }));
-        s.Vm.Buttons.EditingPresetId = "preset-2";
+        using var s = Show(c => c.Modes.Add(new ModeConfig { Id = "mode-2", Name = "Gaming" }));
+        s.Vm.Buttons.EditingModeId = "mode-2";
         Settle(s.Window);
         Open(s, button: 1, row: "Hold");
         Assert.Equal("Button 2 · Gaming", s.Dialog.Subtitle);
         Assert.Equal("Hold", s.Dialog.Title);
 
-        s.Dialog.Pick(ButtonActionType.GoToPreset);
+        s.Dialog.Pick(ButtonActionType.GoToMode);
         Settle(s.Window);
         Click(In<Button>(s.View, "DoneButton"));
         Settle(s.Window);
         Assert.True(s.Controls.HasDialog);
-        Assert.Equal("Choose a mode.", In<TextBlock>(s.View, "PresetErrorText").Text);
-        Assert.True(In<ComboBox>(s.View, "PresetCombo").IsFocused);
-        s.Dialog.Draft.SelectedPreset = s.Dialog.Draft.PresetChoices.Single(p => p.Id == AppConfig.DefaultPresetId);
+        Assert.Equal("Choose a mode.", In<TextBlock>(s.View, "ModeErrorText").Text);
+        Assert.True(In<ComboBox>(s.View, "ModeCombo").IsFocused);
+        s.Dialog.Draft.SelectedMode = s.Dialog.Draft.ModeChoices.Single(p => p.Id == AppConfig.DefaultModeId);
         Click(In<Button>(s.View, "DoneButton"));
         Settle(s.Window);
 
         Assert.False(s.Controls.HasDialog);
-        var written = s.Config.Buttons[1].Actions["preset-2"].LongPress;
-        Assert.Equal(ButtonActionType.GoToPreset, written.Action);
-        Assert.Equal(AppConfig.DefaultPresetId, written.PresetId);
-        Assert.Equal(ButtonActionType.None, s.Config.Buttons[1].BindingFor(AppConfig.DefaultPresetId).LongPress.Action);
+        var written = s.Config.Buttons[1].Actions["mode-2"].LongPress;
+        Assert.Equal(ButtonActionType.GoToMode, written.Action);
+        Assert.Equal(AppConfig.DefaultModeId, written.ModeId);
+        Assert.Equal(ButtonActionType.None, s.Config.Buttons[1].BindingFor(AppConfig.DefaultModeId).LongPress.Action);
         // The row, the tile and the problems follow, as after any edit.
         var item = s.Vm.Buttons.Items[1];
         Assert.Same(written, item.Hold.Config);
@@ -536,22 +536,22 @@ public class ActionDialogTests
     }
 
     [AvaloniaFact]
-    public void EditedPresetDeleted_WhileOpen_ClosesWithoutWrite()
+    public void EditedModeDeleted_WhileOpen_ClosesWithoutWrite()
     {
-        using var s = Show(c => c.Presets.Add(new PresetConfig { Id = "preset-2", Name = "Gaming" }));
-        s.Vm.Buttons.EditingPresetId = "preset-2";
+        using var s = Show(c => c.Modes.Add(new ModeConfig { Id = "mode-2", Name = "Gaming" }));
+        s.Vm.Buttons.EditingModeId = "mode-2";
         Settle(s.Window);
         Open(s);
         s.Dialog.Pick(ButtonActionType.MuteCurrentInput);
         var dialog = s.Dialog;
 
-        s.Vm.Buttons.DeleteMode("preset-2");
+        s.Vm.Buttons.DeleteMode("mode-2");
         Settle(s.Window);
 
         Assert.False(s.Controls.HasDialog);
         Assert.False(dialog.Done());   // a late Done writes nothing either
-        Assert.All(s.Config.Buttons, b => Assert.False(b.Actions.ContainsKey("preset-2")));
-        Assert.Equal(ButtonActionType.None, s.Config.Buttons[0].BindingFor(AppConfig.DefaultPresetId).SinglePress.Action);
+        Assert.All(s.Config.Buttons, b => Assert.False(b.Actions.ContainsKey("mode-2")));
+        Assert.Equal(ButtonActionType.None, s.Config.Buttons[0].BindingFor(AppConfig.DefaultModeId).SinglePress.Action);
     }
 
     // ── Each action's settings ────────────────────────────────────────────────

@@ -204,7 +204,7 @@ public class SettingsCoverageTests
         try
         {
             using var rig = new TestRig(Engine(), custom: custom);
-            rig.Config.Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            rig.Config.Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
             using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
             var page = new ControlsPage(vm.Controls);
             var window = Host(page);
@@ -225,7 +225,7 @@ public class SettingsCoverageTests
             Named<ComboBox>(d, "DeviceBCombo").SelectedItem = "Headphones";                // toggle B
             Done(d, window, vm);
             d = OpenAction(page, window, vm, 1, "Double", "Go to mode");
-            Named<ComboBox>(d, "PresetCombo").SelectedItem = new PresetChoice("gaming", "Gaming");   // PresetId
+            Named<ComboBox>(d, "ModeCombo").SelectedItem = new ModeChoice("gaming", "Gaming");   // ModeId
             Done(d, window, vm);
             d = OpenAction(page, window, vm, 1, "Hold", "Play / pause");
             var apps = Named<ComboBox>(d, "MediaAppCombo");
@@ -253,23 +253,23 @@ public class SettingsCoverageTests
             Named<NumericUpDown>(Inspector(page), "DoublePressBox").Value = 350;            // DoublePressWindowMs
 
             var b = SaveAndReload(rig).Buttons;
-            var b0 = b[0].BindingFor(AppConfig.DefaultPresetId);
+            var b0 = b[0].BindingFor(AppConfig.DefaultModeId);
             Assert.Equal(ButtonActionType.MuteSpecificDevice, b0.SinglePress.Action);
             Assert.Equal("dev-1", b0.SinglePress.Device!.Id);
             Assert.Equal("Speakers", b0.SinglePress.Device.FriendlyName);
             Assert.Equal(ButtonActionType.MuteCurrentInput, b0.DoublePress.Action);
             Assert.Equal(ButtonActionType.SetOutputDevice, b0.LongPress.Action);
             Assert.Equal("dev-2", b0.LongPress.Device!.Id);
-            var b1 = b[1].BindingFor(AppConfig.DefaultPresetId);
+            var b1 = b[1].BindingFor(AppConfig.DefaultModeId);
             Assert.Equal(ButtonActionType.ToggleOutputDevice, b1.SinglePress.Action);
             Assert.Equal("dev-1", b1.SinglePress.Device!.Id);
             Assert.Equal("dev-2", b1.SinglePress.DeviceB!.Id);
-            Assert.Equal(ButtonActionType.GoToPreset, b1.DoublePress.Action);
-            Assert.Equal("gaming", b1.DoublePress.PresetId);
+            Assert.Equal(ButtonActionType.GoToMode, b1.DoublePress.Action);
+            Assert.Equal("gaming", b1.DoublePress.ModeId);
             Assert.Equal(ButtonActionType.MediaPlayPause, b1.LongPress.Action);
             Assert.Equal("chrome", b1.LongPress.MediaApp!.Id);
             Assert.Equal("Google Chrome", b1.LongPress.MediaApp.Name);
-            var b2 = b[2].BindingFor(AppConfig.DefaultPresetId);
+            var b2 = b[2].BindingFor(AppConfig.DefaultModeId);
             Assert.Equal(ButtonActionType.RunScript, b2.SinglePress.Action);
             Assert.Equal(script, b2.SinglePress.Command!.Path);
             Assert.Equal("on", b2.SinglePress.Command.Arguments);
@@ -307,16 +307,16 @@ public class SettingsCoverageTests
         var page = new ControlsPage(vm.Controls);
         Host(page);
 
-        Named<Button>(page, "AddModeButton").Command!.Execute(null);           // Presets[] (added)
+        Named<Button>(page, "AddModeButton").Command!.Execute(null);           // Modes[] (added)
         Dispatcher.UIThread.RunJobs();
-        vm.Buttons.RenameMode(vm.Buttons.EditingPresetId, "Gaming");           // Presets[].Name
-        vm.Buttons.RenameMode(vm.Buttons.EditingPresetId, "Play");
-        Assert.Equal(new[] { "Default", "Play" }, SaveAndReload(rig).Presets.Select(p => p.Name));
+        vm.Buttons.RenameMode(vm.Buttons.EditingModeId, "Gaming");           // Modes[].Name
+        vm.Buttons.RenameMode(vm.Buttons.EditingModeId, "Play");
+        Assert.Equal(new[] { "Default", "Play" }, SaveAndReload(rig).Modes.Select(p => p.Name));
 
-        vm.Buttons.MoveMode(1, 0);                                             // Presets[] (order)
-        Assert.Equal(new[] { "Play", "Default" }, SaveAndReload(rig).Presets.Select(p => p.Name));
-        vm.Buttons.DeleteMode(AppConfig.DefaultPresetId);                      // Presets[] (removed)
-        Assert.Equal(new[] { "Play" }, SaveAndReload(rig).Presets.Select(p => p.Name));
+        vm.Buttons.MoveMode(1, 0);                                             // Modes[] (order)
+        Assert.Equal(new[] { "Play", "Default" }, SaveAndReload(rig).Modes.Select(p => p.Name));
+        vm.Buttons.DeleteMode(AppConfig.DefaultModeId);                      // Modes[] (removed)
+        Assert.Equal(new[] { "Play" }, SaveAndReload(rig).Modes.Select(p => p.Name));
     }
 
     [AvaloniaFact]

@@ -168,22 +168,22 @@ public sealed class ControlsViewModelTests : IDisposable
     {
         var binding = Config.Buttons[0].Default();
         binding.DoublePress.Action = ButtonActionType.MuteCurrentInput;
-        binding.LongPress.Action = ButtonActionType.NextPreset;
+        binding.LongPress.Action = ButtonActionType.NextMode;
         var item = Vm().Buttons.Items[0];
 
         Assert.Equal("Mute mic", item.MainLabel);
         Assert.Equal(PressType.Double, item.MainGesture);
-        Assert.Equal(new[] { new GestureLine(PressType.Long, "Next mode", "NextPreset") }, item.Secondary.ToArray());
+        Assert.Equal(new[] { new GestureLine(PressType.Long, "Next mode", "NextMode") }, item.Secondary.ToArray());
     }
 
     [Fact]
-    public void ClearButton_EmptiesEditedPresetOnly_UndoRestores()
+    public void ClearButton_EmptiesEditedModeOnly_UndoRestores()
     {
-        Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
         Config.Buttons[1].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
         Config.Buttons[1].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentInput;
         var vm = Vm();
-        vm.Buttons.EditingPresetId = "gaming";
+        vm.Buttons.EditingModeId = "gaming";
         var item = vm.Buttons.Items[1];
         Assert.True(item.HasEditedActions);
 
@@ -203,20 +203,20 @@ public sealed class ControlsViewModelTests : IDisposable
     }
 
     [Fact]
-    public void Preview_ShowsEditedPreset()
+    public void Preview_ShowsEditedMode()
     {
         Hardware(sliders: 5, buttons: 3);
-        Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
         // The output is muted: a mute action lights the LED, an empty binding doesn't.
         Config.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentOutput;
         var vm = Vm();
         var item = vm.Buttons.Items[0];
-        Assert.Equal(AppConfig.DefaultPresetId, vm.Buttons.LivePresetId);
+        Assert.Equal(AppConfig.DefaultModeId, vm.Buttons.LiveModeId);
         Assert.False(item.LedOn);
 
-        vm.Buttons.EditingPresetId = "gaming";
+        vm.Buttons.EditingModeId = "gaming";
         Assert.True(item.LedOn);
-        Assert.Equal(AppConfig.DefaultPresetId, vm.Buttons.LivePresetId);
+        Assert.Equal(AppConfig.DefaultModeId, vm.Buttons.LiveModeId);
     }
 
     [Fact]
