@@ -25,6 +25,8 @@ internal sealed class ShellAppIcons : IAppIcons
             // "path,index" is how a resource icon is named; the thumbnail is of the file.
             var comma = source.LastIndexOf(',');
             var path = comma > 0 && int.TryParse(source.AsSpan(comma + 1), out _) ? source[..comma] : source;
+            // Session icon paths may hold variables ("%SystemRoot%\System32\…").
+            path = Environment.ExpandEnvironmentVariables(path);
             var file = await StorageFile.GetFileFromPathAsync(path);
             using var thumbnail = await file.GetThumbnailAsync(ThumbnailMode.SingleItem, (uint)size);
             if (thumbnail is null || thumbnail.Size == 0) return null;
