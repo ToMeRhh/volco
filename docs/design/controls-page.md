@@ -309,7 +309,7 @@ The device registry already holds capture endpoints. Slider routing calls `SetDe
 - **Tile alignment.** Avalonia has no CSS `subgrid`. Each grid row of button tiles is one `Grid` with four shared rows (`Grid.IsSharedSizeScope` plus `SharedSizeGroup` per row index), or a custom panel that measures every row and arranges tiles by the tallest row. A panel test checks that the caps, main actions and action lists of a row have equal Y.
 - **Drag.** Today's `CardReorder` pointer-based drag is reused:
   - The drag visual is an adorner holding a copy of the action rows (buttons) or of the slider tile.
-  - The source dims its action rows (buttons) or the tile (sliders).
+  - The source tile dims (buttons and sliders); dimming only a button's action rows would dim the drag image too, since it is a live copy of them.
   - Keyboard alternative: the context menu of a tile has **Swap with ▸ Button N / Slider N**.
 - **Dialogs** are overlays over the page, like today's setup and test dialogs: modal, Escape and click-outside close, focus trapped, and focus returns to the row that opened them.
 

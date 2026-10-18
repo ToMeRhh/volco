@@ -73,7 +73,7 @@
         if (kinds[i] === P.KIND.LED_PAIR || role === 'output') return DEVICES[state.output].name;
         if (kinds[i] === P.KIND.LED) return state.outputMuted ? 'Output muted' : 'Output on';
         if (role === 'mic') return state.micMuted ? 'Microphone muted' : 'Microphone on';
-        if (role === 'presets') return `Preset: ${PRESETS[state.preset]}`;
+        if (role === 'presets') return `Mode: ${PRESETS[state.preset]}`;
         if (role === 'discord') return state.discordMuted ? 'Discord muted' : 'Discord on';
         return null;
       },
