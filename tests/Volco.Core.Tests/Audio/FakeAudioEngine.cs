@@ -120,6 +120,9 @@ public sealed class FakeAudioEngine : IAudioEngine
     /// <summary>How many handlers are currently subscribed to <see cref="DeviceVolumeChanged"/>.</summary>
     public int DeviceVolumeChangedSubscriberCount => DeviceVolumeChanged?.GetInvocationList().Length ?? 0;
 
+    /// <summary>How many handlers are currently subscribed to <see cref="SessionsChanged"/>.</summary>
+    public int SessionsChangedSubscriberCount => SessionsChanged?.GetInvocationList().Length ?? 0;
+
     public void Dispose()
     {
         Disposed = true;

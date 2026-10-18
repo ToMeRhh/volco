@@ -631,4 +631,89 @@ public class TargetDialogTests
 
         Assert.False(view.MetersRunning);
     }
+
+    // ── Session changes ───────────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void SessionStarted_WhileOpen_AddsRowAndKeepsDraft()
+    {
+        var icons = new FakeIcons();
+        using var s = Show(icons: icons);
+        Open(s, slider: 3);
+        Click(s, "Spotify");
+        s.Dialog.Query = "vlc";
+        Assert.True(s.Dialog.HasNoMatches);
+
+        var vlc = Session("vlc.exe", 9) with { DisplayName = "VLC media player", IconPath = @"C:\Apps\vlc.exe" };
+        s.Rig.Engine.Sessions.Add(vlc);
+        s.Rig.Engine.RaiseSessionCreated(vlc);
+        Settle(s.Window);
+
+        Assert.Equal("vlc", s.Dialog.Query);
+        var row = Assert.Single(s.Dialog.VisibleItems);
+        Assert.Equal("VLC media player", row.Name);
+        Assert.NotNull(row.Meter);
+        Assert.Contains(@"C:\Apps\vlc.exe", icons.Requests);
+        Assert.NotNull(Item(s, "VLC media player").AppIcon);
+
+        s.Dialog.Query = "";
+        Assert.Equal(new[] { "Spotify", "game" }, On(s).OrderBy(n => n, StringComparer.Ordinal));
+    }
+
+    [AvaloniaFact]
+    public void SessionEnded_WhileOpen_MeterDropsToZero()
+    {
+        using var s = Show();
+        s.Rig.Engine.Peaks["s-2"] = 0.5f;
+        Open(s);
+        s.Dialog.PollMeters();
+        var meter = Item(s, "chrome").Meter!;
+        Assert.Equal(0.5, meter.Level, 3);
+
+        var chrome = s.Rig.Engine.Sessions.Single(x => x.ImageName == "chrome.exe");
+        s.Rig.Engine.Sessions.Remove(chrome);
+        s.Rig.Engine.RaiseSessionExpired(chrome);
+        Settle(s.Window);
+        s.Dialog.PollMeters();
+
+        Assert.Equal(0, meter.Level, 3);
+        Assert.DoesNotContain(s.Dialog.VisibleItems, i => i.Name == "chrome");
+    }
+
+    [AvaloniaFact]
+    public void Dispose_UnsubscribesFromSessions()
+    {
+        using var s = Show();
+        var before = s.Rig.Engine.SessionsChangedSubscriberCount;
+        Open(s);
+        var dialog = s.Dialog;
+        Assert.Equal(before + 1, s.Rig.Engine.SessionsChangedSubscriberCount);
+
+        s.Controls.CloseDialog();
+        Settle(s.Window);
+
+        Assert.Equal(before, s.Rig.Engine.SessionsChangedSubscriberCount);
+        var vlc = Session("vlc.exe", 9);
+        s.Rig.Engine.Sessions.Add(vlc);
+        s.Rig.Engine.RaiseSessionCreated(vlc);
+        Settle(s.Window);
+        Assert.DoesNotContain(dialog.Sections.SelectMany(x => x.Items), i => i.Name == "vlc");
+    }
+
+    [AvaloniaFact]
+    public void UnpluggedSavedMic_ListedAsInput()
+    {
+        // No live device and no saved settings: only the endpoint id says it is an input.
+        using var s = Show(c => c.Sliders[0].Device = new DeviceRefConfig { Id = "{0.0.1.00000000}.{rode}", FriendlyName = "Podcast Mic (Rode)" },
+                           setup: AddMic);
+        Open(s);
+
+        var devices = s.Dialog.Sections[0].Items;
+        Assert.Equal(new[] { "Main output", "Speakers", "Cans", "Microphone", "Podcast Mic" }, devices.Select(i => i.Name));
+        var saved = devices[^1];
+        Assert.True(saved.IsOn);
+        Assert.Equal("Input · Podcast Mic (Rode)", saved.Secondary);
+        Assert.Equal(AudioFlow.Capture, saved.Flow);
+        Assert.Equal("Icon.Device.Mic", saved.IconKey);
+    }
 }

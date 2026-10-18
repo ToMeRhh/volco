@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Volco.App.ViewModels.Search;
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Devices;
 using Volco.Core.Input;
 
 namespace Volco.App.ViewModels;
@@ -284,8 +285,10 @@ public sealed partial class ActionDialogViewModel : ObservableObject, ISearchLis
     /// dialog for the picked device, A or B. Nothing without a pick.</summary>
     public void OpenDeviceDialog(bool deviceB, bool focusIcon)
     {
-        if ((deviceB ? Draft.Config.DeviceB : Draft.Config.Device) is { } device)
-            OpenDevice?.Invoke(device, AudioFlow.Render, focusIcon);
+        if ((deviceB ? Draft.Config.DeviceB : Draft.Config.Device) is not { } device) return;
+        IButtonCardOwner owner = _buttons;
+        var flow = DeviceDisplay.FlowOf(owner.AppConfig, owner.Audio, device) ?? AudioFlow.Render;
+        OpenDevice?.Invoke(device, flow, focusIcon);
     }
 
     /// <summary>The device dialog closed: the pickers re-read the names.</summary>

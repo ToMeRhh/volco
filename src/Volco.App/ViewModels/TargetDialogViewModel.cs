@@ -147,6 +147,7 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         _devices = sliders.Devices;
         Title = $"Slider {slider.Index + 1} controls";
         _sliders.DevicesRefreshed += OnDevicesRefreshed;
+        _sliders.Audio.SessionsChanged += OnSessionsChanged;
         Rebuild();
         RequestIcons();
     }
@@ -182,18 +183,19 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
                                               _type == SliderMappingType.Device && _device is null, null, [])
                                { IconKey = "Icon.Speaker" }, $"default {main}");
 
-        var rows = _devices.OrderBy(device => device.Flow).Select(device => (Ref: new DeviceRefConfig { Id = device.Id, FriendlyName = device.FriendlyName },
-                                              Look: DeviceDisplay.For(config, device)))
+        var rows = _devices.Select(device => (Ref: new DeviceRefConfig { Id = device.Id, FriendlyName = device.FriendlyName },
+                                              Look: DeviceDisplay.For(config, device), device.Flow))
             .ToList();
-        // A saved device that is not plugged in keeps its row.
+        // A saved device that is not plugged in keeps its row, with the outputs or the inputs: its
+        // flow from its settings, else from its endpoint id.
         if (_original.Type == SliderMappingType.Device && _original.Device is { } saved && !rows.Exists(r => Matches(saved, r.Ref))
             && DeviceDisplay.For(config, audio, saved) is { } savedLook)
-            rows.Add((saved, savedLook));
-        foreach (var (reference, look) in rows)
+            rows.Add((saved, savedLook, DeviceDisplay.FlowOf(config, audio, saved) ?? AudioFlow.Render));
+        foreach (var (reference, look, flow) in rows.OrderBy(r => r.Flow))
         {
             var key = $"device:{(reference.Id.Length > 0 ? reference.Id : reference.FriendlyName)}";
             _deviceRows[key] = reference;
-            var isInput = _devices.Any(d => d.Flow == AudioFlow.Capture && Matches(reference, new DeviceRefConfig { Id = d.Id, FriendlyName = d.FriendlyName }));
+            var isInput = flow == AudioFlow.Capture;
             var windowsName = look.Name == reference.FriendlyName ? "" : reference.FriendlyName;
             var secondary = !isInput ? windowsName : windowsName.Length > 0 ? $"Input · {windowsName}" : "Input";
             var on = _type == SliderMappingType.Device && _device is not null && Matches(_device, reference);
@@ -249,17 +251,32 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
                                { IconKey = "Icon.Plus" }, "browse exe");
     }
 
-    /// <summary>Sets each running app's meter to its loudest session (the view's timer calls it).</summary>
+    /// <summary>Sets each running app's meter to its loudest session, and the meter of an app that
+    /// stopped to 0 (the view's timer calls it).</summary>
     public void PollMeters()
     {
         if (_disposed) return;
         var audio = _sliders.Audio;
+        var live = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in LiveSessions().GroupBy(s => s.ImageName, StringComparer.OrdinalIgnoreCase))
         {
+            live.Add(group.Key);
             if (!_meters.TryGetValue(group.Key, out var meter)) continue;
             meter.Level = group.Max(s => (double)audio.GetSessionPeak(s.InstanceId));
         }
+        foreach (var (app, meter) in _meters)
+            if (!live.Contains(app)) meter.Level = 0;
     }
+
+    /// <summary>An app started or stopped (any thread): on the UI thread the rows follow, keeping the
+    /// draft, the search, the current row and the meters, and new apps' icons are asked for.</summary>
+    private void OnSessionsChanged(object? sender, SessionsChangedEventArgs e)
+        => Dispatcher.UIThread.Post(() =>
+        {
+            if (_disposed) return;
+            Rebuild();
+            RequestIcons();
+        });
 
     /// <summary>Asks for the icons of the running apps not asked for yet, all at once; when the
     /// batch is done the list is rebuilt once, on the UI thread.</summary>
@@ -484,5 +501,6 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
     {
         _disposed = true;
         _sliders.DevicesRefreshed -= OnDevicesRefreshed;
+        _sliders.Audio.SessionsChanged -= OnSessionsChanged;
     }
 }

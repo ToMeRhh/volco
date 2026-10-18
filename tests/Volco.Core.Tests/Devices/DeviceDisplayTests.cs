@@ -99,4 +99,24 @@ public class DeviceDisplayTests
         config.Devices.Add(new DeviceSettingsConfig { Id = "line", Nickname = "Aux", Icon = ScreenIcon.Headset });
         Assert.Equal(ScreenIcon.Headset, DeviceDisplay.For(config, new AudioDevice("line", "Line In", AudioFlow.Capture, false)).Icon);
     }
+
+    [Fact]
+    public void FlowFromEndpointId_RenderCaptureUnknown()
+    {
+        Assert.Equal(AudioFlow.Render, DeviceDisplay.FlowFromEndpointId("{0.0.0.00000000}.{0f8a1b2c-0000-4000-8000-000000000001}"));
+        Assert.Equal(AudioFlow.Capture, DeviceDisplay.FlowFromEndpointId("{0.0.1.00000000}.{0f8a1b2c-0000-4000-8000-000000000002}"));
+        Assert.Null(DeviceDisplay.FlowFromEndpointId("mic-1"));
+        Assert.Null(DeviceDisplay.FlowFromEndpointId(""));
+        Assert.Null(DeviceDisplay.FlowFromEndpointId(null));
+    }
+
+    [Fact]
+    public void UnpluggedCaptureId_WithoutSettings_GetsMicAndCaptureFlow()
+    {
+        var reference = new DeviceRefConfig { Id = "{0.0.1.00000000}.{gone}", FriendlyName = "Microphone (Gone)" };
+        Assert.Equal(ScreenIcon.Mic, DeviceDisplay.For(new AppConfig(), _audio, reference)!.Value.Icon);
+        Assert.Equal(AudioFlow.Capture, DeviceDisplay.FlowOf(new AppConfig(), _audio, reference));
+        Assert.Equal(AudioFlow.Capture, DeviceDisplay.FlowOf(new AppConfig(), _audio, new DeviceRefConfig { Id = "mic" }));
+        Assert.Null(DeviceDisplay.FlowOf(new AppConfig(), _audio, new DeviceRefConfig { Id = "unknown" }));
+    }
 }

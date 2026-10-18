@@ -60,7 +60,25 @@ public static partial class DeviceDisplay
         if (FindLive(audio, reference) is { } live) return For(config, live);
         var settings = config.FindDevice(reference.Id);
         var friendly = settings?.FriendlyName is { Length: > 0 } stored ? stored : reference.FriendlyName;
-        return new DeviceLook(NameFrom(settings, friendly), settings?.Icon ?? (settings?.Flow == AudioFlow.Capture ? ScreenIcon.Mic : ScreenIcon.Generic));
+        var flow = settings?.Flow ?? FlowFromEndpointId(reference.Id);
+        return new DeviceLook(NameFrom(settings, friendly), settings?.Icon ?? (flow == AudioFlow.Capture ? ScreenIcon.Mic : ScreenIcon.Generic));
+    }
+
+    /// <summary>The flow a Windows endpoint id names: render ids start <c>{0.0.0.</c>, capture ids
+    /// <c>{0.0.1.</c>. Null for anything else.</summary>
+    public static AudioFlow? FlowFromEndpointId(string? id)
+        => id is null ? null
+           : id.StartsWith("{0.0.0.", StringComparison.Ordinal) ? AudioFlow.Render
+           : id.StartsWith("{0.0.1.", StringComparison.Ordinal) ? AudioFlow.Capture
+           : null;
+
+    /// <summary>A reference's flow: the live device's, else its saved settings', else its endpoint
+    /// id's; null when nothing tells.</summary>
+    public static AudioFlow? FlowOf(AppConfig config, IAudioEngine audio, DeviceRefConfig? reference)
+    {
+        if (reference is null) return null;
+        if (FindLive(audio, reference) is { } live) return live.Flow;
+        return config.FindDevice(reference.Id)?.Flow ?? FlowFromEndpointId(reference.Id);
     }
 
     /// <summary>The display name of a reference, or <paramref name="fallback"/> when it names nothing.</summary>
