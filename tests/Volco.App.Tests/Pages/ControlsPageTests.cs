@@ -297,7 +297,7 @@ public class ControlsPageTests
         {
             Assert.Equal(Avalonia.Media.TextTrimming.None, text.TextTrimming);
             Assert.True(text.TextLayout.TextLines.Count >= 2, $"\"{text.Text}\" should wrap");
-            Assert.Equal(text.Text!.Length, text.TextLayout.TextLines.Sum(l => l.Length));   // nothing cut
+            Assert.True(text.TextLayout.TextLines.Sum(l => l.Length) >= text.Text!.Length, "nothing cut");   // the layout also counts the paragraph end
         }
         foreach (var part in new[] { "Cap", "MainAction", "SecondaryActions" })
         {
