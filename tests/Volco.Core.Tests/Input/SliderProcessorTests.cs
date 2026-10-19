@@ -679,6 +679,45 @@ public class SliderProcessorTests
     }
 
     [Fact]
+    public async Task Reapply_SetsTheNewTargetToTheLastPosition_NoOsdNoSmoothing()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Device, SmoothingFactor = 0.9 });
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+        processor.HandleSliderEvent(0, 4095);
+        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 1);
+        await Task.Delay(100);   // the first value's own OSD is raised right after its write
+        var osd = 0;
+        processor.VolumeChanged += (_, _) => Interlocked.Increment(ref osd);
+
+        configManager.Config.Sliders[0].Type = SliderMappingType.Processes;
+        configManager.Config.Sliders[0].Processes = new List<string> { "spotify.exe" };
+        processor.Reapply(0);
+        await WaitForAsync(() => audio.Snapshot(audio.SessionVolumeCalls).Count >= 1);
+
+        var (filter, level) = Assert.Single(audio.Snapshot(audio.SessionVolumeCalls));
+        Assert.Equal(new[] { "spotify.exe" }, Assert.IsType<SessionFilter.ByImageNames>(filter).Names);
+        Assert.Equal(audio.Snapshot(audio.DeviceVolumeCalls)[0].Level, level, 3);
+        Assert.Equal(0, osd);
+    }
+
+    [Fact]
+    public async Task Reapply_BeforeAnyPosition_DoesNothing()
+    {
+        var configManager = NewConfigManager();
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        processor.Reapply(0);
+        await Task.Delay(100);
+
+        Assert.Empty(audio.Snapshot(audio.DeviceVolumeCalls));
+        Assert.Empty(audio.Snapshot(audio.SessionVolumeCalls));
+    }
+
+    [Fact]
     public void MapAdcToVolume_ZeroReturnsZero()
     {
         Assert.Equal(0f, SliderProcessor.MapAdcToVolume(0, invert: false), 3);

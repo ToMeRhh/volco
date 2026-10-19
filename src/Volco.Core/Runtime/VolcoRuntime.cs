@@ -26,7 +26,7 @@ namespace Volco.Core.Runtime;
 /// thread, the SliderProcessor coalescing timer, the ButtonPressDetector timers, or the
 /// controller link's keepalive timer. Subscribers marshal to their UI thread themselves.
 /// </remarks>
-public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionLink
+public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionLink, IButtonFeedback
 {
     /// <summary>The live mode's id as last set; null until the first set. Read through
     /// <see cref="ActiveModeId"/>, which falls back to the first mode when this one is gone
@@ -150,6 +150,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             UpdateLink();
         };
         _link.HelloReceived += OnHello;
+        _link.Announced += (_, _) => RaiseFeedbackChanged(-1);
         ControllerConfig = new ControllerConfigService(Config, this, _options.Time, () => _options.Firmware.BundledVersion);
         ControllerConfig.OperationChanged += (_, _) => UpdateLink();
     }
@@ -206,7 +207,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         if (started)
         {
             AppLog.Info("Test mode on");
-            ClearFeedback();
+            if (ClearFeedback()) RaiseFeedbackChanged(-1);
             _buttonPressDetector?.Reset();   // a gesture started before the test can't fire during it
             _sliderProcessor?.DropPending();  // nor a slider value queued just before it
             _link.PushAll();
@@ -325,6 +326,13 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// <see cref="SliderLevelChanged"/> alone, which a window hidden since before a slider last
     /// moved would otherwise never receive.
     /// </summary>
+    /// <summary>Sets what slider <paramref name="sliderIndex"/> controls now to the slider's last
+    /// reported position (its target changed in the settings UI). No OSD.</summary>
+    public void ReapplySlider(int sliderIndex)
+    {
+        if (!IsDisposed) _sliderProcessor?.Reapply(sliderIndex);
+    }
+
     public float? GetSliderLevel(int sliderIndex)
         => IsDisposed ? null : _sliderProcessor?.GetLastLevel(sliderIndex);
 
@@ -503,7 +511,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         }
 
         AppLog.Info($"Active mode: {modeId}");
-        ClearFeedback();   // the other mode's actions: nothing pressed there yet
+        if (ClearFeedback()) RaiseFeedbackChanged(-1);   // the other mode's actions: nothing pressed there yet
         WatchPrograms();
         ActiveModeChanged?.Invoke(this, modeId);
 
@@ -578,7 +586,22 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     {
         if (IsDisposed) return;
         if (ActionValidator.Validate(action, ActionValidationContext.Structural(Config.Config)).Count > 0) return;
-        ActionFactory.Create(action, Services, origin)?.Execute();
+        // The button whose binding holds this action shows its feedback, as for a press: in its
+        // preview whatever the mode, and on the controller when that mode is live.
+        var binding = origin is { Button: var b } && b >= 0 && b < Config.Config.Buttons.Count
+            ? Config.Config.Buttons[b].Actions.Values.FirstOrDefault(x => x.All().Any(a => ReferenceEquals(a, action)))
+            : null;
+        if (binding is not null)
+            origin = origin! with { ReportError = why => StartFeedback(origin!.Button, binding, action, why) };
+        var created = ActionFactory.Create(action, Services, origin);
+        if (binding is not null)
+        {
+            if (created is null && action.Action != ButtonActionType.None)
+                StartFeedback(origin!.Button, binding, action, ControllerDisplay.NotAvailable);
+            else if (created is not null)
+                StartFeedback(origin!.Button, binding, action, error: null);
+        }
+        created?.Execute();
     }
 
     /// <summary>The invalid actions already logged, so a held-down or repeated press logs once.</summary>
@@ -1248,7 +1271,11 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         }
         if (error is null && !secondary && from is null)
         {
-            if (ClearFeedback(button)) PushControllerState();
+            if (ClearFeedback(button))
+            {
+                PushControllerState();
+                RaiseFeedbackChanged(button);
+            }
             return;
         }
 
@@ -1262,6 +1289,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             _feedback[button] = entry;
         }
         PushControllerState();
+        RaiseFeedbackChanged(button);
     }
 
     /// <summary>One step of <paramref name="entry"/>'s feedback (unless a later press replaced it).</summary>
@@ -1284,6 +1312,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             }
         }
         PushControllerState();
+        RaiseFeedbackChanged(button);
     }
 
     /// <summary>Ends the feedback of <paramref name="button"/> (-1: of every button). Returns
@@ -1303,6 +1332,24 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             _feedback.Clear();
             return any;
         }
+    }
+
+    /// <inheritdoc/>
+    public PressFeedback? FeedbackFor(int button)
+    {
+        lock (_feedbackGate)
+            return _feedback.TryGetValue(button, out var entry) ? entry.Feedback : null;
+    }
+
+    /// <inheritdoc/>
+    public int? AnnounceStep => _link.AnnounceStep;
+
+    /// <inheritdoc/>
+    public event EventHandler<int>? FeedbackChanged;
+
+    private void RaiseFeedbackChanged(int button)
+    {
+        if (!IsDisposed) FeedbackChanged?.Invoke(this, button);
     }
 
     private IReadOnlyDictionary<int, PressFeedback>? FeedbackSnapshot()

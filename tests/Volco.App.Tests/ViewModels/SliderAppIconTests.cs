@@ -90,6 +90,45 @@ public sealed class SliderAppIconTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void ExePath_SavedFromTheSession_IconShowsNextRunWhileNotRunning()
+    {
+        const string exe = @"C:\Apps\Spotify\Spotify.exe";
+        _rig.Engine.Sessions.Add(Spotify() with { IconPath = exe, ExePath = exe });
+        using (var first = new AppIconLookup(_rig.Engine, _icons, _rig.Config))
+        using (var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, new UndoToastViewModel(), first))
+            Dispatcher.UIThread.RunJobs();
+        Assert.Equal(exe, Config.AppPathFor("SPOTIFY.EXE"));
+        Assert.Equal(exe, Config.AppPaths["spotify.exe"]);
+
+        // The next run: Spotify is not playing.
+        _rig.Engine.Sessions.Clear();
+        _icons.Requests.Clear();
+        using var next = new AppIconLookup(_rig.Engine, _icons, _rig.Config);
+        using var again = new SlidersViewModel(_rig.Config, _rig.Engine, new UndoToastViewModel(), next);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(_icons.Of(exe), again.Items[0].AppIcon);
+        Assert.Equal(new[] { exe }, _icons.Requests);
+    }
+
+    [AvaloniaFact]
+    public void OtherAppPath_Remembered_IconShows()
+    {
+        const string exe = @"D:\Games\Game.exe";
+        using var lookup = new AppIconLookup(_rig.Engine, _icons, _rig.Config);
+        Config.Sliders[0].Processes = new List<string> { "game.exe" };
+        using var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, new UndoToastViewModel(), lookup);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(sliders.Items[0].AppIcon);
+
+        sliders.RememberAppPath("game.exe", exe);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(exe, Config.AppPathFor("game.exe"));
+        Assert.Same(_icons.Of(exe), sliders.Items[0].AppIcon);
+    }
+
+    [AvaloniaFact]
     public void Dispose_StopsFollowingTheLookup()
     {
         var sliders = Sliders();

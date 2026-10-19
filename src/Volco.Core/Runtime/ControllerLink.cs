@@ -76,6 +76,13 @@ public sealed class ControllerLink : IDisposable
     /// so a handler can store the controller info the push is computed from. Any thread.</summary>
     public event EventHandler<HelloMessage>? HelloReceived;
 
+    /// <summary>The announce step since the last mode change, or null when none is announced.</summary>
+    public int? AnnounceStep { get { lock (_gate) return _announceStep; } }
+
+    /// <summary>An announce step started or passed (after its push, outside the lock; a timer or
+    /// transport thread).</summary>
+    public event EventHandler? Announced;
+
     /// <summary>The transport just connected: start a session on it.</summary>
     public void Attach(IControllerConnection connection)
     {
@@ -185,6 +192,7 @@ public sealed class ControllerLink : IDisposable
             if (synchronized) Send(ProtocolEncoder.EncodeCommit());
         }
         Drain();
+        if (_announceSteps > 0) Announced?.Invoke(this, EventArgs.Empty);
     }
 
     private void PushLocked(ScreenTransition transition, bool everything)
@@ -229,6 +237,7 @@ public sealed class ControllerLink : IDisposable
     {
         try
         {
+            var announced = false;
             lock (_gate)
             {
                 if (_connection is null || _disposed) return;
@@ -236,6 +245,7 @@ public sealed class ControllerLink : IDisposable
                 {
                     _announceStep = step + 1 < _announceSteps ? step + 1 : null;
                     PushLocked(_announceTransition, everything: false);
+                    announced = true;
                 }
                 var now = Environment.TickCount64;
                 if (_state == ControllerState.AwaitingHello
@@ -246,6 +256,7 @@ public sealed class ControllerLink : IDisposable
                     Send(ProtocolEncoder.EncodeHeartbeat());
             }
             Drain();
+            if (announced) Announced?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {

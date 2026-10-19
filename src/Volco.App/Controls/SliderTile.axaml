@@ -4,7 +4,7 @@
              xmlns:conv="using:Volco.App.Converters"
              x:Class="Volco.App.Controls.SliderTile"
              x:DataType="vm:SliderItemViewModel"
-             Focusable="True">
+             Focusable="True" ToolTip.Tip="{Binding Heading}">
   <!-- The page fills "Swap with" when the menu opens (ControlsPage.OnTileContextRequested) -->
   <UserControl.ContextMenu>
     <ContextMenu>
@@ -50,7 +50,14 @@
                  Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
           <TextBlock Name="Label" Grid.Column="1" Classes="TileLabel" Classes.unset="{Binding IsUnset}" Text="{Binding Label}"
                      TextWrapping="WrapWithOverflow" MaxLines="2" TextTrimming="CharacterEllipsis"
-                     TextAlignment="Center" ToolTip.Tip="{Binding Label}"/>
+                     TextAlignment="Center">
+            <ToolTip.Tip>
+              <MultiBinding StringFormat="{}{0}: {1}">
+                <Binding Path="Heading"/>
+                <Binding Path="Label"/>
+              </MultiBinding>
+            </ToolTip.Tip>
+          </TextBlock>
         </Grid>
         <TextBlock Name="MissingText" Classes="TileMissing" Text="Not on this controller"
                    IsVisible="{Binding IsMissing}"/>

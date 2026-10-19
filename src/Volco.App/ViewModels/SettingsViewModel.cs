@@ -49,7 +49,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _connectionViewModel ??= new ConnectionViewModel(_config, _runtime, _ui);
 
     public SlidersViewModel Sliders =>
-        _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast, _appIconLookup);
+        _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast, _appIconLookup, _runtime.ReapplySlider);
 
     public DevicesViewModel Devices
     {
@@ -107,6 +107,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.DevicesChanged += OnDevicesChanged;
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
         _runtime.ButtonActivity += OnButtonActivity;
+        _runtime.FeedbackChanged += OnFeedbackChanged;
         _runtime.ActiveModeChanged += OnActiveModeChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
         _runtime.LinkStatusChanged += OnLinkStatusChanged;
@@ -163,6 +164,13 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             else _buttonsViewModel?.Pulse(index);
         });
 
+    /// <summary>A button's press feedback or a mode change's announce moved on: its preview follows.</summary>
+    private void OnFeedbackChanged(object? sender, int button)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) _buttonsViewModel?.RefreshFeedback(button);
+        });
+
     private void OnActiveModeChanged(object? sender, string modeId)
         => _ui.Post(() =>
         {
@@ -217,6 +225,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.DevicesChanged -= OnDevicesChanged;
         _runtime.SliderLevelChanged -= OnSliderLevelChanged;
         _runtime.ButtonActivity -= OnButtonActivity;
+        _runtime.FeedbackChanged -= OnFeedbackChanged;
         _runtime.ActiveModeChanged -= OnActiveModeChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
         _runtime.LinkStatusChanged -= OnLinkStatusChanged;

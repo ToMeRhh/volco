@@ -200,11 +200,16 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         Indicator = _owner.IndicatorFor(Index);
         UpdateLightDescription(edited);
 
-        // The previews show what the controller would show in the edited mode.
-        LightValue = ControllerDisplay.LedValueFor(edited, Indicator ?? IndicatorKind.LedPair, _owner.AppConfig, _owner.EditingModeId, _owner.Audio, _owner.ActionStatus);
-        // From this button's own config, not AppConfig.Buttons[Index].
-        Screen = ControllerDisplay.Screen(edited.All().FirstOrDefault(a => a.Action != ButtonActionType.None),
-                                          _owner.AppConfig, _owner.EditingModeId, _owner.Audio, _owner.ActionStatus);
+        // The previews show what the controller would show in the edited mode, through the same
+        // function, with a press's feedback (an error flash, the pressed action) and, in the live
+        // mode, a mode change's announce.
+        var feedback = _owner.Feedback?.FeedbackFor(Index);
+        var announce = _owner.EditingModeId == _owner.LiveModeId ? _owner.Feedback?.AnnounceStep : null;
+        var ledKind = Indicator == IndicatorKind.Led ? IndicatorKind.Led : IndicatorKind.LedPair;
+        LightValue = (ControllerDisplay.For(edited, ledKind, _owner.AppConfig, _owner.EditingModeId, _owner.Audio,
+                                            announce, _owner.ActionStatus, feedback) as LedDisplay)?.Value ?? 0;
+        Screen = (ControllerDisplay.For(edited, IndicatorKind.Screen, _owner.AppConfig, _owner.EditingModeId, _owner.Audio,
+                                        announce, _owner.ActionStatus, feedback) as ScreenDisplay)?.Content ?? ScreenContent.Blank;
     }
 
     /// <summary>The main action (the first set one, Press → Double press → Hold, as the light
@@ -338,6 +343,8 @@ internal interface IButtonCardOwner
     void Execute(ButtonActionConfig action, int button, PressType gesture);
     ActionSlotHost SlotHost { get; }
     IActionStatus ActionStatus { get; }
+    /// <summary>A press's feedback and a mode change's announce; null: none.</summary>
+    IButtonFeedback? Feedback { get; }
     void Changed(ButtonItemViewModel item);
     void RemoveLast();
     IndicatorKind? IndicatorFor(int index);

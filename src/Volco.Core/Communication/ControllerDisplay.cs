@@ -93,8 +93,15 @@ public static class ControllerDisplay
 
     public static ButtonDisplay? For(AppConfig config, int button, IndicatorKind kind, string modeId, IAudioEngine audio,
                                      int? announceStep = null, IActionStatus? status = null, PressFeedback? feedback = null)
+        => For(button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(modeId) : null,
+               kind, config, modeId, audio, announceStep, status, feedback);
+
+    /// <summary>What a button with <paramref name="binding"/> (its actions in <paramref name="modeId"/>)
+    /// shows. The controller (<see cref="Compute"/>) and the settings UI's light and screen previews
+    /// both come through here, so a preview is what the controller would show.</summary>
+    public static ButtonDisplay? For(ButtonBindingConfig? binding, IndicatorKind kind, AppConfig config, string modeId, IAudioEngine audio,
+                                     int? announceStep = null, IActionStatus? status = null, PressFeedback? feedback = null)
     {
-        var binding = button >= 0 && button < config.Buttons.Count ? config.Buttons[button].BindingFor(modeId) : null;
         var primary = binding is null ? null : Primary(binding);
         var failing = binding is null ? null : FailingScript(binding, status);
         // Feedback for one of this binding's actions only (a mode change replaced the binding).

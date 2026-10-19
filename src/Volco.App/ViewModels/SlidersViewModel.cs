@@ -17,12 +17,17 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
     private readonly IAudioEngine _audio;
     private readonly UndoToastViewModel _toast;
     private readonly AppIconLookup? _appIcons;
+    private readonly Action<int>? _reapply;
     private IReadOnlyList<AudioDevice> _devices;
 
     public ObservableCollection<SliderItemViewModel> Items { get; } = new();
 
-    public SlidersViewModel(ConfigManager config, IAudioEngine audio, UndoToastViewModel toast, AppIconLookup? appIcons = null)
+    /// <param name="reapply">Sets a slider's new target to the slider's last position
+    /// (<c>VolcoRuntime.ReapplySlider</c>); null: nothing.</param>
+    public SlidersViewModel(ConfigManager config, IAudioEngine audio, UndoToastViewModel toast, AppIconLookup? appIcons = null,
+                            Action<int>? reapply = null)
     {
+        _reapply = reapply;
         _config = config;
         _audio = audio;
         _toast = toast;
@@ -115,6 +120,9 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         Items[a].Reload();
         Items[b].Reload();
         AppsChanged();
+        // Each physical slider still sits where it was: its new target follows it.
+        _reapply?.Invoke(a);
+        _reapply?.Invoke(b);
     }
 
     private void Renumber()
@@ -141,6 +149,13 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
                 .ToList();
             item.SetOtherAppsHint(claimed);
         }
+    }
+
+    /// <summary>"Other app…" picked <paramref name="app"/> at <paramref name="exePath"/>: saved for its icon.</summary>
+    internal void RememberAppPath(string app, string exePath)
+    {
+        if (_appIcons is not null) _appIcons.Remember(app, exePath);
+        else if (_config.Config.RememberAppPath(app, exePath)) Save();
     }
 
     /// <summary>Each apps slider shows the icon of its first app that has one.</summary>
@@ -228,6 +243,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         item.Reload();
         AppsChanged();
         Save();
+        _reapply?.Invoke(item.Index);
     }
 
     // ── Config copies ─────────────────────────────────────────────────────────

@@ -235,6 +235,22 @@ public class AppConfig
     /// Written only by <c>ControllerConfigService</c>, on a confirmed save or an adopted read.</summary>
     public string? ControllerConfigBlob { get; set; }
 
+    /// <summary>Where each slider app's exe is (lower-case exe name → full path), learned from its
+    /// audio session or picked with "Other app…", so the app's icon shows while it is not running.</summary>
+    public Dictionary<string, string> AppPaths { get; set; } = new();
+
+    /// <summary>The saved exe path of <paramref name="app"/> (an exe name), or null.</summary>
+    public string? AppPathFor(string app)
+        => AppPaths.TryGetValue(app.ToLowerInvariant(), out var path) && path.Length > 0 ? path : null;
+
+    /// <summary>Saves where <paramref name="app"/>'s exe is; returns whether anything changed.</summary>
+    public bool RememberAppPath(string app, string path)
+    {
+        if (app.Length == 0 || path.Length == 0 || AppPathFor(app) == path) return false;
+        AppPaths[app.ToLowerInvariant()] = path;
+        return true;
+    }
+
     /// <summary>The settings entry for an endpoint id, or null.</summary>
     public DeviceSettingsConfig? FindDevice(string? id)
         => string.IsNullOrEmpty(id) ? null

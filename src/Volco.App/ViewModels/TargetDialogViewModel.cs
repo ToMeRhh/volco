@@ -235,7 +235,8 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             var appSessions = running ? sessions.Where(s => SameApp(s.ImageName, app)).ToList() : [];
             var display = appSessions.Select(s => s.DisplayName).FirstOrDefault(n => !string.IsNullOrEmpty(n));
             var name = display ?? CommandPath.FileNameWithoutExtension(app);
-            var iconSource = appSessions.Select(s => s.IconPath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+            var iconSource = appSessions.Select(s => s.IconPath).FirstOrDefault(p => !string.IsNullOrEmpty(p))
+                             ?? _sliders.AppConfig.AppPathFor(app);
             var icon = iconSource is not null && _loaded.TryGetValue(iconSource, out var bitmap) ? bitmap : null;
             AppMeterViewModel? meter = null;
             if (running && !_meters.TryGetValue(app, out meter)) _meters[app] = meter = new AppMeterViewModel();
@@ -278,12 +279,15 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             RequestIcons();
         });
 
-    /// <summary>Asks for the icons of the running apps not asked for yet, all at once; when the
-    /// batch is done the list is rebuilt once, on the UI thread.</summary>
+    /// <summary>Asks for the icons not asked for yet, all at once: the running apps', and the saved
+    /// exe paths' of the apps on a slider or ticked here; when the batch is done the list is
+    /// rebuilt once, on the UI thread.</summary>
     private void RequestIcons()
     {
         if (_icons is not { } icons) return;
-        var sources = LiveSessions().Select(s => s.IconPath).Where(p => p.Length > 0)
+        var saved = _apps.Concat(_sliders.Items.Where(i => i.IsApps).SelectMany(i => i.AppNames))
+            .Select(_sliders.AppConfig.AppPathFor).OfType<string>();
+        var sources = LiveSessions().Select(s => s.IconPath).Where(p => p.Length > 0).Concat(saved)
             .Distinct(StringComparer.OrdinalIgnoreCase).Where(p => _requested.Add(p)).ToList();
         if (sources.Count == 0) return;
         _ = LoadIconsAsync(icons, sources);
@@ -422,9 +426,11 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             if (PickExe is not { } pick || await pick() is not { } path) return;
             var app = CommandPath.FileName(path);
             if (app.Length == 0) return;
+            _sliders.RememberAppPath(app, path);
             if (_type != SliderMappingType.Processes || !_apps.Exists(a => SameApp(a, app))) ToggleApp(app);
             _current = $"app:{app}";
             Changed();
+            RequestIcons();
         }
         catch (Exception ex)
         {

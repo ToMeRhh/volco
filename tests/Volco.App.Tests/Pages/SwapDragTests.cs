@@ -334,6 +334,19 @@ public class SwapDragTests
         Assert.Equal("Drag onto another slider to swap", ToolTip.GetTip(Grip(sliders[0])));
     }
 
+    [AvaloniaFact]
+    public void Tiles_TooltipNamesTheControl()
+    {
+        using var s = Show();
+        var buttons = ButtonTiles(s);
+        var sliders = SliderTiles(s);
+
+        Assert.Equal("Button 1", ToolTip.GetTip(buttons[0]));
+        Assert.Equal("Button 3", ToolTip.GetTip(buttons[2]));
+        Assert.Equal("Slider 2", ToolTip.GetTip(sliders[1]));
+        Assert.Equal("Slider 2: S2", ToolTip.GetTip(In<TextBlock>(sliders[1], "Label")));
+    }
+
     // ── Swap with ─────────────────────────────────────────────────────────────
 
     private static MenuItem OpenSwapWith(Shown s, Control tile)

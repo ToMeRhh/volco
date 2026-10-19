@@ -586,6 +586,27 @@ public class TargetDialogTests
     }
 
     [AvaloniaFact]
+    public void NotRunningApp_SavedExePath_ShowsItsIcon_OtherAppSavesThePath()
+    {
+        var icons = new FakeIcons();
+        using var s = Show(c => c.RememberAppPath("game.exe", @"C:\Games\game.exe"), icons);
+        Open(s);
+        Settle(s.Window);
+
+        var game = Item(s, "game");
+        Assert.Equal("Not running", game.Secondary);
+        Assert.NotNull(game.AppIcon);
+        Assert.Contains(@"C:\Games\game.exe", icons.Requests);
+
+        s.Dialog.PickExe = () => Task.FromResult<string?>(@"C:\Games\Quest\quest.exe");
+        Click(s, "Other app…");
+        Settle(s.Window);
+
+        Assert.Equal(@"C:\Games\Quest\quest.exe", s.Config.AppPathFor("quest.exe"));
+        Assert.NotNull(Item(s, "quest").AppIcon);
+    }
+
+    [AvaloniaFact]
     public void NoExePath_FallsBackToImageName_NoIcon()
     {
         var icons = new FakeIcons();

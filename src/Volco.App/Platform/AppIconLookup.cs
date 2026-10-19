@@ -1,28 +1,33 @@
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Volco.Core.Audio;
+using Volco.Core.Config;
 using Volco.Core.Diagnostics;
 
 namespace Volco.App.Platform;
 
 /// <summary>
 /// An app's icon by its exe name ("spotify.exe"), for the slider tiles, the inspector and the volume
-/// pop-up: the icon of the app's first live session that has one, through <see cref="IAppIcons"/>.
-/// Once loaded it is kept for the rest of the run, so an app that quits keeps its icon; one that has
-/// not played since Volco started has none yet. One instance for the whole app; UI thread only.
+/// pop-up, through <see cref="IAppIcons"/>: the icon of the app's first live session that has one,
+/// else of its exe at the path saved in <see cref="AppConfig.AppPaths"/>. A live session's exe path
+/// is saved there, so the icon also shows after the app quits, in later runs too. Once loaded an
+/// icon is kept for the rest of the run. One instance for the whole app; UI thread only.
 /// </summary>
 public sealed class AppIconLookup : IDisposable
 {
     private readonly IAudioEngine _audio;
     private readonly IAppIcons _icons;
+    private readonly ConfigManager? _config;
     private readonly Dictionary<string, Bitmap> _loaded = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _loading = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
-    public AppIconLookup(IAudioEngine audio, IAppIcons icons)
+    /// <param name="config">Where the exe paths are saved; null: only live sessions.</param>
+    public AppIconLookup(IAudioEngine audio, IAppIcons icons, ConfigManager? config = null)
     {
         _audio = audio;
         _icons = icons;
+        _config = config;
         _audio.SessionsChanged += OnSessionsChanged;
     }
 
@@ -43,12 +48,27 @@ public sealed class AppIconLookup : IDisposable
         return found;
     }
 
+    /// <summary>Saves where <paramref name="app"/>'s exe is ("Other app…" picked it), and asks
+    /// for its icon again.</summary>
+    public void Remember(string app, string exePath)
+    {
+        if (_config is null || !_config.Config.RememberAppPath(app, exePath)) return;
+        _config.RequestSave();
+        if (_loaded.ContainsKey(app)) return;
+        _loading.Remove(app);
+        Changed?.Invoke();
+    }
+
     private void Request(string app)
     {
         if (_disposed || _loading.Contains(app)) return;
-        var source = _audio.GetSessions()
-            .Where(s => !s.IsSystemSounds && string.Equals(s.ImageName, app, StringComparison.OrdinalIgnoreCase))
-            .Select(s => s.IconPath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+        var sessions = _audio.GetSessions()
+            .Where(s => !s.IsSystemSounds && string.Equals(s.ImageName, app, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (sessions.Select(s => s.ExePath).FirstOrDefault(p => p.Length > 0) is { } exe
+            && _config is not null && _config.Config.RememberAppPath(app, exe))
+            _config.RequestSave();
+        var source = sessions.Select(s => s.IconPath).FirstOrDefault(p => !string.IsNullOrEmpty(p))
+                     ?? _config?.Config.AppPathFor(app);
         if (source is null) return;
         _loading.Add(app);
         _ = LoadAsync(app, source);

@@ -15,14 +15,17 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels;
 
 /// <summary>What the Controls page knows about media, program and script actions: which this
-/// platform runs, their live state for the previews, and the media sessions for the app picker.</summary>
-public sealed record ActionCapabilities(ActionAvailability Availability, IActionStatus Status, IMediaSessions? Media)
+/// platform runs, their live state for the previews, and the media sessions for the app picker.
+/// <paramref name="Feedback"/> is what a button shows for a moment after a press or a mode change
+/// (null: nothing), so the previews show it as the controller does.</summary>
+public sealed record ActionCapabilities(ActionAvailability Availability, IActionStatus Status, IMediaSessions? Media,
+                                        IButtonFeedback? Feedback = null)
 {
     public static ActionCapabilities None { get; } = new(new ActionAvailability(false, false, false), ActionStatus.None, null);
 
     public static ActionCapabilities Of(VolcoRuntime runtime)
         => new(new ActionAvailability(runtime.Media is not null, runtime.ProgramsAvailable, runtime.ScriptsAvailable),
-               runtime.ActionStatus, runtime.Media);
+               runtime.ActionStatus, runtime.Media, runtime);
 }
 
 /// <summary>
@@ -149,6 +152,8 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
 
     ActionSlotHost IButtonCardOwner.SlotHost => _slotHost;
     IActionStatus IButtonCardOwner.ActionStatus => _capabilities.Status;
+
+    IButtonFeedback? IButtonCardOwner.Feedback => _capabilities.Feedback;
 
     void IButtonCardOwner.Changed(ButtonItemViewModel item) => Save();
 
@@ -461,6 +466,14 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     public void Pulse(int index)
     {
         if (index >= 0 && index < Items.Count) Items[index].Pulse();
+    }
+
+    /// <summary>Recomputes the light and screen preview of button <paramref name="index"/> (-1: of
+    /// every button): its press feedback or a mode change's announce moved on.</summary>
+    public void RefreshFeedback(int index)
+    {
+        if (index < 0) RefreshLights();
+        else if (index < Items.Count) Items[index].Refresh();
     }
 
     /// <summary>Recomputes every light preview (audio state or the live mode changed).</summary>

@@ -99,7 +99,7 @@ internal sealed class CompositionRoot : IDisposable
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
-        _appIcons = _platform.AppIcons is { } icons ? new AppIconLookup(_platform.Audio, icons) : null;
+        _appIcons = _platform.AppIcons is { } icons ? new AppIconLookup(_platform.Audio, icons, _config) : null;
         _osd = new VolumeOsdWindow(_platform.WindowEffects, _appIcons);
         var osd = _osd;
         _osdHandler = (_, n) => osd.Show(n);

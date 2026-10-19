@@ -155,6 +155,22 @@ public sealed class SwapTests : IDisposable
     }
 
     [Fact]
+    public void SliderSwapAndUndo_ReapplyBothSliders_SetTargetReappliesIt()
+    {
+        var reapplied = new List<int>();
+        var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, _toast, reapply: reapplied.Add);
+
+        sliders.Swap(1, 3);
+        Assert.Equal(new[] { 1, 3 }, reapplied);
+        _toast.UndoCommand.Execute(null);
+        Assert.Equal(new[] { 1, 3, 1, 3 }, reapplied);
+
+        reapplied.Clear();
+        sliders.SetTarget(sliders.Items[2], new SliderConfig { Type = SliderMappingType.Unmapped });
+        Assert.Equal(new[] { 2 }, reapplied);
+    }
+
+    [Fact]
     public void Swap_MixedKindsOrMissing_DoesNothing_NoSave()
     {
         Config.Controller = new ControllerInfoConfig

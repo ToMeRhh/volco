@@ -41,7 +41,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
 7. **Edit modes:** a pencil at the right end of the tabs. While editing, tabs can be dragged to reorder, clicked to rename, and deleted with × (except the first). The pencil becomes a check mark that ends editing.
 8. **Buttons have no names.** A button's label is its main action, with its other actions listed below.
 9. **Swapping a button moves only its actions.** One grip, beside a button's action rows, drags all its actions onto another button in the edited mode only. The drag image is the action rows, not the cap or light. There are no per-action drag handles.
-10. **Sliders keep optional names. Swapping a slider moves only what it controls and its name**, by a grip beside the track. The response settings (curve, dead zone, smoothing, reverse) and the live level stay with the physical slider. The drag image is the label row.
+10. **Sliders keep optional names. Swapping a slider moves only what it controls and its name**, by a grip beside the track. The response settings (curve, dead zone, smoothing, reverse) and the live level stay with the physical slider, and each slider's new target is set to its last reported position at once (`VolcoRuntime.ReapplySlider`, no OSD); so is a target picked in the target dialog. The drag image is the label row.
 11. **Inspector "Clear"** removes all of a button's actions in the edited mode, with Undo.
 12. **The light or screen follows the main action** (§7), as today.
 13. **The controller works normally while the window is open.**
@@ -104,9 +104,9 @@ The grip sits in a column on the left of rows 3–4. The main action's line has 
 Caps, main actions and action lists therefore line up across a row whatever each button has. The mock checked this in Chromium at all three sizes, on both 3- and 16-button boards.
 
 **The previews show the edited mode:**
-- The LEDs and screen show what the controller would show in that mode, from `ControllerDisplay`.
-- When the edited mode is live, this is exactly what the controller shows.
-- The brief "used another action" feedback (a double blink, or the pressed action on a screen) plays in the preview when Try runs a non-main action.
+- The LEDs and screen show what the controller would show in that mode, through the same function as the controller (`ControllerDisplay.For` on the button's binding).
+- When the edited mode is live, this is exactly what the controller shows, including a mode change's announce.
+- A press's feedback plays in the preview as on the controller (`IButtonFeedback`, read from the runtime): the error flash and error screen when an action could not run, the "used another action" blink or screen, and a Play/pause's expected state. A press on the controller shows in the live mode's preview; Try shows in the edited mode's preview, and also on the controller when that mode is live.
 
 ### 4.4 Dense boards
 
@@ -299,7 +299,7 @@ The pencil switches the strip into edit mode:
 - `DisplayName`: the session's display name, else the exe's file description, else the exe name;
 - `IconPath`: the session's icon path, else the exe path. The App draws the icon through a new `IAppIcons` seam, null on Linux; letter tiles are the fallback.
 
-An apps slider also shows an app's icon on its tile, on the inspector's Controls row and in the volume pop-up (`AppIconLookup`): the first of its apps whose icon Volco has seen this run. The icon comes from a live session, so an app that has not played since Volco started has none yet. Once loaded it is kept until exit, even after the app quits. Without one, the tile shows no icon, the Controls row the generic app icon and the pop-up the output device's icon.
+An apps slider also shows an app's icon on its tile, on the inspector's Controls row and in the volume pop-up (`AppIconLookup`): the first of its apps that has one. The icon comes from a live session, else from the app's exe at the path saved in `config.appPaths` (exe name → path, saved when a slider app's session is seen or "Other app…" picks it), so it also shows while the app is not running, and the target dialog shows it on "Not running" rows. An app Volco never saw play and nobody picked has none. Without one, the tile shows no icon, the Controls row the generic app icon, the dialog a letter tile and the pop-up the output device's icon.
 
 `IAudioEngine` gains `float GetSessionPeak(string instanceId)`, from `IAudioMeterInformation` on the audio thread, for the live meters. The target dialog polls it every 100 ms while open.
 

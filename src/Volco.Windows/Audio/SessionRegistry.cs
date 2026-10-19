@@ -87,7 +87,7 @@ internal sealed class SessionRegistry : IDisposable
         /// succeeds, so <see cref="Dispose"/> can unregister it.</summary>
         public IAudioSessionEvents? EventsSink { get; set; }
 
-        public AudioSessionInfo ToInfo() => new(InstanceId, ProcessId, ImageName, DeviceId, IsSystemSounds, DisplayName, IconPath);
+        public AudioSessionInfo ToInfo() => new(InstanceId, ProcessId, ImageName, DeviceId, IsSystemSounds, DisplayName, IconPath, ExePath ?? "");
 
         public void Dispose()
         {
