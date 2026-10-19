@@ -982,7 +982,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                 if (!_loggedInvalid.TryGetValue(actionConfig, out _))
                 {
                     _loggedInvalid.Add(actionConfig, new object());
-                    AppLog.Info($"Button {e.ButtonIndex}: {e.PressType} not run: {problems.First().Value}");
+                    AppLog.Info($"Button {e.ButtonIndex + 1}: {e.PressType} not run: {problems.First().Value}");
                 }
             }
             return;
@@ -991,7 +991,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         if (ButtonActionTypes.RunsCode(actionConfig.Action)
             && !(_pressOverUsb.TryGetValue(e.ButtonIndex, out var overUsb) && overUsb))
         {
-            AppLog.Info($"Button {e.ButtonIndex}: {actionConfig.Action} refused; programs and scripts run only for presses over USB");
+            AppLog.Info($"Button {e.ButtonIndex + 1}: {actionConfig.Action} refused; programs and scripts run only for presses over USB");
             StartFeedback(e.ButtonIndex, binding, actionConfig, ControllerDisplay.UsbOnly);
             return;
         }

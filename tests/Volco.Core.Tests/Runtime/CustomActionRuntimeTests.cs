@@ -121,7 +121,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
     {
         Volco.Core.Diagnostics.AppLog.Flush();
         var path = Volco.Core.Diagnostics.AppLog.LogPath;
-        return File.ReadAllLines(path).Count(l => l.Contains("Button 0") && l.Contains("Choose the script to run."));
+        return File.ReadAllLines(path).Count(l => l.Contains("Button 1:") && l.Contains("Choose the script to run."));
     }
 
     [Fact]

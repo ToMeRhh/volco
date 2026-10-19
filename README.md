@@ -115,7 +115,7 @@ flowchart LR
     U <--> R
 ```
 
-The firmware is deliberately simple. It doesn't know what "mute" or "headphones" mean: it reports *"slider 2 is at 3071"* and *"button 0 was pressed"*, and it draws whatever the PC sends back. All the logic lives in the app, so **changing what a button does never needs a reflash**.
+The firmware is deliberately simple. It doesn't know what "mute" or "headphones" mean: it reports *"slider input 2 is at 3071"* and *"button input 0 was pressed"* (inputs are numbered from 0 on the wire; the app calls them Slider 3 and Button 1), and it draws whatever the PC sends back. All the logic lives in the app, so **changing what a button does never needs a reflash**.
 
 They talk over a small, open binary protocol that works the same over **USB serial, UDP and WebSocket**. You can build your own controller (an RP2040, a phone app, a MIDI bridge...) and Volco will drive it. The byte-level spec is in [`firmware/README.md`](firmware/README.md#wire-protocol).
 

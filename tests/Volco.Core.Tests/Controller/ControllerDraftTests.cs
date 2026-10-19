@@ -67,10 +67,10 @@ public class ControllerDraftTests
     }
 
     [Theory]
-    [InlineData(0, ConfigField.SliderPin, "the slider pin on Slider 0")]
-    [InlineData(2, ConfigField.LedPin, "the LED pin on Button 2")]
-    [InlineData(1, ConfigField.PairPinB, "LED pin B on Button 1")]
-    [InlineData(3, ConfigField.ScreenAddress, "the screen address on Button 3")]
+    [InlineData(0, ConfigField.SliderPin, "the slider pin on Slider 1")]
+    [InlineData(2, ConfigField.LedPin, "the LED pin on Button 3")]
+    [InlineData(1, ConfigField.PairPinB, "LED pin B on Button 2")]
+    [InlineData(3, ConfigField.ScreenAddress, "the screen address on Button 4")]
     [InlineData(0, ConfigField.I2cPins, "the SDA/SCL pins on I2C bus 0")]
     [InlineData(2, ConfigField.I2cMissing, "missing bus pins on I2C bus 2")]
     [InlineData(255, ConfigField.UdpPcIp, "the PC IP address on Wi-Fi")]

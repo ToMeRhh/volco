@@ -8,7 +8,7 @@ namespace Volco.App.ViewModels;
 public sealed partial class TestSliderViewModel(int index) : ObservableObject
 {
     public int Index { get; } = index;
-    public string Title => $"Slider {Index}";
+    public string Title => $"Slider {Index + 1}";
 
     [ObservableProperty] private int _value;
 
@@ -24,7 +24,7 @@ public sealed partial class TestButtonViewModel(int index, IndicatorKind kind) :
 {
     public int Index { get; } = index;
     public IndicatorKind Kind { get; } = kind;
-    public string Title => $"Button {Index}";
+    public string Title => $"Button {Index + 1}";
 
     [ObservableProperty] private bool _isPressed;
 

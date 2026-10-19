@@ -962,13 +962,13 @@ public sealed class VolcoRuntimeTests : IDisposable
         using (runtime.EnterTestMode())
         {
             var expected = ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
-                ScreenContent.Text("Test", ScreenIcon.Generic, false, "Button 1"));   // the app numbers inputs from 0
+                ScreenContent.Text("Test", ScreenIcon.Generic, false, "Button 2"));   // input 1, numbered from 1 as in the UI
             Assert.True(ContainsFrame(c.SentFrames, expected));
 
             Press(c, 1);
             Press(c, 1);
             Assert.True(ContainsFrame(c.SentFrames, ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
-                ScreenContent.Text("Button 1", ScreenIcon.Generic, false, "2 presses"))));
+                ScreenContent.Text("Button 2", ScreenIcon.Generic, false, "2 presses"))));
         }
     }
 

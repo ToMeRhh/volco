@@ -74,7 +74,7 @@ public static class DraftProblems
                                 && o.Screen.Address == screen.Address)
                             {
                                 Add(ConfigField.ScreenAddress, item,
-                                    $"Button {j}'s screen is also on bus {screen.Bus} at 0x{screen.Address:X2}. Give one of them the other address or another bus.");
+                                    $"Button {j + 1}'s screen is also on bus {screen.Bus} at 0x{screen.Address:X2}. Give one of them the other address or another bus.");
                                 break;
                             }
                         }
@@ -104,20 +104,20 @@ public static class DraftProblems
         // 5. Pin uniqueness: every use of a shared pin, on each field that uses it.
         var uses = new List<(uint Pin, ConfigField Field, byte Item, string Who)>();
         for (var i = 0; i < c.Sliders.Count; i++)
-            if (c.Sliders[i].HasPin) uses.Add((c.Sliders[i].Pin, ConfigField.SliderPin, (byte)i, $"Slider {i}"));
+            if (c.Sliders[i].HasPin) uses.Add((c.Sliders[i].Pin, ConfigField.SliderPin, (byte)i, $"Slider {i + 1}"));
         for (var i = 0; i < c.Buttons.Count; i++)
         {
             var b = c.Buttons[i];
             var item = (byte)i;
-            if (b.HasPin) uses.Add((b.Pin, ConfigField.ButtonPin, item, $"Button {i}"));
+            if (b.HasPin) uses.Add((b.Pin, ConfigField.ButtonPin, item, $"Button {i + 1}"));
             if (b.IndicatorCase == Button.IndicatorOneofCase.Led && b.Led.HasPin)
-                uses.Add((b.Led.Pin, ConfigField.LedPin, item, $"Button {i}'s LED"));
+                uses.Add((b.Led.Pin, ConfigField.LedPin, item, $"Button {i + 1}'s LED"));
             if (b.IndicatorCase == Button.IndicatorOneofCase.LedPair)
             {
-                if (b.LedPair.HasPinA) uses.Add((b.LedPair.PinA, ConfigField.PairPinA, item, $"Button {i}'s LED A"));
+                if (b.LedPair.HasPinA) uses.Add((b.LedPair.PinA, ConfigField.PairPinA, item, $"Button {i + 1}'s LED A"));
                 // A and B on one pin is the pair's own problem (above).
                 if (b.LedPair.HasPinB && !(b.LedPair.HasPinA && b.LedPair.PinB == b.LedPair.PinA))
-                    uses.Add((b.LedPair.PinB, ConfigField.PairPinB, item, $"Button {i}'s LED B"));
+                    uses.Add((b.LedPair.PinB, ConfigField.PairPinB, item, $"Button {i + 1}'s LED B"));
             }
         }
         for (byte bus = 0; bus < used.Length; bus++)
