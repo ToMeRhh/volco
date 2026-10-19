@@ -3,60 +3,54 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Volco.App.Controls;
 using Volco.App.Views.Pages;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
 
 /// <summary>
-/// Keyboard-only use. Tab walks each page in reading order: the header's add
-/// button, then each card's drag handle (reorder with Alt+Up/Down), its header (open/close) and
-/// its ⋯ menu, card by card.
+/// Keyboard-only use. Tab walks the Controls page in reading order: each slider tile, the mode
+/// tabs, Add mode and the edit pencil, each button tile, then the selected control's inspector.
 /// </summary>
 public class TabOrderTests
 {
-    private static List<string?> TabSequence(Window window, Control start, int count)
+    private static List<string> TabSequence(Window window, Control start, int count)
     {
         start.Focus(NavigationMethod.Tab);
         Dispatcher.UIThread.RunJobs();
-        var names = new List<string?>();
+        var names = new List<string>();
         for (int i = 0; i < count; i++)
         {
             window.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
             window.KeyRelease(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
             Dispatcher.UIThread.RunJobs();
-            names.Add((window.FocusManager?.GetFocusedElement() as Control)?.Name);
+            var focused = window.FocusManager?.GetFocusedElement() as Control;
+            names.Add(focused?.Name ?? focused?.GetType().Name ?? "(none)");
         }
         return names;
     }
 
     [AvaloniaFact]
-    public void SlidersPage_TabGoesCardByCard()
+    public void ControlsPage_TabGoesTileByTile_ThenTheInspector()
     {
         using var rig = new TestRig();
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new SlidersPage(vm.Sliders);
-        var window = new Window { Content = page, Width = 900, Height = 900 };
+        var page = new ControlsPage(vm.Controls);
+        var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Dispatcher.UIThread.RunJobs();
 
+        var first = page.GetVisualDescendants().OfType<SliderTile>().First();
         Assert.Equal(
-            new[] { "Grip", "ExpandButton", "MenuButton", "Grip", "ExpandButton", "MenuButton" },
-            TabSequence(window, page.FindControl<Button>("AddButton")!, 6));
-    }
-
-    [AvaloniaFact]
-    public void ButtonsPage_TabGoesPresetsThenCardByCard()
-    {
-        using var rig = new TestRig();
-        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ButtonsPage(vm.Buttons);
-        var window = new Window { Content = page, Width = 900, Height = 900 };
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
-
-        Assert.Equal(
-            new[] { "AddFirstPresetButton", "Grip", "ExpandButton", "MenuButton", "Grip" },
-            TabSequence(window, page.FindControl<Button>("AddButton")!, 5));
+            new[]
+            {
+                "SliderTile", "SliderTile", "SliderTile", "SliderTile",
+                "ModeTab", "AddModeButton", "EditModesButton",
+                "ButtonTile", "ButtonTile", "ButtonTile",
+                "NameBox",
+            },
+            TabSequence(window, first, 11));
     }
 }

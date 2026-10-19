@@ -71,7 +71,7 @@ public sealed partial class HwSliderRowViewModel : HardwareRowViewModel
         RemoveCommand = new RelayCommand(() => owner.RequestRemoveSlider(Index));
     }
 
-    public string Title => $"Slider {Index}";
+    public string Title => $"Slider {Index + 1}";
     public IRelayCommand RemoveCommand { get; }
     public bool PinInvalid => IsInvalid(ConfigField.SliderPin);
 
@@ -92,7 +92,7 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
         RemoveCommand = new RelayCommand(() => owner.RequestRemoveButton(Index));
     }
 
-    public string Title => $"Button {Index}";
+    public string Title => $"Button {Index + 1}";
     public IRelayCommand RemoveCommand { get; }
     public bool PinInvalid => IsInvalid(ConfigField.ButtonPin);
     public bool LedPinInvalid => IsInvalid(ConfigField.LedPin);

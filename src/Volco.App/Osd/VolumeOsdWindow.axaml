@@ -26,13 +26,16 @@
                   Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
         <PathIcon Name="MutedIcon" Data="{StaticResource Icon.Muted}" Width="20" Height="20"
                   Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
-        <PathIcon Name="PresetIcon" Data="{StaticResource Icon.Preset}" Width="20" Height="20"
+        <PathIcon Name="ModeIcon" Data="{StaticResource Icon.Mode}" Width="20" Height="20"
                   Foreground="{DynamicResource OsdTextBrush}" IsVisible="False"/>
         <!-- The device's own icon (the vector art, ScreenIcons.Geometry). Muted, it is dimmed and
              struck through (the slash is outlined in the surface colour to stand out against the
              icon). -->
         <PathIcon Name="DeviceIcon" Width="20" Height="20" IsVisible="False"
                   Foreground="{DynamicResource OsdTextBrush}"/>
+        <!-- An apps slider's app icon (AppIconLookup), when Volco has seen one; it replaces the
+             glyph, and is dimmed and struck through like the device icon while muted. -->
+        <Image Name="AppIcon" Width="20" Height="20" IsVisible="False"/>
         <Panel Name="DeviceMuteSlash" IsVisible="False">
           <Line StartPoint="2,2" EndPoint="18,18" StrokeThickness="4" StrokeLineCap="Round"
                 Stroke="{DynamicResource OsdBackgroundBrush}"/>

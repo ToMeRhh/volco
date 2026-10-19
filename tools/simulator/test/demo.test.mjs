@@ -46,6 +46,7 @@ test('mutes toggle, presets cycle, plain buttons show nothing', () => {
   const host = D.createDemoHost([3, 3, 3, 3, 1, 0]);
   assert.equal(host.press(1)[0].content.top, 'MUTED');
   assert.equal(host.press(2)[0].content.dotsSelected, 1);
+  assert.match(host.overlay(2), /^Mode: /);
   assert.equal(host.press(3)[0].content.main, 'Discord');
   assert.deepEqual(host.press(4), [{ button: 4, led: 1 }]);
   assert.equal(host.state.outputMuted, true);

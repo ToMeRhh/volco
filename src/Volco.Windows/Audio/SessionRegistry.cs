@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.Audio;
+using Windows.Win32.Media.Audio.Endpoints;
 using Windows.Win32.System.Threading;
 using Volco.Core.Audio;
 
@@ -50,8 +52,29 @@ internal sealed class SessionRegistry : IDisposable
         public required string InstanceId { get; init; }      // IAudioSessionControl2::GetSessionInstanceIdentifier
         public required uint ProcessId { get; init; }
         public required string ImageName { get; init; }        // resolved once, at creation
+        public required string? ExePath { get; init; }         // full path, null when the process could not be opened
         public required string DeviceId { get; init; }
         public required bool IsSystemSounds { get; init; }
+
+        /// <summary>The exe's file description, read once at creation (null if unreadable).</summary>
+        public required string? FileDescription { get; init; }
+
+        // The session's own display name and icon path as Windows reports them (may be blank or
+        // an unresolved "@" resource string); updated on the audio thread by the change
+        // notifications, under the registry lock. DisplayName/IconPath are resolved from them.
+        public required string SessionDisplayName { get; set; }
+        public required string SessionIconPath { get; set; }
+
+        public string DisplayName => SessionNames.Pick(SessionDisplayName, FileDescription, ImageName);
+        public string IconPath => SessionNames.IconSource(SessionIconPath, ExePath);
+
+        /// <summary>Peak meter: a QueryInterface view of <see cref="Control"/> like
+        /// <see cref="Volume"/>, null when the session does not expose one.</summary>
+        public required IAudioMeterInformation? Meter { get; init; }
+
+        /// <summary>The last peak read by <see cref="RefreshPeaks"/>; read and written under the
+        /// registry lock.</summary>
+        public float Peak { get; set; }
 
         /// <summary>The long-lived owned reference. <see cref="Volume"/> is a QueryInterface view
         /// of this same underlying COM object (same pattern as <c>(IMMEndpoint)device</c> in
@@ -64,7 +87,7 @@ internal sealed class SessionRegistry : IDisposable
         /// succeeds, so <see cref="Dispose"/> can unregister it.</summary>
         public IAudioSessionEvents? EventsSink { get; set; }
 
-        public AudioSessionInfo ToInfo() => new(InstanceId, ProcessId, ImageName, DeviceId, IsSystemSounds);
+        public AudioSessionInfo ToInfo() => new(InstanceId, ProcessId, ImageName, DeviceId, IsSystemSounds, DisplayName, IconPath, ExePath ?? "");
 
         public void Dispose()
         {
@@ -80,8 +103,9 @@ internal sealed class SessionRegistry : IDisposable
                 // Session is likely already gone; nothing to unregister from.
             }
 
-            // Volume is a QI view of Control's COM identity, not a separately activated object -
-            // releasing Control alone is correct (mirrors DeviceRegistry's IMMEndpoint precedent).
+            // Volume and Meter are QI views of Control's COM identity, not separately activated
+            // objects - releasing Control alone is correct (mirrors DeviceRegistry's IMMEndpoint
+            // precedent).
             ReleaseIfComObject(Control);
         }
     }
@@ -130,9 +154,11 @@ internal sealed class SessionRegistry : IDisposable
 
     /// <summary>
     /// Per-session sink for <see cref="IAudioSessionControl.RegisterAudioSessionNotification"/>.
-    /// Same non-blocking, no-COM, no-lock contract as <see cref="SessionNotificationSink"/>. Only
-    /// <see cref="OnStateChanged"/> (Expired) and <see cref="OnSessionDisconnected"/> matter here
-    /// (spec §2.3 invariant 3); the rest are no-ops required only to satisfy the interface.
+    /// Same non-blocking, no-COM, no-lock contract as <see cref="SessionNotificationSink"/>.
+    /// <see cref="OnStateChanged"/> (Expired) and <see cref="OnSessionDisconnected"/> remove the
+    /// session (spec §2.3 invariant 3); <see cref="OnDisplayNameChanged"/> and
+    /// <see cref="OnIconPathChanged"/> copy the new string (plain memory, no COM) and queue it; the
+    /// rest are no-ops required only to satisfy the interface.
     /// </summary>
     [ComVisible(true)]
     private sealed unsafe class SessionEventsSink : IAudioSessionEvents
@@ -148,11 +174,15 @@ internal sealed class SessionRegistry : IDisposable
 
         public void OnDisplayNameChanged(PCWSTR NewDisplayName, Guid* EventContext)
         {
+            _owner.Enqueue(PendingChange.DisplayName(_instanceId, ReadString(NewDisplayName)));
         }
 
         public void OnIconPathChanged(PCWSTR NewIconPath, Guid* EventContext)
         {
+            _owner.Enqueue(PendingChange.IconPath(_instanceId, ReadString(NewIconPath)));
         }
+
+        private static string ReadString(PCWSTR text) => text.Value == null ? string.Empty : text.ToString() ?? string.Empty;
 
         public void OnSimpleVolumeChanged(float NewVolume, BOOL NewMute, Guid* EventContext)
         {
@@ -185,6 +215,8 @@ internal sealed class SessionRegistry : IDisposable
         SessionCreated,
         SessionExpired,
         SessionDisconnected,
+        DisplayNameChanged,
+        IconPathChanged,
     }
 
     /// <summary>
@@ -194,13 +226,17 @@ internal sealed class SessionRegistry : IDisposable
     /// (QueryInterface, GetSessionInstanceIdentifier, ...) is deferred work, not a callback-time
     /// COM call.
     /// </summary>
-    private readonly record struct PendingChange(PendingKind Kind, string DeviceId, string InstanceId, IAudioSessionControl? NewSession)
+    private readonly record struct PendingChange(PendingKind Kind, string DeviceId, string InstanceId, IAudioSessionControl? NewSession, string Text = "")
     {
         public static PendingChange Created(string deviceId, IAudioSessionControl session) => new(PendingKind.SessionCreated, deviceId, "", session);
 
         public static PendingChange Expired(string instanceId) => new(PendingKind.SessionExpired, "", instanceId, null);
 
         public static PendingChange Disconnected(string instanceId) => new(PendingKind.SessionDisconnected, "", instanceId, null);
+
+        public static PendingChange DisplayName(string instanceId, string name) => new(PendingKind.DisplayNameChanged, "", instanceId, null, name);
+
+        public static PendingChange IconPath(string instanceId, string path) => new(PendingKind.IconPathChanged, "", instanceId, null, path);
     }
 
     private readonly Action<SessionsChangedEventArgs> _onChanged;
@@ -229,6 +265,10 @@ internal sealed class SessionRegistry : IDisposable
     /// audio-thread-only, so a single scratch buffer is safe without extra locking, and avoids
     /// the per-call <c>Where(...).ToList()</c> allocation on the ~50Hz slider path.</summary>
     private readonly List<SessionHandle> _applyVolumeTargets = new();
+
+    /// <summary>Scratch list for <see cref="RefreshPeaks"/> (audio-thread-only, like
+    /// <see cref="_applyVolumeTargets"/>).</summary>
+    private readonly List<SessionHandle> _peakTargets = new();
 
     private bool _disposed;
 
@@ -344,6 +384,57 @@ internal sealed class SessionRegistry : IDisposable
         }
     }
 
+    /// <summary>The cached peak of one session, 0 for an unknown one. Safe from any thread: reads
+    /// only the value <see cref="RefreshPeaks"/> last stored, under the lock, never COM.</summary>
+    public float GetCachedPeak(string instanceId)
+    {
+        lock (_lock)
+        {
+            return _sessions.TryGetValue(instanceId, out var handle) ? handle.Peak : 0f;
+        }
+    }
+
+    /// <summary>Reads every session's meter and caches the value for <see cref="GetCachedPeak"/>.
+    /// Audio thread only. The COM reads happen outside the lock; a session that fails to answer
+    /// (likely vanishing) reads 0.</summary>
+    public void RefreshPeaks()
+    {
+        var targets = _peakTargets;
+        targets.Clear();
+
+        lock (_lock)
+        {
+            foreach (var handle in _sessions.Values)
+            {
+                if (handle.Meter is not null)
+                {
+                    targets.Add(handle);
+                }
+            }
+        }
+
+        foreach (var handle in targets)
+        {
+            float peak;
+            try
+            {
+                handle.Meter!.GetPeakValue(out peak);
+                peak = Math.Clamp(peak, 0f, 1f);
+            }
+            catch (Exception ex) when (ex is COMException or InvalidComObjectException)
+            {
+                peak = 0f;
+            }
+
+            lock (_lock)
+            {
+                handle.Peak = peak;
+            }
+        }
+
+        targets.Clear();
+    }
+
     /// <summary>
     /// Requirement 5: walks the in-memory dictionary and never enumerates. Writes via
     /// <see cref="ISimpleAudioVolume.SetMasterVolume"/>, passing <see cref="EngineEventContext"/>.
@@ -427,6 +518,10 @@ internal sealed class SessionRegistry : IDisposable
                 case PendingKind.SessionExpired:
                 case PendingKind.SessionDisconnected:
                     HandleSessionRemoved(change.InstanceId);
+                    break;
+                case PendingKind.DisplayNameChanged:
+                case PendingKind.IconPathChanged:
+                    HandleNameOrIconChanged(change);
                     break;
             }
         }
@@ -534,6 +629,8 @@ internal sealed class SessionRegistry : IDisposable
 
         uint pid = 0;
         string imageName = string.Empty;
+        string? exePath = null;
+        string? fileDescription = null;
         if (!isSystemSounds)
         {
             try
@@ -544,8 +641,16 @@ internal sealed class SessionRegistry : IDisposable
             {
             }
 
-            imageName = ResolveImageName(pid);
+            exePath = ResolveExePath(pid);
+            if (exePath is not null)
+            {
+                imageName = Path.GetFileName(exePath);
+                fileDescription = ReadFileDescription(exePath);
+            }
         }
+
+        string sessionDisplayName = ReadDisplayName(control2);
+        string sessionIconPath = ReadIconPath(control2);
 
         ISimpleAudioVolume volume;
         try
@@ -558,15 +663,31 @@ internal sealed class SessionRegistry : IDisposable
             return;
         }
 
+        // Optional: a session without a meter is still tracked and controllable, its peak stays 0.
+        IAudioMeterInformation? meter;
+        try
+        {
+            meter = (IAudioMeterInformation)control2;
+        }
+        catch (InvalidCastException)
+        {
+            meter = null;
+        }
+
         var handle = new SessionHandle
         {
             InstanceId = instanceId,
             ProcessId = pid,
             ImageName = imageName,
+            ExePath = exePath,
             DeviceId = deviceId,
             IsSystemSounds = isSystemSounds,
+            FileDescription = fileDescription,
+            SessionDisplayName = sessionDisplayName,
+            SessionIconPath = sessionIconPath,
             Control = control2,
             Volume = volume,
+            Meter = meter,
         };
 
         // Requirement 2: one ISimpleAudioVolume per session, released on Expired/Disconnected.
@@ -618,6 +739,39 @@ internal sealed class SessionRegistry : IDisposable
         var info = removed.ToInfo();
         removed.Dispose();
         _onChanged(new SessionsChangedEventArgs(SessionChangeKind.Expired, info));
+    }
+
+    /// <summary>A queued display name or icon path change: update the handle and raise
+    /// <see cref="SessionChangeKind.Changed"/> when the resolved name or icon actually moved.
+    /// Tolerates a session that is already gone.</summary>
+    private void HandleNameOrIconChanged(PendingChange change)
+    {
+        AudioSessionInfo before;
+        AudioSessionInfo after;
+        lock (_lock)
+        {
+            if (!_sessions.TryGetValue(change.InstanceId, out var handle))
+            {
+                return;
+            }
+
+            before = handle.ToInfo();
+            if (change.Kind == PendingKind.DisplayNameChanged)
+            {
+                handle.SessionDisplayName = change.Text;
+            }
+            else
+            {
+                handle.SessionIconPath = change.Text;
+            }
+
+            after = handle.ToInfo();
+        }
+
+        if (after != before)
+        {
+            _onChanged(new SessionsChangedEventArgs(SessionChangeKind.Changed, after));
+        }
     }
 
     private void DetachInternal(string deviceId, bool raiseChanged)
@@ -698,8 +852,70 @@ internal sealed class SessionRegistry : IDisposable
 
     private static bool IsSystemSoundsSession(IAudioSessionControl2 control) => IsSystemSoundsSessionCore(control).Value == 0;
 
+    /// <summary>The session's own display name (<c>GetDisplayName</c>, CoTaskMem the caller
+    /// frees); "" on failure.</summary>
+    private static unsafe string ReadDisplayName(IAudioSessionControl2 control)
+    {
+        PWSTR ptr = default;
+        try
+        {
+            control.GetDisplayName(out ptr);
+            return ptr.Value == null ? string.Empty : ptr.ToString() ?? string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+        finally
+        {
+            if (ptr.Value != null)
+            {
+                PInvoke.CoTaskMemFree((void*)ptr.Value);
+            }
+        }
+    }
+
+    /// <summary>The session's own icon path (<c>GetIconPath</c>, CoTaskMem the caller frees);
+    /// "" on failure.</summary>
+    private static unsafe string ReadIconPath(IAudioSessionControl2 control)
+    {
+        PWSTR ptr = default;
+        try
+        {
+            control.GetIconPath(out ptr);
+            return ptr.Value == null ? string.Empty : ptr.ToString() ?? string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+        finally
+        {
+            if (ptr.Value != null)
+            {
+                PInvoke.CoTaskMemFree((void*)ptr.Value);
+            }
+        }
+    }
+
+    /// <summary>The exe's version-resource file description ("Google Chrome"), null when the file
+    /// has none or cannot be read (access denied, gone, not a PE file).</summary>
+    private static string? ReadFileDescription(string exePath)
+    {
+        try
+        {
+            return FileVersionInfo.GetVersionInfo(exePath).FileDescription;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Requirement 4: GetProcessId → OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) →
-    /// QueryFullProcessImageNameW → Path.GetFileName, then close the handle. Never
+    /// QueryFullProcessImageNameW (the full path; the caller takes the file name), then close the
+    /// handle. Null when the process cannot be opened or queried (e.g. an elevated process seen
+    /// from a non-elevated Volco); the image name then stays "" as before. Never
     /// <c>Process.GetProcessById</c>. Notes on the generated shapes actually used here (see report
     /// for the full per-call type audit and confirmed/unconfirmed breakdown):
     /// <list type="bullet">
@@ -715,17 +931,17 @@ internal sealed class SessionRegistry : IDisposable
     /// whatever concrete type <c>OpenProcess_SafeHandle</c> returns is accepted directly.</item>
     /// </list>
     /// </summary>
-    private static string ResolveImageName(uint pid)
+    private static string? ResolveExePath(uint pid)
     {
         if (pid == 0)
         {
-            return string.Empty;
+            return null;
         }
 
         using var process = PInvoke.OpenProcess_SafeHandle(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
         if (process.IsInvalid)
         {
-            return string.Empty;
+            return null;
         }
 
         try
@@ -734,14 +950,15 @@ internal sealed class SessionRegistry : IDisposable
             uint size = (uint)buffer.Length;
             if (!PInvoke.QueryFullProcessImageName(process, 0, buffer, ref size))
             {
-                return string.Empty;
+                return null;
             }
 
-            return Path.GetFileName(buffer[..(int)size].ToString());
+            var path = buffer[..(int)size].ToString();
+            return path.Length == 0 ? null : path;
         }
         catch (COMException)
         {
-            return string.Empty;
+            return null;
         }
     }
 

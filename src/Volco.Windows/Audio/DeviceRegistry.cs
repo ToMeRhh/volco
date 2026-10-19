@@ -43,7 +43,8 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     internal sealed class DeviceHandle : IDisposable
     {
         public required string Id { get; init; }              // IMMDevice::GetId
-        public required string FriendlyName { get; init; }    // PKEY_Device_FriendlyName
+        /// <summary>PKEY_Device_FriendlyName; replaced when the user renames the device in Windows.</summary>
+        public required string FriendlyName { get; set; }
         public DeviceFormFactor FormFactor { get; init; }     // PKEY_AudioEndpoint_FormFactor
         public required AudioFlow Flow { get; init; }
         public required IMMDevice Device { get; init; }
@@ -136,6 +137,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         DeviceRemovedOrInactive,
         DefaultChanged,
         VolumeChanged,
+        NameChanged,
     }
 
     /// <summary>
@@ -160,6 +162,8 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         public static PendingChange RemovedOrInactive(string id) => new(PendingChangeKind.DeviceRemovedOrInactive, id, default, default, default, default, default);
 
         public static PendingChange DefaultChangedTo(AudioFlow flow, AudioRole role, string id) => new(PendingChangeKind.DefaultChanged, id, flow, role, default, default, default);
+
+        public static PendingChange NameChanged(string id) => new(PendingChangeKind.NameChanged, id, default, default, default, default, default);
 
         public static PendingChange VolumeChanged(string id, float level, bool muted, Guid eventContext) =>
             new(PendingChangeKind.VolumeChanged, id, default, default, level, muted, eventContext);
@@ -287,6 +291,9 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
                     break;
                 case PendingChangeKind.VolumeChanged:
                     ApplyVolumeChanged(change.DeviceId, change.Level, change.Muted, change.EventContext);
+                    break;
+                case PendingChangeKind.NameChanged:
+                    ApplyNameChanged(change.DeviceId);
                     break;
             }
         }
@@ -658,9 +665,11 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
 
     void IMMNotificationClient.OnPropertyValueChanged(PCWSTR pwstrDeviceId, PROPERTYKEY key)
     {
-        // Not required by any binding requirement for this task. A friendly-name change would
-        // need re-reading the property store and raising StateChanged; left for a follow-up
-        // rather than done partially/incorrectly here. (Nothing to enqueue, so nothing to drain.)
+        // A rename in Windows (Sound settings) writes the device description, and the friendly
+        // name is derived from it; which key the notification names varies, so any property
+        // change re-reads the name on the audio thread, which raises a change only when the name
+        // differs (ApplyNameChanged).
+        Enqueue(PendingChange.NameChanged(pwstrDeviceId.ToString() ?? string.Empty));
     }
 
     private void Enqueue(PendingChange change)
@@ -682,6 +691,38 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     {
         bool isOwnChange = eventContext == _engineEventContext;
         _onVolumeChanged(new DeviceVolumeChangedEventArgs(deviceId, level, muted, isOwnChange));
+    }
+
+    /// <summary>A device was renamed in Windows: re-reads its friendly name and raises
+    /// <see cref="DeviceChangeKind.StateChanged"/>, so the pickers, the labels and the names stored
+    /// in the config follow.</summary>
+    private void ApplyNameChanged(string id)
+    {
+        DeviceHandle? handle;
+        lock (_lock)
+        {
+            if (!_devices.TryGetValue(id, out handle)) return;
+        }
+
+        string name;
+        try
+        {
+            name = GetFriendlyName(handle.Device);
+        }
+        catch (Exception ex) when (ex is COMException or InvalidComObjectException)
+        {
+            return;   // unplugged meanwhile: its removal is queued too
+        }
+
+        AudioDevice device;
+        lock (_lock)
+        {
+            if (name.Length == 0 || name == handle.FriendlyName || !_devices.ContainsKey(id)) return;
+            handle.FriendlyName = name;
+            device = ToAudioDeviceLocked(handle);
+        }
+
+        _onChanged(new DevicesChangedEventArgs(DeviceChangeKind.StateChanged, device));
     }
 
     private void ApplyDefaultChanged(AudioFlow flow, AudioRole role, string id)

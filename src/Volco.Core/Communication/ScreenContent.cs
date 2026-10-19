@@ -52,7 +52,7 @@ public sealed record ScreenContent(
     public static ScreenContent Text(string top, ScreenIcon? icon, bool muted, string main)
         => new(top.Length == 0 ? TopKind.Empty : TopKind.Text, top, 0, 0, icon, muted, main);
 
-    /// <summary>Preset dots on top (selected is 0-based), icon, main.</summary>
+    /// <summary>Mode dots on top (selected is 0-based), icon, main.</summary>
     public static ScreenContent Dots(byte selected, byte count, ScreenIcon? icon, string main)
         => new(TopKind.Dots, "", selected, count, icon, false, main);
 }

@@ -164,12 +164,12 @@ public sealed class ControllerLinkTests : IDisposable
     }
 
     [Fact]
-    public void PresetChange_Synchronized_IsBeginScreensLedsCommit_EvenWhenUnchanged()
+    public void ModeChange_Synchronized_IsBeginScreensLedsCommit_EvenWhenUnchanged()
     {
         var link = Ready();
         var baseline = _conn.SentCount;
 
-        link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: true);
+        link.PushModeChange(ScreenTransition.SlideLeft, synchronized: true);
 
         var burst = _conn.SentFrames.Skip(baseline).ToList();
         Assert.Equal(4, burst.Count);
@@ -180,12 +180,12 @@ public sealed class ControllerLinkTests : IDisposable
     }
 
     [Fact]
-    public void PresetChange_Unsynchronized_SameMessagesWithoutBeginCommit()
+    public void ModeChange_Unsynchronized_SameMessagesWithoutBeginCommit()
     {
         var link = Ready();
         var baseline = _conn.SentCount;
 
-        link.PushPresetChange(ScreenTransition.SlideRight, synchronized: false);
+        link.PushModeChange(ScreenTransition.SlideRight, synchronized: false);
 
         var burst = _conn.SentFrames.Skip(baseline).ToList();
         Assert.Equal(2, burst.Count);
@@ -203,7 +203,7 @@ public sealed class ControllerLinkTests : IDisposable
         Assert.Equal(2, Count(Screen1()));
     }
 
-    /// <summary>A link whose LED blinks while a preset change is announced (on in even steps) and
+    /// <summary>A link whose LED blinks while a mode change is announced (on in even steps) and
     /// whose screen says FLASH; it records the steps compute was called with.</summary>
     private ControllerLink AnnouncingLink(List<int?> steps, int announceSteps, ControllerLinkOptions options)
     {
@@ -223,13 +223,13 @@ public sealed class ControllerLinkTests : IDisposable
     }
 
     [Fact]
-    public void PresetChange_IsAnnouncedForItsSteps_ThenSlidesBackToTheSteadyState()
+    public void ModeChange_IsAnnouncedForItsSteps_ThenSlidesBackToTheSteadyState()
     {
         var steps = new List<int?>();
         var link = AnnouncingLink(steps, announceSteps: 4, SlowHeartbeat);
         var baseline = _conn.SentCount;
 
-        link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: false);
+        link.PushModeChange(ScreenTransition.SlideLeft, synchronized: false);
         Assert.True(WaitUntil(() => Count(Screen1(ScreenTransition.SlideLeft)) == 1));
         Thread.Sleep(100);   // ten more ticks: nothing else changes
 
@@ -247,7 +247,7 @@ public sealed class ControllerLinkTests : IDisposable
     {
         var steps = new List<int?>();
         var link = AnnouncingLink(steps, announceSteps: 4, Quiet);
-        link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: false);
+        link.PushModeChange(ScreenTransition.SlideLeft, synchronized: false);
         steps.Clear();
 
         link.Push();
@@ -303,14 +303,14 @@ public sealed class ControllerLinkTests : IDisposable
     }
 
     [Fact]
-    public void RapidPresetChanges_EachBurstIsCompleteAndInOrder()
+    public void RapidModeChanges_EachBurstIsCompleteAndInOrder()
     {
         // Presses from several threads never interleave bursts.
         var link = Ready();
         var baseline = _conn.SentCount;
         var threads = Enumerable.Range(0, 6).Select(_ => new Thread(() =>
         {
-            for (int i = 0; i < 20; i++) link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: true);
+            for (int i = 0; i < 20; i++) link.PushModeChange(ScreenTransition.SlideLeft, synchronized: true);
         })).ToList();
         threads.ForEach(t => t.Start());
         threads.ForEach(t => t.Join());
@@ -361,7 +361,7 @@ public sealed class ControllerLinkTests : IDisposable
         Assert.Equal(ControllerState.Ready, link.State);
         link.Push();
         link.PushAll();
-        link.PushPresetChange(ScreenTransition.SlideLeft, synchronized: true);
+        link.PushModeChange(ScreenTransition.SlideLeft, synchronized: true);
         Assert.Equal(new[] { ProtocolEncoder.EncodeHelloRequest() }, _conn.SentFrames);   // no Begin left open
 
         fail = false;
@@ -439,7 +439,7 @@ public sealed class ControllerLinkTests : IDisposable
         _displays[0] = new LedDisplay(1);
         link.Push();
         link.PushAll();
-        link.PushPresetChange(ScreenTransition.SlideLeft, true);
+        link.PushModeChange(ScreenTransition.SlideLeft, true);
         link.Detach();
 
         Assert.Equal(after, _conn.SentCount);

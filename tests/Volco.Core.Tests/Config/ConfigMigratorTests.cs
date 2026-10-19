@@ -170,10 +170,10 @@ public class ConfigMigratorTests
     // ── Fix C: HealDeviceIds ─────────────────────────────────────────────────
 
     [Fact]
-    public void HealDeviceIds_FillsBlankIdsForTogglePair_InEveryPreset_ByExactName()
+    public void HealDeviceIds_FillsBlankIdsForTogglePair_InEveryMode_ByExactName()
     {
         var config = AppConfig.CreateDefault();
-        config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
         var toggle = config.Buttons[0].GetOrAddBinding("gaming").LongPress = Toggle(
             new DeviceRefConfig { Id = "", FriendlyName = "Speakers (Realtek High Definition Audio)" },
             new DeviceRefConfig { Id = "", FriendlyName = "Headphones (USB Audio Device)" });

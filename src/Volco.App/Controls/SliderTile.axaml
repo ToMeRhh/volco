@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
+             x:Class="Volco.App.Controls.SliderTile"
+             x:DataType="vm:SliderItemViewModel"
+             Focusable="True" ToolTip.Tip="{Binding Heading}">
+  <!-- The page fills "Swap with" when the menu opens (ControlsPage.OnTileContextRequested) -->
+  <UserControl.ContextMenu>
+    <ContextMenu>
+      <MenuItem Header="Swap with"/>
+    </ContextMenu>
+  </UserControl.ContextMenu>
+  <!-- One slider on the Controls page's drawing (spec §4.2): the live level, a grip beside the
+       track, and the name, else what it controls. -->
+  <!-- TileFlash adds "flash" when the controller reports the control -->
+  <Panel Name="TileRoot" Classes="TileRoot">
+    <Border Name="TileBorder" Classes="Tile" Classes.selected="{Binding IsSelected}">
+      <StackPanel Spacing="7" Margin="4,8,4,6">
+        <Grid ColumnDefinitions="*,Auto,*">
+          <!-- A drag swaps what the slider controls, and its name, with another (spec §2.10) -->
+          <Border Name="Grip" Classes="TileGrip" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,4,0"
+                  IsVisible="{Binding !IsMissing}" ToolTip.Tip="Drag onto another slider to swap">
+            <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
+          </Border>
+          <Panel Name="Fader" Grid.Column="1" Classes="Fader" Width="32">
+            <Border Classes="Track" Width="12" HorizontalAlignment="Center"/>
+            <Border Name="LevelFill" Classes="LevelFill" Width="6" HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom" Margin="0,0,0,3">
+              <Border.Height>
+                <MultiBinding Converter="{x:Static conv:FaderConverter.Fill}">
+                  <Binding Path="LiveLevel"/>
+                  <Binding ElementName="Fader" Path="Bounds.Height"/>
+                </MultiBinding>
+              </Border.Height>
+            </Border>
+            <Border Name="Knob" Classes="Knob" VerticalAlignment="Bottom">
+              <Border.Margin>
+                <MultiBinding Converter="{x:Static conv:FaderConverter.Knob}">
+                  <Binding Path="LiveLevel"/>
+                  <Binding ElementName="Fader" Path="Bounds.Height"/>
+                </MultiBinding>
+              </Border.Margin>
+              <Border Classes="KnobLine"/>
+            </Border>
+          </Panel>
+        </Grid>
+        <!-- The label, after the app's icon on an apps slider; a drag carries this row -->
+        <Grid Name="LabelRow" ColumnDefinitions="Auto,*" HorizontalAlignment="Center">
+          <Image Name="AppIconImage" Width="16" Height="16" Margin="0,1,5,0" VerticalAlignment="Top"
+                 Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
+          <TextBlock Name="Label" Grid.Column="1" Classes="TileLabel" Classes.unset="{Binding IsUnset}" Text="{Binding Label}"
+                     TextWrapping="Wrap"
+                     TextAlignment="Center">
+            <ToolTip.Tip>
+              <MultiBinding StringFormat="{}{0}: {1}">
+                <Binding Path="Heading"/>
+                <Binding Path="Label"/>
+              </MultiBinding>
+            </ToolTip.Tip>
+          </TextBlock>
+        </Grid>
+        <TextBlock Name="MissingText" Classes="TileMissing" Text="Not on this controller"
+                   IsVisible="{Binding IsMissing}"/>
+      </StackPanel>
+    </Border>
+    <Rectangle Classes="MissingOutline" IsVisible="{Binding IsMissing}"/>
+    <Rectangle Classes="DropOutline"/>
+    <Border Classes="TileActive"/>
+  </Panel>
+</UserControl>

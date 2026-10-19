@@ -7,6 +7,10 @@ public interface IAudioEngine : IDisposable
     AudioDevice?                    GetDefaultDevice(AudioFlow flow);
     IReadOnlyList<AudioSessionInfo> GetSessions();
 
+    /// <summary>The session's current peak level, 0..1, and 0 for an unknown session. Returns a
+    /// cached value at once; asking keeps the engine refreshing it for a short while.</summary>
+    float GetSessionPeak(string instanceId);
+
     // Writes — O(1) lookup plus one COM call, posted to the audio thread.
     void SetDeviceVolume(DeviceRef device, float level);
     void SetDeviceMute(DeviceRef device, bool muted);

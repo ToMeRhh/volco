@@ -75,6 +75,8 @@ with **Open a program** and **Run a script**. The action card adds, per action:
 
 Program and script cards say "Runs only over USB" when the connection type is not Serial (§7).
 A path that does not exist is marked on the card when the page is shown.
+The Controls page (`docs/design/controls-page.md` §2 item 15) replaced this note with a "USB" tag
+that program and script actions always show, whatever the connection type.
 
 ## 3. Media
 
@@ -121,6 +123,10 @@ the simulator's `icons.js`.
   names; a program Volco started itself is known at once (its `Exited`). A process Volco cannot
   query (elevated) counts as not running. URLs and documents have no running state: dark, and
   every press opens them.
+- **Shortcut targets** are read when Volco starts, when the live mode or the actions change, and
+  again on every press or Try of that shortcut. An update that points the shortcut at a new
+  version's exe is followed by the next press, and the running poll and the light follow it. An
+  action set to the exe itself keeps that path: pick the Start-menu shortcut for apps that move.
 - **Bringing to front:** Windows restricts a background app taking the foreground; the
   implementation uses the usual workaround (attach to the foreground thread's input, then
   `SetForegroundWindow`). Where that fails, the window flashes in the taskbar.
@@ -147,8 +153,8 @@ Start-up cost per press, for guidance in the picker's help text: `.exe` and `.ba
 Python and Node tens of ms, PowerShell hundreds of ms. The help text recommends `.bat` or `.exe`
 when speed matters.
 
-The script gets `VOLCO_BUTTON` (input number), `VOLCO_GESTURE` (`single`, `double`, `long`) and
-`VOLCO_PRESET` (the preset's name) in its environment.
+The script gets `VOLCO_BUTTON` (the button's number as the settings UI shows it, from 1), `VOLCO_GESTURE` (`single`, `double`, `long`) and
+`VOLCO_MODE` (the mode's name) in its environment.
 
 ### 5.2 Repeat presses
 
@@ -193,7 +199,8 @@ are open to others:
 
 **Rule until this is solved:** `OpenProgram` and `RunScript` run **only when the press arrived over
 USB serial**. Over WebSocket or UDP the press is refused and logged; the card says "Runs only over
-USB" when the connection type is not Serial. Media actions, like the existing audio and preset
+USB" when the connection type is not Serial (now an always-shown "USB" tag on the Controls page,
+`docs/design/controls-page.md` §2 item 15). Media actions, like the existing audio and preset
 actions, run over every transport. A consequence: the simulator cannot trigger programs or
 scripts.
 
@@ -214,7 +221,8 @@ controller's config blob carries no actions, so a controller cannot define a com
   the transport rule (refused over WebSocket and UDP, allowed over serial); the runtime pushing
   state on media, program and script events; config v6 round trip.
 - **App (Avalonia headless):** picker groups; new actions unavailable without the services;
-  card fields per action; the "Runs only over USB" note; card summaries.
+  card fields per action; the "Runs only over USB" note (on the Controls page, the always-shown
+  "USB" tag); card summaries.
 - **Firmware and simulator:** new icons through `gen_assets.py`; regenerated render goldens;
   `icons.js`.
 - **Windows, manual checklist:** Spotify and a browser tab (Current vs a named app, playing state

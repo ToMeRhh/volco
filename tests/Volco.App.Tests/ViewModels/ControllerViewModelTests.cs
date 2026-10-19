@@ -318,7 +318,7 @@ public sealed class ControllerViewModelTests : IDisposable
         Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
         Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Invalid, 0, 2));
         Until(() => !vm.IsSaving);
-        Assert.Equal("The controller rejected the setup: the button pin on Button 0.", vm.ProgressText);
+        Assert.Equal("The controller rejected the setup: the button pin on Button 1.", vm.ProgressText);
         Assert.Equal("The controller didn't accept the button pin.", vm.Buttons[0].ErrorText);
         Assert.True(vm.CanDismissFooter);   // a failure stays until closed
     }
@@ -353,7 +353,7 @@ public sealed class ControllerViewModelTests : IDisposable
         vm.Buttons[0].RemoveCommand.Execute(null);
         vm.Confirmation!.ConfirmCommand.Execute(null);
         Assert.Equal(2, vm.Buttons.Count);
-        Assert.Equal("Button 0", vm.Buttons[0].Title);
+        Assert.Equal("Button 1", vm.Buttons[0].Title);
     }
 
     [Fact]
@@ -430,8 +430,8 @@ public sealed class ControllerViewModelTests : IDisposable
         vm.Sliders[0].Pin = 39;
         vm.Sliders[1].Pin = 39;
 
-        Assert.Equal("Pin 39 is also used by Slider 1. Each pin can only do one thing.", vm.Sliders[0].ErrorText);
-        Assert.Equal("Pin 39 is also used by Slider 0. Each pin can only do one thing.", vm.Sliders[1].ErrorText);
+        Assert.Equal("Pin 39 is also used by Slider 2. Each pin can only do one thing.", vm.Sliders[0].ErrorText);
+        Assert.Equal("Pin 39 is also used by Slider 1. Each pin can only do one thing.", vm.Sliders[1].ErrorText);
         Assert.True(vm.Sliders[0].PinInvalid);
         Assert.True(vm.Sliders[1].PinInvalid);
         Assert.All(vm.Sliders.Skip(2), r => Assert.False(r.HasError));

@@ -32,7 +32,7 @@ public class ConfigManagerTests
                     Index = 0,
                     Actions =
                     {
-                        [AppConfig.DefaultPresetId] = new ButtonBindingConfig
+                        [AppConfig.DefaultModeId] = new ButtonBindingConfig
                         {
                             SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput },
                             DoublePress = new ButtonActionConfig
@@ -44,15 +44,15 @@ public class ConfigManagerTests
                         },
                         ["gaming"] = new ButtonBindingConfig
                         {
-                            LongPress = new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "default" },
+                            LongPress = new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "default" },
                         },
                     },
                 }
             },
-            Presets =
+            Modes =
             {
-                new PresetConfig { Id = AppConfig.DefaultPresetId, Name = "Default" },
-                new PresetConfig { Id = "gaming", Name = "Gaming" },
+                new ModeConfig { Id = AppConfig.DefaultModeId, Name = "Default" },
+                new ModeConfig { Id = "gaming", Name = "Gaming" },
             },
         };
 
@@ -68,8 +68,8 @@ public class ConfigManagerTests
         Assert.True(deserialized.Sliders[2].Invert);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, deserialized.Buttons[0].Default().SinglePress.Action);
         Assert.Equal("Headphones", deserialized.Buttons[0].Default().DoublePress.DeviceB!.FriendlyName);
-        Assert.Equal("default", deserialized.Buttons[0].BindingFor("gaming").LongPress.PresetId);
-        Assert.Equal(new[] { "Default", "Gaming" }, deserialized.Presets.Select(p => p.Name));
+        Assert.Equal("default", deserialized.Buttons[0].BindingFor("gaming").LongPress.ModeId);
+        Assert.Equal(new[] { "Default", "Gaming" }, deserialized.Modes.Select(p => p.Name));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class ConfigManagerTests
             Curve = ResponseCurve.SCurve, DeadZonePercent = 0.05, SmoothingFactor = 0.5, Invert = true,
         };
         config.Sliders[1] = new SliderConfig { Type = SliderMappingType.Processes, Processes = { "spotify.exe" } };
-        config.Buttons[0].Actions[AppConfig.DefaultPresetId] = new ButtonBindingConfig
+        config.Buttons[0].Actions[AppConfig.DefaultModeId] = new ButtonBindingConfig
         {
             SinglePress = new ButtonActionConfig { Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "Spotify.exe", Name = "Spotify" } },
             DoublePress = new ButtonActionConfig
@@ -144,14 +144,14 @@ public class ConfigManagerTests
     }
 
     [Fact]
-    public void AppConfig_DefaultConfig_IsNotSetUp_AndHasOnePreset()
+    public void AppConfig_DefaultConfig_IsNotSetUp_AndHasOneMode()
     {
         var config = AppConfig.CreateDefault();
 
         Assert.All(config.Sliders, s => Assert.Equal(SliderMappingType.None, s.Type));
         Assert.All(config.Buttons, b => Assert.Empty(b.Actions));
-        var preset = Assert.Single(config.Presets);
-        Assert.Equal(AppConfig.DefaultPresetId, preset.Id);
+        var mode = Assert.Single(config.Modes);
+        Assert.Equal(AppConfig.DefaultModeId, mode.Id);
     }
 }
 
@@ -181,6 +181,20 @@ public class ConfigManagerLoadSaveTests : IDisposable
 
         Assert.Equal(5, manager.Config.Sliders.Count);
         Assert.Equal(3, manager.Config.Buttons.Count);
+    }
+
+    [Fact]
+    public void SliderName_RoundTrips()
+    {
+        var manager = new ConfigManager(_configPath);
+        manager.Load();
+        manager.Config.Sliders[0].Name = "Music";
+        manager.Save();
+
+        var manager2 = new ConfigManager(_configPath);
+        manager2.Load();
+
+        Assert.Equal("Music", manager2.Config.Sliders[0].Name);
     }
 
     [Fact]
@@ -454,8 +468,8 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(AppConfig.CurrentSchemaVersion, c.SchemaVersion);
         Assert.Empty(c.Devices);
         Assert.Null(c.Controller);
-        Assert.Equal(2, c.Presets.Count);
-        Assert.Equal(ButtonActionType.NextPreset, c.Buttons[0].Default().LongPress.Action);
+        Assert.Equal(2, c.Modes.Count);
+        Assert.Equal(ButtonActionType.NextMode, c.Buttons[0].Default().LongPress.Action);
         Assert.Equal("dev-2", c.Buttons[1].Default().SinglePress.DeviceB!.Id);
         Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
 
@@ -550,8 +564,8 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
         Assert.Equal(0.2, c.Sliders[1].SmoothingFactor);
 
-        var preset = Assert.Single(c.Presets);
-        Assert.Equal(AppConfig.DefaultPresetId, preset.Id);
+        var mode = Assert.Single(c.Modes);
+        Assert.Equal(AppConfig.DefaultModeId, mode.Id);
 
         Assert.Equal(3, c.Buttons.Count);
         Assert.Equal(600, c.Buttons[0].LongPressMs);
@@ -607,14 +621,14 @@ public class ConfigManagerLoadSaveTests : IDisposable
     }
 
     [Fact]
-    public void Load_V3ConfigWithNoPresets_GetsTheDefaultPreset()
+    public void Load_V3ConfigWithNoModes_GetsTheDefaultMode()
     {
         File.WriteAllText(_configPath, """{ "schemaVersion": 3, "sliders": [], "buttons": [ { "index": 0 } ], "presets": [] }""");
 
         var cm = new ConfigManager(_configPath);
         cm.Load();
 
-        Assert.Single(cm.Config.Presets);
+        Assert.Single(cm.Config.Modes);
         Assert.Empty(cm.Config.Sliders);
         Assert.NotNull(cm.Config.Buttons[0].Actions);
     }

@@ -7,7 +7,14 @@
     the "Advanced" toggle, the activity flash and the navigation list.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Volco.App.Controls">
+  <!-- Every tooltip opens just below its element, left-aligned with it, instead of wherever the
+       pointer stopped (Avalonia flips it above when there is no room below). -->
+  <Style Selector=":is(Control)">
+    <Setter Property="ToolTip.Placement" Value="Bottom"/>
+    <Setter Property="ToolTip.VerticalOffset" Value="4"/>
+  </Style>
   <Styles.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
@@ -47,39 +54,6 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}"/>
-  </Style>
-  <!-- "Not set up": no fill, a quieter outline and a muted title. -->
-  <Style Selector="Border.Card.unset">
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
-  </Style>
-  <Style Selector="Border.Card.unset TextBlock.CardTitleText">
-    <Setter Property="FontWeight" Value="Normal"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
-  </Style>
-  <!-- Activity flash: each card has a Border.ActiveOutline (accent, normally invisible) that
-       fades out once each time the card gets the "active" class. -->
-  <Style Selector="Border.ActiveOutline">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
-    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}"/>
-    <Setter Property="IsHitTestVisible" Value="False"/>
-    <Setter Property="Opacity" Value="0"/>
-  </Style>
-  <Style Selector="Border.Card.active Border.ActiveOutline">
-    <Style.Animations>
-      <Animation Duration="0:0:0.6" FillMode="None">
-        <KeyFrame Cue="0%">
-          <Setter Property="Opacity" Value="1"/>
-        </KeyFrame>
-        <KeyFrame Cue="40%">
-          <Setter Property="Opacity" Value="1"/>
-        </KeyFrame>
-        <KeyFrame Cue="100%">
-          <Setter Property="Opacity" Value="0"/>
-        </KeyFrame>
-      </Animation>
-    </Style.Animations>
   </Style>
   <Style Selector="Border.CardBody">
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -167,24 +141,6 @@
     <Setter Property="Background" Value="Transparent"/>
   </Style>
 
-  <!-- The drag handle: quiet until the card is hovered or the handle has focus. -->
-  <Style Selector="Border.Grip">
-    <Setter Property="Width" Value="22"/>
-    <Setter Property="Height" Value="32"/>
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="CornerRadius" Value="4"/>
-    <Setter Property="Cursor" Value="SizeNorthSouth"/>
-    <Setter Property="Focusable" Value="True"/>
-    <Setter Property="Opacity" Value="0.45"/>
-  </Style>
-  <Style Selector="Border.Card:pointerover Border.Grip, Border.Grip:focus">
-    <Setter Property="Opacity" Value="1"/>
-  </Style>
-  <Style Selector="Border.Grip:focus-visible">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="BorderThickness" Value="2"/>
-  </Style>
-
   <!-- ── Segmented choice (RadioButton.Segment inside Border.SegmentTrack) ── -->
   <Style Selector="Border.SegmentTrack">
     <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
@@ -225,55 +181,6 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
-  <!-- ── Preset tabs (the Buttons page) ──────────────────────────────────
-       Folder tabs over Border.PresetBody, the frame around the edited preset's buttons. Each tab
-       and the frame carry their preset's colour (controls:PresetTint puts PresetFill and
-       PresetEdge in their resources); the checked tab joins the frame under it. -->
-  <Style Selector="RadioButton.PresetTab">
-    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-    <Setter Property="VerticalAlignment" Value="Bottom"/>
-    <!-- 4 between tabs and between wrapped lines; unchecked tabs stop a pixel short of the frame. -->
-    <Setter Property="Margin" Value="0,4,4,1"/>
-    <Setter Property="Template">
-      <ControlTemplate TargetType="RadioButton">
-        <Border Name="PART_Tab"
-                Background="{DynamicResource PresetFill}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1,1,1,0"
-                CornerRadius="8,8,0,0"
-                Padding="14,6,14,8">
-          <ContentPresenter Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            Foreground="{TemplateBinding Foreground}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"/>
-        </Border>
-      </ControlTemplate>
-    </Setter>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:pointerover">
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:checked">
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-    <Setter Property="Margin" Value="0,4,4,0"/>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:checked /template/ Border#PART_Tab">
-    <Setter Property="BorderBrush" Value="{DynamicResource PresetEdge}"/>
-    <Setter Property="BorderThickness" Value="1,3,1,0"/>
-  </Style>
-  <Style Selector="RadioButton.PresetTab:focus-visible /template/ Border#PART_Tab">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-  </Style>
-  <!-- With one preset there are no tabs and the frame draws nothing. -->
-  <Style Selector="Border.PresetBody.framed">
-    <Setter Property="Background" Value="{DynamicResource PresetFill}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource PresetEdge}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="0,8,8,8"/>
-    <Setter Property="Padding" Value="12"/>
-  </Style>
-
   <!-- ── "Advanced" toggle ─────────────────────────────────────────────── -->
   <Style Selector="ToggleButton.Advanced">
     <Setter Property="Background" Value="Transparent"/>
@@ -297,15 +204,8 @@
     <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
     <Setter Property="Padding" Value="10,2,4,2"/>
   </Style>
-  <Style Selector="Border.ChipBox">
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
-    <Setter Property="Padding" Value="4"/>
-    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-  </Style>
 
-  <!-- Device icon picker (Devices page). -->
+  <!-- Device icon picker (the device dialog). -->
   <Style Selector="Button.IconChoice">
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -363,6 +263,614 @@
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
+  <!-- ── Controls page: the drawing (spec §4) ────────────────────────────
+       The case holds the slider grid and the buttons' frame. Each tile is a SliderTile or a
+       ButtonTile: transparent until hovered, the accent outline when selected, dashed when the
+       controller doesn't have it, and the activity flash when the controller reports it.
+       Border.Case.dense (more than 8 sliders or buttons) makes everything smaller. -->
+  <Style Selector="Border.Case">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="18"/>
+    <Setter Property="Padding" Value="14"/>
+  </Style>
+  <Style Selector="controls|FillWrapPanel.SliderGrid">
+    <Setter Property="MinItemWidth" Value="84"/>
+  </Style>
+  <Style Selector="controls|FillWrapPanel.ButtonGrid">
+    <Setter Property="MinItemWidth" Value="136"/>
+  </Style>
+  <Style Selector="Border.Case.dense controls|FillWrapPanel.SliderGrid">
+    <Setter Property="MinItemWidth" Value="74"/>
+  </Style>
+  <Style Selector="Border.Case.dense controls|FillWrapPanel.ButtonGrid">
+    <Setter Property="MinItemWidth" Value="80"/>
+  </Style>
+
+  <Style Selector="controls|SliderTile, controls|ButtonTile">
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+  <Style Selector="Border.Tile">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="1.5"/>
+    <Setter Property="CornerRadius" Value="11"/>
+  </Style>
+  <Style Selector="Border.Tile:pointerover">
+    <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
+  </Style>
+  <Style Selector="Border.Tile.selected">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="controls|SliderTile:focus-visible Border.Tile, controls|ButtonTile:focus-visible Border.Tile">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Rectangle.MissingOutline">
+    <Setter Property="Stroke" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="StrokeDashArray" Value="4,3"/>
+    <Setter Property="RadiusX" Value="11"/>
+    <Setter Property="RadiusY" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <Style Selector="TextBlock.TileMissing">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+    <Setter Property="TextAlignment" Value="Center"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+  <!-- The flash when the controller reports the control (Controls/TileFlash). -->
+  <Style Selector="Border.TileActive">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="CornerRadius" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Panel.TileRoot.flash Border.TileActive">
+    <Style.Animations>
+      <Animation Duration="0:0:0.6" FillMode="None">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="1"/>
+        </KeyFrame>
+        <KeyFrame Cue="40%">
+          <Setter Property="Opacity" Value="1"/>
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0"/>
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector="Border.TileGrip">
+    <Setter Property="Padding" Value="2"/>
+    <Setter Property="CornerRadius" Value="3"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Opacity" Value="0.55"/>
+    <Setter Property="Cursor" Value="SizeAll"/>
+  </Style>
+  <Style Selector="Border.TileGrip PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="controls|SliderTile:pointerover Border.TileGrip, controls|ButtonTile:pointerover Border.TileGrip">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <!-- Drag to swap (spec §2.9–10, §11): the dragged tile is dimmed (the whole tile, so the live
+       VisualBrush of its action rows stays at full strength), and the tile it would swap with gets
+       a dashed accent outline -->
+  <Style Selector="controls|SliderTile.dragSource, controls|ButtonTile.dragSource">
+    <Setter Property="Opacity" Value="0.35"/>
+  </Style>
+  <Style Selector="Rectangle.DropOutline">
+    <Setter Property="IsVisible" Value="False"/>
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="StrokeDashArray" Value="4,3"/>
+    <Setter Property="RadiusX" Value="11"/>
+    <Setter Property="RadiusY" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <Style Selector="controls|SliderTile.dropTarget Rectangle.DropOutline, controls|ButtonTile.dropTarget Rectangle.DropOutline">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <Style Selector="Border.SwapDragImage">
+    <Setter Property="Opacity" Value="0.85"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+
+  <!-- Sliders: a track with the live level and a knob -->
+  <Style Selector="Panel.Fader">
+    <Setter Property="Height" Value="140"/>
+  </Style>
+  <Style Selector="Border.Case.dense Panel.Fader">
+    <Setter Property="Height" Value="84"/>
+  </Style>
+  <Style Selector="Border.Track">
+    <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="6"/>
+  </Style>
+  <Style Selector="Border.LevelFill">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Opacity" Value="0.55"/>
+    <Setter Property="CornerRadius" Value="3"/>
+  </Style>
+  <Style Selector="Border.Knob">
+    <Setter Property="Width" Value="32"/>
+    <Setter Property="Height" Value="15"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BoxShadow" Value="0 2 4 0 #40000000"/>
+  </Style>
+  <Style Selector="Border.Case.dense Border.Knob">
+    <Setter Property="Width" Value="24"/>
+    <Setter Property="Height" Value="12"/>
+  </Style>
+  <Style Selector="Border.KnobLine">
+    <Setter Property="Height" Value="2"/>
+    <Setter Property="Margin" Value="5,0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Background" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.TileLabel">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="Border.Case.dense TextBlock.TileLabel">
+    <Setter Property="FontSize" Value="11"/>
+  </Style>
+  <!-- "Not set" -->
+  <Style Selector="TextBlock.TileLabel.unset">
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+
+  <!-- Buttons: the frame in the edited mode's colour, its tabs, and the tiles -->
+  <Style Selector="Border.ModeFrame">
+    <Setter Property="Background" Value="{DynamicResource ModeFill}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ModeEdge}"/>
+    <Setter Property="BorderThickness" Value="1.5"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="8,0,8,8"/>
+  </Style>
+  <!-- Tabs hang from the frame's top edge; the edited one is filled with its colour. -->
+  <Style Selector="RadioButton.ModeTab">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Margin" Value="0,0,4,0"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="RadioButton">
+        <Border Name="PART_Tab" Background="{DynamicResource SubtleBrush}" CornerRadius="0,0,7,7" Padding="10,4,10,5">
+          <!-- A plain (square) background, so the tab is hit even where the rounded border's
+               geometry isn't (headless tests draw no geometry) -->
+          <ContentPresenter Background="Transparent"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}"
+                            VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.ModeTab:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="RadioButton.ModeTab:checked">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="RadioButton.ModeTab:checked /template/ Border#PART_Tab">
+    <Setter Property="Background" Value="{DynamicResource ModeEdge}"/>
+  </Style>
+  <Style Selector="RadioButton.ModeTab:focus-visible /template/ Border#PART_Tab">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style Selector="Ellipse.LiveDot">
+    <Setter Property="Width" Value="7"/>
+    <Setter Property="Height" Value="7"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+  </Style>
+  <Style Selector="Button.ModeAction">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="0,0,7,7"/>
+    <Setter Property="Padding" Value="8,4,8,5"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.ModeAction.Live">
+    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
+  </Style>
+  <!-- The pencil, and its check mark while the tabs are in edit mode -->
+  <Style Selector="Button.EditModes">
+    <Setter Property="ToolTip.Tip" Value="Edit modes"/>
+  </Style>
+  <Style Selector="Button.EditModes.editing">
+    <Setter Property="ToolTip.Tip" Value="Done"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <!-- Edit mode: the inline rename box, the start-up mode's label, × and a picked-up tab -->
+  <Style Selector="TextBox.TabNameBox">
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MinWidth" Value="80"/>
+    <Setter Property="Padding" Value="4,0"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="TextBlock.StartLabel">
+    <Setter Property="FontSize" Value="10"/>
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.DeleteTab">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="3"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="ItemsControl.editing RadioButton.ModeTab">
+    <Setter Property="Cursor" Value="SizeAll"/>
+  </Style>
+  <Style Selector="ContentPresenter.dragging">
+    <Setter Property="Opacity" Value="0.85"/>
+  </Style>
+  <!-- The rows of the mode menu -->
+  <Style Selector="Button.MenuItem">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Padding" Value="8,5"/>
+  </Style>
+  <Style Selector="Button.MenuItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <Style Selector="Button.ModeAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+
+  <Style Selector="Border.ScreenText">
+    <Setter Property="IsVisible" Value="False"/>
+    <Setter Property="Background" Value="#05070A"/>
+    <Setter Property="CornerRadius" Value="3"/>
+    <Setter Property="Padding" Value="4,2"/>
+    <Setter Property="Width" Value="64"/>
+  </Style>
+  <Style Selector="Border.ScreenText TextBlock">
+    <Setter Property="FontSize" Value="10"/>
+    <Setter Property="Foreground" Value="#E8F0FF"/>
+    <Setter Property="TextAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.Case.dense Border.ScreenText">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <Style Selector="Border.Case.dense Panel.ScreenFull">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector="Ellipse.Cap">
+    <Setter Property="Width" Value="46"/>
+    <Setter Property="Height" Value="46"/>
+    <Setter Property="Margin" Value="0,7,0,0"/>
+    <Setter Property="Fill" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="Stroke" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+  </Style>
+  <Style Selector="Border.Case.dense Ellipse.Cap">
+    <Setter Property="Width" Value="32"/>
+    <Setter Property="Height" Value="32"/>
+  </Style>
+  <Style Selector="TextBlock.MainAction">
+    <Setter Property="Margin" Value="0,6,0,0"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <!-- "Not set" -->
+  <Style Selector="TextBlock.MainAction.none">
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Panel.SecondaryRow">
+    <Setter Property="Margin" Value="0,4,0,0"/>
+  </Style>
+  <Style Selector="DockPanel.SecondaryLine TextBlock">
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="StackPanel.ActionIcons">
+    <Setter Property="IsVisible" Value="False"/>
+    <Setter Property="Margin" Value="0,6,0,0"/>
+  </Style>
+  <Style Selector="Border.Case.dense StackPanel.ActionIcons">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <Style Selector="Border.Case.dense TextBlock.MainAction, Border.Case.dense Panel.SecondaryRow">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector="Border.GestureIcon">
+    <Setter Property="Width" Value="18"/>
+    <Setter Property="Height" Value="18"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style Selector="Border.GestureIcon PathIcon">
+    <Setter Property="Width" Value="11"/>
+    <Setter Property="Height" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="Border.GestureIcon.main">
+    <Setter Property="BorderBrush" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Border.GestureIcon.empty">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+  </Style>
+
+  <!-- ── Controls page: the inspector (spec §5) ──────────────────────────
+       A fixed column: a header, then one-line rows of 44 px, and the collapsed sections. -->
+  <Style Selector="Border.Inspector">
+    <Setter Property="Width" Value="380"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1,0,0,0"/>
+  </Style>
+  <Style Selector=":is(Window).compact Border.Inspector">
+    <Setter Property="Width" Value="300"/>
+  </Style>
+  <Style Selector=":is(Panel).InspectorHeader">
+    <Setter Property="Margin" Value="16,14"/>
+  </Style>
+  <Style Selector="TextBlock.InspectorKind">
+    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.InspectorHeading">
+    <Setter Property="FontSize" Value="16"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="TextBox.NameField">
+    <Setter Property="FontSize" Value="16"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Margin" Value="-6,0,0,0"/>
+  </Style>
+  <Style Selector="StackPanel.InspectorBody">
+    <Setter Property="Margin" Value="16,4,16,20"/>
+    <Setter Property="Spacing" Value="18"/>
+  </Style>
+  <Style Selector="TextBlock.GroupLabel">
+    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.ModePill">
+    <Setter Property="Background" Value="{DynamicResource ModeEdge}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
+    <Setter Property="Padding" Value="7,0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.ModePill TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="Border.InspectorRows">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="ClipToBounds" Value="True"/>
+  </Style>
+  <Style Selector="Border.RowDivider">
+    <Setter Property="Height" Value="1"/>
+    <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
+  </Style>
+  <Style Selector="Grid.InspectorRow">
+    <Setter Property="Height" Value="44"/>
+    <Setter Property="Margin" Value="12,0,8,0"/>
+  </Style>
+  <Style Selector="Grid.ActionRowGrid">
+    <Setter Property="Height" Value="44"/>
+  </Style>
+  <Style Selector="Button.InspectorRow">
+    <Setter Property="Height" Value="44"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="0"/>
+    <Setter Property="Padding" Value="12,0,8,0"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Button.InspectorRow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.RowLabel">
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <!-- The inspector's values wrap whole rather than end in "…" -->
+  <Style Selector="TextBlock.RowValue">
+    <Setter Property="Margin" Value="8,0,0,0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+  <Style Selector="TextBlock.RowValue.none">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Border.RowIcon">
+    <Setter Property="Width" Value="24"/>
+    <Setter Property="Height" Value="24"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+  </Style>
+  <Style Selector="Border.RowIcon PathIcon">
+    <Setter Property="Width" Value="13"/>
+    <Setter Property="Height" Value="13"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="PathIcon.RowChevron, PathIcon.SectionChevron">
+    <Setter Property="Width" Value="10"/>
+    <Setter Property="Height" Value="10"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Border.UsbTag">
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Padding" Value="4,0"/>
+    <Setter Property="Margin" Value="6,0,0,0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.UsbTag TextBlock">
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+  </Style>
+  <Style Selector="PathIcon.InvalidIcon">
+    <Setter Property="Width" Value="14"/>
+    <Setter Property="Height" Value="14"/>
+    <Setter Property="Margin" Value="6,0,0,0"/>
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+  </Style>
+  <Style Selector="Panel.TryCell">
+    <Setter Property="Width" Value="38"/>
+  </Style>
+  <Style Selector="Button.Try">
+    <Setter Property="Width" Value="26"/>
+    <Setter Property="Height" Value="26"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="CornerRadius" Value="5"/>
+  </Style>
+  <Style Selector="PathIcon.RowAdd">
+    <Setter Property="Width" Value="12"/>
+    <Setter Property="Height" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Grid.LightRowGrid">
+    <Setter Property="Height" Value="56"/>
+    <Setter Property="Margin" Value="12,0"/>
+    <Setter Property="ColumnSpacing" Value="12"/>
+  </Style>
+  <Style Selector="Border.LightPreview">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="6,4"/>
+    <Setter Property="MinWidth" Value="44"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.LightPreview > Panel">
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.InspectorSection">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+  </Style>
+  <Style Selector="ToggleButton.SectionHeader">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="12,9"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="ToggleButton.SectionHeader:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.SectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="ToggleButton.SectionHeader:checked PathIcon.SectionChevron">
+    <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+  </Style>
+  <Style Selector="StackPanel.SectionBody">
+    <Setter Property="Margin" Value="12,2,12,12"/>
+    <Setter Property="Spacing" Value="10"/>
+  </Style>
+  <Style Selector="ListBox.Curves">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="ListBox.Curves ListBoxItem">
+    <Setter Property="Margin" Value="0,0,6,0"/>
+    <Setter Property="Padding" Value="4,5"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="FontSize" Value="11.5"/>
+  </Style>
+  <Style Selector="ListBox.Curves ListBoxItem TextBlock">
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Path.CurveGraph">
+    <Setter Property="Width" Value="28"/>
+    <Setter Property="Height" Value="20"/>
+    <Setter Property="Stretch" Value="Fill"/>
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="ListBox.Curves ListBoxItem:selected Path.CurveGraph">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
+  <!-- ── Settings window: the compact layout below 1000 px (spec §3.1) ───
+       A 56 px icon-only sidebar (the entries' tooltips give the names) instead of 168 px. -->
+  <Style Selector="Border.SidebarWidth">
+    <Setter Property="Width" Value="168"/>
+  </Style>
+  <Style Selector=":is(Window).compact Border.SidebarWidth">
+    <Setter Property="Width" Value="56"/>
+  </Style>
+  <Style Selector="DockPanel.NavPane">
+    <Setter Property="Width" Value="148"/>
+  </Style>
+  <Style Selector=":is(Window).compact DockPanel.NavPane">
+    <Setter Property="Width" Value="36"/>
+  </Style>
+  <Style Selector=":is(Window).compact TextBlock.NavLabel, :is(Window).compact TextBlock.Brand, :is(Window).compact StackPanel.AboutFooter, :is(Window).compact TextBlock.FooterLabel">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector=":is(Window).compact ListBox.Nav ListBoxItem">
+    <Setter Property="Padding" Value="9,9"/>
+  </Style>
+  <Style Selector=":is(Window).compact StackPanel.ConnectionFooter">
+    <Setter Property="Margin" Value="4,8"/>
+  </Style>
+  <!-- The sidebar lies over the page, and its room in the layout (SidebarSpacer) keeps the page
+       beside it. In the compact layout, the mouse on the sidebar opens it to full width, over
+       the page; the icons keep their place. These come after the compact styles above, so they win. -->
+  <Style Selector="Grid.SidebarHost">
+    <Setter Property="Width" Value="168"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost">
+    <Setter Property="Width" Value="56"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover">
+    <Setter Property="Width" Value="168"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Border.Sidebar">
+    <Setter Property="BoxShadow" Value="4 0 16 0 #33000000"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover DockPanel.NavPane">
+    <Setter Property="Width" Value="148"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.FooterLabel">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+
   <!-- ── Settings window chrome ────────────────────────────────────────── -->
   <!-- The client area extends into the title bar; these fill the title bar row. -->
   <Style Selector="Border.Sidebar">
@@ -384,6 +892,187 @@
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <!-- ── Controls page dialogs (spec §6) ───────────────────────────────── -->
+  <!-- Up to 640 × 560, smaller in a small window, centred over the page. -->
+  <Style Selector="Border.DialogCard">
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Margin" Value="24"/>
+    <Setter Property="MaxWidth" Value="640"/>
+    <Setter Property="MaxHeight" Value="560"/>
+    <Setter Property="ClipToBounds" Value="True"/>
+    <Setter Property="BoxShadow" Value="0 8 28 0 #40000000"/>
+  </Style>
+  <Style Selector="Grid.DialogHeader">
+    <Setter Property="Margin" Value="16,12,10,12"/>
+  </Style>
+  <Style Selector="TextBlock.DialogTitle">
+    <Setter Property="FontSize" Value="15"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="TextBlock.DialogSubtitle">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.DialogSearch">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,1"/>
+    <Setter Property="Padding" Value="16,10"/>
+  </Style>
+  <Style Selector="TextBox.Search">
+    <Setter Property="FontSize" Value="14"/>
+  </Style>
+  <Style Selector="Grid.DialogFooter">
+    <Setter Property="Margin" Value="16,10"/>
+    <Setter Property="ColumnSpacing" Value="8"/>
+  </Style>
+  <Style Selector="Border.ActionListPane">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+  </Style>
+  <Style Selector="Button.ActionSectionHeader">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="6,8,6,4"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionSectionHeader PathIcon.SectionChevron">
+    <Setter Property="RenderTransform" Value="none"/>
+  </Style>
+  <Style Selector="Button.ActionSectionHeader.open PathIcon.SectionChevron">
+    <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+  </Style>
+  <Style Selector="Button.ActionItem">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+  </Style>
+  <Style Selector="Button.ActionItem PathIcon">
+    <Setter Property="Width" Value="14"/>
+    <Setter Property="Height" Value="14"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ActionItem.current /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionItem.picked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+  </Style>
+  <Style Selector="Button.ActionItem.picked PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.NoMatch">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+    <Setter Property="Margin" Value="8,10"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+  <!-- Target dialog rows: a radio or check mark, the icon, the name over its secondary text, and
+       the owner pill. -->
+  <Style Selector="Border.DialogCard.Narrow">
+    <Setter Property="MaxWidth" Value="520"/>
+  </Style>
+  <!-- The device dialog: as tall as its fields. -->
+  <Style Selector="Border.DialogCard.Small">
+    <Setter Property="MaxWidth" Value="400"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <!-- A device row's ⋯ menu shows on hover or focus (and while its menu is open). -->
+  <Style Selector="Grid.TargetRowHost Button.DeviceMenu">
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Grid.TargetRowHost:pointerover Button.DeviceMenu, Grid.TargetRowHost:focus-within Button.DeviceMenu, Grid.TargetRowHost Button.DeviceMenu:flyout-open">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <Style Selector="Border.TargetFooter">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,1,0,0"/>
+  </Style>
+  <Style Selector="Button.TargetRow">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="Button.TargetRow:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.TargetRow.current /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+  </Style>
+  <Style Selector="Button.TargetRow.on /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+  </Style>
+  <Style Selector="Border.Mark">
+    <Setter Property="Width" Value="16"/>
+    <Setter Property="Height" Value="16"/>
+    <Setter Property="BorderThickness" Value="1.5"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.Mark.radio">
+    <Setter Property="CornerRadius" Value="8"/>
+  </Style>
+  <Style Selector="Border.Mark.check">
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <Style Selector="Button.TargetRow.on Border.Mark">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Ellipse.RadioDot">
+    <Setter Property="Width" Value="6"/>
+    <Setter Property="Height" Value="6"/>
+    <Setter Property="Fill" Value="{DynamicResource OnAccentBrush}"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Path.CheckGlyph">
+    <Setter Property="Stroke" Value="{DynamicResource OnAccentBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.8"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Button.TargetRow.on Ellipse.RadioDot, Button.TargetRow.on Path.CheckGlyph">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <Style Selector="TextBlock.RowSecondary">
+    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Border.Pill">
+    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
+    <Setter Property="Padding" Value="7,1"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.Pill TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="StackPanel.Field">
+    <Setter Property="Spacing" Value="4"/>
+  </Style>
+  <Style Selector="StackPanel.Field ComboBox">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="TextBlock.FieldLabel">
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="TextBlock.FieldError">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
 
 </Styles>

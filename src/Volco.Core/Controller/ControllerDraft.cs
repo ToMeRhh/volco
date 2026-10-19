@@ -105,13 +105,15 @@ public static class ControllerDraft
     };
 
     /// <summary>Where a violation is: "Slider 1", "Button 2", "I2C bus 0", "Wi-Fi", "Screen
-    /// behaviour" or "Input tuning" (spec §8.7).</summary>
+    /// behaviour" or "Input tuning" (spec §8.7). Sliders and buttons are numbered from 1, as
+    /// everywhere a person reads them; <paramref name="item"/> is the 0-based input. I2C buses keep
+    /// their hardware numbers (0-3).</summary>
     public static string Target(byte item, ConfigField field) => field switch
     {
-        ConfigField.SliderPin => item == ValidationResult.NoItem ? "Sliders" : $"Slider {item}",
+        ConfigField.SliderPin => item == ValidationResult.NoItem ? "Sliders" : $"Slider {item + 1}",
         ConfigField.ButtonPin or ConfigField.LedPin or ConfigField.PairPinA or ConfigField.PairPinB
             or ConfigField.ScreenBus or ConfigField.ScreenAddress
-            => item == ValidationResult.NoItem ? "Buttons" : $"Button {item}",
+            => item == ValidationResult.NoItem ? "Buttons" : $"Button {item + 1}",
         ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock => $"I2C bus {item}",
         ConfigField.UdpSsid or ConfigField.UdpPassword or ConfigField.UdpPcIp or ConfigField.UdpPort => "Wi-Fi",
         ConfigField.ScreenValue => "Screen behaviour",

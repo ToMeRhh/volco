@@ -6,7 +6,8 @@
         x:Class="Volco.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Volco Settings"
-        Width="860" Height="660" MinWidth="820" MinHeight="520"
+        Width="1100" Height="720" MinWidth="820" MinHeight="520"
+        Classes.compact="{Binding $self.Bounds.Width, Converter={x:Static conv:LayoutConverters.IsCompact}}"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
         WindowDecorations="Full"
@@ -29,61 +30,70 @@
 
   <!-- The client area extends into the title bar: the caption buttons are drawn over the
        top-right corner, and the top row of each pane is the drag region. -->
-  <Grid ColumnDefinitions="208,*" RowDefinitions="40,*">
-    <!-- Sidebar, running up to the top edge, with the brand in the title bar row -->
-    <Border Grid.Column="0" Grid.RowSpan="2" Classes="Sidebar"/>
-    <Border Grid.Column="0" Name="SidebarTitleBar" Classes="TitleBarDrag"
-            WindowDecorationProperties.ElementRole="TitleBar">
-      <StackPanel Orientation="Horizontal" Spacing="10" Margin="18,0,0,0" VerticalAlignment="Center"
-                  IsHitTestVisible="False">
-        <Border Classes="BrandMark">
-          <PathIcon Data="{StaticResource Icon.Sliders}" Width="12" Height="12"
-                    Foreground="{DynamicResource OnAccentBrush}"/>
-        </Border>
-        <TextBlock Name="BrandText" Text="Volco" Classes="Brand" VerticalAlignment="Center"/>
-      </StackPanel>
-    </Border>
+  <Grid ColumnDefinitions="Auto,*" RowDefinitions="40,*">
+    <!-- The sidebar's room in the layout: 168 px, or 56 in the compact layout -->
+    <Border Name="SidebarSpacer" Grid.Column="0" Grid.RowSpan="2" Classes="SidebarWidth"/>
+
+    <!-- The sidebar, running up to the top edge, with the brand in the title bar row. It lies over
+         the page: in the compact layout it shows icons only, and opens over the page while the
+         mouse is on it. -->
+    <Grid Name="SidebarHost" Grid.ColumnSpan="2" Grid.RowSpan="2" RowDefinitions="40,*" ZIndex="1"
+          HorizontalAlignment="Left" Classes="SidebarHost">
+      <Border Name="Sidebar" Grid.RowSpan="2" Classes="Sidebar"/>
+      <Border Name="SidebarTitleBar" Classes="TitleBarDrag"
+              WindowDecorationProperties.ElementRole="TitleBar">
+        <StackPanel Orientation="Horizontal" Spacing="10" Margin="18,0,0,0" VerticalAlignment="Center"
+                    IsHitTestVisible="False">
+          <Border Classes="BrandMark">
+            <PathIcon Data="{StaticResource Icon.Sliders}" Width="12" Height="12"
+                      Foreground="{DynamicResource OnAccentBrush}"/>
+          </Border>
+          <TextBlock Name="BrandText" Text="Volco" Classes="Brand" VerticalAlignment="Center"/>
+        </StackPanel>
+      </Border>
+
+      <DockPanel Grid.Row="1" Margin="10,4,10,12" Classes="NavPane">
+        <StackPanel Name="ConnectionFooter" DockPanel.Dock="Bottom" Orientation="Horizontal" Classes="ConnectionFooter"
+                    ToolTip.Tip="{Binding Connection.FooterText}"
+                    Spacing="8" Margin="12,8">
+          <Ellipse Name="FooterDot" Width="8" Height="8" VerticalAlignment="Center"
+                   Fill="{Binding Connection.StatusTone, Converter={StaticResource ToneToBrush}}"/>
+          <TextBlock Name="FooterText" Classes="Caption FooterLabel" VerticalAlignment="Center"
+                     Text="{Binding Connection.FooterText}"/>
+        </StackPanel>
+        <StackPanel Name="AboutFooter" DockPanel.Dock="Bottom" Spacing="2" Margin="12,8,12,0" Classes="AboutFooter">
+          <!-- Non-release builds carry their branch, commit and build time as the tooltip -->
+          <TextBlock Name="VersionText" Classes="Caption" Text="{Binding About.VersionText}"
+                     TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding About.BuildDetails}"/>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <HyperlinkButton Name="RepoLink" Padding="0" FontSize="12" Content="GitHub"
+                             NavigateUri="{Binding About.RepoUri}" ToolTip.Tip="{Binding About.RepoUri}"/>
+            <HyperlinkButton Name="NoticesLink" Padding="0" FontSize="12" Content="Notices"
+                             ToolTip.Tip="Third-party notices" Command="{Binding About.OpenNoticesCommand}"/>
+          </StackPanel>
+        </StackPanel>
+        <ListBox Name="NavList" Classes="Nav">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="views:NavItem">
+              <Grid ColumnDefinitions="Auto,Auto,*,Auto" ToolTip.Tip="{Binding Label}">
+                <Border Classes="NavMarker" Width="3" Height="16" CornerRadius="2" Margin="-10,0,8,0"
+                        Background="{DynamicResource AccentBrush}"/>
+                <PathIcon Grid.Column="1" Data="{Binding Icon}" Width="16" Height="16"
+                          Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Column="2" Classes="NavLabel" Text="{Binding Label}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                <Ellipse Name="NavDot" Grid.Column="3" Width="7" Height="7" Margin="8,0,4,0" VerticalAlignment="Center"
+                         Fill="{DynamicResource AccentBrush}"
+                         AutomationProperties.Name="Controller needs attention"
+                         IsVisible="{Binding ShowDot}"/>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Grid>
+
     <Border Grid.Column="1" Name="PageTitleBar" Classes="TitleBarDrag"
             WindowDecorationProperties.ElementRole="TitleBar"/>
-
-    <!-- Navigation, with the connection state always visible at the bottom and About above it -->
-    <DockPanel Grid.Column="0" Grid.Row="1" Margin="10,4,10,12">
-      <StackPanel Name="ConnectionFooter" DockPanel.Dock="Bottom" Orientation="Horizontal"
-                  Spacing="8" Margin="12,8">
-        <Ellipse Name="FooterDot" Width="8" Height="8" VerticalAlignment="Center"
-                 Fill="{Binding Connection.StatusTone, Converter={StaticResource ToneToBrush}}"/>
-        <TextBlock Name="FooterText" Classes="Caption" VerticalAlignment="Center"
-                   Text="{Binding Connection.FooterText}"/>
-      </StackPanel>
-      <StackPanel Name="AboutFooter" DockPanel.Dock="Bottom" Spacing="2" Margin="12,8,12,0">
-        <!-- Non-release builds carry their branch, commit and build time as the tooltip -->
-        <TextBlock Name="VersionText" Classes="Caption" Text="{Binding About.VersionText}"
-                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding About.BuildDetails}"/>
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <HyperlinkButton Name="RepoLink" Padding="0" FontSize="12" Content="GitHub"
-                           NavigateUri="{Binding About.RepoUri}" ToolTip.Tip="{Binding About.RepoUri}"/>
-          <HyperlinkButton Name="NoticesLink" Padding="0" FontSize="12" Content="Notices"
-                           ToolTip.Tip="Third-party notices" Command="{Binding About.OpenNoticesCommand}"/>
-        </StackPanel>
-      </StackPanel>
-      <ListBox Name="NavList" Classes="Nav">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="views:NavItem">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-              <Border Classes="NavMarker" Width="3" Height="16" CornerRadius="2" Margin="-10,0,8,0"
-                      Background="{DynamicResource AccentBrush}"/>
-              <PathIcon Grid.Column="1" Data="{Binding Icon}" Width="16" Height="16"
-                        Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <TextBlock Grid.Column="2" Text="{Binding Label}" Margin="12,0,0,0" VerticalAlignment="Center"/>
-              <Ellipse Name="NavDot" Grid.Column="3" Width="7" Height="7" Margin="8,0,4,0" VerticalAlignment="Center"
-                       Fill="{DynamicResource AccentBrush}"
-                       AutomationProperties.Name="Controller needs attention"
-                       IsVisible="{Binding ShowDot}"/>
-            </Grid>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-    </DockPanel>
 
     <!-- The page, with the undo message floating over its bottom edge -->
     <Panel Grid.Column="1" Grid.Row="1">
@@ -103,7 +113,7 @@
     </Panel>
 
     <!-- Third-party notices: a modal card over the whole window; Escape or a click outside closes it -->
-    <Border Name="NoticesOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" Background="#66000000"
+    <Border Name="NoticesOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
             IsVisible="{Binding About.IsNoticesOpen}">
       <Border Name="NoticesCard" Classes="Panel" Padding="24" Margin="40" MaxWidth="720"
               HorizontalAlignment="Center" BoxShadow="0 8 28 0 #40000000">

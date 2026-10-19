@@ -62,7 +62,7 @@ public class ControllerDisplayPressedTests
         => new(action, ControllerDisplay.ShowsWhenPressed(Binding(c), action), error, step, from, expect);
 
     private ButtonDisplay? Show(AppConfig c, PressFeedback? feedback)
-        => ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio, null, _status,
+        => ControllerDisplay.Compute(c, AppConfig.DefaultModeId, _audio, null, _status,
                                      feedback is null ? null : new Dictionary<int, PressFeedback> { [0] = feedback })[0];
 
     private ScreenContent ScreenOf(AppConfig c, PressFeedback? feedback) => Assert.IsType<ScreenDisplay>(Show(c, feedback)).Content;
@@ -118,7 +118,7 @@ public class ControllerDisplayPressedTests
         Assert.False(ControllerDisplay.ShowsWhenPressed(b, b.SinglePress));            // the first action: shown anyway
         Assert.True(ControllerDisplay.ShowsWhenPressed(b, b.DoublePress));
         Assert.True(ControllerDisplay.ShowsWhenPressed(b, b.LongPress));
-        b.LongPress = new ButtonActionConfig { Action = ButtonActionType.NextPreset };
+        b.LongPress = new ButtonActionConfig { Action = ButtonActionType.NextMode };
         Assert.False(ControllerDisplay.ShowsWhenPressed(b, b.LongPress));              // announced on its own
         b.LongPress = new ButtonActionConfig();
         Assert.False(ControllerDisplay.ShowsWhenPressed(b, b.LongPress));              // Do nothing

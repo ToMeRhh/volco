@@ -8,7 +8,7 @@ using Volco.Core.Devices;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>One device card on the Devices page.</summary>
+/// <summary>One device's nickname and icon, as the device dialog edits them.</summary>
 public sealed partial class DeviceItemViewModel : ObservableObject
 {
     private readonly DevicesViewModel _owner;
@@ -29,9 +29,6 @@ public sealed partial class DeviceItemViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Preview))]
     private ScreenIcon _icon;
-
-    [ObservableProperty]
-    private bool _isExpanded;
 
     public IReadOnlyList<IconChoiceViewModel> IconChoices { get; }
 
@@ -77,19 +74,14 @@ public sealed partial class DeviceItemViewModel : ObservableObject
 
     public string UsedBy => _owner.UsedBy(Id);
     public bool CanForget => !IsConnected && UsedBy.Length == 0;
-    public bool ShowUsedBy => !IsConnected && UsedBy.Length > 0;
     /// <summary>Re-reads "Used by" (a slider or button action changed on another page).</summary>
     internal void RefreshUsage()
     {
         OnPropertyChanged(nameof(UsedBy));
         OnPropertyChanged(nameof(CanForget));
-        OnPropertyChanged(nameof(ShowUsedBy));
     }
 
     public string FooterText => $"Windows name: {WindowsName} · {(Flow == AudioFlow.Render ? "Output" : "Input")}";
-
-    [RelayCommand]
-    private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     [RelayCommand]
     private void Forget() => _owner.Forget(this);

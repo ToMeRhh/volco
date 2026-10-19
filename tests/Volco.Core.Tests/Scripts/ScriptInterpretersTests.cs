@@ -97,6 +97,8 @@ public class ScriptInterpretersTests
         Assert.Equal("backup now", CommandPath.DisplayName(new CommandConfig { Path = @"C:\My Scripts\backup now.bat" }));
         Assert.Equal("Backup", CommandPath.DisplayName(new CommandConfig { Path = @"C:\x.bat", Name = " Backup " }));
         Assert.Equal("rungameid/570", CommandPath.DisplayName(new CommandConfig { Path = "steam://rungameid/570" }));
+        Assert.Equal("sound", CommandPath.DisplayName(new CommandConfig { Path = "ms-settings:sound" }));
+        Assert.Equal("lights", CommandPath.DisplayName(new CommandConfig { Path = "\"C:\\Scripts\\lights.bat\"" }));
         Assert.Equal("", CommandPath.DisplayName(new CommandConfig()));
         Assert.Equal("", CommandPath.DisplayName(null));
     }

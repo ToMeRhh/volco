@@ -40,7 +40,8 @@ internal static class Program
             var startWithSystem = Environment.ProcessPath is { } exe ? new RunKeyStartWithSystem(exe) : null;
             return new PlatformServices(engine, ready, new Win32WindowEffects(),
                                         new EspDotNetFirmwareFlasher(), new EmbeddedFirmwareSource(),
-                                        new MediaSessions(), new ProgramLauncher(), startWithSystem);
+                                        new MediaSessions(), new ProgramLauncher(), startWithSystem,
+                                        new ShellAppIcons());
         });
     }
 

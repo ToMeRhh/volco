@@ -5,7 +5,7 @@ namespace Volco.App.Osd;
 
 /// <summary>Which icon the OSD shows. <see cref="Device"/> is a device's own icon
 /// (<see cref="VolumeOsdViewModel.DeviceIcon"/>).</summary>
-internal enum OsdGlyph { Volume, Muted, Speaker, Preset, Device }
+internal enum OsdGlyph { Volume, Muted, Speaker, Mode, Device }
 
 /// <summary>
 /// Pure presentation state of the volume OSD (no Avalonia types, so plain [Fact]-testable).
@@ -36,10 +36,15 @@ internal sealed class VolumeOsdViewModel
     /// draws a slash over it.</summary>
     public bool DeviceIconMuted => Glyph == OsdGlyph.Device && Muted;
 
-    private bool Muted { get; set; }
+    /// <summary>The target is muted (the device icon or app icon is dimmed and struck through).</summary>
+    public bool Muted { get; private set; }
 
-    /// <summary>False for a preset switch, which has no level to show.</summary>
-    public bool ShowsLevel => Glyph != OsdGlyph.Preset;
+    /// <summary>An apps slider's apps: the window shows the first one's icon when it has one, in
+    /// place of <see cref="Glyph"/>. Empty for everything else.</summary>
+    public IReadOnlyList<string> Apps { get; private set; } = Array.Empty<string>();
+
+    /// <summary>False for a mode switch, which has no level to show.</summary>
+    public bool ShowsLevel => Glyph != OsdGlyph.Mode;
 
     /// <summary>Level bar opacity: dimmed while muted.</summary>
     public double LevelBarOpacity { get; private set; } = 1.0;
@@ -49,25 +54,26 @@ internal sealed class VolumeOsdViewModel
     {
         var level = Math.Clamp(n.Level * 100.0, 0, 100);
 
-        var valueText = n.Kind == OsdKind.Preset ? ""
+        var valueText = n.Kind == OsdKind.Mode ? ""
             : (n.Kind is OsdKind.Mute or OsdKind.Device) && n.Muted
             ? "Muted"
             : $"{Math.Round(level, MidpointRounding.AwayFromZero):0}%";
-        // A preset switch has no level: the preset's name, "Preset" on the right, and no bar.
+        // A mode switch has no level: the mode's name, "Mode" on the right, and no bar.
         var label = n.Label;
-        if (n.Kind == OsdKind.Preset) valueText = "Preset";
+        if (n.Kind == OsdKind.Mode) valueText = "Mode";
 
         var deviceIcon = n.Kind is OsdKind.Device or OsdKind.Mute or OsdKind.Volume ? n.Icon : null;
-        var glyph = n.Kind == OsdKind.Preset ? OsdGlyph.Preset
+        var glyph = n.Kind == OsdKind.Mode ? OsdGlyph.Mode
             : deviceIcon is not null ? OsdGlyph.Device
             : n.Muted ? OsdGlyph.Muted
             : n.Kind == OsdKind.Device ? OsdGlyph.Speaker
             : OsdGlyph.Volume;
         var barOpacity = n.Muted ? 0.4 : 1.0;
+        var apps = n.Kind == OsdKind.Volume ? n.Apps ?? Array.Empty<string>() : Array.Empty<string>();
 
         var changed = Label != label || Level != level || ValueText != valueText
                       || Glyph != glyph || DeviceIcon != deviceIcon || Muted != n.Muted
-                      || LevelBarOpacity != barOpacity;
+                      || LevelBarOpacity != barOpacity || !Apps.SequenceEqual(apps);
         Label = label;
         Level = level;
         ValueText = valueText;
@@ -75,6 +81,7 @@ internal sealed class VolumeOsdViewModel
         DeviceIcon = deviceIcon;
         Muted = n.Muted;
         LevelBarOpacity = barOpacity;
+        Apps = apps;
         return changed;
     }
 }

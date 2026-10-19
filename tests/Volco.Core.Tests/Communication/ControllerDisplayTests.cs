@@ -41,11 +41,11 @@ public class ControllerDisplayTests
         return c;
     }
 
-    private ScreenContent ScreenOf(AppConfig c, int button = 0, string preset = AppConfig.DefaultPresetId, int? step = null)
-        => Assert.IsType<ScreenDisplay>(ControllerDisplay.Compute(c, preset, _audio, step)[button]).Content;
+    private ScreenContent ScreenOf(AppConfig c, int button = 0, string mode = AppConfig.DefaultModeId, int? step = null)
+        => Assert.IsType<ScreenDisplay>(ControllerDisplay.Compute(c, mode, _audio, step)[button]).Content;
 
-    private byte LedOf(AppConfig c, int button = 0, string preset = AppConfig.DefaultPresetId, int? step = null)
-        => Assert.IsType<LedDisplay>(ControllerDisplay.Compute(c, preset, _audio, step)[button]).Value;
+    private byte LedOf(AppConfig c, int button = 0, string mode = AppConfig.DefaultModeId, int? step = null)
+        => Assert.IsType<LedDisplay>(ControllerDisplay.Compute(c, mode, _audio, step)[button]).Value;
 
     private static IndicatorKind[] Leds(int n) => Enumerable.Repeat(IndicatorKind.Led, n).ToArray();
 
@@ -147,28 +147,28 @@ public class ControllerDisplayTests
     }
 
     [Fact]
-    public void NextPreset_ShowsDotsAndTheLivePresetsName()
+    public void NextMode_ShowsDotsAndTheLiveModesName()
     {
-        var c = Config(null, Act(ButtonActionType.NextPreset));
-        c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
-        c.Buttons[0].GetOrAddBinding("gaming").SinglePress = Act(ButtonActionType.NextPreset);
+        var c = Config(null, Act(ButtonActionType.NextMode));
+        c.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
+        c.Buttons[0].GetOrAddBinding("gaming").SinglePress = Act(ButtonActionType.NextMode);
         Assert.Equal(ScreenContent.Dots(0, 2, ScreenIcon.Presets, "Default"), ScreenOf(c));
         Assert.Equal(ScreenContent.Dots(1, 2, ScreenIcon.Presets, "Gaming"), ScreenOf(c, 0, "gaming"));
     }
 
     [Fact]
-    public void GoToPreset_ShowsTheTargetsName()
+    public void GoToMode_ShowsTheTargetsName()
     {
-        var c = Config(null, new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "gaming" });
-        c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        var c = Config(null, new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "gaming" });
+        c.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
         Assert.Equal(ScreenContent.Dots(0, 2, ScreenIcon.Presets, "Gaming"), ScreenOf(c));
     }
 
     [Fact]
-    public void MoreThanTwelvePresets_TopShowsNOfN()
+    public void MoreThanTwelveModes_TopShowsNOfN()
     {
-        var c = Config(null, Act(ButtonActionType.NextPreset));
-        for (int i = 2; i <= 13; i++) c.Presets.Add(new PresetConfig { Id = $"p{i}", Name = $"P{i}" });
+        var c = Config(null, Act(ButtonActionType.NextMode));
+        for (int i = 2; i <= 13; i++) c.Modes.Add(new ModeConfig { Id = $"p{i}", Name = $"P{i}" });
         Assert.Equal(ScreenContent.Text("1/13", ScreenIcon.Presets, false, "Default"), ScreenOf(c));
     }
 
@@ -195,7 +195,7 @@ public class ControllerDisplayTests
     public void MoreControllerButtonsThanCards_ExtraButtonsAreNotSetUp()
     {
         var c = Config(new[] { IndicatorKind.Screen, IndicatorKind.Screen, IndicatorKind.Led }, Act(ButtonActionType.MuteCurrentOutput));
-        var all = ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio);
+        var all = ControllerDisplay.Compute(c, AppConfig.DefaultModeId, _audio);
         Assert.Equal(3, all.Count);
         Assert.Equal(new ScreenDisplay(ScreenContent.Blank), all[1]);
         Assert.Equal(new LedDisplay(0), all[2]);
@@ -205,34 +205,34 @@ public class ControllerDisplayTests
     public void FewerControllerButtonsThanCards_ExtraCardsIgnored()
     {
         var c = Config(new[] { IndicatorKind.Led }, Act(ButtonActionType.None), Act(ButtonActionType.MuteCurrentOutput));
-        Assert.Single(ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio));
+        Assert.Single(ControllerDisplay.Compute(c, AppConfig.DefaultModeId, _audio));
     }
 
     [Fact]
     public void KindNoneOrUnknown_IsNull_NoControllerInfo_IsEmpty()
     {
         var c = Config(new[] { IndicatorKind.None, (IndicatorKind)9 }, Act(ButtonActionType.MuteCurrentOutput), Act(ButtonActionType.MuteCurrentOutput));
-        Assert.All(ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio), Assert.Null);
+        Assert.All(ControllerDisplay.Compute(c, AppConfig.DefaultModeId, _audio), Assert.Null);
         c.Controller = null;
-        Assert.Empty(ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio));
+        Assert.Empty(ControllerDisplay.Compute(c, AppConfig.DefaultModeId, _audio));
     }
 
     // ── LED values (the rules the old 0x05 feedback had) ─────────────────────────────
 
     [Fact]
-    public void LedValues_FollowTheLivePreset()
+    public void LedValues_FollowTheLiveMode()
     {
         var c = Config(new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.LedPair },
             Act(ButtonActionType.MuteCurrentOutput),
             new ButtonActionConfig { Action = ButtonActionType.SetOutputDevice, Device = Ref(Headphones) },
             new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice, Device = Ref(Speakers), DeviceB = Ref(Headphones) },
-            Act(ButtonActionType.NextPreset));
-        c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
-        c.Buttons[3].GetOrAddBinding("gaming").SinglePress = Act(ButtonActionType.NextPreset);
+            Act(ButtonActionType.NextMode));
+        c.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
+        c.Buttons[3].GetOrAddBinding("gaming").SinglePress = Act(ButtonActionType.NextMode);
         _audio.DeviceStates["spk"] = (1f, true);
 
         Assert.Equal(new byte[] { 1, 0, 1, 1 },
-            ControllerDisplay.Compute(c, AppConfig.DefaultPresetId, _audio).Select(d => ((LedDisplay)d!).Value));
+            ControllerDisplay.Compute(c, AppConfig.DefaultModeId, _audio).Select(d => ((LedDisplay)d!).Value));
         _audio.DefaultRender = Headphones;
         Assert.Equal(1, LedOf(c, 1));
         Assert.Equal(2, LedOf(c, 2));
@@ -269,14 +269,14 @@ public class ControllerDisplayTests
     }
 
     [Fact]
-    public void SingleLed_GoToPreset_IsLitWhileThatPresetIsLive_NextPresetIsDark()
+    public void SingleLed_GoToMode_IsLitWhileThatModeIsLive_NextModeIsDark()
     {
         var c = Config(Leds(2),
-            new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "gaming" },
-            Act(ButtonActionType.NextPreset));
-        c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+            new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "gaming" },
+            Act(ButtonActionType.NextMode));
+        c.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
         c.Buttons[0].GetOrAddBinding("gaming").SinglePress = c.Buttons[0].Default().SinglePress;
-        c.Buttons[1].GetOrAddBinding("gaming").SinglePress = Act(ButtonActionType.NextPreset);
+        c.Buttons[1].GetOrAddBinding("gaming").SinglePress = Act(ButtonActionType.NextMode);
 
         Assert.Equal(0, LedOf(c, 0));
         Assert.Equal(1, LedOf(c, 0, "gaming"));
@@ -284,12 +284,12 @@ public class ControllerDisplayTests
         Assert.Equal(0, LedOf(c, 1, "gaming"));
     }
 
-    // ── Announcing a preset change ────────────────────────────────────────────
+    // ── Announcing a mode change ────────────────────────────────────────────
 
     [Fact]
-    public void Announce_SingleLedWithNextPreset_BlinksThreeTimes_ThenGoesDark()
+    public void Announce_SingleLedWithNextMode_BlinksThreeTimes_ThenGoesDark()
     {
-        var c = Config(Leds(1), Act(ButtonActionType.NextPreset));
+        var c = Config(Leds(1), Act(ButtonActionType.NextMode));
         var steps = Enumerable.Range(0, ControllerDisplay.AnnounceSteps).Select(i => LedOf(c, step: i));
         Assert.Equal(new byte[] { 1, 0, 1, 0, 1, 0 }, steps);
         Assert.Equal(0, LedOf(c, step: ControllerDisplay.AnnounceSteps));
@@ -297,33 +297,33 @@ public class ControllerDisplayTests
     }
 
     [Fact]
-    public void Announce_SingleLedFollowingAnotherAction_BlinksWhenHoldIsAPresetAction()
+    public void Announce_SingleLedFollowingAnotherAction_BlinksWhenHoldIsAModeAction()
     {
         var c = Config(Leds(2), Act(ButtonActionType.MuteCurrentOutput), Act(ButtonActionType.MuteCurrentOutput));
-        c.Buttons[0].Default().LongPress = Act(ButtonActionType.NextPreset);
+        c.Buttons[0].Default().LongPress = Act(ButtonActionType.NextMode);
         _audio.DeviceStates["spk"] = (1f, true);
         Assert.Equal(new byte[] { 1, 0 }, new[] { LedOf(c, 0, step: 0), LedOf(c, 0, step: 1) });
-        Assert.Equal(1, LedOf(c, 1, step: 1));    // no preset action: its own light, no blink
+        Assert.Equal(1, LedOf(c, 1, step: 1));    // no mode action: its own light, no blink
         Assert.Equal(1, LedOf(c, 0));             // after the announce: muted again
     }
 
     [Fact]
-    public void Announce_SingleLedWithGoToPreset_AndLedPairs_DoNotBlink()
+    public void Announce_SingleLedWithGoToMode_AndLedPairs_DoNotBlink()
     {
         var c = Config(new[] { IndicatorKind.Led, IndicatorKind.LedPair },
-            new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = AppConfig.DefaultPresetId },
-            Act(ButtonActionType.NextPreset));
+            new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = AppConfig.DefaultModeId },
+            Act(ButtonActionType.NextMode));
         Assert.Equal(1, LedOf(c, 0, step: 1));
         Assert.Equal(1, LedOf(c, 1, step: 1));
     }
 
     [Fact]
-    public void Announce_ScreenShowingAnotherAction_FlashesTheLivePreset_ThenShowsItsAction()
+    public void Announce_ScreenShowingAnotherAction_FlashesTheLiveMode_ThenShowsItsAction()
     {
         var c = Config(null, Act(ButtonActionType.MuteCurrentOutput), Act(ButtonActionType.MuteCurrentOutput));
-        c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        c.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
         foreach (var b in c.Buttons) b.GetOrAddBinding("gaming").SinglePress = Act(ButtonActionType.MuteCurrentOutput);
-        c.Buttons[0].GetOrAddBinding("gaming").DoublePress = Act(ButtonActionType.NextPreset);
+        c.Buttons[0].GetOrAddBinding("gaming").DoublePress = Act(ButtonActionType.NextMode);
         var mute = ScreenContent.Text("LIVE", ScreenIcon.Speaker, false, "Speakers");
 
         var flash = ScreenContent.Dots(1, 2, ScreenIcon.Presets, "Gaming");
@@ -331,14 +331,14 @@ public class ControllerDisplayTests
         Assert.Equal(flash, ScreenOf(c, 0, "gaming", step: ControllerDisplay.AnnounceSteps - 1));
         Assert.Equal(mute, ScreenOf(c, 0, "gaming", step: ControllerDisplay.AnnounceSteps));
         Assert.Equal(mute, ScreenOf(c, 0, "gaming"));
-        Assert.Equal(mute, ScreenOf(c, 1, "gaming", step: 0));   // no preset action: no flash
+        Assert.Equal(mute, ScreenOf(c, 1, "gaming", step: 0));   // no mode action: no flash
     }
 
     [Fact]
-    public void Announce_ScreenAlreadyShowingAPresetAction_IsUnchanged()
+    public void Announce_ScreenAlreadyShowingAModeAction_IsUnchanged()
     {
-        var c = Config(null, new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = AppConfig.DefaultPresetId });
-        c.Buttons[0].Default().LongPress = Act(ButtonActionType.NextPreset);
+        var c = Config(null, new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = AppConfig.DefaultModeId });
+        c.Buttons[0].Default().LongPress = Act(ButtonActionType.NextMode);
         Assert.Equal(ScreenOf(c), ScreenOf(c, step: 0));
     }
 
@@ -346,20 +346,20 @@ public class ControllerDisplayTests
     public void AnnounceRules_FollowTheActionsThatAreSet()
     {
         var b = new ButtonBindingConfig();
-        Assert.False(ControllerDisplay.BlinksOnPresetChange(b));
-        Assert.False(ControllerDisplay.FlashesPresetName(b));
+        Assert.False(ControllerDisplay.BlinksOnModeChange(b));
+        Assert.False(ControllerDisplay.FlashesModeName(b));
 
-        b.SinglePress = Act(ButtonActionType.NextPreset);
-        Assert.True(ControllerDisplay.BlinksOnPresetChange(b));
-        Assert.False(ControllerDisplay.FlashesPresetName(b));
+        b.SinglePress = Act(ButtonActionType.NextMode);
+        Assert.True(ControllerDisplay.BlinksOnModeChange(b));
+        Assert.False(ControllerDisplay.FlashesModeName(b));
 
         b.SinglePress = Act(ButtonActionType.MuteCurrentInput);
-        b.LongPress = new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "x" };
-        Assert.True(ControllerDisplay.BlinksOnPresetChange(b));
-        Assert.True(ControllerDisplay.FlashesPresetName(b));
+        b.LongPress = new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "x" };
+        Assert.True(ControllerDisplay.BlinksOnModeChange(b));
+        Assert.True(ControllerDisplay.FlashesModeName(b));
 
-        b.SinglePress = Act(ButtonActionType.None);    // Hold's "Go to preset" now decides the light
-        Assert.False(ControllerDisplay.BlinksOnPresetChange(b));
-        Assert.False(ControllerDisplay.FlashesPresetName(b));
+        b.SinglePress = Act(ButtonActionType.None);    // Hold's "Go to mode" now decides the light
+        Assert.False(ControllerDisplay.BlinksOnModeChange(b));
+        Assert.False(ControllerDisplay.FlashesModeName(b));
     }
 }

@@ -59,16 +59,16 @@ public class SettingsWindowTests
 
         var expected = new[]
         {
-            typeof(GeneralPage), typeof(ControllerPage), typeof(SlidersPage), typeof(ButtonsPage),
+            typeof(GeneralPage), typeof(ControlsPage), typeof(ControllerPage),
         };
-        Assert.Equal(4, nav.ItemCount);
+        Assert.Equal(3, nav.ItemCount);
         for (var i = 0; i < expected.Length; i++)
         {
             nav.SelectedIndex = i;
             Assert.IsType(expected[i], host.Content);
         }
         Assert.Equal(
-            new[] { "General", "Hardware", "Sliders", "Buttons" },
+            new[] { "General", "Controls", "Hardware" },
             nav.Items.Cast<NavItem>().Select(n => n.Label).ToArray());
     }
 
@@ -78,22 +78,11 @@ public class SettingsWindowTests
         var window = Create();
         window.Show();
 
-        window.ShowPage("buttons");
-        Assert.IsType<ButtonsPage>(window.CurrentPage);
+        window.ShowPage("controls");
+        Assert.IsType<ControlsPage>(window.CurrentPage);
 
         window.ShowPage("general");
         Assert.IsType<GeneralPage>(window.CurrentPage);
-    }
-
-    [AvaloniaFact]
-    public void SettingsWindow_GeneralHoldsTheDevicesSection()
-    {
-        var window = Create();
-        window.Show();
-
-        var general = Assert.IsType<GeneralPage>(window.CurrentPage);
-        Assert.NotNull(general.Devices);
-        Assert.Same(window, TopLevel.GetTopLevel(general.Devices));
     }
 
     [AvaloniaFact]
@@ -226,28 +215,18 @@ public class SettingsWindowTests
         Assert.False(toast.IsVisible);
     }
 
-    [AvaloniaFact]
-    public void SettingsWindow_Size()
-    {
-        var window = Create();
-        Assert.Equal(820, window.MinWidth);
-        Assert.Equal(520, window.MinHeight);
-        Assert.Equal(860, window.Width);
-        Assert.Equal(660, window.Height);
-    }
-
     /// <summary>
     /// At the smallest window size every page still fits: nothing reaches past the page's right
     /// edge, and no wrapping text is squeezed into a narrow column (a letter or word per line).
-    /// The Buttons page is the widest: two presets, every card open, a program action (path box
-    /// and Browse) on one and a toggle on another.
+    /// The Controls page shows a button with a program action (its USB tag and warning) in the
+    /// inspector, with Timing open, in the compact layout.
     /// </summary>
     [AvaloniaFact]
     public void SettingsWindow_AtItsMinimumSize_EveryPageFits()
     {
         var window = Create(c =>
         {
-            c.Presets.Add(new PresetConfig { Id = "gaming", Name = "A preset with a rather long name" });
+            c.Modes.Add(new ModeConfig { Id = "gaming", Name = "A mode with a rather long name" });
             c.Buttons[0].Default().SinglePress.Action = ButtonActionType.OpenProgram;
             c.Buttons[0].Default().SinglePress.Command = new CommandConfig { Path = @"C:\Program Files\Some App\app.exe" };
             c.Buttons[1].Default().SinglePress.Action = ButtonActionType.ToggleOutputDevice;
@@ -263,10 +242,10 @@ public class SettingsWindowTests
         {
             nav.SelectedIndex = i;
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            if (host.Content is ButtonsPage buttons && buttons.DataContext is ButtonsViewModel bvm)
+            if (host.Content is ControlsPage { DataContext: ControlsViewModel controls })
             {
-                bvm.EditingPresetId = "gaming"; // not live: the Make live button shows too
-                foreach (var item in bvm.Items) item.IsExpanded = true;
+                controls.Select(controls.Buttons.Items[0]);
+                controls.Buttons.Items[0].IsAdvancedOpen = true;
             }
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();

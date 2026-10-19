@@ -21,15 +21,19 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly VolcoRuntime _runtime;
     private readonly FirmwareService? _firmware;
     private readonly IStartWithSystem? _startWithSystem;
+    private readonly IAppIcons? _appIcons;
+    private readonly AppIconLookup? _appIconLookup;
 
     // Runtime and engine events fire on arbitrary threads (audio thread, SliderProcessor's
     // coalescing timer, transport threads). Every handler posts through this first.
     private readonly IUiDispatcher _ui;
     private bool _disposed;
+    private bool _wasConnected;
 
     private ConnectionViewModel? _connectionViewModel;
     private SlidersViewModel? _slidersViewModel;
     private ButtonsViewModel? _buttonsViewModel;
+    private ControlsViewModel? _controlsViewModel;
     private GeneralViewModel? _generalViewModel;
     private ControllerViewModel? _controllerViewModel;
 
@@ -45,7 +49,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _connectionViewModel ??= new ConnectionViewModel(_config, _runtime, _ui);
 
     public SlidersViewModel Sliders =>
-        _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast);
+        _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast, _appIconLookup, _runtime.ReapplySlider);
 
     public DevicesViewModel Devices
     {
@@ -64,6 +68,14 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast,
                                                    ActionCapabilities.Of(_runtime));
 
+    /// <summary>The Controls page: the drawing and inspector over <see cref="Sliders"/> and
+    /// <see cref="Buttons"/>, whose dialogs edit device names through <see cref="Devices"/>.</summary>
+    public ControlsViewModel Controls =>
+        _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast, _appIcons, Devices);
+
+    /// <summary>The Controls page's view model if the page was ever opened; null otherwise.</summary>
+    public ControlsViewModel? ControlsIfCreated => _controlsViewModel;
+
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config, _startWithSystem);
 
@@ -80,10 +92,13 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _controllerNavDot;
 
     public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui,
-                             FirmwareService? firmware = null, IStartWithSystem? startWithSystem = null)
+                             FirmwareService? firmware = null, IStartWithSystem? startWithSystem = null,
+                             IAppIcons? appIcons = null, AppIconLookup? appIconLookup = null)
     {
+        _appIconLookup = appIconLookup;
         _firmware = firmware;
         _startWithSystem = startWithSystem;
+        _appIcons = appIcons;
         _config = config;
         _audio = audio;
         _runtime = runtime;
@@ -92,12 +107,14 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.DevicesChanged += OnDevicesChanged;
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
         _runtime.ButtonActivity += OnButtonActivity;
-        _runtime.ActivePresetChanged += OnActivePresetChanged;
+        _runtime.FeedbackChanged += OnFeedbackChanged;
+        _runtime.ActiveModeChanged += OnActiveModeChanged;
         _runtime.ControllerInfoChanged += OnControllerInfoChanged;
+        _runtime.LinkStatusChanged += OnLinkStatusChanged;
+        _wasConnected = _runtime.LinkStatus.IsConnected;
         _audio.DeviceVolumeChanged += OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged += OnBannerChanged;
         _runtime.ActionStateChanged += OnActionStateChanged;
-        _config.ConnectionConfigChanged += OnConnectionConfigChanged;
         _controllerNavDot = _runtime.ControllerConfig.Banner.NeedsAttention;
 
         // The controller only reports a slider when it moves, so levels reported before this VM
@@ -120,9 +137,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             _devicesViewModel?.Refresh();
         });
 
-    /// <summary>A nickname or icon changed on the Devices page (UI thread): the cached Sliders and
-    /// Buttons pages re-seed their pickers (so the item templates re-run the label converter) and
-    /// recompute card summaries and screen previews.</summary>
+    /// <summary>A nickname or icon changed in the device dialog (UI thread): the cached Controls
+    /// page's sliders and buttons re-read their devices and recompute their labels and screen
+    /// previews.</summary>
     private void OnDeviceSettingsChanged(object? sender, EventArgs e)
     {
         if (_disposed) return;
@@ -134,19 +151,30 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private void OnSliderLevelChanged(object? sender, SliderLevelEventArgs e)
         => _ui.Post(() =>
         {
-            if (!_disposed) Sliders.UpdateLiveLevel(e.SliderIndex, e.Level);
+            if (_disposed) return;
+            if (_controlsViewModel is { } controls) controls.OnSliderLevel(e.SliderIndex, e.Level);
+            else Sliders.UpdateLiveLevel(e.SliderIndex, e.Level);
         });
 
     private void OnButtonActivity(object? sender, int index)
         => _ui.Post(() =>
         {
-            if (!_disposed) _buttonsViewModel?.Pulse(index);
+            if (_disposed) return;
+            if (_controlsViewModel is { } controls) controls.OnButtonActivity(index);
+            else _buttonsViewModel?.Pulse(index);
         });
 
-    private void OnActivePresetChanged(object? sender, string presetId)
+    /// <summary>A button's press feedback or a mode change's announce moved on: its preview follows.</summary>
+    private void OnFeedbackChanged(object? sender, int button)
         => _ui.Post(() =>
         {
-            if (!_disposed) _buttonsViewModel?.OnRuntimePresetChanged(presetId);
+            if (!_disposed) _buttonsViewModel?.RefreshFeedback(button);
+        });
+
+    private void OnActiveModeChanged(object? sender, string modeId)
+        => _ui.Post(() =>
+        {
+            if (!_disposed) _buttonsViewModel?.OnRuntimeModeChanged(modeId);
         });
 
     private void OnControllerInfoChanged(object? sender, EventArgs e)
@@ -154,7 +182,18 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         {
             if (_disposed) return;
             _buttonsViewModel?.RefreshController();
-            _slidersViewModel?.RefreshController();
+            _controlsViewModel?.OnHello();
+        });
+
+    /// <summary>Every Hello connects the link, and the Hello's slider sync follows it; the
+    /// hardware summary (above) changes only when the controller does.</summary>
+    private void OnLinkStatusChanged(object? sender, LinkStatus status)
+        => _ui.Post(() =>
+        {
+            if (_disposed) return;
+            var connected = status.IsConnected;
+            if (connected && !_wasConnected) _controlsViewModel?.OnHello();
+            _wasConnected = connected;
         });
 
     private void OnBannerChanged(object? sender, EventArgs e)
@@ -178,12 +217,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             if (!_disposed) _buttonsViewModel?.RefreshActionState();
         });
 
-    private void OnConnectionConfigChanged(object? sender, EventArgs e)
-        => _ui.Post(() =>
-        {
-            if (!_disposed) _buttonsViewModel?.RefreshTransport();
-        });
-
     /// <summary>Unsubscribes from the runtime and engine, and disposes the Connection ViewModel.</summary>
     public void Dispose()
     {
@@ -192,14 +225,16 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _runtime.DevicesChanged -= OnDevicesChanged;
         _runtime.SliderLevelChanged -= OnSliderLevelChanged;
         _runtime.ButtonActivity -= OnButtonActivity;
-        _runtime.ActivePresetChanged -= OnActivePresetChanged;
+        _runtime.FeedbackChanged -= OnFeedbackChanged;
+        _runtime.ActiveModeChanged -= OnActiveModeChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfoChanged;
+        _runtime.LinkStatusChanged -= OnLinkStatusChanged;
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
         _runtime.ActionStateChanged -= OnActionStateChanged;
-        _config.ConnectionConfigChanged -= OnConnectionConfigChanged;
         _controllerViewModel?.Dispose();
         if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();
+        _slidersViewModel?.Dispose();
     }
 }

@@ -29,6 +29,7 @@ public class SliderProcessor : IDisposable
     // Keyed by hardware slider input. No fixed size: the number of sliders is the user's.
     private readonly Dictionary<int, ushort> _pendingValues = new();
     private readonly Dictionary<int, float> _lastVolume = new();
+    private readonly Dictionary<int, ushort> _lastRaw = new();
     private readonly Timer _coalesceTimer;
     private readonly object _lock = new();
 
@@ -195,6 +196,21 @@ public class SliderProcessor : IDisposable
         }
     }
 
+    /// <summary>
+    /// Applies a slider's last reported position again, to whatever it controls now (its target
+    /// changed: a swap or the target dialog). Like a sync frame: no smoothing and no OSD. Nothing
+    /// happens for a slider that has not reported a position yet.
+    /// </summary>
+    public void Reapply(int sliderIndex)
+    {
+        lock (_lock)
+        {
+            if (!_lastRaw.TryGetValue(sliderIndex, out var raw)) return;
+            // A newer value already queued wins, and stays a movement.
+            if (_pendingValues.TryAdd(sliderIndex, raw)) _pendingSync.Add(sliderIndex);
+        }
+    }
+
     /// <summary>Forgets slider values not yet applied (spec §8.5: test mode starts with nothing
     /// queued for audio).</summary>
     public void DropPending()
@@ -262,6 +278,7 @@ public class SliderProcessor : IDisposable
             lock (_lock)
             {
                 _lastVolume[sliderIndex] = volume;
+                _lastRaw[sliderIndex] = rawValue;
             }
 
             // Only allocated when actually needed (review item 10): this ~50Hz-per-moving-slider
@@ -325,7 +342,9 @@ public class SliderProcessor : IDisposable
                 var label = BuildSliderLabel(sliderConfig, currentOutputLook?.Name, configuredLook?.Name);
                 var icon = (configuredLook ?? currentOutputLook)?.Icon;
                 var muted = _audio.IsMuted(MuteSourceFor(sliderConfig));
-                volumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume, icon));
+                // A copy: the settings UI edits the list on its own thread.
+                var apps = sliderConfig.Type == SliderMappingType.Processes ? sliderConfig.Processes.ToArray() : null;
+                volumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume, icon, apps));
             }
         }
     }

@@ -1,0 +1,151 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:controls="using:Volco.App.Controls"
+             xmlns:pages="using:Volco.App.Views.Pages"
+             x:Class="Volco.App.Views.Inspector.ButtonInspector"
+             x:DataType="vm:ButtonItemViewModel">
+  <UserControl.Resources>
+    <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
+
+    <!-- One gesture's row: its action (a click opens the action dialog), the USB tag, a warning
+         for a saved action with a problem, and Try. An empty row shows "—" and a +, which opens the dialog too. -->
+    <DataTemplate x:Key="ActionRowTemplate" x:DataType="vm:ActionSlotViewModel">
+      <Grid ColumnDefinitions="*,Auto" Classes="ActionRowGrid">
+        <Button Name="RowButton" Classes="InspectorRow"
+                Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).OpenActionCommand}"
+                CommandParameter="{Binding}">
+          <Grid ColumnDefinitions="78,Auto,*,Auto,Auto">
+            <TextBlock Name="GestureText" Classes="RowLabel" Text="{Binding Label}"/>
+            <Border Grid.Column="1" Classes="RowIcon" IsVisible="{Binding CanTest}">
+              <PathIcon Data="{Binding IconKey, Converter={x:Static conv:IconConverters.Action}}"/>
+            </Border>
+            <TextBlock Name="ActionText" Grid.Column="2" Classes="RowValue" Classes.none="{Binding !CanTest}"
+                       Text="{Binding RowText}"/>
+            <Border Name="UsbTag" Grid.Column="3" Classes="UsbTag" IsVisible="{Binding IsUsb}"
+                    ToolTip.Tip="Runs only for presses over the USB cable">
+              <TextBlock Text="USB"/>
+            </Border>
+            <PathIcon Name="InvalidIcon" Grid.Column="4" Classes="InvalidIcon" Data="{StaticResource Icon.Status.Warning}"
+                      IsVisible="{Binding HasProblem}" ToolTip.Tip="{Binding Problem}"/>
+          </Grid>
+        </Button>
+        <Panel Grid.Column="1" Classes="TryCell">
+          <Button Name="TryButton" Classes="Try" Command="{Binding TestCommand}" IsVisible="{Binding CanTest}"
+                  ToolTip.Tip="Try">
+            <PathIcon Data="{StaticResource Icon.Device.Play}" Width="10" Height="10"/>
+          </Button>
+          <Button Name="AddButton" Classes="Try" IsVisible="{Binding !CanTest}" ToolTip.Tip="Set an action"
+                  Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).OpenActionCommand}"
+                  CommandParameter="{Binding}">
+            <PathIcon Classes="RowAdd" Data="{StaticResource Icon.Plus}"/>
+          </Button>
+        </Panel>
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <!-- The selected button (spec §5.2): its actions in the edited mode, its light, its timing. -->
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" Classes="InspectorHeader" ColumnDefinitions="*,Auto">
+      <StackPanel Spacing="2">
+        <TextBlock Name="KindText" Classes="InspectorKind" Text="{Binding KindText}"
+                   IsVisible="{Binding KindText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding Heading}"/>
+      </StackPanel>
+      <Button Name="ClearButton" Grid.Column="1" VerticalAlignment="Center" Content="Clear"
+              Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).ClearCommand}"
+              CommandParameter="{Binding}" IsEnabled="{Binding HasEditedActions}"/>
+    </Grid>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Classes="InspectorBody">
+        <Border Name="MissingPanel" Classes="InspectorRows" IsVisible="{Binding IsMissing}">
+          <Grid ColumnDefinitions="*,Auto" Classes="InspectorRow">
+            <TextBlock Classes="Secondary" Text="Not on this controller" VerticalAlignment="Center"/>
+            <Button Name="RemoveButton" Grid.Column="1" Classes="Danger" Content="Remove"
+                    Command="{Binding RemoveLastCommand}">
+              <Button.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                  <Binding Path="IsMissing"/>
+                  <Binding Path="IsLast"/>
+                </MultiBinding>
+              </Button.IsVisible>
+            </Button>
+          </Grid>
+        </Border>
+
+        <!-- Actions, labelled with the edited mode as a coloured pill -->
+        <StackPanel Spacing="6">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Classes="GroupLabel" Text="Actions"/>
+            <Border Name="ModePill" Classes="ModePill"
+                    controls:ModeTint.Index="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).Buttons.EditingTintIndex}">
+              <TextBlock Text="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).Buttons.EditingName}"/>
+            </Border>
+          </StackPanel>
+          <Border Classes="InspectorRows">
+            <StackPanel>
+              <ContentControl Name="ActionRow_Press" Content="{Binding Press}" ContentTemplate="{StaticResource ActionRowTemplate}"/>
+              <Border Classes="RowDivider"/>
+              <ContentControl Name="ActionRow_Double" Content="{Binding DoublePress}" ContentTemplate="{StaticResource ActionRowTemplate}"/>
+              <Border Classes="RowDivider"/>
+              <ContentControl Name="ActionRow_Hold" Content="{Binding Hold}" ContentTemplate="{StaticResource ActionRowTemplate}"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- The light or screen follows the main action; not editable -->
+        <Border Name="LightRow" Classes="InspectorRows" IsVisible="{Binding HasLightRow}">
+          <Grid ColumnDefinitions="Auto,*" Classes="LightRowGrid">
+            <Border Classes="LightPreview" ToolTip.Tip="{Binding LightDescription}">
+              <Panel>
+                <Ellipse Classes="Led" Classes.on="{Binding LedOn}" IsVisible="{Binding IsLed}"/>
+                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsLedPair}">
+                  <Ellipse Classes="Led" Classes.on="{Binding LedA}"/>
+                  <Ellipse Classes="Led" Classes.on="{Binding LedB}"/>
+                </StackPanel>
+                <controls:ScreenPreview Scale="0.5" Screen="{Binding Screen}" IsVisible="{Binding IsScreen}"/>
+              </Panel>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+              <TextBlock Name="LightLabel" Classes="Secondary" Text="{Binding LightRowLabel}"/>
+              <TextBlock Name="LightText" Text="{Binding LightRowText}"/>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Timing: per button, collapsed -->
+        <Border Name="TimingSection" Classes="InspectorSection">
+          <StackPanel>
+            <ToggleButton Name="TimingToggle" Classes="SectionHeader" IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
+              <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Text="Timing" FontWeight="Medium"/>
+                <TextBlock Name="TimingSummaryText" Grid.Column="1" Classes="Caption" Margin="0,0,8,0"
+                           VerticalAlignment="Center" Text="{Binding TimingSummary}"/>
+                <PathIcon Grid.Column="2" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </ToggleButton>
+            <StackPanel Name="TimingBody" Classes="SectionBody" IsVisible="{Binding IsAdvancedOpen}">
+              <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Text="Hold after" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="LongPressBox" Grid.Column="1" Width="120"
+                               Minimum="200" Maximum="2000" Increment="50" FormatString="0"
+                               Value="{Binding LongPressMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+                <TextBlock Grid.Column="2" Text="ms" Classes="Caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Text="Double press within" Classes="Secondary" VerticalAlignment="Center"/>
+                <NumericUpDown Name="DoublePressBox" Grid.Column="1" Width="120"
+                               Minimum="100" Maximum="1000" Increment="50" FormatString="0"
+                               Value="{Binding DoublePressWindowMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+                <TextBlock Grid.Column="2" Text="ms" Classes="Caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

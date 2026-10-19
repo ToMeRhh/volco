@@ -247,6 +247,34 @@ public class SliderProcessorTests
         Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
     }
 
+    [Fact]
+    public async Task VolumeChanged_AppsSlider_CarriesItsApps_DeviceSlider_None()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Processes, Processes = { "spotify.exe", "discord.exe" } });
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 1,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "present-dev", FriendlyName = "Headphones" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, configManager);
+        var apps = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var device = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.VolumeChanged += (_, e) => (e.Apps is null ? device : apps).TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+        processor.HandleSliderEvent(1, 2048);
+
+        Assert.True(await Task.WhenAny(apps.Task, Task.Delay(500)) == apps.Task, "no notification for the apps slider");
+        Assert.True(await Task.WhenAny(device.Task, Task.Delay(500)) == device.Task, "no notification for the device slider");
+        Assert.Equal(new[] { "spotify.exe", "discord.exe" }, apps.Task.Result.Apps);
+    }
+
     // ── Sync: the firmware reports every slider after each Hello ──────────────────────────
 
     private static ConfigManager PresentDeviceSliderConfig(double smoothing = 0)
@@ -460,6 +488,56 @@ public class SliderProcessorTests
         Assert.Equal("Cans", n.Label);
     }
 
+    private static FakeAudioEngine EngineWithMic()
+    {
+        var audio = EngineWithIconDevices();
+        audio.Devices.Add(new AudioDevice("mic", "Microphone (Blue Yeti)", AudioFlow.Capture, true, DeviceFormFactor.Microphone));
+        audio.DeviceStates["mic"] = (0.5f, false);
+        return audio;
+    }
+
+    private static readonly SliderConfig MicSlider = new()
+    {
+        Index = 0,
+        Type = SliderMappingType.Device,
+        Device = new DeviceRefConfig { Id = "mic", FriendlyName = "Microphone (Blue Yeti)" },
+    };
+
+    [Fact]
+    public async Task CaptureDeviceSlider_SetsThatDeviceVolume()
+    {
+        using var audio = EngineWithMic();
+        await MoveSliderAndCaptureOsd(audio, MicSlider);
+
+        var (device, _) = Assert.Single(audio.Snapshot(audio.DeviceVolumeCalls));
+        Assert.Equal(DeviceRefKind.ById, device.Kind);
+        Assert.Equal("mic", device.Id);
+    }
+
+    [Fact]
+    public async Task CaptureDeviceSlider_OsdIconIsMic()
+    {
+        using var audio = EngineWithMic();
+        var n = await MoveSliderAndCaptureOsd(audio, MicSlider);
+        Assert.Equal(ScreenIcon.Mic, n.Icon);
+        Assert.Equal("Microphone", n.Label);
+    }
+
+    [Fact]
+    public async Task CaptureDeviceSlider_UnknownFormFactor_OsdIconIsMic()
+    {
+        using var audio = EngineWithIconDevices();
+        audio.Devices.Add(new AudioDevice("line", "Line In (Realtek)", AudioFlow.Capture, true));
+        audio.DeviceStates["line"] = (0.5f, false);
+        var n = await MoveSliderAndCaptureOsd(audio, new SliderConfig
+        {
+            Index = 0,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "line", FriendlyName = "Line In (Realtek)" },
+        });
+        Assert.Equal(ScreenIcon.Mic, n.Icon);
+    }
+
     [Fact]
     public async Task DeviceSlider_ForTheCurrentOutput_CarriesTheCurrentOutputsIcon()
     {
@@ -598,6 +676,45 @@ public class SliderProcessorTests
             await Task.Delay(10);
         }
         Assert.Fail($"Condition not met within {timeoutMs}ms");
+    }
+
+    [Fact]
+    public async Task Reapply_SetsTheNewTargetToTheLastPosition_NoOsdNoSmoothing()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Device, SmoothingFactor = 0.9 });
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+        processor.HandleSliderEvent(0, 4095);
+        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 1);
+        await Task.Delay(100);   // the first value's own OSD is raised right after its write
+        var osd = 0;
+        processor.VolumeChanged += (_, _) => Interlocked.Increment(ref osd);
+
+        configManager.Config.Sliders[0].Type = SliderMappingType.Processes;
+        configManager.Config.Sliders[0].Processes = new List<string> { "spotify.exe" };
+        processor.Reapply(0);
+        await WaitForAsync(() => audio.Snapshot(audio.SessionVolumeCalls).Count >= 1);
+
+        var (filter, level) = Assert.Single(audio.Snapshot(audio.SessionVolumeCalls));
+        Assert.Equal(new[] { "spotify.exe" }, Assert.IsType<SessionFilter.ByImageNames>(filter).Names);
+        Assert.Equal(audio.Snapshot(audio.DeviceVolumeCalls)[0].Level, level, 3);
+        Assert.Equal(0, osd);
+    }
+
+    [Fact]
+    public async Task Reapply_BeforeAnyPosition_DoesNothing()
+    {
+        var configManager = NewConfigManager();
+        using var audio = new FakeAudioEngine();
+        using var processor = new SliderProcessor(audio, configManager);
+
+        processor.Reapply(0);
+        await Task.Delay(100);
+
+        Assert.Empty(audio.Snapshot(audio.DeviceVolumeCalls));
+        Assert.Empty(audio.Snapshot(audio.SessionVolumeCalls));
     }
 
     [Fact]

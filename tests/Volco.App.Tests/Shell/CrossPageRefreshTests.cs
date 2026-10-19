@@ -2,7 +2,6 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
@@ -47,7 +46,7 @@ public class CrossPageRefreshTests
         => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void NicknameSetOnDevices_ReachesTheOpenButtonsPage()
+    public void NicknameSetInTheDeviceDialog_ReachesTheControlsPage()
     {
         var (window, rig, vm) = Open(c =>
         {
@@ -61,28 +60,23 @@ public class CrossPageRefreshTests
             };
         });
         using var _ = rig; using var __ = vm;
-        Show(window, "buttons");
-        vm.Buttons.Items[1].IsExpanded = true;
+        Show(window, "controls");
+        vm.Controls.Select(vm.Buttons.Items[1]);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal("Toggle Speakers / Headphones", vm.Buttons.Items[0].Summary);
+        Assert.Equal("Toggle Speakers / Headphones", vm.Buttons.Items[0].MainLabel);
 
-        Show(window, "general");   // Devices is a section of General
-        vm.Devices.Outputs.Single(d => d.Id == "dev-2").Nickname = "Arctis";
+        vm.Devices.ItemFor("dev-2", AudioFlow.Render)!.Nickname = "Arctis";   // the device dialog's field
         Dispatcher.UIThread.RunJobs();
-        Show(window, "buttons");
 
-        Assert.Equal("Toggle Speakers / Arctis", vm.Buttons.Items[0].Summary);
-        Assert.Equal("Arctis", vm.Buttons.Items[1].Screen.Main);   // closed-card / card screen preview
-        var page = Assert.IsType<ButtonsPage>(window.CurrentPage);
-        var card = page.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "Card").ElementAt(1);
-        var combo = In<ComboBox>(In<ActionRow>(card, "PressRow"), "DeviceCombo");
-        Assert.Equal("Headphones", combo.SelectedItem);
-        Assert.Equal("Arctis", In<TextBlock>(combo, "DeviceLabel").Text);
-        Assert.Equal("Headphones", In<TextBlock>(combo, "DeviceSecondary").Text);
+        Assert.Equal("Toggle Speakers / Arctis", vm.Buttons.Items[0].MainLabel);
+        Assert.Equal("Arctis", vm.Buttons.Items[1].Screen.Main);   // the screen preview
+        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        var row = In<ContentControl>(page, "ActionRow_Press");
+        Assert.Equal("Mute Arctis", In<TextBlock>(row, "ActionText").Text);
     }
 
     [AvaloniaFact]
-    public void NicknameSetOnDevices_ReachesTheOpenSlidersPicker()
+    public void NicknameSetInTheDeviceDialog_ReachesTheSliderLabels()
     {
         var (window, rig, vm) = Open(c =>
         {
@@ -90,41 +84,70 @@ public class CrossPageRefreshTests
             c.Sliders[0].Device = Headphones;
         });
         using var _ = rig; using var __ = vm;
-        vm.Sliders.Items[0].IsExpanded = true;
+        Show(window, "controls");
+        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.Equal("Headphones", In<TextBlock>(page, "TargetText").Text);   // slider 1 is selected
+
+        vm.Devices.ItemFor("dev-2", AudioFlow.Render)!.Nickname = "Arctis";   // the device dialog's field
         Dispatcher.UIThread.RunJobs();
 
-        Show(window, "general");   // Devices is a section of General
-        vm.Devices.Outputs.Single(d => d.Id == "dev-2").Nickname = "Arctis";
-        Dispatcher.UIThread.RunJobs();
-        Show(window, "sliders");
-
-        var combo = In<ComboBox>(Assert.IsType<SlidersPage>(window.CurrentPage), "DeviceCombo");
-        Assert.Equal("Headphones", combo.SelectedItem);
-        Assert.Equal("Arctis", In<TextBlock>(combo, "DeviceLabel").Text);
+        Assert.Equal("Arctis", In<TextBlock>(page, "TargetText").Text);
+        Assert.Equal("Arctis", In<TextBlock>(page.GetVisualDescendants().OfType<Volco.App.Controls.SliderTile>().First(), "Label").Text);
+        Assert.Equal("Arctis", In<TextBox>(page, "NameBox").PlaceholderText);
+        Assert.Equal("Headphones", vm.Sliders.Items[0].SelectedDevice);
         Assert.Equal(Headphones.Id, rig.Config.Config.Sliders[0].Device?.Id);   // the re-seed saved nothing new
     }
 
     [AvaloniaFact]
-    public void ActionEditedOnButtons_UpdatesUsedByWhenDevicesIsShownAgain()
+    public void ActionEdited_UsedByIsCurrentWhenTheDeviceDialogOpens()
     {
         var (window, rig, vm) = Open();
         using var _ = rig; using var __ = vm;
-        Show(window, "general");   // Devices is a section of General
-        var headphones = vm.Devices.Outputs.Single(d => d.Id == "dev-2");
+        Show(window, "controls");
+        var headphones = vm.Devices.ItemFor("dev-2", AudioFlow.Render)!;
         Assert.Equal("", headphones.UsedBy);
         var changed = new List<string?>();
         headphones.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
-        Show(window, "buttons");
         var slot = vm.Buttons.Items[2].Press;
         slot.SelectedChoice = ActionCatalog.For(ButtonActionType.MuteSpecificDevice);
         slot.Device = "Headphones";
         Dispatcher.UIThread.RunJobs();
-        Show(window, "general");   // Devices is a section of General
 
-        Assert.Same(headphones, vm.Devices.Outputs.Single(d => d.Id == "dev-2"));   // card kept
-        Assert.Equal("Used by Button 2", headphones.UsedBy);
+        Assert.Same(headphones, vm.Devices.ItemFor("dev-2", AudioFlow.Render));   // the item is kept
+        Assert.Equal("Used by: Button 3", headphones.UsedBy);
         Assert.Contains(nameof(DeviceItemViewModel.UsedBy), changed);
-        Assert.Contains(nameof(DeviceItemViewModel.ShowUsedBy), changed);
+        Assert.Contains(nameof(DeviceItemViewModel.CanForget), changed);
+    }
+
+    [AvaloniaFact]
+    public void DeviceRenamedInWindows_LabelsFollow_UnlessTheUserNamedIt()
+    {
+        var (window, rig, vm) = Open(c =>
+        {
+            c.Sliders[0].Type = SliderMappingType.Device;
+            c.Sliders[0].Device = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };
+            c.Sliders[1].Type = SliderMappingType.Device;
+            c.Sliders[1].Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-1", FriendlyName = "Speakers", Nickname = "Desk" });
+        });
+        using var _ = rig; using var __ = vm;
+        Show(window, "controls");
+        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.Equal("Headphones", In<TextBlock>(page, "TargetText").Text);   // slider 1 is selected
+
+        // Both are renamed in Windows' Sound settings while Volco runs.
+        var arctis = new AudioDevice("dev-2", "Arctis 7 (USB Audio)", AudioFlow.Render, false);
+        var monitor = new AudioDevice("dev-1", "Monitor (HDMI)", AudioFlow.Render, true);
+        rig.Engine.Devices[1] = arctis;
+        rig.Engine.Devices[0] = monitor;
+        rig.Engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, arctis);
+        rig.Engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, monitor);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Arctis 7", In<TextBlock>(page, "TargetText").Text);
+        Assert.Equal("Arctis 7", vm.Sliders.Items[0].Label);
+        Assert.Equal("Desk", vm.Sliders.Items[1].Label);   // the user's own name wins
+        Assert.Equal("Monitor (HDMI)", rig.Config.Config.FindDevice("dev-1")!.FriendlyName);
     }
 }

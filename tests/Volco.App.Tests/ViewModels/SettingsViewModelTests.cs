@@ -183,20 +183,20 @@ public class SettingsViewModelTests
     }
 
     [Fact]
-    public void SettingsViewModel_RuntimePresetChange_MovesTheLiveMarker()
+    public void SettingsViewModel_RuntimeModeChange_MovesTheLiveMarker()
     {
         using var rig = new TestRig();
-        rig.Config.Config.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
+        rig.Config.Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
         var ui = new RecordingDispatcher();
         using var vm = rig.CreateSettings(ui);
         var buttons = vm.Buttons;
-        Assert.Equal(AppConfig.DefaultPresetId, buttons.LivePresetId);
+        Assert.Equal(AppConfig.DefaultModeId, buttons.LiveModeId);
 
-        rig.Runtime.SetActivePreset("gaming");
+        rig.Runtime.SetActiveMode("gaming");
         ui.RunAll();
 
-        Assert.Equal("gaming", buttons.LivePresetId);
-        Assert.True(buttons.Presets.Single(p => p.Id == "gaming").IsLive);
-        Assert.False(buttons.Presets.Single(p => p.Id == AppConfig.DefaultPresetId).IsLive);
+        Assert.Equal("gaming", buttons.LiveModeId);
+        Assert.True(buttons.Modes.Single(p => p.Id == "gaming").IsLive);
+        Assert.False(buttons.Modes.Single(p => p.Id == AppConfig.DefaultModeId).IsLive);
     }
 }

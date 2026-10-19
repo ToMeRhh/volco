@@ -17,6 +17,8 @@ namespace Volco.Core.Config;
 /// action. Purely structural, so <see cref="ConfigManager.Load"/> runs it
 /// (<see cref="UpgradeShapeToV3"/>) on the raw JSON before deserialising - for v1 files too,
 /// which then still carry their old schema number until the v1 → v2 name resolution runs.</item>
+/// <item>v6 → v7: button presets become modes (<see cref="RenamePresetsToModes"/>), run by
+/// <see cref="ConfigManager.Load"/> on every older file after the shape upgrade.</item>
 /// </list>
 ///
 /// Both read raw JSON rather than the deserialized <see cref="AppConfig"/>, because the old
@@ -126,7 +128,7 @@ public static class ConfigMigrator
             foreach (var button in buttons.EnumerateArray())
             {
                 if (i >= config.Buttons.Count) break;
-                var binding = config.Buttons[i].GetOrAddBinding(AppConfig.DefaultPresetId);
+                var binding = config.Buttons[i].GetOrAddBinding(AppConfig.DefaultModeId);
                 MigrateAction(button, "singlePress", binding.SinglePress, devices);
                 MigrateAction(button, "doublePress", binding.DoublePress, devices);
                 MigrateAction(button, "longPress",   binding.LongPress,   devices);
@@ -164,7 +166,8 @@ public static class ConfigMigrator
     /// <c>buttons[i].actions["default"]</c>.</item>
     /// <item>Each ToggleOutputDevice action gets <c>device</c> = <c>outputDevices.device1</c> and
     /// <c>deviceB</c> = <c>outputDevices.device2</c>; <c>outputDevices</c> is dropped.</item>
-    /// <item><c>presets</c> is added with the single Default preset when absent.</item>
+    /// <item><c>presets</c> is added with the single Default preset when absent (v3 named modes
+    /// presets; <see cref="RenamePresetsToModes"/> renames them afterwards).</item>
     /// <item><c>index</c> of every slider and button is set to its list position.</item>
     /// </list>
     /// </summary>
@@ -201,7 +204,7 @@ public static class ConfigMigrator
                         button.Remove(key);
                     }
                 }
-                button["actions"] = new JsonObject { [AppConfig.DefaultPresetId] = binding };
+                button["actions"] = new JsonObject { [AppConfig.DefaultModeId] = binding };
             }
         }
 
@@ -212,7 +215,49 @@ public static class ConfigMigrator
         root.Remove("outputDevices");
 
         if (root["presets"] is not JsonArray presets || presets.Count == 0)
-            root["presets"] = new JsonArray(new JsonObject { ["id"] = AppConfig.DefaultPresetId, ["name"] = "Default" });
+            root["presets"] = new JsonArray(new JsonObject { ["id"] = AppConfig.DefaultModeId, ["name"] = "Default" });
+    }
+
+    /// <summary>
+    /// v6 → v7 on the raw config JSON: button presets become modes. In place; idempotent. Run
+    /// after <see cref="UpgradeShapeToV3"/>, so v1 to v6 files all come through here.
+    /// <list type="bullet">
+    /// <item><c>presets</c> becomes <c>modes</c>.</item>
+    /// <item>Every action's <c>presetId</c> becomes <c>modeId</c>.</item>
+    /// <item>The actions <c>NextPreset</c> and <c>GoToPreset</c> become <c>NextMode</c> and
+    /// <c>GoToMode</c>.</item>
+    /// </list>
+    /// Mode ids (such as "default" and "preset-2") are kept.
+    /// </summary>
+    public static void RenamePresetsToModes(JsonObject root)
+    {
+        Rename(root, "presets", "modes");
+
+        if (root["buttons"] is not JsonArray buttons) return;
+        foreach (var button in buttons)
+        {
+            if (button?["actions"] is not JsonObject actions) continue;
+            foreach (var (_, binding) in actions)
+            {
+                if (binding is not JsonObject slots) continue;
+                foreach (var key in new[] { "singlePress", "doublePress", "longPress" })
+                {
+                    if (slots[key] is not JsonObject action) continue;
+                    Rename(action, "presetId", "modeId");
+                    if (IsAction(action, "NextPreset")) action["action"] = "NextMode";
+                    else if (IsAction(action, "GoToPreset")) action["action"] = "GoToMode";
+                }
+            }
+        }
+    }
+
+    /// <summary>Moves <paramref name="from"/>'s value to <paramref name="to"/>, unless
+    /// <paramref name="to"/> is already there (then <paramref name="from"/> is only dropped).</summary>
+    private static void Rename(JsonObject obj, string from, string to)
+    {
+        if (!obj.TryGetPropertyValue(from, out var value)) return;
+        obj.Remove(from);
+        if (!obj.ContainsKey(to)) obj[to] = value;
     }
 
     private static bool IsAction(JsonObject action, string name)

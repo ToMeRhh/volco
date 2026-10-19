@@ -962,13 +962,13 @@ public sealed class VolcoRuntimeTests : IDisposable
         using (runtime.EnterTestMode())
         {
             var expected = ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
-                ScreenContent.Text("Test", ScreenIcon.Generic, false, "Button 1"));   // the app numbers inputs from 0
+                ScreenContent.Text("Test", ScreenIcon.Generic, false, "Button 2"));   // input 1, numbered from 1 as in the UI
             Assert.True(ContainsFrame(c.SentFrames, expected));
 
             Press(c, 1);
             Press(c, 1);
             Assert.True(ContainsFrame(c.SentFrames, ProtocolEncoder.EncodeScreen(1, ScreenTransition.None,
-                ScreenContent.Text("Button 1", ScreenIcon.Generic, false, "2 presses"))));
+                ScreenContent.Text("Button 2", ScreenIcon.Generic, false, "2 presses"))));
         }
     }
 
@@ -1193,47 +1193,47 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void NextPreset_SlidesLeft_EvenWhenWrapping()
+    public void NextMode_SlidesLeft_EvenWhenWrapping()
     {
-        var config = TwoPresetConfig();
+        var config = TwoModeConfig();
         config.Config.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = 5, Buttons = { IndicatorKind.Screen } };
         var runtime = StartRuntime(config);
         var connection = Connection(0);
         ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
 
-        runtime.SetActivePreset("gaming");
+        runtime.SetActiveMode("gaming");
         var baseline = connection.SentCount;
-        runtime.NextPreset();                                     // gaming → default wraps
+        runtime.NextMode();                                     // gaming → default wraps
 
         var screen = connection.SentFrames.Skip(baseline).First(f => f[2] == (byte)MessageType.Screen);
         Assert.Equal((byte)ScreenTransition.SlideLeft, screen[4]);
     }
 
     [Fact]
-    public void GoToAnEarlierPreset_SlidesRight()
+    public void GoToAnEarlierMode_SlidesRight()
     {
-        var config = TwoPresetConfig();
+        var config = TwoModeConfig();
         var runtime = StartRuntime(config);
         var connection = Connection(0);
         ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
-        runtime.SetActivePreset("gaming");
+        runtime.SetActiveMode("gaming");
         var baseline = connection.SentCount;
 
-        runtime.SetActivePreset(AppConfig.DefaultPresetId);
+        runtime.SetActiveMode(AppConfig.DefaultModeId);
 
         var screen = connection.SentFrames.Skip(baseline).First(f => f[2] == (byte)MessageType.Screen);
         Assert.Equal((byte)ScreenTransition.SlideRight, screen[4]);
     }
 
     [Fact]
-    public void Unsynchronized_PresetChange_HasNoBeginOrCommit()
+    public void Unsynchronized_ModeChange_HasNoBeginOrCommit()
     {
-        var runtime = StartRuntime(TwoPresetConfig(), options: Quiet with { SynchronizedPresetTransitions = false });
+        var runtime = StartRuntime(TwoModeConfig(), options: Quiet with { SynchronizedModeTransitions = false });
         var connection = Connection(0);
         ConnectAndGreet(connection);
         var baseline = connection.SentCount;
 
-        runtime.SetActivePreset("gaming");
+        runtime.SetActiveMode("gaming");
 
         var burst = connection.SentFrames.Skip(baseline).ToList();
         Assert.NotEmpty(burst);
@@ -1241,17 +1241,17 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void DeletingTheLivePreset_PushesInstantly()
+    public void DeletingTheLiveMode_PushesInstantly()
     {
-        var config = TwoPresetConfig();
+        var config = TwoModeConfig();
         var runtime = StartRuntime(config);
         var connection = Connection(0);
         ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
-        runtime.SetActivePreset("gaming");
+        runtime.SetActiveMode("gaming");
         var baseline = connection.SentCount;
 
-        config.Config.Presets.RemoveAll(p => p.Id == "gaming");
-        runtime.SetActivePreset(AppConfig.DefaultPresetId);       // what ButtonsViewModel does
+        config.Config.Modes.RemoveAll(p => p.Id == "gaming");
+        runtime.SetActiveMode(AppConfig.DefaultModeId);       // what ButtonsViewModel does
 
         var screen = connection.SentFrames.Skip(baseline).First(f => f[2] == (byte)MessageType.Screen);
         Assert.Equal((byte)ScreenTransition.None, screen[4]);
@@ -1259,17 +1259,17 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void DeletingTheFallbackLivePreset_NeverSetExplicitly_PushesInstantly()
+    public void DeletingTheFallbackLiveMode_NeverSetExplicitly_PushesInstantly()
     {
-        // No SetActivePreset before: the live preset is the first one only by fallback.
-        var config = TwoPresetConfig();
+        // No SetActiveMode before: the live mode is the first one only by fallback.
+        var config = TwoModeConfig();
         var runtime = StartRuntime(config);
         var connection = Connection(0);
         ConnectAndGreet(connection, new HelloMessage(ProtocolVersion.Current, 5, new[] { IndicatorKind.Screen }));
         var baseline = connection.SentCount;
 
-        config.Config.Presets.RemoveAll(p => p.Id == AppConfig.DefaultPresetId);
-        runtime.SetActivePreset("gaming");                        // what ButtonsViewModel does
+        config.Config.Modes.RemoveAll(p => p.Id == AppConfig.DefaultModeId);
+        runtime.SetActiveMode("gaming");                        // what ButtonsViewModel does
 
         var burst = connection.SentFrames.Skip(baseline).ToList();
         var screen = burst.First(f => f[2] == (byte)MessageType.Screen);
@@ -1304,6 +1304,34 @@ public sealed class VolcoRuntimeTests : IDisposable
         _engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, renamed);
 
         Assert.Equal("Speakers (new driver)", config.Config.FindDevice(Speakers)!.FriendlyName);
+    }
+
+    [Fact]
+    public void DeviceRenamedInWindows_SliderAndActionNamesFollow_BeforeTheUiHears()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Sliders[0].Type = SliderMappingType.Device;
+            c.Sliders[0].Device = new DeviceRefConfig { Id = Speakers, FriendlyName = "Old name" };
+            c.Buttons[1].Default().SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { Id = Speakers, FriendlyName = "Old name" },
+                DeviceB = new DeviceRefConfig { Id = "gone", FriendlyName = "Unplugged" },
+            };
+        });
+        var runtime = StartRuntime(config);
+        string? seenByUi = null;
+        runtime.DevicesChanged += (_, _) => seenByUi = config.Config.Sliders[0].Device!.FriendlyName;
+        var renamed = new AudioDevice(Speakers, "Desk (Realtek)", AudioFlow.Render, true);
+        _engine.Devices[0] = renamed;
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, renamed);
+
+        Assert.Equal("Desk (Realtek)", config.Config.Sliders[0].Device!.FriendlyName);
+        Assert.Equal("Desk (Realtek)", config.Config.Buttons[1].Default().SinglePress.Device!.FriendlyName);
+        Assert.Equal("Unplugged", config.Config.Buttons[1].Default().SinglePress.DeviceB!.FriendlyName);
+        Assert.Equal("Desk (Realtek)", seenByUi);
     }
 
     [Fact]
@@ -1583,33 +1611,33 @@ public sealed class VolcoRuntimeTests : IDisposable
         Assert.Empty(_engine.DeviceVolumeCalls);
     }
 
-    // ---- presets (schema v3) ---------------------------------------------------------------
+    // ---- modes (schema v3) ---------------------------------------------------------------
 
-    /// <summary>Two presets: Default (button 0 mutes the output, button 2 holds for "next preset")
+    /// <summary>Two modes: Default (button 0 mutes the output, button 2 holds for "next mode")
     /// and Gaming (button 0 mutes the input, button 2 jumps back to Default).</summary>
-    private ConfigManager TwoPresetConfig() => NewConfig(c =>
+    private ConfigManager TwoModeConfig() => NewConfig(c =>
     {
-        c.Presets.Add(new PresetConfig { Id = "gaming", Name = "Gaming" });
-        c.Buttons[2].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.NextPreset };
+        c.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
+        c.Buttons[2].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.NextMode };
         var gaming0 = c.Buttons[0].GetOrAddBinding("gaming");
         gaming0.SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
         c.Buttons[2].GetOrAddBinding("gaming").SinglePress =
-            new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = AppConfig.DefaultPresetId };
+            new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = AppConfig.DefaultModeId };
     });
 
     [Fact]
-    public void ActivePreset_StartsAtTheFirstPreset()
+    public void ActiveMode_StartsAtTheFirstMode()
     {
-        var runtime = StartRuntime(TwoPresetConfig());
-        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+        var runtime = StartRuntime(TwoModeConfig());
+        Assert.Equal(AppConfig.DefaultModeId, runtime.ActiveModeId);
     }
 
     [Fact]
-    public void ButtonDispatch_FollowsTheActivePreset()
+    public void ButtonDispatch_FollowsTheActiveMode()
     {
-        var runtime = StartRuntime(TwoPresetConfig());
+        var runtime = StartRuntime(TwoModeConfig());
 
-        runtime.SetActivePreset("gaming");
+        runtime.SetActiveMode("gaming");
         Press(Connection(0), 0);
 
         Assert.True(WaitUntil(() => _engine.ToggleMuteCalls.Count > 0), "press never executed");
@@ -1617,84 +1645,84 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void NextPresetButton_SwitchesAndWraps_RaisingEventsAndAPresetOsd()
+    public void NextModeButton_SwitchesAndWraps_RaisingEventsAndAModeOsd()
     {
-        var runtime = StartRuntime(TwoPresetConfig());
+        var runtime = StartRuntime(TwoModeConfig());
         var changes = new Recorder<string>();
         var osd = new Recorder<VolumeChangeNotification>();
-        runtime.ActivePresetChanged += changes.Handler;
+        runtime.ActiveModeChanged += changes.Handler;
         runtime.VolumeChanged += osd.Handler;
 
-        Press(Connection(0), 2);   // Default: next preset -> Gaming
-        Assert.True(WaitUntil(() => runtime.ActivePresetId == "gaming"), "next preset never ran");
+        Press(Connection(0), 2);   // Default: next mode -> Gaming
+        Assert.True(WaitUntil(() => runtime.ActiveModeId == "gaming"), "next mode never ran");
         Press(Connection(0), 2);   // Gaming: go to Default
-        Assert.True(WaitUntil(() => runtime.ActivePresetId == AppConfig.DefaultPresetId), "go-to preset never ran");
+        Assert.True(WaitUntil(() => runtime.ActiveModeId == AppConfig.DefaultModeId), "go-to mode never ran");
 
-        Assert.Equal(new[] { "gaming", AppConfig.DefaultPresetId }, changes.Items);
-        Assert.Equal(new[] { "Gaming", "Default" }, osd.Items.Where(n => n.Kind == OsdKind.Preset).Select(n => n.Label));
+        Assert.Equal(new[] { "gaming", AppConfig.DefaultModeId }, changes.Items);
+        Assert.Equal(new[] { "Gaming", "Default" }, osd.Items.Where(n => n.Kind == OsdKind.Mode).Select(n => n.Label));
     }
 
     [Fact]
-    public void NextPreset_WrapsToTheFirst()
+    public void NextMode_WrapsToTheFirst()
     {
-        var runtime = StartRuntime(TwoPresetConfig());
-        runtime.NextPreset();
-        runtime.NextPreset();
-        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+        var runtime = StartRuntime(TwoModeConfig());
+        runtime.NextMode();
+        runtime.NextMode();
+        Assert.Equal(AppConfig.DefaultModeId, runtime.ActiveModeId);
     }
 
     [Fact]
-    public void SetActivePreset_UnknownId_IsIgnored()
+    public void SetActiveMode_UnknownId_IsIgnored()
     {
-        var runtime = StartRuntime(TwoPresetConfig());
+        var runtime = StartRuntime(TwoModeConfig());
         var changes = new Recorder<string>();
-        runtime.ActivePresetChanged += changes.Handler;
+        runtime.ActiveModeChanged += changes.Handler;
 
-        runtime.SetActivePreset("nope");
+        runtime.SetActiveMode("nope");
 
-        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+        Assert.Equal(AppConfig.DefaultModeId, runtime.ActiveModeId);
         Assert.Empty(changes.Items);
     }
 
     [Fact]
-    public void DeletingTheActivePreset_FallsBackToTheFirst()
+    public void DeletingTheActiveMode_FallsBackToTheFirst()
     {
-        var config = TwoPresetConfig();
+        var config = TwoModeConfig();
         var runtime = StartRuntime(config);
-        runtime.SetActivePreset("gaming");
+        runtime.SetActiveMode("gaming");
 
-        config.Config.Presets.RemoveAll(p => p.Id == "gaming");
+        config.Config.Modes.RemoveAll(p => p.Id == "gaming");
 
-        Assert.Equal(AppConfig.DefaultPresetId, runtime.ActivePresetId);
+        Assert.Equal(AppConfig.DefaultModeId, runtime.ActiveModeId);
     }
 
     [Fact]
-    public void PresetChange_PushesTheNewPresetsFeedback()
+    public void ModeChange_PushesTheNewModesFeedback()
     {
-        var runtime = StartRuntime(TwoPresetConfig());
+        var runtime = StartRuntime(TwoModeConfig());
         var connection = Connection(0);
         ConnectAndGreet(connection);
         _engine.DeviceStates[Microphone] = (0.5f, true);   // muted mic: lit only under Gaming
         var baseline = connection.SentCount;
 
-        runtime.SetActivePreset("gaming");
+        runtime.SetActiveMode("gaming");
 
         var newFrames = connection.SentFrames.Skip(baseline).ToList();
         Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeBegin()), "no Begin");
         Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeCommit()), "no Commit");
         Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(0, 1)), "button 0 not lit for the muted mic");
         Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(1, 0)), "button 1 has nothing in Gaming, so its light must go off");
-        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(2, 2)), "preset indicator not on preset 2");
+        Assert.True(ContainsFrame(newFrames, ProtocolEncoder.EncodeLed(2, 2)), "mode indicator not on mode 2");
     }
 
     [Fact]
     public void Execute_RunsAnActionOutsideAButtonPress()
     {
-        var runtime = StartRuntime(TwoPresetConfig());
+        var runtime = StartRuntime(TwoModeConfig());
 
-        runtime.Execute(new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "gaming" });
+        runtime.Execute(new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "gaming" });
 
-        Assert.Equal("gaming", runtime.ActivePresetId);
+        Assert.Equal("gaming", runtime.ActiveModeId);
     }
 
     [Fact]

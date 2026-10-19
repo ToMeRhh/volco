@@ -62,10 +62,9 @@ public partial class SettingsWindow : Window
 
         _navList.ItemsSource = new[]
         {
-            Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General, vm.Devices)),
+            Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
+            Nav("Controls", "controls", "Icon.Sliders", () => new ControlsPage(vm.Controls)),
             _controllerNav = Nav("Hardware", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
-            Nav("Sliders", "sliders", "Icon.Sliders", () => new SlidersPage(vm.Sliders)),
-            Nav("Buttons", "buttons", "Icon.Buttons", () => new ButtonsPage(vm.Buttons)),
         };
         _navList.SelectionChanged += OnNavSelectionChanged;
         _navList.SelectedIndex = 0;
@@ -122,8 +121,8 @@ public partial class SettingsWindow : Window
         return new NavItem(label, tag, icon, create);
     }
 
-    /// <summary>Switches to the page with this tag ("general", "controller" (shown as Hardware),
-    /// "sliders", "buttons").</summary>
+    /// <summary>Switches to the page with this tag ("general", "controls", "controller" (shown as
+    /// Hardware)).</summary>
     public void ShowPage(string tag)
     {
         var items = _navList.ItemsSource?.Cast<NavItem>().ToList() ?? new List<NavItem>();
@@ -138,6 +137,8 @@ public partial class SettingsWindow : Window
     {
         // Leaving the Controller page ends a running hardware test (spec §8.5).
         if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controller")) _vm.ControllerIfCreated?.OnPageLeft();
+        // Leaving the Controls page closes its dialog, which would otherwise hold off touch-to-select.
+        if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controls")) _vm.ControlsIfCreated?.CloseDialog();
         if (_navList.SelectedItem is not NavItem item) return;
         if (!_pages.TryGetValue(item.Tag, out var page))
             _pages[item.Tag] = page = item.CreatePage();
@@ -162,6 +163,7 @@ public partial class SettingsWindow : Window
         if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
         _vm.ControllerIfCreated?.OnPageLeft();   // hiding the window ends a running test too
+        _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controls page's dialog
         Hide();
     }
 

@@ -5,7 +5,7 @@ using Volco.Core.Communication;
 namespace Volco.Core.Config;
 
 /// <summary>
-/// The user's settings for one audio device (Devices page, spec §5.1). Only devices the user
+/// The user's settings for one audio device (the device dialog, spec §5.1). Only devices the user
 /// customized have an entry; an entry with no nickname and no icon is removed.
 /// </summary>
 public class DeviceSettingsConfig

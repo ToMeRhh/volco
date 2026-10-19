@@ -2,7 +2,8 @@ namespace Volco.Core.Audio;
 
 public enum DeviceChangeKind { Added, Removed, StateChanged, DefaultChanged }
 
-public enum SessionChangeKind { Created, Expired }
+/// <summary><see cref="Changed"/>: a live session's display name or icon path changed.</summary>
+public enum SessionChangeKind { Created, Expired, Changed }
 
 public sealed record DevicesChangedEventArgs(DeviceChangeKind Kind, AudioDevice Device);
 

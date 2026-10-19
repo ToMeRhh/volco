@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
+using Volco.Core.Input.Actions;
 using Volco.Core.Media;
 
 namespace Volco.App.ViewModels;
@@ -15,27 +16,26 @@ public sealed record MediaAppChoice(string? Id, string Name, string Label)
     public override string ToString() => Label;
 }
 
-/// <summary>What an action row needs from its page beyond its own config: which custom actions
-/// this platform has, the live media apps, whether presses arrive over the network (programs and
-/// scripts then do not run), and whether a file exists.</summary>
+/// <summary>What an action slot needs from its page beyond its own config: which custom actions
+/// this platform has, the live media apps, and whether a file exists.</summary>
 internal sealed record ActionSlotHost(ActionAvailability Availability, Func<IReadOnlyList<MediaApp>> MediaApps,
-                                      Func<bool> PressesOverNetwork, Func<string, bool> FileExists)
+                                      Func<string, bool> FileExists)
 {
     public static ActionSlotHost Default { get; } =
-        new(ActionAvailability.All, () => Array.Empty<MediaApp>(), () => false, File.Exists);
+        new(ActionAvailability.All, () => Array.Empty<MediaApp>(), File.Exists);
 }
 
 /// <summary>
-/// One action row of a button card (Press, Double press or Hold) for the preset being edited:
-/// the grouped action picker, that action's settings, and Test. Re-pointed at another preset's
-/// <see cref="ButtonActionConfig"/> with <see cref="Bind"/> when the edited preset changes.
+/// One action slot of a button (Press, Double press or Hold) for the mode being edited: the
+/// inspector's row, Try, and (as a draft) the action dialog's settings. Re-pointed at another
+/// mode's <see cref="ButtonActionConfig"/> with <see cref="Bind"/> when the edited mode changes.
 /// </summary>
 public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabeler
 {
     private readonly Action _changed;
     private readonly Func<string, DeviceChoice> _describe;
     private readonly Action<ButtonActionConfig> _execute;
-    private readonly Func<IReadOnlyList<PresetChoice>> _presets;
+    private readonly Func<IReadOnlyList<ModeChoice>> _modes;
     private readonly ActionSlotHost _host;
     private ButtonActionConfig _cfg = new();
     private bool _loading;
@@ -46,9 +46,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     public IReadOnlyList<ActionChoice> Choices { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(NeedsDevice), nameof(NeedsPair), nameof(NeedsPreset), nameof(CanTest),
+    [NotifyPropertyChangedFor(nameof(NeedsDevice), nameof(NeedsPair), nameof(NeedsMode), nameof(CanTest),
                               nameof(NeedsMediaApp), nameof(NeedsCommand), nameof(NeedsWhileRunning),
-                              nameof(CommandHint), nameof(CommandPlaceholder), nameof(ShowUsbOnly))]
+                              nameof(CommandPlaceholder),
+                              nameof(IconKey), nameof(IsUsb))]
     private ActionChoice _selectedChoice = ActionCatalog.For(ButtonActionType.None);
 
     /// <summary>Render device names (plus a configured one that is not plugged in).</summary>
@@ -64,10 +65,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     private string _deviceB = "";
 
     [ObservableProperty]
-    private IReadOnlyList<PresetChoice> _presetChoices = Array.Empty<PresetChoice>();
+    private IReadOnlyList<ModeChoice> _modeChoices = Array.Empty<ModeChoice>();
 
     [ObservableProperty]
-    private PresetChoice? _selectedPreset;
+    private ModeChoice? _selectedMode;
 
     // ── Media ─────────────────────────────────────────────────────────────────
 
@@ -95,38 +96,111 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     [ObservableProperty]
     private bool _startAnother;
 
-    /// <summary>The chosen file does not exist (URLs are never checked).</summary>
-    [ObservableProperty]
-    private bool _pathMissing;
-
     private ButtonActionType Type => SelectedChoice.Type ?? ButtonActionType.None;
     public bool NeedsDevice => ActionCatalog.NeedsDevice(Type);
     public bool NeedsPair => ActionCatalog.NeedsPair(Type);
-    public bool NeedsPreset => ActionCatalog.NeedsPreset(Type);
+    public bool NeedsMode => ActionCatalog.NeedsMode(Type);
     public bool NeedsMediaApp => ActionCatalog.NeedsMediaApp(Type);
     public bool NeedsCommand => ActionCatalog.NeedsCommand(Type);
     public bool NeedsWhileRunning => ActionCatalog.NeedsWhileRunning(Type);
     public bool CanTest => Type != ButtonActionType.None;
 
-    /// <summary>Programs and scripts run only for presses over USB (custom-actions spec §7).</summary>
-    public bool ShowUsbOnly => NeedsCommand && _host.PressesOverNetwork();
+    // ── The Controls page's inspector row ─────────────────────────────────────
 
-    public string CommandHint => Type == ButtonActionType.RunScript
-        ? "Runs hidden. .bat, .cmd and .exe start fastest; PowerShell takes a moment longer. " +
-          "The script gets VOLCO_BUTTON, VOLCO_GESTURE and VOLCO_PRESET."
-        : "An .exe, a shortcut, a document, or a link such as steam://rungameid/570. " +
-          "If the program already runs, its window comes to the front.";
+    /// <summary>The row's text: the action's short label, or "—" when the slot is empty.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RowTip))]
+    private string _rowText = "—";
+
+    /// <summary>The first problem <see cref="Volco.Core.Input.Actions.ActionValidator"/> finds in
+    /// the saved action, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProblem))]
+    [NotifyCanExecuteChangedFor(nameof(TestCommand))]
+    private string? _problem;
+
+    /// <summary>This slot holds the button's main action (the one its light follows).</summary>
+    [ObservableProperty]
+    private bool _isMain;
+
+    public bool HasProblem => Problem is not null;
+
+    /// <summary>The action's <see cref="ButtonActionType"/> name, for its icon.</summary>
+    public string IconKey => Type.ToString();
+
+    /// <summary>Programs and scripts carry the "USB" tag, whatever the transport.</summary>
+    public bool IsUsb => NeedsCommand;
+
+    /// <summary>"Press: Mute mic", for the dense drawing's icons.</summary>
+    public string RowTip => $"{Label}: {RowText}";
+
+    /// <summary>Set by the button after each change (<see cref="Problem"/> separately).</summary>
+    internal void SetRow(string text, bool isMain)
+    {
+        RowText = text;
+        IsMain = isMain;
+    }
+
+    // ── The action dialog's validation (spec §6.4) ────────────────────────────
+
+    private static readonly IReadOnlyDictionary<string, string> NoErrors = new Dictionary<string, string>();
+
+    /// <summary>Builds the context <see cref="Errors"/> is checked against; null checks structure only.</summary>
+    internal Func<ActionValidationContext>? Validation { get; init; }
+
+    /// <summary>Field key (<see cref="ActionValidator"/>'s) to message; empty until <see cref="ShowErrors"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DeviceError), nameof(DeviceBError), nameof(ModeError), nameof(PathError),
+                              nameof(WorkingDirectoryError), nameof(FirstErrorKey))]
+    private IReadOnlyDictionary<string, string> _errors = NoErrors;
+
+    /// <summary>Set by the dialog's first Done: from then on every change re-checks <see cref="Errors"/>.</summary>
+    [ObservableProperty]
+    private bool _showErrors;
+
+    public string? DeviceError => Errors.GetValueOrDefault(ActionValidator.Device);
+    public string? DeviceBError => Errors.GetValueOrDefault(ActionValidator.DeviceB);
+    public string? ModeError => Errors.GetValueOrDefault(ActionValidator.Mode);
+    public string? PathError => Errors.GetValueOrDefault(ActionValidator.Path);
+    public string? WorkingDirectoryError => Errors.GetValueOrDefault(ActionValidator.WorkingDirectory);
+
+    /// <summary>The first field with an error, in the settings pane's order; null when valid.</summary>
+    public string? FirstErrorKey
+        => new[] { ActionValidator.Device, ActionValidator.DeviceB, ActionValidator.Mode, ActionValidator.Path,
+                   ActionValidator.WorkingDirectory }.FirstOrDefault(Errors.ContainsKey);
+
+    /// <summary>Checks the action now (whatever <see cref="ShowErrors"/> says) and returns the problems.</summary>
+    internal IReadOnlyDictionary<string, string> Check()
+    {
+        var context = Validation?.Invoke() ?? new ActionValidationContext(ModeChoices.Select(p => p.Id).ToList(), _ => null, _ => true);
+        var errors = ActionValidator.Validate(_cfg, context);
+        Errors = errors.Count == 0 ? NoErrors : errors;
+        return errors;
+    }
+
+    partial void OnShowErrorsChanged(bool value)
+    {
+        if (value) Check();
+        else Errors = NoErrors;
+    }
+
+    /// <summary>A user edit was written to the config.</summary>
+    private void Edited()
+    {
+        if (ShowErrors) Check();
+        _changed();
+    }
 
     public string CommandPlaceholder => Type == ButtonActionType.RunScript ? @"C:\Scripts\lights.bat" : @"C:\Games\game.exe";
 
     internal ActionSlotViewModel(string label, IReadOnlyList<AudioDevice> devices,
-                                 Func<IReadOnlyList<PresetChoice>> presets,
+                                 Func<IReadOnlyList<ModeChoice>> modes,
                                  Action<ButtonActionConfig> execute, Action changed,
                                  Func<string, DeviceChoice> describe, ActionSlotHost? host = null)
     {
         _describe = describe;
         Label = label;
-        _presets = presets;
+        _modes = modes;
         _execute = execute;
         _changed = changed;
         _host = host ?? ActionSlotHost.Default;
@@ -139,7 +213,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
 
     internal ButtonActionConfig Config => _cfg;
 
-    /// <summary>Shows <paramref name="cfg"/> (another preset's action) without saving.</summary>
+    /// <summary>Shows <paramref name="cfg"/> (another mode's action) without saving.</summary>
     internal void Bind(ButtonActionConfig cfg)
     {
         _cfg = cfg;
@@ -150,27 +224,26 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
             SetDevices(null);
             Device = cfg.Device?.FriendlyName ?? "";
             DeviceB = cfg.DeviceB?.FriendlyName ?? "";
-            RefreshPresets();
+            RefreshModes();
             CommandPath = cfg.Command?.Path ?? "";
             CommandArguments = cfg.Command?.Arguments ?? "";
             CommandWorkingDirectory = cfg.Command?.WorkingDirectory ?? "";
             CommandName = cfg.Command?.Name ?? "";
             StartAnother = cfg.WhileRunning == WhileRunningPolicy.StartAnother;
-            UpdatePathMissing();
             RefreshMediaApps(force: true);
         }
         finally { _loading = false; }
     }
 
-    /// <summary>Re-reads the preset list (a preset was added, renamed or deleted).</summary>
-    internal void RefreshPresets()
+    /// <summary>Re-reads the mode list (a mode was added, renamed or deleted).</summary>
+    internal void RefreshModes()
     {
         var wasLoading = _loading;
         _loading = true;
         try
         {
-            PresetChoices = _presets();
-            SelectedPreset = PresetChoices.FirstOrDefault(p => p.Id == _cfg.PresetId);
+            ModeChoices = _modes();
+            SelectedMode = ModeChoices.FirstOrDefault(p => p.Id == _cfg.ModeId);
         }
         finally { _loading = wasLoading; }
     }
@@ -202,10 +275,10 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         finally { _loading = wasLoading; }
     }
 
-    /// <summary>The connection type changed: the "Runs only over USB" note follows.</summary>
-    internal void RefreshTransport() => OnPropertyChanged(nameof(ShowUsbOnly));
+    /// <summary>Try is off for an action with a problem: the runtime refuses to run it.</summary>
+    private bool CanTry() => !HasProblem;
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanTry))]
     private void Test() => _execute(_cfg);
 
     partial void OnSelectedChoiceChanged(ActionChoice value)
@@ -220,7 +293,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
             return;
         }
         _cfg.Action = value.Type!.Value;
-        _changed();
+        Edited();
     }
 
     partial void OnDeviceChanged(string value)
@@ -228,73 +301,66 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         // A swapped ItemsSource can null the two-way-bound selection for a moment; never user intent.
         if (_loading || string.IsNullOrEmpty(value)) return;
         _cfg.Device = DeviceRefLookup.DeviceRefFromName(_devices, value);
-        _changed();
+        Edited();
     }
 
     partial void OnDeviceBChanged(string value)
     {
         if (_loading || string.IsNullOrEmpty(value)) return;
         _cfg.DeviceB = DeviceRefLookup.DeviceRefFromName(_devices, value);
-        _changed();
+        Edited();
     }
 
-    partial void OnSelectedPresetChanged(PresetChoice? value)
+    partial void OnSelectedModeChanged(ModeChoice? value)
     {
         if (_loading || value is null) return;
-        _cfg.PresetId = value.Id;
-        _changed();
+        _cfg.ModeId = value.Id;
+        Edited();
     }
 
     partial void OnSelectedMediaAppChanged(MediaAppChoice? value)
     {
         if (_loading || value is null) return;
         _cfg.MediaApp = value.Id is null ? null : new MediaAppConfig { Id = value.Id, Name = value.Name };
-        _changed();
+        Edited();
     }
 
     partial void OnCommandPathChanged(string value)
     {
-        UpdatePathMissing();
         if (_loading) return;
-        Command().Path = value.Trim();
-        _changed();
+        Command().Path = Volco.Core.Programs.CommandPath.Unquote(value);   // "Copy as path" quotes it
+        Edited();
     }
 
     partial void OnCommandArgumentsChanged(string value)
     {
         if (_loading) return;
         Command().Arguments = value;
-        _changed();
+        Edited();
     }
 
     partial void OnCommandWorkingDirectoryChanged(string value)
     {
         if (_loading) return;
-        Command().WorkingDirectory = value.Trim();
-        _changed();
+        Command().WorkingDirectory = Volco.Core.Programs.CommandPath.Unquote(value);
+        Edited();
     }
 
     partial void OnCommandNameChanged(string value)
     {
         if (_loading) return;
         Command().Name = value;
-        _changed();
+        Edited();
     }
 
     partial void OnStartAnotherChanged(bool value)
     {
         if (_loading) return;
         _cfg.WhileRunning = value ? WhileRunningPolicy.StartAnother : WhileRunningPolicy.Ignore;
-        _changed();
+        Edited();
     }
 
     private CommandConfig Command() => _cfg.Command ??= new CommandConfig();
-
-    private void UpdatePathMissing()
-    {
-        var path = CommandPath.Trim();
-        PathMissing = path.Length > 0 && !Volco.Core.Programs.CommandPath.IsUrl(path) && !_host.FileExists(path);
-    }
 
     /// <summary>Re-seeds the device pickers; keeps the current selections without saving.</summary>
     internal void RefreshDevices(IReadOnlyList<AudioDevice> devices)
@@ -315,9 +381,13 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
         finally { _loading = false; }
         OnPropertyChanged(nameof(Device));
         OnPropertyChanged(nameof(DeviceB));
+        if (ShowErrors) Check();   // a device may now be an input, or gone
     }
 
     private IReadOnlyList<AudioDevice> _devices = Array.Empty<AudioDevice>();
+
+    /// <summary>The render devices the pickers list.</summary>
+    internal IReadOnlyList<AudioDevice> Devices => _devices;
 
     private void SetDevices(IReadOnlyList<AudioDevice>? devices)
     {

@@ -23,9 +23,9 @@ public sealed record ControllerLinkOptions(TimeSpan HelloRetryInterval, TimeSpan
 /// frames have all been sent by the time a public method returns.
 /// </para>
 /// <para>
-/// A preset change is announced for a few ticks (the LED blink and the screen's preset flash):
+/// A mode change is announced for a few ticks (the LED blink and the screen's mode flash):
 /// <c>compute</c> gets the announce step (0 at the change, +1 per tick, null once it is over), and
-/// each tick sends what changed, sliding screens the way the preset change did.
+/// each tick sends what changed, sliding screens the way the mode change did.
 /// </para>
 /// </summary>
 public sealed class ControllerLink : IDisposable
@@ -56,9 +56,9 @@ public sealed class ControllerLink : IDisposable
     public ControllerLink(Func<IReadOnlyList<ButtonDisplay?>> compute, ControllerLinkOptions? options = null)
         : this(_ => compute(), 0, options) { }
 
-    /// <param name="compute">As above, given the announce step (null when no preset change is
+    /// <param name="compute">As above, given the announce step (null when no mode change is
     /// being announced).</param>
-    /// <param name="announceSteps">How many ticks a preset change is announced for.</param>
+    /// <param name="announceSteps">How many ticks a mode change is announced for.</param>
     public ControllerLink(Func<int?, IReadOnlyList<ButtonDisplay?>> compute, int announceSteps, ControllerLinkOptions? options = null)
     {
         _compute = compute;
@@ -75,6 +75,13 @@ public sealed class ControllerLink : IDisposable
     /// <summary>A Hello with this app's version arrived. Raised before the full push it triggers,
     /// so a handler can store the controller info the push is computed from. Any thread.</summary>
     public event EventHandler<HelloMessage>? HelloReceived;
+
+    /// <summary>The announce step since the last mode change, or null when none is announced.</summary>
+    public int? AnnounceStep { get { lock (_gate) return _announceStep; } }
+
+    /// <summary>An announce step started or passed (after its push, outside the lock; a timer or
+    /// transport thread).</summary>
+    public event EventHandler? Announced;
 
     /// <summary>The transport just connected: start a session on it.</summary>
     public void Attach(IControllerConnection connection)
@@ -154,7 +161,7 @@ public sealed class ControllerLink : IDisposable
         Drain();
     }
 
-    /// <summary>Re-sends every button with no transition (e.g. the live preset was deleted).</summary>
+    /// <summary>Re-sends every button with no transition (e.g. the live mode was deleted).</summary>
     public void PushAll()
     {
         lock (_gate)
@@ -164,10 +171,10 @@ public sealed class ControllerLink : IDisposable
         Drain();
     }
 
-    /// <summary>A preset change: every screen slides (even unchanged ones) and every LED is
+    /// <summary>A mode change: every screen slides (even unchanged ones) and every LED is
     /// re-sent; wrapped in Begin/Commit when <paramref name="synchronized"/>. Starts the announce
     /// steps.</summary>
-    public void PushPresetChange(ScreenTransition transition, bool synchronized)
+    public void PushModeChange(ScreenTransition transition, bool synchronized)
     {
         lock (_gate)
         {
@@ -185,6 +192,7 @@ public sealed class ControllerLink : IDisposable
             if (synchronized) Send(ProtocolEncoder.EncodeCommit());
         }
         Drain();
+        if (_announceSteps > 0) Announced?.Invoke(this, EventArgs.Empty);
     }
 
     private void PushLocked(ScreenTransition transition, bool everything)
@@ -229,6 +237,7 @@ public sealed class ControllerLink : IDisposable
     {
         try
         {
+            var announced = false;
             lock (_gate)
             {
                 if (_connection is null || _disposed) return;
@@ -236,6 +245,7 @@ public sealed class ControllerLink : IDisposable
                 {
                     _announceStep = step + 1 < _announceSteps ? step + 1 : null;
                     PushLocked(_announceTransition, everything: false);
+                    announced = true;
                 }
                 var now = Environment.TickCount64;
                 if (_state == ControllerState.AwaitingHello
@@ -246,6 +256,7 @@ public sealed class ControllerLink : IDisposable
                     Send(ProtocolEncoder.EncodeHeartbeat());
             }
             Drain();
+            if (announced) Announced?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {

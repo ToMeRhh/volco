@@ -35,8 +35,10 @@ public static class TestMode
     /// <summary>"1 press", "3 presses".</summary>
     public static string PressText(int presses) => presses == 1 ? "1 press" : $"{presses} presses";
 
-    /// <summary>"Test" over "Button N" until the first press, then "Button N" over the count.</summary>
+    /// <summary>"Test" over "Button N" until the first press, then "Button N" over the count;
+    /// N is numbered from 1, as the settings UI names the button (<paramref name="button"/> is the
+    /// 0-based input).</summary>
     public static ScreenContent Screen(int button, int presses) => presses <= 0
-        ? ScreenContent.Text("Test", ScreenIcon.Generic, false, $"Button {button}")
-        : ScreenContent.Text($"Button {button}", ScreenIcon.Generic, false, PressText(presses));
+        ? ScreenContent.Text("Test", ScreenIcon.Generic, false, $"Button {button + 1}")
+        : ScreenContent.Text($"Button {button + 1}", ScreenIcon.Generic, false, PressText(presses));
 }

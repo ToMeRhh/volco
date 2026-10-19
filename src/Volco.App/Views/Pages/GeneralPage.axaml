@@ -28,9 +28,6 @@
       <!-- The Updates panel goes here on release builds (code-behind). -->
       <ContentControl Name="UpdatesHost"/>
 
-      <!-- Device nicknames and icons (code-behind) -->
-      <ContentControl Name="DevicesHost"/>
-
       <Border Name="TroubleshootingPanel" Classes="Panel">
         <StackPanel Spacing="14">
           <TextBlock Text="Troubleshooting" Classes="Subtitle"/>

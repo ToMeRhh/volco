@@ -60,8 +60,8 @@ internal sealed class TestRig : IDisposable
         Runtime.Start();
     }
 
-    public SettingsViewModel CreateSettings(IUiDispatcher ui)
-        => new(Config, Engine, Runtime, ui);
+    public SettingsViewModel CreateSettings(IUiDispatcher ui, Volco.App.Platform.IAppIcons? appIcons = null)
+        => new(Config, Engine, Runtime, ui, appIcons: appIcons);
 
     public void Dispose() => Runtime.Dispose();
 }

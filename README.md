@@ -67,7 +67,7 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 | ⏯️ **Media keys** | Play/pause, next, previous and stop, for the current player or a specific app |
 | 🚀 **Programs & scripts** | Open (or bring to front) a program, or run a `.bat`, `.ps1`, `.py` or `.js` script |
 | 🔘 **Single, double & long press** | Up to three actions per button |
-| 🗂️ **Presets** | Each button keeps its own actions per preset; switch presets from a button |
+| 🗂️ **Modes** | Each button keeps its own actions per mode; switch modes from a button |
 | 🖥️ **OLED button screens** | Icons, live status, scrolling names, Hebrew/RTL, synced slide animations, burn-in protection |
 | 🏷️ **Device nicknames** | "Sony WH-1000XM5 Hands-Free AG Audio" becomes **Headphones** 🎧, on screen and on the controller |
 | 🔧 **Firmware from the app** | Volco carries its matching firmware and installs or updates it over USB |
@@ -77,11 +77,8 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 
 <table>
 <tr>
-<td width="50%" align="center"><a href="docs/images/app-sliders.png"><img src="docs/images/app-sliders.png" alt="Volco's Sliders page: two sliders on output devices, one on a game, one on Spotify, and one on all other apps"></a><br><sub><b>Sliders:</b> a device, an app, or everything else</sub></td>
-<td width="50%" align="center"><a href="docs/images/app-buttons.png"><img src="docs/images/app-buttons.png" alt="Volco's Buttons page: mute with a double press for Spotify play/pause, mute mic, and a speakers/headphones toggle with an LED pair"></a><br><sub><b>Buttons:</b> press, double press and hold, with LED feedback</sub></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><a href="docs/images/app-hardware.png"><img src="docs/images/app-hardware.png" alt="Volco's Hardware page: connected over USB, the firmware version, and the controller's slider and button pins" width="50%"></a><br><sub><b>Hardware:</b> the connection, the firmware, and the layout stored on the controller</sub></td>
+<td width="50%" align="center"><a href="docs/images/app-controls.png"><img src="docs/images/app-controls.png" alt="Volco's Controls page: five sliders (Main output, Headphones, Wardogs, Spotify with its icon, All other apps) above four buttons in the Default mode, one with a screen showing Spotify playing; the inspector shows the selected slider, Wardogs"></a><br><sub><b>Controls:</b> your sliders and buttons as a drawing of the controller; pick one to set what it does</sub></td>
+<td width="50%" align="center"><a href="docs/images/app-controls-dialog.png"><img src="docs/images/app-controls-dialog.png" alt="The dialog that picks what a slider controls: output and input devices, the apps playing now with their icons and live levels, and a saved app that is not running"></a><br><sub><b>Slider dialog:</b> devices, microphones and apps, with their icons and live levels</sub></td>
 </tr>
 </table>
 
@@ -93,7 +90,7 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 2. **Get the app.** Download `Volco.exe` from the [latest release](https://github.com/ToMeRhh/volco/releases/latest). It's a single file with nothing to install; run it and it appears in the system tray.
    > Volco isn't code-signed yet, so Windows SmartScreen may warn you the first time. Choose **More info → Run anyway**.
 3. **Flash the firmware.** Plug the ESP32 in over USB, open **Settings → Controller**, pick its COM port and choose **Install firmware…**. It takes under a minute.
-4. **Set it up.** On the same page, choose **Set up**, start from the **DIY reference** preset or your own layout, and **Save to controller**. Then map your sliders and buttons on their pages. Done! 🎉
+4. **Set it up.** On the same page, choose **Set up**, start from the **DIY reference** preset or your own layout, and **Save to controller**. Then map your sliders and buttons on the **Controls** page. Done! 🎉
 
 Wi-Fi (UDP) is in the Hardware page's **Advanced** section. USB always stays on, so a wrong Wi-Fi setting can be fixed over the cable.
 
@@ -118,7 +115,7 @@ flowchart LR
     U <--> R
 ```
 
-The firmware is deliberately simple. It doesn't know what "mute" or "headphones" mean: it reports *"slider 2 is at 3071"* and *"button 0 was pressed"*, and it draws whatever the PC sends back. All the logic lives in the app, so **changing what a button does never needs a reflash**.
+The firmware is deliberately simple. It doesn't know what "mute" or "headphones" mean: it reports *"slider input 2 is at 3071"* and *"button input 0 was pressed"* (inputs are numbered from 0 on the wire; the app calls them Slider 3 and Button 1), and it draws whatever the PC sends back. All the logic lives in the app, so **changing what a button does never needs a reflash**.
 
 They talk over a small, open binary protocol that works the same over **USB serial, UDP and WebSocket**. You can build your own controller (an RP2040, a phone app, a MIDI bridge...) and Volco will drive it. The byte-level spec is in [`firmware/README.md`](firmware/README.md#wire-protocol).
 
@@ -152,7 +149,7 @@ cd firmware && pio test -e native         # firmware tests on your PC
 ## 🗺️ Roadmap
 
 - [x] Per-app and device volume, mute, output switching
-- [x] Presets with single, double and long press actions
+- [x] Modes with single, double and long press actions
 - [x] OLED button screens
 - [x] Media, program and script actions
 - [ ] 🔌 PCB files, BOM and case

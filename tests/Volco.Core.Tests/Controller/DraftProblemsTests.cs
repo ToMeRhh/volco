@@ -18,8 +18,8 @@ public class DraftProblemsTests
         var problems = Find(c);
 
         Assert.Equal(2, problems.Count);
-        Assert.Contains(new DraftProblem(ConfigField.SliderPin, 0, "Pin 33 is also used by Button 0's LED. Each pin can only do one thing."), problems);
-        Assert.Contains(new DraftProblem(ConfigField.LedPin, 0, "Pin 33 is also used by Slider 0. Each pin can only do one thing."), problems);
+        Assert.Contains(new DraftProblem(ConfigField.SliderPin, 0, "Pin 33 is also used by Button 1's LED. Each pin can only do one thing."), problems);
+        Assert.Contains(new DraftProblem(ConfigField.LedPin, 0, "Pin 33 is also used by Slider 1. Each pin can only do one thing."), problems);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class DraftProblemsTests
     {
         var c = new ControllerConfig();
         for (var i = 0; i < 3; i++) c.Buttons.Add(new Button { Pin = 4 });
-        Assert.Equal("Pin 4 is also used by Button 1 and Button 2. Each pin can only do one thing.",
+        Assert.Equal("Pin 4 is also used by Button 2 and Button 3. Each pin can only do one thing.",
             Find(c).Single(p => p.Item == 0).Message);
     }
 
@@ -72,7 +72,7 @@ public class DraftProblemsTests
         var problems = Find(c);
 
         Assert.Equal(new byte[] { 0, 1 }, problems.Where(p => p.Field == ConfigField.ScreenAddress).Select(p => p.Item).ToArray());
-        Assert.StartsWith("Button 1's screen is also on bus 0 at 0x3C.", problems[0].Message);
+        Assert.StartsWith("Button 2's screen is also on bus 0 at 0x3C.", problems[0].Message);
     }
 
     [Fact]

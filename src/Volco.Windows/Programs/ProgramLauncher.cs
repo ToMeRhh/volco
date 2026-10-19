@@ -154,7 +154,7 @@ internal sealed class ProgramLauncher : IProgramLauncher, IDisposable
     }
 
     /// <summary>A process's full image path, or "" when it cannot be opened (the same calls as
-    /// <c>SessionRegistry.ResolveImageName</c>).</summary>
+    /// <c>SessionRegistry.ResolveExePath</c>).</summary>
     private static string ImagePath(uint pid)
     {
         using var process = PInvoke.OpenProcess_SafeHandle(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);

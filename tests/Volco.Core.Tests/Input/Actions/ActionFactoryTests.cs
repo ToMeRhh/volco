@@ -9,13 +9,13 @@ namespace Volco.Core.Tests.Input.Actions;
 public class ActionFactoryTests
 {
     private readonly FakeAudioEngine _audio = new();
-    private readonly FakePresetController _presets = new();
+    private readonly FakeModeController _modes = new();
 
     [Fact]
     public void Create_MuteCurrentOutput_ReturnsCorrectType()
     {
         var config = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
-        var action = ActionFactory.Create(config, _audio, _presets);
+        var action = ActionFactory.Create(config, _audio, _modes);
         Assert.IsType<MuteCurrentOutputAction>(action);
     }
 
@@ -23,7 +23,7 @@ public class ActionFactoryTests
     public void Create_MuteSpecificDevice_ReturnsCorrectType()
     {
         var config = new ButtonActionConfig { Action = ButtonActionType.MuteSpecificDevice, Device = new DeviceRefConfig { FriendlyName = "Speakers" } };
-        var action = ActionFactory.Create(config, _audio, _presets);
+        var action = ActionFactory.Create(config, _audio, _modes);
         Assert.IsType<MuteSpecificDeviceAction>(action);
     }
 
@@ -31,7 +31,7 @@ public class ActionFactoryTests
     public void Create_None_ReturnsNull()
     {
         var config = new ButtonActionConfig { Action = ButtonActionType.None };
-        var action = ActionFactory.Create(config, _audio, _presets);
+        var action = ActionFactory.Create(config, _audio, _modes);
         Assert.Null(action);
     }
 
@@ -39,7 +39,7 @@ public class ActionFactoryTests
     public void Create_ToggleOutputDevice_ReturnsCorrectType()
     {
         var config = new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice };
-        var action = ActionFactory.Create(config, _audio, _presets);
+        var action = ActionFactory.Create(config, _audio, _modes);
         Assert.IsType<ToggleOutputDeviceAction>(action);
     }
 
@@ -53,7 +53,7 @@ public class ActionFactoryTests
             Device = new DeviceRefConfig()          // both Id and FriendlyName empty
         };
 
-        ActionFactory.Create(config, audio, _presets)?.Execute();
+        ActionFactory.Create(config, audio, _modes)?.Execute();
 
         Assert.Empty(audio.ToggleMuteCalls);
     }
@@ -64,7 +64,7 @@ public class ActionFactoryTests
         var audio = new FakeAudioEngine();
         var config = new ButtonActionConfig { Action = ButtonActionType.MuteSpecificDevice, Device = null };
 
-        ActionFactory.Create(config, audio, _presets)?.Execute();
+        ActionFactory.Create(config, audio, _modes)?.Execute();
 
         Assert.Empty(audio.ToggleMuteCalls);
     }
@@ -75,7 +75,7 @@ public class ActionFactoryTests
         var audio = new FakeAudioEngine();
         var config = new ButtonActionConfig { Action = ButtonActionType.SetOutputDevice, Device = new DeviceRefConfig() };
 
-        ActionFactory.Create(config, audio, _presets)?.Execute();
+        ActionFactory.Create(config, audio, _modes)?.Execute();
 
         Assert.Empty(audio.SetDefaultCalls);
     }
@@ -90,7 +90,7 @@ public class ActionFactoryTests
             Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Headphones" }
         };
 
-        ActionFactory.Create(config, audio, _presets)!.Execute();
+        ActionFactory.Create(config, audio, _modes)!.Execute();
 
         Assert.Equal(DeviceRef.ById("dev-1"), Assert.Single(audio.ToggleMuteCalls));
     }
@@ -104,7 +104,7 @@ public class ActionFactoryTests
         };
         var config = Toggle(new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" },
                             new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" });
-        ActionFactory.Create(config, audio, _presets)!.Execute();
+        ActionFactory.Create(config, audio, _modes)!.Execute();
 
         var (endpointId, flow) = Assert.Single(audio.SetDefaultCalls);
         Assert.Equal("dev-2", endpointId);
@@ -120,7 +120,7 @@ public class ActionFactoryTests
         };
         ActionFactory.Create(Toggle(new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" },
                                     new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" }),
-                             audio, _presets)!.Execute();
+                             audio, _modes)!.Execute();
 
         Assert.Equal("dev-1", Assert.Single(audio.SetDefaultCalls).EndpointId);
     }
@@ -142,7 +142,7 @@ public class ActionFactoryTests
         };
         var config = Toggle(new DeviceRefConfig { Id = "", FriendlyName = "Speakers" },
                             new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" });
-        ActionFactory.Create(config, audio, _presets)!.Execute();
+        ActionFactory.Create(config, audio, _modes)!.Execute();
 
         var (endpointId, flow) = Assert.Single(audio.SetDefaultCalls);
         Assert.Equal("dev-2", endpointId);
@@ -162,7 +162,7 @@ public class ActionFactoryTests
 
         ActionFactory.Create(Toggle(new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" },
                                     new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" }),
-                             audio, _presets)!.Execute();
+                             audio, _modes)!.Execute();
 
         Assert.Equal("dev-1", Assert.Single(audio.SetDefaultCalls).EndpointId);
     }
@@ -176,54 +176,54 @@ public class ActionFactoryTests
         };
 
         ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.ToggleOutputDevice },
-                             audio, _presets)!.Execute();
+                             audio, _modes)!.Execute();
 
         Assert.Empty(audio.SetDefaultCalls);
     }
 
     [Fact]
-    public void NextPreset_AdvancesThePresetController()
+    public void NextMode_AdvancesTheModeController()
     {
-        ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.NextPreset }, _audio, _presets)!.Execute();
+        ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.NextMode }, _audio, _modes)!.Execute();
 
-        Assert.Equal(1, _presets.NextCalls);
+        Assert.Equal(1, _modes.NextCalls);
     }
 
     [Fact]
-    public void GoToPreset_SetsThatPreset()
+    public void GoToMode_SetsThatMode()
     {
-        ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.GoToPreset, PresetId = "gaming" },
-                             _audio, _presets)!.Execute();
+        ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.GoToMode, ModeId = "gaming" },
+                             _audio, _modes)!.Execute();
 
-        Assert.Equal(new[] { "gaming" }, _presets.SetCalls);
+        Assert.Equal(new[] { "gaming" }, _modes.SetCalls);
     }
 
     [Fact]
-    public void GoToPreset_WithNoPresetChosen_DoesNothing()
+    public void GoToMode_WithNoModeChosen_DoesNothing()
     {
-        ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.GoToPreset }, _audio, _presets)!.Execute();
+        ActionFactory.Create(new ButtonActionConfig { Action = ButtonActionType.GoToMode }, _audio, _modes)!.Execute();
 
-        Assert.Empty(_presets.SetCalls);
+        Assert.Empty(_modes.SetCalls);
     }
 
     [Theory]
-    [InlineData(ButtonActionType.NextPreset)]
-    [InlineData(ButtonActionType.GoToPreset)]
-    public void PresetActions_WithoutAPresetController_AreNull(ButtonActionType type)
-        => Assert.Null(ActionFactory.Create(new ButtonActionConfig { Action = type }, _audio, presets: null));
+    [InlineData(ButtonActionType.NextMode)]
+    [InlineData(ButtonActionType.GoToMode)]
+    public void ModeActions_WithoutAModeController_AreNull(ButtonActionType type)
+        => Assert.Null(ActionFactory.Create(new ButtonActionConfig { Action = type }, _audio, modes: null));
 }
 
-internal sealed class FakePresetController : Volco.Core.Runtime.IPresetController
+internal sealed class FakeModeController : Volco.Core.Runtime.IModeController
 {
-    public string ActivePresetId { get; private set; } = AppConfig.DefaultPresetId;
+    public string ActiveModeId { get; private set; } = AppConfig.DefaultModeId;
     public List<string> SetCalls { get; } = new();
     public int NextCalls { get; private set; }
 
-    public void SetActivePreset(string presetId)
+    public void SetActiveMode(string modeId)
     {
-        SetCalls.Add(presetId);
-        ActivePresetId = presetId;
+        SetCalls.Add(modeId);
+        ActiveModeId = modeId;
     }
 
-    public void NextPreset() => NextCalls++;
+    public void NextMode() => NextCalls++;
 }

@@ -32,14 +32,15 @@ public sealed class CustomActionRuntimeTests : IDisposable
     private readonly List<FakeControllerConnection> _connections = new();
     private readonly List<VolcoRuntime> _runtimes = new();
     private readonly string _dir;
-    private readonly string _script;
+    // Validation wants a Windows full path. On Linux this is one file with backslashes in its
+    // name, in the working directory, which is where ScriptRunner's File.Exists looks.
+    private readonly string _script = $@"C:\volco-{Guid.NewGuid():N}\backup.bat";
 
     public CustomActionRuntimeTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), $"volco-custom-{Guid.NewGuid()}");
         Directory.CreateDirectory(_dir);
-        _script = Path.Combine(_dir, "backup.bat");
-        File.WriteAllText(_script, "@echo off\r\n");
+        if (!OperatingSystem.IsWindows()) File.WriteAllText(_script, "@echo off\r\n");
         var speakers = new AudioDevice("spk", "Speakers", AudioFlow.Render, true);
         _engine.Devices = new List<AudioDevice> { speakers };
         _engine.DefaultRender = speakers;
@@ -50,6 +51,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
     public void Dispose()
     {
         foreach (var runtime in _runtimes) runtime.Dispose();
+        try { if (!OperatingSystem.IsWindows()) File.Delete(_script); } catch { /* best effort */ }
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
@@ -110,6 +112,46 @@ public sealed class CustomActionRuntimeTests : IDisposable
         Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = _script },
     };
 
+    private static void EmptyScript(AppConfig c) => c.Buttons[0].Default().SinglePress = new ButtonActionConfig
+    {
+        Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = "" },
+    };
+
+    private static int LoggedRefusals()
+    {
+        Volco.Core.Diagnostics.AppLog.Flush();
+        var path = Volco.Core.Diagnostics.AppLog.LogPath;
+        return File.ReadAllLines(path).Count(l => l.Contains("Button 1:") && l.Contains("Choose the script to run."));
+    }
+
+    [Fact]
+    public void Press_RunScriptWithoutPath_DoesNotStartAProcess()
+    {
+        Start(ConnectionType.Serial, EmptyScript);
+        Press(Connection(0), 0);
+        Assert.True(StaysFalse(() => _starter.Runs.Count > 0), "an invalid script action started a process");
+    }
+
+    [Fact]
+    public void Press_InvalidAction_LogsOnce()
+    {
+        var before = LoggedRefusals();
+        Start(ConnectionType.Serial, EmptyScript);
+        Press(Connection(0), 0);
+        Assert.True(WaitUntil(() => LoggedRefusals() == before + 1), "the refusal was not logged");
+        Press(Connection(0), 0);
+        Assert.True(StaysFalse(() => LoggedRefusals() > before + 1), "the refusal was logged twice");
+    }
+
+    [Fact]
+    public void Execute_Test_InvalidAction_DoesNothing()
+    {
+        var runtime = Start(ConnectionType.Serial, _ => { });
+        runtime.Execute(new ButtonActionConfig { Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = "" } },
+            new ActionOrigin(0, PressType.Single, "Default"));
+        Assert.True(StaysFalse(() => _starter.Runs.Count > 0), "an invalid action ran from Test");
+    }
+
     [Fact]
     public void ScriptPressOverSerial_Runs_WithTheEnvironment()
     {
@@ -118,9 +160,9 @@ public sealed class CustomActionRuntimeTests : IDisposable
 
         Assert.True(WaitUntil(() => _starter.Runs.Count == 1), "the script did not run");
         var env = _starter.Runs[0].Spec.Environment;
-        Assert.Equal("0", env["VOLCO_BUTTON"]);
+        Assert.Equal("1", env["VOLCO_BUTTON"]);   // input 0 is "Button 1"
         Assert.Equal("single", env["VOLCO_GESTURE"]);
-        Assert.Equal("Default", env["VOLCO_PRESET"]);
+        Assert.Equal("Default", env["VOLCO_MODE"]);
     }
 
     [Theory]
@@ -158,7 +200,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void LivePresetsPrograms_AreWatched()
+    public void LiveModesPrograms_AreWatched()
     {
         Start(ConnectionType.Serial, c => c.Buttons[1].Default().LongPress = new ButtonActionConfig
         {
@@ -263,7 +305,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
         }, options: Quiet with { Time = time });
         var binding = runtime.Config.Config.Buttons[0].Default();
         var first = ProtocolEncoder.EncodeScreen(0, ScreenTransition.None,
-            ControllerDisplay.Screen(binding.SinglePress, runtime.Config.Config, runtime.ActivePresetId, _engine));
+            ControllerDisplay.Screen(binding.SinglePress, runtime.Config.Config, runtime.ActiveModeId, _engine));
         var expected = ScreenFrame("PLAYING", ScreenIcon.Equalizer, "Spotify");
         var real = ScreenFrame("PAUSED", ScreenIcon.EqualizerStill, "Spotify");
         Assert.True(WaitUntil(() => Count(first) == 1), "the first action's screen was not sent");

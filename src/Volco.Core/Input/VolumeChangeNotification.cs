@@ -10,10 +10,10 @@ namespace Volco.Core.Input;
 /// a dimmed bar). <see cref="Mute"/>: a mute button was
 /// pressed (the notification carries the target's real level and icon; the OSD shows "Muted"
 /// while muted, the percentage otherwise). <see cref="Device"/>: a button switched the default output
-/// device (label = the new default's display name, icon = its icon, level/muted = that device's state). <see cref="Preset"/>: a
-/// button switched the live preset (label = the new preset's name; level and muted unused).
+/// device (label = the new default's display name, icon = its icon, level/muted = that device's state). <see cref="Mode"/>: a
+/// button switched the live mode (label = the new mode's name; level and muted unused).
 /// </remarks>
-public enum OsdKind { Volume, Mute, Device, Preset }
+public enum OsdKind { Volume, Mute, Device, Mode }
 
 /// <summary>
 /// Platform-neutral payload describing a volume/mute/output-device change that the OSD flyout
@@ -22,11 +22,13 @@ public enum OsdKind { Volume, Mute, Device, Preset }
 /// <see cref="Icon"/> is a device's icon (chosen icon, else form factor) on a
 /// <see cref="OsdKind.Device"/>, <see cref="OsdKind.Mute"/> or <see cref="OsdKind.Volume"/>
 /// notification, null otherwise or
-/// when the device is unknown.
+/// when the device is unknown. <see cref="Apps"/> is an apps slider's apps (exe names) on a
+/// <see cref="OsdKind.Volume"/> notification, so the OSD can show an app's icon; null otherwise.
 /// </summary>
 public sealed record VolumeChangeNotification(
     string Label,
     float Level,
     bool Muted,
     OsdKind Kind,
-    ScreenIcon? Icon = null);
+    ScreenIcon? Icon = null,
+    IReadOnlyList<string>? Apps = null);
