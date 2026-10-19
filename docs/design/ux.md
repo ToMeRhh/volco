@@ -3,6 +3,10 @@
 **Date:** 2026-10-01
 **Status:** Approved 2026-10-01; implemented.
 
+> **Since then:** presets were renamed **modes** (config schema v7), and one Controls page replaced the
+> Sliders and Buttons pages ([`controls-page.md`](controls-page.md)). This spec keeps its original
+> wording; the code and `CLAUDE.md` are the current reference.
+
 ## 0. Scope change from the Step 3 plan
 
 The Step 3 plan limits the PR to `src/Volco.App/` and `tests/Volco.App.Tests/`. The user's goals (any number of controls, presets, room for per-button OLED screens and custom actions) cannot be met that way, because Core still assumes the current hardware (§2.2). The user approved this scope instead:

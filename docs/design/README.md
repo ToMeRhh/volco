@@ -9,6 +9,7 @@ the code has moved on since, the code and `CLAUDE.md` are the current reference.
 | [`audio-core.md`](audio-core.md) | The Windows Core Audio engine: one audio thread, cached device and session registries, event-driven updates |
 | [`volume-osd.md`](volume-osd.md) | The on-screen volume indicator |
 | [`ux.md`](ux.md) | The settings window: pages, layout, colour and type tokens, accessibility |
+| [`controls-page.md`](controls-page.md) | The Controls page: the controller drawing, the inspector, the action and slider dialogs, modes, drag to swap |
 | [`oled-screens.md`](oled-screens.md) | Per-button OLED screens, the Hello handshake and the Screen message |
 | [`controller-config.md`](controller-config.md) | The controller config stored on the ESP32, its protocol, and installing firmware from the app |
 | [`link-state.md`](link-state.md) | What "Connected" means, and the other link states |

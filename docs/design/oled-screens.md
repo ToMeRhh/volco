@@ -3,6 +3,10 @@
 **Date:** 2026-10-02
 **Status:** Approved; implemented.
 
+> **Since then:** presets were renamed **modes** (config schema v7), and one Controls page replaced the
+> Sliders and Buttons pages ([`controls-page.md`](controls-page.md)). This spec keeps its original
+> wording; the code and `CLAUDE.md` are the current reference.
+
 **Builds on:** `ux.md`. This spec settles what that spec deferred: how screen content is sent (§4.3, §7) and the Hello handshake (§4.3).
 
 ## 0. Scope

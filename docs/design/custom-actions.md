@@ -4,7 +4,7 @@ Date: 2026-10-08. Status: implemented (branch `worktree-custom_actions`); the Wi
 
 ## 1. Goal
 
-Buttons get three new kinds of action next to the audio and preset ones:
+Buttons get three new kinds of action next to the audio and mode ones:
 
 - **Media**: Play/Pause, Next, Previous, Stop, sent to the current media app or to a chosen one.
 - **Open a program**: start a program (a game, an app), or bring it to the front if it runs.
@@ -12,7 +12,7 @@ Buttons get three new kinds of action next to the audio and preset ones:
   for anything else (webhooks via `curl`, batch commands).
 
 Each new action fits the existing model: a slot (single, double, long press) of a button in a
-preset. Webhooks as a built-in action, a "stop the script" repeat mode, script timeouts, scripts
+mode. Webhooks as a built-in action, a "stop the script" repeat mode, script timeouts, scripts
 setting their own button's display, and a playing animation are out of scope (§9).
 
 Single user, Windows only for now; app and firmware ship together, so there is no migration or
@@ -38,7 +38,7 @@ interface, so tests can use a fake process. Only its default interpreter table (
 Windows-flavoured, and it is data.
 
 `PlatformServices` gains `Media` and `Launcher`, both optional (null on Linux tests and on a future
-macOS build). `ActionFactory.Create` takes an `ActionServices` bundle (audio, presets, media,
+macOS build). `ActionFactory.Create` takes an `ActionServices` bundle (audio, modes, media,
 launcher, script runner, the current transport) instead of a growing parameter list. Without a
 service, its actions are unavailable: the picker shows them disabled (`ActionChoice.IsAvailable`).
 
@@ -46,7 +46,7 @@ service, its actions are unavailable: the picker shows them disabled (`ActionCho
 
 `ButtonActionType` gains `MediaPlayPause`, `MediaNext`, `MediaPrevious`, `MediaStop`,
 `OpenProgram`, `RunScript`. `ButtonActionConfig` gains, as loose optional fields like `Device` and
-`PresetId`:
+`ModeId`:
 
 - `MediaApp`: `{ id, name }`, the app's Windows id (its AppUserModelId, e.g. `Spotify.exe`) and
   its display name; null = "Current".
@@ -103,7 +103,7 @@ and this is logged once.
 | Action | Single LED / LED pair | Screen (layout 1) |
 |---|---|---|
 | Play/Pause, Stop | lit while the target plays (a pair lights A, like mute) | top: `PLAYING` / `PAUSED` / `STOPPED`; icon: the equaliser, moving while playing and frozen otherwise ([`playing-indicator.md`](playing-indicator.md)); main: app name |
-| Next, Previous | dark (no state, like Next preset) | top blank; icon: next / previous; main: app name |
+| Next, Previous | dark (no state, like Next mode) | top blank; icon: next / previous; main: app name |
 | target not running | dark | top blank; icon: play; main: app name (`Media` for Current with no session) |
 
 New screen icons: play, pause, next, previous (and the app and script icons of §4–5), added to
@@ -119,7 +119,7 @@ the simulator's `icons.js`.
   else start it through the shell (a program that requires admin shows UAC). Presses within ~5 s
   of a launch are ignored, so a double tap does not start two copies.
 - **Running detection** (exe and `.lnk` only): a process whose image path matches,
-  case-insensitively. Polled about every 2 s, only for programs that an action in the live preset
+  case-insensitively. Polled about every 2 s, only for programs that an action in the live mode
   names; a program Volco started itself is known at once (its `Exited`). A process Volco cannot
   query (elevated) counts as not running. URLs and documents have no running state: dark, and
   every press opens them.
@@ -169,8 +169,8 @@ flash** for ~1.5 s. Volco never kills a script, at exit either; there is no time
 
 ### 5.4 State and display
 
-Running and failed state is kept per (preset, button, gesture), so two buttons using one script
-light independently, and switching presets does not stop a run (switching back shows it still lit).
+Running and failed state is kept per (mode, button, gesture), so two buttons using one script
+light independently, and switching modes does not stop a run (switching back shows it still lit).
 Editing a command during a run leaves that run alone; the next press uses the new command.
 
 LED lit while running, blinking during the failure flash. Screen: top `RUNNING`, `FAILED` during
@@ -200,7 +200,7 @@ are open to others:
 **Rule until this is solved:** `OpenProgram` and `RunScript` run **only when the press arrived over
 USB serial**. Over WebSocket or UDP the press is refused and logged; the card says "Runs only over
 USB" when the connection type is not Serial (now an always-shown "USB" tag on the Controls page,
-`docs/design/controls-page.md` §2 item 15). Media actions, like the existing audio and preset
+`docs/design/controls-page.md` §2 item 15). Media actions, like the existing audio and mode
 actions, run over every transport. A consequence: the simulator cannot trigger programs or
 scripts.
 
@@ -251,8 +251,8 @@ Where the implementation differs from the draft above:
 - **Media availability:** the session manager is requested in the background after start, so
   the media actions are always offered on Windows; if the request fails, the failure is logged
   once and presses do nothing.
-- **Script state** is kept per action object (one slot of one button in one preset), which is
-  the (preset, button, gesture) key of §5.4; moving a card moves its state with it.
+- **Script state** is kept per action object (one slot of one button in one mode), which is
+  the (mode, button, gesture) key of §5.4; swapping two buttons moves their state with them.
 - **`.url` files** (Steam's desktop shortcuts) are offered by the program picker; like any
   non-exe they open on every press and have no running state.
 - **Program and script presses** remember, per button, whether the press frame came from the
@@ -268,7 +268,7 @@ what the press did:
 | | Screen | Single LED / LED pair (A) |
 |---|---|---|
 | **The press did nothing** (any slot) | error icon (X), top: why, main: what was pressed | fast flash: 125 ms on, 125 ms off |
-| **Another action than the shown one** (double press or hold, not a preset action) | that action, live | 2 long blinks: 375 ms on, 375 ms off, twice |
+| **Another action than the shown one** (double press or hold, not a mode action) | that action, live | 2 long blinks: 375 ms on, 375 ms off, twice |
 | **The shown action** | as always; ends any other feedback at once | as always |
 
 - **Why a press did nothing**, the error's top line: `NOT RUNNING` (the chosen media app has no
@@ -281,8 +281,8 @@ what the press did:
   slot, while the app still reports the state it had before the press, for at most 1 s
   (`ControllerDisplay.ExpectSteps`); then the real state wins. Spotify takes about half a second
   to report a pause.
-- A new press replaces the feedback; a preset change, a hardware test and dispose clear it, and
-  the preset announce wins over it. Each step pushes; the link sends only what changed.
+- A new press replaces the feedback; a mode change, a hardware test and dispose clear it, and
+  the mode announce wins over it. Each step pushes; the link sends only what changed.
 
 The runtime keeps a `PressFeedback` per button (`VolcoRuntime.StartFeedback`, its own timer per
 press) and passes them to `ControllerDisplay.Compute`. Actions report why they did nothing through
