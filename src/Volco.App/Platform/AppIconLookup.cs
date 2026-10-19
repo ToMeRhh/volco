@@ -9,9 +9,10 @@ namespace Volco.App.Platform;
 /// <summary>
 /// An app's icon by its exe name ("spotify.exe"), for the slider tiles, the inspector and the volume
 /// pop-up, through <see cref="IAppIcons"/>: the icon of the app's first live session that has one,
-/// else of its exe at the path saved in <see cref="AppConfig.AppPaths"/>. A live session's exe path
-/// is saved there, so the icon also shows after the app quits, in later runs too. Once loaded an
-/// icon is kept for the rest of the run. One instance for the whole app; UI thread only.
+/// else of its exe at the path its slider saved (<see cref="SliderConfig.AppPaths"/>). A live
+/// session's exe path is saved there, so the icon also shows after the app quits, in later runs
+/// too. Once loaded an icon is kept for the rest of the run. One instance for the whole app; UI
+/// thread only.
 /// </summary>
 public sealed class AppIconLookup : IDisposable
 {
@@ -46,17 +47,6 @@ public sealed class AppIconLookup : IDisposable
             Request(app);
         }
         return found;
-    }
-
-    /// <summary>Saves where <paramref name="app"/>'s exe is ("Other app…" picked it), and asks
-    /// for its icon again.</summary>
-    public void Remember(string app, string exePath)
-    {
-        if (_config is null || !_config.Config.RememberAppPath(app, exePath)) return;
-        _config.RequestSave();
-        if (_loaded.ContainsKey(app)) return;
-        _loading.Remove(app);
-        Changed?.Invoke();
     }
 
     private void Request(string app)

@@ -160,7 +160,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
 
         Assert.True(WaitUntil(() => _starter.Runs.Count == 1), "the script did not run");
         var env = _starter.Runs[0].Spec.Environment;
-        Assert.Equal("0", env["VOLCO_BUTTON"]);
+        Assert.Equal("1", env["VOLCO_BUTTON"]);   // input 0 is "Button 1"
         Assert.Equal("single", env["VOLCO_GESTURE"]);
         Assert.Equal("Default", env["VOLCO_MODE"]);
     }

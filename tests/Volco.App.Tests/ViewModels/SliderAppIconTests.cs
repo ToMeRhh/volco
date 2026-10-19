@@ -98,7 +98,8 @@ public sealed class SliderAppIconTests : IDisposable
         using (var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, new UndoToastViewModel(), first))
             Dispatcher.UIThread.RunJobs();
         Assert.Equal(exe, Config.AppPathFor("SPOTIFY.EXE"));
-        Assert.Equal(exe, Config.AppPaths["spotify.exe"]);
+        Assert.Equal(exe, Config.Sliders[0].AppPaths["spotify.exe"]);   // on the slider that lists it
+        Assert.Empty(Config.Sliders[1].AppPaths);
 
         // The next run: Spotify is not playing.
         _rig.Engine.Sessions.Clear();
@@ -112,20 +113,25 @@ public sealed class SliderAppIconTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void OtherAppPath_Remembered_IconShows()
+    public void SavedPath_MovesWithASwap_GoesWhenTheAppLeavesTheSlider()
     {
         const string exe = @"D:\Games\Game.exe";
+        Config.Sliders[0].Processes = new List<string> { "game.exe", "chat.exe" };
+        Config.Sliders[0].RememberAppPath("game.exe", exe);
+        Config.Sliders[0].RememberAppPath("chat.exe", @"C:\Chat\chat.exe");
         using var lookup = new AppIconLookup(_rig.Engine, _icons, _rig.Config);
-        Config.Sliders[0].Processes = new List<string> { "game.exe" };
         using var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, new UndoToastViewModel(), lookup);
         Dispatcher.UIThread.RunJobs();
-        Assert.Null(sliders.Items[0].AppIcon);
+        Assert.Same(_icons.Of(exe), sliders.Items[0].AppIcon);   // not running: from the saved path
 
-        sliders.RememberAppPath("game.exe", exe);
-        Dispatcher.UIThread.RunJobs();
+        sliders.Swap(0, 1);
+        Assert.Equal(exe, Config.Sliders[1].AppPathFor("game.exe"));
+        Assert.Empty(Config.Sliders[0].AppPaths);
 
-        Assert.Equal(exe, Config.AppPathFor("game.exe"));
-        Assert.Same(_icons.Of(exe), sliders.Items[0].AppIcon);
+        // Another slider takes chat.exe: its path leaves slider 2 with it, game.exe's stays.
+        sliders.SetTarget(sliders.Items[3], new SliderConfig { Type = SliderMappingType.Processes, Processes = { "chat.exe" } });
+        Assert.Equal(new[] { "game.exe" }, Config.Sliders[1].AppPaths.Keys);
+        Assert.Null(Config.Sliders[3].AppPathFor("chat.exe"));   // the dialog had no path for it
     }
 
     [AvaloniaFact]

@@ -115,6 +115,24 @@ public partial class SliderConfig
     /// <summary>null means "the current default output device".</summary>
     public DeviceRefConfig? Device { get; set; }
 
+    /// <summary>Where each of <see cref="Processes"/>' exes is (lower-case exe name → full path), only
+    /// for its icon while it is not running: learned from its audio session (the latest path seen
+    /// wins, so an app that moved follows) or picked with "Other app…". Sessions are still matched
+    /// by exe name alone.</summary>
+    public Dictionary<string, string> AppPaths { get; set; } = new();
+
+    /// <summary>The saved exe path of <paramref name="app"/>, or null.</summary>
+    public string? AppPathFor(string app)
+        => AppPaths.TryGetValue(app.ToLowerInvariant(), out var path) && path.Length > 0 ? path : null;
+
+    /// <summary>Saves where <paramref name="app"/>'s exe is; returns whether anything changed.</summary>
+    public bool RememberAppPath(string app, string path)
+    {
+        if (app.Length == 0 || path.Length == 0 || AppPathFor(app) == path) return false;
+        AppPaths[app.ToLowerInvariant()] = path;
+        return true;
+    }
+
     public bool Invert { get; set; }
     public ResponseCurve Curve { get; set; } = ResponseCurve.Linear;
     public double DeadZonePercent { get; set; } = 0;   // 0..0.2
@@ -235,20 +253,20 @@ public class AppConfig
     /// Written only by <c>ControllerConfigService</c>, on a confirmed save or an adopted read.</summary>
     public string? ControllerConfigBlob { get; set; }
 
-    /// <summary>Where each slider app's exe is (lower-case exe name → full path), learned from its
-    /// audio session or picked with "Other app…", so the app's icon shows while it is not running.</summary>
-    public Dictionary<string, string> AppPaths { get; set; } = new();
-
-    /// <summary>The saved exe path of <paramref name="app"/> (an exe name), or null.</summary>
+    /// <summary>The saved exe path of <paramref name="app"/> (an exe name) on the apps slider that
+    /// lists it (<see cref="SliderConfig.AppPaths"/>), or null. An app is on one slider at most.</summary>
     public string? AppPathFor(string app)
-        => AppPaths.TryGetValue(app.ToLowerInvariant(), out var path) && path.Length > 0 ? path : null;
+        => Sliders.Where(s => s.Type == SliderMappingType.Processes).Select(s => s.AppPathFor(app)).FirstOrDefault(p => p is not null);
 
-    /// <summary>Saves where <paramref name="app"/>'s exe is; returns whether anything changed.</summary>
+    /// <summary>Saves where <paramref name="app"/>'s exe is on the apps slider that lists it (its
+    /// session was seen there); returns whether anything changed.</summary>
     public bool RememberAppPath(string app, string path)
     {
-        if (app.Length == 0 || path.Length == 0 || AppPathFor(app) == path) return false;
-        AppPaths[app.ToLowerInvariant()] = path;
-        return true;
+        var changed = false;
+        foreach (var slider in Sliders)
+            if (slider.Type == SliderMappingType.Processes && slider.Processes.Contains(app, StringComparer.OrdinalIgnoreCase))
+                changed |= slider.RememberAppPath(app, path);
+        return changed;
     }
 
     /// <summary>The settings entry for an endpoint id, or null.</summary>

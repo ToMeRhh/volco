@@ -96,6 +96,9 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
     private DeviceRefConfig? _device;
     private readonly List<string> _apps;
 
+    // The ticked apps' exe paths (lower-case exe name → path): the slider's, and "Other app…" picks.
+    private readonly Dictionary<string, string> _paths;
+
     // The device each device row stands for, from the last rebuild.
     private readonly Dictionary<string, DeviceRefConfig> _deviceRows = new();
     private string? _current;
@@ -144,6 +147,7 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         _type = _original.Type;
         _device = _original.Device;
         _apps = _type == SliderMappingType.Processes ? new List<string>(_original.Processes) : new List<string>();
+        _paths = new Dictionary<string, string>(_original.AppPaths);
         _devices = sliders.Devices;
         Title = $"Slider {slider.Index + 1} controls";
         _sliders.DevicesRefreshed += OnDevicesRefreshed;
@@ -236,7 +240,7 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             var display = appSessions.Select(s => s.DisplayName).FirstOrDefault(n => !string.IsNullOrEmpty(n));
             var name = display ?? CommandPath.FileNameWithoutExtension(app);
             var iconSource = appSessions.Select(s => s.IconPath).FirstOrDefault(p => !string.IsNullOrEmpty(p))
-                             ?? _sliders.AppConfig.AppPathFor(app);
+                             ?? SavedPath(app);
             var icon = iconSource is not null && _loaded.TryGetValue(iconSource, out var bitmap) ? bitmap : null;
             AppMeterViewModel? meter = null;
             if (running && !_meters.TryGetValue(app, out meter)) _meters[app] = meter = new AppMeterViewModel();
@@ -286,7 +290,7 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
     {
         if (_icons is not { } icons) return;
         var saved = _apps.Concat(_sliders.Items.Where(i => i.IsApps).SelectMany(i => i.AppNames))
-            .Select(_sliders.AppConfig.AppPathFor).OfType<string>();
+            .Select(SavedPath).OfType<string>();
         var sources = LiveSessions().Select(s => s.IconPath).Where(p => p.Length > 0).Concat(saved)
             .Distinct(StringComparer.OrdinalIgnoreCase).Where(p => _requested.Add(p)).ToList();
         if (sources.Count == 0) return;
@@ -426,7 +430,7 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
             if (PickExe is not { } pick || await pick() is not { } path) return;
             var app = CommandPath.FileName(path);
             if (app.Length == 0) return;
-            _sliders.RememberAppPath(app, path);
+            _paths[app.ToLowerInvariant()] = path;
             if (_type != SliderMappingType.Processes || !_apps.Exists(a => SameApp(a, app))) ToggleApp(app);
             _current = $"app:{app}";
             Changed();
@@ -449,7 +453,12 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         Type = _type,
         Device = _type == SliderMappingType.Device ? _device : null,
         Processes = _type == SliderMappingType.Processes ? new List<string>(_apps) : new List<string>(),
+        AppPaths = _type == SliderMappingType.Processes ? SlidersViewModel.PathsOf(_apps, _paths) : new Dictionary<string, string>(),
     };
+
+    /// <summary>An app's exe path: picked here or saved on this slider, else saved on another.</summary>
+    private string? SavedPath(string app)
+        => _paths.TryGetValue(app.ToLowerInvariant(), out var path) ? path : _sliders.AppConfig.AppPathFor(app);
 
     private bool Unchanged()
     {
@@ -458,7 +467,9 @@ public sealed partial class TargetDialogViewModel : ObservableObject, ISearchLis
         {
             SliderMappingType.Device => _device is null ? _original.Device is null
                                         : _original.Device is not null && Matches(_original.Device, _device),
-            SliderMappingType.Processes => _apps.SequenceEqual(_original.Processes, StringComparer.OrdinalIgnoreCase),
+            SliderMappingType.Processes => _apps.SequenceEqual(_original.Processes, StringComparer.OrdinalIgnoreCase)
+                                           && SlidersViewModel.PathsOf(_apps, _paths).OrderBy(p => p.Key)
+                                              .SequenceEqual(_original.AppPaths.OrderBy(p => p.Key)),
             _ => true,
         };
     }

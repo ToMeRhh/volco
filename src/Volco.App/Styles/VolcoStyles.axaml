@@ -9,6 +9,12 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:Volco.App.Controls">
+  <!-- Every tooltip opens just below its element, left-aligned with it, instead of wherever the
+       pointer stopped (Avalonia flips it above when there is no room below). -->
+  <Style Selector=":is(Control)">
+    <Setter Property="ToolTip.Placement" Value="Bottom"/>
+    <Setter Property="ToolTip.VerticalOffset" Value="4"/>
+  </Style>
   <Styles.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>

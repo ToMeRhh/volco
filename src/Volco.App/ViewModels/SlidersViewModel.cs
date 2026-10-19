@@ -117,6 +117,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         (x.Type, y.Type) = (y.Type, x.Type);
         (x.Device, y.Device) = (y.Device, x.Device);
         (x.Processes, y.Processes) = (y.Processes, x.Processes);
+        (x.AppPaths, y.AppPaths) = (y.AppPaths, x.AppPaths);
         Items[a].Reload();
         Items[b].Reload();
         AppsChanged();
@@ -149,13 +150,6 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
                 .ToList();
             item.SetOtherAppsHint(claimed);
         }
-    }
-
-    /// <summary>"Other app…" picked <paramref name="app"/> at <paramref name="exePath"/>: saved for its icon.</summary>
-    internal void RememberAppPath(string app, string exePath)
-    {
-        if (_appIcons is not null) _appIcons.Remember(app, exePath);
-        else if (_config.Config.RememberAppPath(app, exePath)) Save();
     }
 
     /// <summary>Each apps slider shows the icon of its first app that has one.</summary>
@@ -228,11 +222,13 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
                 var kept = cfg.Processes.Where(p => !target.Processes.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
                 if (kept.Count == cfg.Processes.Count) continue;
                 cfg.Processes = kept;
+                cfg.AppPaths = PathsOf(kept, cfg.AppPaths);
             }
             else if (target.Type == SliderMappingType.Unmapped && cfg.Type == SliderMappingType.Unmapped)
             {
                 cfg.Type = SliderMappingType.Processes;
                 cfg.Processes = new List<string>();
+                cfg.AppPaths = new Dictionary<string, string>();
             }
             else continue;
             other.Reload();
@@ -240,10 +236,25 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         item.Config.Type = target.Type;
         item.Config.Device = target.Type == SliderMappingType.Device ? target.Device : null;
         item.Config.Processes = target.Type == SliderMappingType.Processes ? new List<string>(target.Processes) : new List<string>();
+        // The dialog's paths (its picks) over the ones the slider already had, for the apps it keeps.
+        var paths = new Dictionary<string, string>(item.Config.AppPaths);
+        foreach (var (app, path) in target.AppPaths) paths[app] = path;
+        item.Config.AppPaths = PathsOf(item.Config.Processes, paths);
         item.Reload();
         AppsChanged();
         Save();
         _reapply?.Invoke(item.Index);
+    }
+
+    /// <summary>The entries of <paramref name="paths"/> for <paramref name="apps"/> only: a path goes
+    /// when its app leaves the slider.</summary>
+    internal static Dictionary<string, string> PathsOf(IEnumerable<string> apps, IReadOnlyDictionary<string, string> paths)
+    {
+        var result = new Dictionary<string, string>();
+        foreach (var app in apps)
+            if (paths.TryGetValue(app.ToLowerInvariant(), out var path) && path.Length > 0)
+                result[app.ToLowerInvariant()] = path;
+        return result;
     }
 
     // ── Config copies ─────────────────────────────────────────────────────────
@@ -254,6 +265,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         Name = s.Name,
         Type = s.Type,
         Processes = new List<string>(s.Processes),
+        AppPaths = new Dictionary<string, string>(s.AppPaths),
         Device = s.Device is null ? null : new DeviceRefConfig { Id = s.Device.Id, FriendlyName = s.Device.FriendlyName },
         Invert = s.Invert,
         Curve = s.Curve,

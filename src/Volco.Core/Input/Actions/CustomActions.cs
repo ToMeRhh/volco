@@ -17,10 +17,11 @@ public sealed record ActionOrigin(int Button, PressType Gesture, string ModeName
     /// like), at once or later from another thread; the button shows it (custom-actions spec §11).</summary>
     public Action<string>? ReportError { get; init; }
 
-    /// <summary>The environment a script run gets: VOLCO_BUTTON, VOLCO_GESTURE, VOLCO_MODE.</summary>
+    /// <summary>The environment a script run gets: VOLCO_BUTTON (from 1), VOLCO_GESTURE, VOLCO_MODE.</summary>
     public IReadOnlyDictionary<string, string> Environment() => new Dictionary<string, string>
     {
-        ["VOLCO_BUTTON"] = Button.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        // Numbered from 1, as the settings UI names buttons ("Button 1"); Button is the 0-based input.
+        ["VOLCO_BUTTON"] = (Button + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
         ["VOLCO_GESTURE"] = Gesture switch { PressType.Double => "double", PressType.Long => "long", _ => "single" },
         ["VOLCO_MODE"] = ModeName,
     };

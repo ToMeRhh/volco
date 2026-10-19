@@ -601,9 +601,11 @@ public class TargetDialogTests
         s.Dialog.PickExe = () => Task.FromResult<string?>(@"C:\Games\Quest\quest.exe");
         Click(s, "Other app…");
         Settle(s.Window);
-
-        Assert.Equal(@"C:\Games\Quest\quest.exe", s.Config.AppPathFor("quest.exe"));
         Assert.NotNull(Item(s, "quest").AppIcon);
+        Assert.Null(s.Config.AppPathFor("quest.exe"));   // the draft's, until Done
+
+        Done(s);
+        Assert.Equal(@"C:\Games\Quest\quest.exe", s.Config.Sliders[0].AppPathFor("quest.exe"));
     }
 
     [AvaloniaFact]

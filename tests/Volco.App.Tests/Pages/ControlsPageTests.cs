@@ -672,7 +672,7 @@ public class ControlsPageTests
             Settle(window);
 
             var (spec, run) = Assert.Single(starter.Runs);
-            Assert.Equal("0", spec.Environment["VOLCO_BUTTON"]);
+            Assert.Equal("1", spec.Environment["VOLCO_BUTTON"]);   // "Button 1", as the UI names it
             Assert.Equal("long", spec.Environment["VOLCO_GESTURE"]);
             Assert.Equal("Default", spec.Environment["VOLCO_MODE"]);
             Assert.Equal("RUNNING", vm.Buttons.Items[0].Screen.TopText);

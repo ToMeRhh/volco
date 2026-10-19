@@ -149,7 +149,7 @@ Start-up cost per press, for guidance in the picker's help text: `.exe` and `.ba
 Python and Node tens of ms, PowerShell hundreds of ms. The help text recommends `.bat` or `.exe`
 when speed matters.
 
-The script gets `VOLCO_BUTTON` (input number), `VOLCO_GESTURE` (`single`, `double`, `long`) and
+The script gets `VOLCO_BUTTON` (the button's number as the settings UI shows it, from 1), `VOLCO_GESTURE` (`single`, `double`, `long`) and
 `VOLCO_MODE` (the mode's name) in its environment.
 
 ### 5.2 Repeat presses
