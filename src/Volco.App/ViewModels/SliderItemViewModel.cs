@@ -314,12 +314,15 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
             : $"Controls every app that no other slider lists (everything except {string.Join(", ", claimedByOthers)}).";
 
     /// <summary>
-    /// Re-seeds the device picker after a device was plugged in or removed. Re-asserts the current
-    /// selection without saving; a device that is gone simply shows no selection.
+    /// Re-seeds the device picker after a device was plugged in, removed or renamed. Re-reads the
+    /// selection from the config (whose stored name the runtime keeps current) without saving; a
+    /// device that is gone simply shows no selection.
     /// </summary>
     public void RefreshDevices(IReadOnlyList<AudioDevice> devices)
     {
-        var keep = SelectedDevice;
+        var keep = Config.Type == SliderMappingType.Device && Config.Device is { FriendlyName.Length: > 0 } configured
+            ? configured.FriendlyName
+            : SelectedDevice;
         _loading = true;
         try
         {

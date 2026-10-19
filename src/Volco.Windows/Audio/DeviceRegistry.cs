@@ -665,10 +665,10 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
 
     void IMMNotificationClient.OnPropertyValueChanged(PCWSTR pwstrDeviceId, PROPERTYKEY key)
     {
-        // A rename in Windows (Sound settings) changes the friendly name. Other properties change
-        // often and are of no interest. Comparing the key is plain memory, no COM.
-        var name = PInvoke.PKEY_Device_FriendlyName;
-        if (key.fmtid != name.fmtid || key.pid != name.pid) return;
+        // A rename in Windows (Sound settings) writes the device description, and the friendly
+        // name is derived from it; which key the notification names varies, so any property
+        // change re-reads the name on the audio thread, which raises a change only when the name
+        // differs (ApplyNameChanged).
         Enqueue(PendingChange.NameChanged(pwstrDeviceId.ToString() ?? string.Empty));
     }
 

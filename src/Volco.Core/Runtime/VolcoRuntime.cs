@@ -654,6 +654,9 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             Config.Save();
         }
 
+        // A device renamed in Windows while Volco was closed: the stored names follow.
+        if (_audioReady && RefreshStoredDeviceNames()) Config.Save();
+
         Config.ConnectionConfigChanged += OnConfigChanged;
         Config.ConfigChanged += OnSettingsChanged;
 
@@ -1132,8 +1135,9 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         // show up in the pickers even when it isn't the new default. So every kind is forwarded
         // as DevicesChanged; subscribers marshal to the UI thread themselves (this handler runs
         // on the audio thread), and with no settings window open there are simply no subscribers.
-        DevicesChanged?.Invoke(this, e);
+        // Stored names first: the UI re-reads them when it hears of the change (a rename).
         if (RefreshStoredDeviceNames()) Config.RequestSave();
+        DevicesChanged?.Invoke(this, e);
 
         if (e.Kind is DeviceChangeKind.Added or DeviceChangeKind.StateChanged)
         {
@@ -1174,18 +1178,37 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         PushControllerState();
     }
 
-    /// <summary>Keeps each customized device's stored Windows name current (spec §5.1).</summary>
+    /// <summary>Keeps the stored Windows name of every device the config names current, by id
+    /// (spec §5.1): each customized device's, and each slider's and action's device reference,
+    /// whose name the settings UI shows and falls back to. A device renamed in Windows is then
+    /// named anew everywhere a nickname does not override it.</summary>
     private bool RefreshStoredDeviceNames()
     {
         var changed = false;
         var live = Audio.GetDevices(AudioFlow.Render).Concat(Audio.GetDevices(AudioFlow.Capture)).ToList();
+        string? NameOf(string? id)
+            => string.IsNullOrEmpty(id) ? null
+               : live.Find(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase))?.FriendlyName;
         foreach (var entry in Config.Config.Devices.ToList())
         {
-            var device = live.Find(d => string.Equals(d.Id, entry.Id, StringComparison.OrdinalIgnoreCase));
-            if (device is null || device.FriendlyName == entry.FriendlyName) continue;
-            entry.FriendlyName = device.FriendlyName;
+            if (NameOf(entry.Id) is not { Length: > 0 } name || name == entry.FriendlyName) continue;
+            entry.FriendlyName = name;
             changed = true;
         }
+        void Refresh(DeviceRefConfig? reference)
+        {
+            if (reference is null || NameOf(reference.Id) is not { Length: > 0 } name || name == reference.FriendlyName) return;
+            reference.FriendlyName = name;
+            changed = true;
+        }
+        foreach (var slider in Config.Config.Sliders.ToList()) Refresh(slider.Device);
+        foreach (var button in Config.Config.Buttons.ToList())
+            foreach (var binding in button.Actions.Values.ToList())
+                foreach (var action in binding.All())
+                {
+                    Refresh(action.Device);
+                    Refresh(action.DeviceB);
+                }
         return changed;
     }
 

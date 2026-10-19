@@ -77,7 +77,7 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 
 <table>
 <tr>
-<td colspan="2" align="center"><!-- TODO(Tomer): screenshot of the Controls page --><sub><b>Controls:</b> your sliders and buttons as a drawing of the controller; pick one to set what it does</sub></td>
+<td colspan="2" align="center"><a href="docs/images/app-controls.png"><img src="docs/images/app-controls.png" alt="Volco's Controls page: five sliders (Main output, Headphones, Wardogs, Spotify with its icon, All other apps) above four buttons in the Default mode, one with a screen showing Spotify playing; the inspector edits Button 2's press, double press and hold" width="70%"></a><br><sub><b>Controls:</b> your sliders and buttons as a drawing of the controller; pick one to set what it does</sub></td>
 </tr>
 <tr>
 <td colspan="2" align="center"><a href="docs/images/app-hardware.png"><img src="docs/images/app-hardware.png" alt="Volco's Hardware page: connected over USB, the firmware version, and the controller's slider and button pins" width="50%"></a><br><sub><b>Hardware:</b> the connection, the firmware, and the layout stored on the controller</sub></td>

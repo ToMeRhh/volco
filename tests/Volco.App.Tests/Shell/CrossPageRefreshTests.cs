@@ -119,4 +119,35 @@ public class CrossPageRefreshTests
         Assert.Contains(nameof(DeviceItemViewModel.UsedBy), changed);
         Assert.Contains(nameof(DeviceItemViewModel.CanForget), changed);
     }
+
+    [AvaloniaFact]
+    public void DeviceRenamedInWindows_LabelsFollow_UnlessTheUserNamedIt()
+    {
+        var (window, rig, vm) = Open(c =>
+        {
+            c.Sliders[0].Type = SliderMappingType.Device;
+            c.Sliders[0].Device = new DeviceRefConfig { Id = "dev-2", FriendlyName = "Headphones" };
+            c.Sliders[1].Type = SliderMappingType.Device;
+            c.Sliders[1].Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
+            c.Devices.Add(new DeviceSettingsConfig { Id = "dev-1", FriendlyName = "Speakers", Nickname = "Desk" });
+        });
+        using var _ = rig; using var __ = vm;
+        Show(window, "controls");
+        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.Equal("Headphones", In<TextBlock>(page, "TargetText").Text);   // slider 1 is selected
+
+        // Both are renamed in Windows' Sound settings while Volco runs.
+        var arctis = new AudioDevice("dev-2", "Arctis 7 (USB Audio)", AudioFlow.Render, false);
+        var monitor = new AudioDevice("dev-1", "Monitor (HDMI)", AudioFlow.Render, true);
+        rig.Engine.Devices[1] = arctis;
+        rig.Engine.Devices[0] = monitor;
+        rig.Engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, arctis);
+        rig.Engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, monitor);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Arctis 7", In<TextBlock>(page, "TargetText").Text);
+        Assert.Equal("Arctis 7", vm.Sliders.Items[0].Label);
+        Assert.Equal("Desk", vm.Sliders.Items[1].Label);   // the user's own name wins
+        Assert.Equal("Monitor (HDMI)", rig.Config.Config.FindDevice("dev-1")!.FriendlyName);
+    }
 }

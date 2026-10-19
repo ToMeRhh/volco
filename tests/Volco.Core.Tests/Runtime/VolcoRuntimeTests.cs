@@ -1307,6 +1307,34 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void DeviceRenamedInWindows_SliderAndActionNamesFollow_BeforeTheUiHears()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Sliders[0].Type = SliderMappingType.Device;
+            c.Sliders[0].Device = new DeviceRefConfig { Id = Speakers, FriendlyName = "Old name" };
+            c.Buttons[1].Default().SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { Id = Speakers, FriendlyName = "Old name" },
+                DeviceB = new DeviceRefConfig { Id = "gone", FriendlyName = "Unplugged" },
+            };
+        });
+        var runtime = StartRuntime(config);
+        string? seenByUi = null;
+        runtime.DevicesChanged += (_, _) => seenByUi = config.Config.Sliders[0].Device!.FriendlyName;
+        var renamed = new AudioDevice(Speakers, "Desk (Realtek)", AudioFlow.Render, true);
+        _engine.Devices[0] = renamed;
+
+        _engine.RaiseDeviceChanged(DeviceChangeKind.StateChanged, renamed);
+
+        Assert.Equal("Desk (Realtek)", config.Config.Sliders[0].Device!.FriendlyName);
+        Assert.Equal("Desk (Realtek)", config.Config.Buttons[1].Default().SinglePress.Device!.FriendlyName);
+        Assert.Equal("Unplugged", config.Config.Buttons[1].Default().SinglePress.DeviceB!.FriendlyName);
+        Assert.Equal("Desk (Realtek)", seenByUi);
+    }
+
+    [Fact]
     public void MuteOsd_UsesTheNickname()
     {
         var config = NewConfig(c => c.Devices.Add(new DeviceSettingsConfig { Id = Speakers, Nickname = "Desk speakers" }));
