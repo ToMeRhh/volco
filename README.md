@@ -17,6 +17,8 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 
 </div>
 
+> **The AI disclaimer you were looking for:** I have 10 years of experience as a software enginner at Google. Previous iterations of this project were written by hand, but with AI-augmentation - I was able to write this polished and high-performance version of the vision that I had in mind. I built Volco with [Claude Code](https://claude.com/claude-code) as my pair programmer - Claude wrote the code but I designed the architecture, and reviewed and tested every change on my real setup.
+
 ---
 
 ## 👋 Why I built this
@@ -26,8 +28,6 @@ About two years ago I built a [**deej**](https://github.com/omriharel/deej), the
 **Volco is that something else: a new project, built from the ground up.** A new architecture, and a dedicated two-way binary protocol, so state can be shown on LEDs and screens. The controller describes its own hardware, and all the logic lives in the app. **The firmware, the desktop app, the PCB, and the case** were all built for this project (the PCB and case files are coming soon).
 
 Today it runs on **Windows**. The app is built so it can be ported to **macOS and Linux**: the UI is already cross-platform, and the OS-specific code sits behind a few small interfaces. Those ports haven't been written yet, and help is welcome.
-
-> **Built with Claude Code.** I'm an experienced software engineer, and I built Volco with [Claude Code](https://claude.com/claude-code) as my pair programmer. I designed the architecture, reviewed every change and tested it on real hardware.
 
 This is my first open-source project, so issues, ideas and feedback are very welcome. ❤️ If Volco is useful to you, you can support it through [GitHub Sponsors](https://github.com/sponsors/ToMeRhh).
 
