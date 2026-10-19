@@ -61,11 +61,11 @@
             <RowDefinition Height="Auto" SharedSizeGroup="BtnSecs"/>
           </Grid.RowDefinitions>
 
-          <!-- 3. The main action -->
+          <!-- 3. The main action, whole: it wraps rather than ending in "…" (the row's tiles
+               share its height, so they stay aligned) -->
           <TextBlock Name="MainAction" Classes="MainAction"
                      Classes.none="{Binding MainGesture, Converter={x:Static ObjectConverters.IsNull}}"
-                     Text="{Binding MainLabel}" TextWrapping="Wrap" MaxLines="2"
-                     TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
+                     Text="{Binding MainLabel}" TextWrapping="Wrap" TextAlignment="Center"/>
 
           <!-- Dense boards: one row of three action icons instead (spec §4.4) -->
           <StackPanel Name="ActionIcons" Classes="ActionIcons"
@@ -87,7 +87,7 @@
             </Border>
           </StackPanel>
 
-          <!-- 4. The other actions, one line each with its gesture mark -->
+          <!-- 4. The other actions, each with its gesture mark, wrapped whole like the main one -->
           <Panel Grid.Row="1" Classes="SecondaryRow">
             <ItemsControl Name="SecondaryActions" ItemsSource="{Binding Secondary}" IsVisible="{Binding !IsMissing}">
               <ItemsControl.ItemTemplate>
@@ -95,7 +95,7 @@
                   <DockPanel Classes="SecondaryLine" HorizontalAlignment="Center">
                     <TextBlock DockPanel.Dock="Left" Margin="0,0,4,0"
                                Text="{Binding Gesture, Converter={x:Static conv:GestureMarkConverter.Instance}}"/>
-                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Name="SecondaryText" Text="{Binding Label}" TextWrapping="Wrap"/>
                   </DockPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

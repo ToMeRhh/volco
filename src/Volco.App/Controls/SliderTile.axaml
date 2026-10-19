@@ -50,7 +50,7 @@
           <Image Name="AppIconImage" Width="16" Height="16" Margin="0,1,5,0" VerticalAlignment="Top"
                  Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
           <TextBlock Name="Label" Grid.Column="1" Classes="TileLabel" Classes.unset="{Binding IsUnset}" Text="{Binding Label}"
-                     TextWrapping="WrapWithOverflow" MaxLines="2" TextTrimming="CharacterEllipsis"
+                     TextWrapping="Wrap"
                      TextAlignment="Center">
             <ToolTip.Tip>
               <MultiBinding StringFormat="{}{0}: {1}">

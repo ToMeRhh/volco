@@ -271,6 +271,42 @@ public class ControlsPageTests
     }
 
     [AvaloniaFact]
+    public void LongActionNames_WrapWhole_NoEllipsis_RowsStayAligned()
+    {
+        using var s = Show(c =>
+        {
+            Hardware(c, 5, IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.Led);
+            var b = c.Buttons[0].Default();
+            b.SinglePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.ToggleOutputDevice,
+                Device = new DeviceRefConfig { FriendlyName = "Living room speakers" },
+                DeviceB = new DeviceRefConfig { FriendlyName = "Wireless headphones" },
+            };
+            b.DoublePress = new ButtonActionConfig
+            {
+                Action = ButtonActionType.MediaPlayPause, MediaApp = new MediaAppConfig { Id = "Spotify.exe", Name = "Spotify Premium Family Edition" },
+            };
+            c.Buttons[1].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
+        });
+        var tiles = Tiles<ButtonTile>(s.Page);
+        var main = In<TextBlock>(tiles[0], "MainAction");
+        var secondary = tiles[0].GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "SecondaryText");
+
+        foreach (var text in new[] { main, secondary })
+        {
+            Assert.Equal(Avalonia.Media.TextTrimming.None, text.TextTrimming);
+            Assert.True(text.TextLayout.TextLines.Count >= 2, $"\"{text.Text}\" should wrap");
+            Assert.Equal(text.Text!.Length, text.TextLayout.TextLines.Sum(l => l.Length));   // nothing cut
+        }
+        foreach (var part in new[] { "Cap", "MainAction", "SecondaryActions" })
+        {
+            var tops = tiles.Select(t => TopIn(In<Control>(t, part), t)).ToList();
+            Assert.All(tops, top => Assert.Equal(tops[0], top, 1));
+        }
+    }
+
+    [AvaloniaFact]
     public void Dense_TwelveSliders_IconsRow()
     {
         using var s = Show(c => Hardware(c, 12, IndicatorKind.Led, IndicatorKind.Screen, IndicatorKind.Led));

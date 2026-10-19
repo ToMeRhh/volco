@@ -84,7 +84,7 @@ Left to right: the page title "Controls", then the drawing (§4), then the inspe
 - **Each slider tile has:**
   - a fader showing the live level (`VolcoRuntime.SliderLevelChanged`, seeded with `GetSliderLevel`);
   - a grip beside the track;
-  - a label of up to two lines that never breaks inside a word. The label is the slider's name, else its target (§5.1);
+  - a label, wrapped whole (never cut with "…"; a word breaks only when it alone is wider than the tile). The label is the slider's name, else its target (§5.1);
   - on an apps slider, the icon of its first app that has one before the label (§10.3).
 - **"Not set"** is drawn in the secondary text colour.
 
@@ -96,8 +96,8 @@ Each **button tile** has four rows, which every tile in a grid row shares (CSS `
 
 1. **Indicator.** LED, LED pair or screen preview, aligned to the bottom of the row. Nothing for "none".
 2. **Cap.**
-3. **Main action.** Bold, up to two lines. "Not set" when empty.
-4. **Other actions.** One line each, with a gesture mark (•• double press, ▬ hold), ellipsized.
+3. **Main action.** Bold, wrapped whole, never cut with "…". "Not set" when empty.
+4. **Other actions.** Each with a gesture mark (•• double press, ▬ hold), wrapped whole like the main action. The inspector's values wrap too.
 
 The grip sits in a column on the left of rows 3–4. The main action's line has no extra marker, because the light follows it by definition (§7).
 
