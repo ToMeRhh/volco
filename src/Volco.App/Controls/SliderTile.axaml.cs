@@ -10,5 +10,6 @@ public partial class SliderTile : UserControl
     public SliderTile()
     {
         AvaloniaXamlLoader.Load(this);
+        TileFlash.Attach(this, this.FindControl<Panel>("TileRoot")!);
     }
 }

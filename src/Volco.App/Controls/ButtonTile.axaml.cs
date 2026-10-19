@@ -10,5 +10,6 @@ public partial class ButtonTile : UserControl
     public ButtonTile()
     {
         AvaloniaXamlLoader.Load(this);
+        TileFlash.Attach(this, this.FindControl<Panel>("TileRoot")!);
     }
 }
