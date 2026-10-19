@@ -22,6 +22,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly FirmwareService? _firmware;
     private readonly IStartWithSystem? _startWithSystem;
     private readonly IAppIcons? _appIcons;
+    private readonly AppIconLookup? _appIconLookup;
 
     // Runtime and engine events fire on arbitrary threads (audio thread, SliderProcessor's
     // coalescing timer, transport threads). Every handler posts through this first.
@@ -48,7 +49,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _connectionViewModel ??= new ConnectionViewModel(_config, _runtime, _ui);
 
     public SlidersViewModel Sliders =>
-        _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast);
+        _slidersViewModel ??= new SlidersViewModel(_config, _audio, Toast, _appIconLookup);
 
     public DevicesViewModel Devices
     {
@@ -92,8 +93,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui,
                              FirmwareService? firmware = null, IStartWithSystem? startWithSystem = null,
-                             IAppIcons? appIcons = null)
+                             IAppIcons? appIcons = null, AppIconLookup? appIconLookup = null)
     {
+        _appIconLookup = appIconLookup;
         _firmware = firmware;
         _startWithSystem = startWithSystem;
         _appIcons = appIcons;
@@ -224,5 +226,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _controllerViewModel?.Dispose();
         if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();
+        _slidersViewModel?.Dispose();
     }
 }

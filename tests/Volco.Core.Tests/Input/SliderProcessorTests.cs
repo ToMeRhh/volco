@@ -247,6 +247,34 @@ public class SliderProcessorTests
         Assert.True(completedVolume == volumeTcs.Task, "VolumeChanged did not fire for a slider mapped to a present device");
     }
 
+    [Fact]
+    public async Task VolumeChanged_AppsSlider_CarriesItsApps_DeviceSlider_None()
+    {
+        var configManager = NewConfigManager();
+        configManager.Config.Sliders.Clear();
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Processes, Processes = { "spotify.exe", "discord.exe" } });
+        configManager.Config.Sliders.Add(new SliderConfig
+        {
+            Index = 1,
+            Type = SliderMappingType.Device,
+            Device = new DeviceRefConfig { Id = "present-dev", FriendlyName = "Headphones" },
+        });
+
+        using var audio = new FakeAudioEngine();
+        audio.DeviceStates["present-dev"] = (0.5f, false);
+        using var processor = new SliderProcessor(audio, configManager);
+        var apps = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var device = new TaskCompletionSource<VolumeChangeNotification>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processor.VolumeChanged += (_, e) => (e.Apps is null ? device : apps).TrySetResult(e);
+
+        processor.HandleSliderEvent(0, 2048);
+        processor.HandleSliderEvent(1, 2048);
+
+        Assert.True(await Task.WhenAny(apps.Task, Task.Delay(500)) == apps.Task, "no notification for the apps slider");
+        Assert.True(await Task.WhenAny(device.Task, Task.Delay(500)) == device.Task, "no notification for the device slider");
+        Assert.Equal(new[] { "spotify.exe", "discord.exe" }, apps.Task.Result.Apps);
+    }
+
     // ── Sync: the firmware reports every slider after each Hello ──────────────────────────
 
     private static ConfigManager PresentDeviceSliderConfig(double smoothing = 0)

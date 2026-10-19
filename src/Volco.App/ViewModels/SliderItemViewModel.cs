@@ -1,3 +1,4 @@
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Audio;
@@ -59,6 +60,15 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         SliderMappingType.Unmapped => "Icon.Volume",
         _ => "Icon.Plus",
     };
+
+    /// <summary>An apps slider's icon: the first of its apps whose icon Volco has seen this run
+    /// (<see cref="Platform.AppIconLookup"/>); null otherwise, and the tile shows none and the
+    /// inspector <see cref="TargetIconKey"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAppIcon))]
+    private Bitmap? _appIcon;
+
+    public bool HasAppIcon => AppIcon is not null;
 
     /// <summary>True for the last slider: only it can be removed.</summary>
     [ObservableProperty]

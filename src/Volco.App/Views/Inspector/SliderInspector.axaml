@@ -37,7 +37,11 @@
             <Grid ColumnDefinitions="78,Auto,*,Auto">
               <TextBlock Classes="RowLabel" Text="Controls"/>
               <Border Grid.Column="1" Classes="RowIcon">
-                <PathIcon Data="{Binding TargetIconKey, Converter={x:Static conv:IconConverters.Resource}}"/>
+                <Panel>
+                  <PathIcon Data="{Binding TargetIconKey, Converter={x:Static conv:IconConverters.Resource}}"
+                            IsVisible="{Binding !HasAppIcon}"/>
+                  <Image Name="TargetAppIcon" Width="16" Height="16" Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
+                </Panel>
               </Border>
               <TextBlock Name="TargetText" Grid.Column="2" Classes="RowValue" Classes.none="{Binding IsNotSetUp}"
                          Text="{Binding TargetLabel}"/>

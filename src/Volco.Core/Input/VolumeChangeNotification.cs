@@ -22,11 +22,13 @@ public enum OsdKind { Volume, Mute, Device, Mode }
 /// <see cref="Icon"/> is a device's icon (chosen icon, else form factor) on a
 /// <see cref="OsdKind.Device"/>, <see cref="OsdKind.Mute"/> or <see cref="OsdKind.Volume"/>
 /// notification, null otherwise or
-/// when the device is unknown.
+/// when the device is unknown. <see cref="Apps"/> is an apps slider's apps (exe names) on a
+/// <see cref="OsdKind.Volume"/> notification, so the OSD can show an app's icon; null otherwise.
 /// </summary>
 public sealed record VolumeChangeNotification(
     string Label,
     float Level,
     bool Muted,
     OsdKind Kind,
-    ScreenIcon? Icon = null);
+    ScreenIcon? Icon = null,
+    IReadOnlyList<string>? Apps = null);

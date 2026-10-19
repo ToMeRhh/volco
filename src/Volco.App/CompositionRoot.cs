@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Volco.App.Osd;
+using Volco.App.Platform;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.Core.Communication;
@@ -37,6 +38,9 @@ internal sealed class CompositionRoot : IDisposable
     private SettingsWindow? _settingsWindow;
     private SettingsViewModel? _settingsViewModel;
     private VolumeOsdWindow? _osd;
+
+    // App icons for the slider tiles, the inspector and the OSD; one cache for the whole run.
+    private AppIconLookup? _appIcons;
     private TrayIcon? _trayIcon;
     private NativeMenuItem? _trayConnectionItem;
     private NativeMenuItem? _firmwareMenuItem;
@@ -95,7 +99,8 @@ internal sealed class CompositionRoot : IDisposable
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
-        _osd = new VolumeOsdWindow(_platform.WindowEffects);
+        _appIcons = _platform.AppIcons is { } icons ? new AppIconLookup(_platform.Audio, icons) : null;
+        _osd = new VolumeOsdWindow(_platform.WindowEffects, _appIcons);
         var osd = _osd;
         _osdHandler = (_, n) => osd.Show(n);
         _runtime.VolumeChanged += _osdHandler;
@@ -250,7 +255,7 @@ internal sealed class CompositionRoot : IDisposable
             if (_settingsWindow is null)
             {
                 _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher(), _firmware,
-                                                           _platform?.StartWithSystem, _platform?.AppIcons);
+                                                           _platform?.StartWithSystem, _platform?.AppIcons, _appIcons);
                 _settingsWindow = new SettingsWindow(_settingsViewModel, _runtime);
                 _settingsWindow.Closed += (_, _) =>
                 {
@@ -298,6 +303,8 @@ internal sealed class CompositionRoot : IDisposable
         _runtime?.Dispose();
         // After the runtime, so a mirror written while it disposed is saved too.
         _config?.FlushPendingSave();
+        _appIcons?.Dispose();
+        _appIcons = null;
         _platform?.Audio.Dispose();
 
         if (_osd is { } osdWindow)

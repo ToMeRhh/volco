@@ -4,6 +4,8 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Volco.App.Osd;
 using Volco.App.Platform;
+using Volco.Core.Audio;
+using Volco.Core.Tests.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Input;
 using Xunit;
@@ -277,6 +279,54 @@ public class VolumeOsdWindowTests
         PumpUntil(() => osd.ValueBlock.Text == "90%");
 
         Assert.Equal(new PixelPoint(first.X + 123, first.Y + 45), osd.Position);   // not recomputed
+        osd.Close();
+    }
+
+    [AvaloniaFact]
+    public void OsdWindow_AppsSlider_ShowsTheAppIcon_StruckThroughWhileMuted()
+    {
+        using var engine = new FakeAudioEngine
+        {
+            Sessions = { new AudioSessionInfo("s-1", 1, "Spotify.exe", "dev-1", false, "Spotify", @"C:\Apps\Spotify.exe") },
+        };
+        var icons = new FakeAppIcons();
+        using var lookup = new AppIconLookup(engine, icons);
+        var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000), lookup);
+        var music = new VolumeChangeNotification("Music", 0.4f, false, OsdKind.Volume, ScreenIcon.Speaker, new[] { "spotify.exe" });
+
+        osd.Show(music);
+        // The icon arrives after the first paint, which shows the device icon meanwhile.
+        PumpUntil(() => osd.AppIconImage.IsVisible);
+        Assert.True(osd.AppIconImage.IsVisible);
+        Assert.Same(icons.Of(@"C:\Apps\Spotify.exe"), osd.AppIconImage.Source);
+        Assert.False(osd.DeviceGlyph.IsVisible);
+        Assert.False(osd.VolumeGlyph.IsVisible);
+        Assert.False(osd.MuteSlash.IsVisible);
+        Assert.Equal(1.0, osd.AppIconImage.Opacity);
+
+        osd.Show(music with { Muted = true });
+        PumpUntil(() => osd.MuteSlash.IsVisible);
+        Assert.True(osd.MuteSlash.IsVisible);
+        Assert.Equal(0.4, osd.AppIconImage.Opacity);
+
+        osd.Show(new VolumeChangeNotification("Headphones", 0.4f, false, OsdKind.Volume, ScreenIcon.Headphones));
+        PumpUntil(() => osd.DeviceGlyph.IsVisible);
+        Assert.False(osd.AppIconImage.IsVisible);
+        osd.Close();
+    }
+
+    [AvaloniaFact]
+    public void OsdWindow_AppWithNoIcon_ShowsTheDeviceIcon()
+    {
+        using var engine = new FakeAudioEngine();   // the app is not running: no icon to load
+        using var lookup = new AppIconLookup(engine, new FakeAppIcons());
+        var osd = new VolumeOsdWindow(new RecordingEffects(), Fast(visibleMs: 10_000), lookup);
+
+        osd.Show(new VolumeChangeNotification("Music", 0.4f, false, OsdKind.Volume, ScreenIcon.Speaker, new[] { "spotify.exe" }));
+        PumpUntil(() => osd.DeviceGlyph.IsVisible);
+
+        Assert.True(osd.DeviceGlyph.IsVisible);
+        Assert.False(osd.AppIconImage.IsVisible);
         osd.Close();
     }
 }

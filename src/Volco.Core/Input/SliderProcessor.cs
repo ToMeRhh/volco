@@ -325,7 +325,9 @@ public class SliderProcessor : IDisposable
                 var label = BuildSliderLabel(sliderConfig, currentOutputLook?.Name, configuredLook?.Name);
                 var icon = (configuredLook ?? currentOutputLook)?.Icon;
                 var muted = _audio.IsMuted(MuteSourceFor(sliderConfig));
-                volumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume, icon));
+                // A copy: the settings UI edits the list on its own thread.
+                var apps = sliderConfig.Type == SliderMappingType.Processes ? sliderConfig.Processes.ToArray() : null;
+                volumeChanged.Invoke(this, new VolumeChangeNotification(label, volume, muted, OsdKind.Volume, icon, apps));
             }
         }
     }

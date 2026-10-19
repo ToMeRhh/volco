@@ -100,30 +100,58 @@ public sealed class SwapTests : IDisposable
     }
 
     [Fact]
-    public void SliderSwap_MovesWholeConfig_Undo()
+    public void SliderSwap_MovesTargetAndName_ResponseAndLevelStay_Undo()
     {
-        Config.Sliders[0].Type = SliderMappingType.Unmapped;
-        var first = Config.Sliders[0];
-        var second = Config.Sliders[1];
+        var a = Config.Sliders[0];
+        a.Name = "Music";
+        a.Type = SliderMappingType.Processes;
+        a.Processes = new List<string> { "spotify.exe" };
+        a.Curve = ResponseCurve.Logarithmic;
+        a.DeadZonePercent = 0.05;
+        a.Invert = true;
+        var b = Config.Sliders[1];
+        b.Name = "";
+        b.Type = SliderMappingType.Device;
+        b.Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
+        b.SmoothingFactor = 0.5;
         var sliders = Vm().Sliders;
         var item0 = sliders.Items[0];
         var item1 = sliders.Items[1];
+        sliders.UpdateLiveLevel(0, 0.2f);
+        sliders.UpdateLiveLevel(1, 0.9f);
 
         sliders.Swap(0, 1);
 
-        Assert.Same(first, Config.Sliders[1]);
-        Assert.Same(second, Config.Sliders[0]);
-        Assert.Same(item0, sliders.Items[1]);
-        Assert.Same(item1, sliders.Items[0]);
-        Assert.Equal(new[] { 0, 1, 2, 3, 4 }, sliders.Items.Select(i => i.Index));
+        // What it controls and its name moved...
+        Assert.Equal(SliderMappingType.Device, a.Type);
+        Assert.Equal("dev-1", a.Device?.Id);
+        Assert.Empty(a.Processes);
+        Assert.Equal("", a.Name);
+        Assert.Equal(SliderMappingType.Processes, b.Type);
+        Assert.Equal(new[] { "spotify.exe" }, b.Processes);
+        Assert.Null(b.Device);
+        Assert.Equal("Music", b.Name);
+        Assert.Equal("Music", item1.Label);
+        Assert.True(item0.IsDevice);
+        // ...the physical slider's feel and level did not.
+        Assert.Equal(ResponseCurve.Logarithmic, a.Curve);
+        Assert.Equal(0.05, a.DeadZonePercent);
+        Assert.True(a.Invert);
+        Assert.Equal(0.5, b.SmoothingFactor);
+        Assert.Same(a, Config.Sliders[0]);
+        Assert.Same(item0, sliders.Items[0]);
+        Assert.Equal(0.2, item0.LiveLevel, 3);
+        Assert.Equal(0.9, item1.LiveLevel, 3);
         Assert.Equal("Swapped slider 1 and slider 2", _toast.Message);
 
         _toast.UndoCommand.Execute(null);
 
-        Assert.Same(first, Config.Sliders[0]);
-        Assert.Same(second, Config.Sliders[1]);
-        Assert.Same(item0, sliders.Items[0]);
-        Assert.Equal(new[] { 0, 1, 2, 3, 4 }, sliders.Items.Select(i => i.Index));
+        Assert.Equal("Music", a.Name);
+        Assert.Equal(SliderMappingType.Processes, a.Type);
+        Assert.Equal(new[] { "spotify.exe" }, a.Processes);
+        Assert.Equal(SliderMappingType.Device, b.Type);
+        Assert.Equal("dev-1", b.Device?.Id);
+        Assert.Equal("Music", item0.Label);
     }
 
     [Fact]

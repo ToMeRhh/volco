@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.App.Platform;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 
@@ -10,20 +11,23 @@ namespace Volco.App.ViewModels;
 /// The sliders of the Controls page, in hardware-input order. Position is identity, so moving a
 /// slider moves its configuration to another physical slider, and only the last can be removed.
 /// </summary>
-public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
+public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDisposable
 {
     private readonly ConfigManager _config;
     private readonly IAudioEngine _audio;
     private readonly UndoToastViewModel _toast;
+    private readonly AppIconLookup? _appIcons;
     private IReadOnlyList<AudioDevice> _devices;
 
     public ObservableCollection<SliderItemViewModel> Items { get; } = new();
 
-    public SlidersViewModel(ConfigManager config, IAudioEngine audio, UndoToastViewModel toast)
+    public SlidersViewModel(ConfigManager config, IAudioEngine audio, UndoToastViewModel toast, AppIconLookup? appIcons = null)
     {
         _config = config;
         _audio = audio;
         _toast = toast;
+        _appIcons = appIcons;
+        if (appIcons is not null) appIcons.Changed += RefreshAppIcons;
         _devices = AllDevices(audio, audio.GetDevices(AudioFlow.Render));
         for (int i = 0; i < config.Config.Sliders.Count; i++)
             Items.Add(NewItem(config.Config.Sliders[i], i));
@@ -86,7 +90,8 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
 
     // ── Reordering ────────────────────────────────────────────────────────────
 
-    /// <summary>Swaps two sliders whole (their configs and items); the position is the input.</summary>
+    /// <summary>Swaps what two sliders control and their names. The response settings and the
+    /// live level stay with each physical slider.</summary>
     public void Swap(int a, int b)
     {
         if (a == b || a < 0 || b < 0 || a >= Items.Count || b >= Items.Count) return;
@@ -101,13 +106,15 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
 
     private void DoSwap(int a, int b)
     {
-        (Sliders[a], Sliders[b]) = (Sliders[b], Sliders[a]);
-        var (lo, hi) = a < b ? (a, b) : (b, a);
-        var first = Items[lo];
-        var second = Items[hi];
-        Items[lo] = second;
-        Items[hi] = first;
-        Renumber();
+        var x = Sliders[a];
+        var y = Sliders[b];
+        (x.Name, y.Name) = (y.Name, x.Name);
+        (x.Type, y.Type) = (y.Type, x.Type);
+        (x.Device, y.Device) = (y.Device, x.Device);
+        (x.Processes, y.Processes) = (y.Processes, x.Processes);
+        Items[a].Reload();
+        Items[b].Reload();
+        AppsChanged();
     }
 
     private void Renumber()
@@ -121,9 +128,10 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
 
     public DeviceChoice Describe(string friendlyName) => DeviceChoice.For(_config.Config, _devices, friendlyName);
 
-    /// <summary>Refreshes every "All other apps" hint after any slider's apps or type changed.</summary>
+    /// <summary>Refreshes every "All other apps" hint and app icon after any slider's apps or type changed.</summary>
     public void AppsChanged()
     {
+        RefreshAppIcons();
         foreach (var item in Items)
         {
             if (!item.IsOtherApps) continue;
@@ -133,6 +141,18 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner
                 .ToList();
             item.SetOtherAppsHint(claimed);
         }
+    }
+
+    /// <summary>Each apps slider shows the icon of its first app that has one.</summary>
+    private void RefreshAppIcons()
+    {
+        foreach (var item in Items)
+            item.AppIcon = item.IsApps ? _appIcons?.Get(item.AppNames) : null;
+    }
+
+    public void Dispose()
+    {
+        if (_appIcons is not null) _appIcons.Changed -= RefreshAppIcons;
     }
 
     // ── Live updates (UI thread) ──────────────────────────────────────────────

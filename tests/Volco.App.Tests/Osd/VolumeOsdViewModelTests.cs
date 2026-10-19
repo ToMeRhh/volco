@@ -232,4 +232,19 @@ public class VolumeOsdViewModelTests
         Assert.Equal("50%", vm.ValueText);
         Assert.Equal(OsdGlyph.Volume, vm.Glyph);
     }
+
+    [Fact]
+    public void OsdViewModel_AppsOnlyForASliderMove_AndAChangeRepaints()
+    {
+        var vm = new VolumeOsdViewModel();
+
+        Assert.True(vm.Apply(new VolumeChangeNotification("Music", 0.5f, false, OsdKind.Volume, null, new[] { "spotify.exe" })));
+        Assert.Equal(new[] { "spotify.exe" }, vm.Apps);
+        Assert.True(vm.Apply(new VolumeChangeNotification("Music", 0.5f, false, OsdKind.Volume, null, new[] { "discord.exe" })));
+        Assert.False(vm.Apply(new VolumeChangeNotification("Music", 0.5f, false, OsdKind.Volume, null, new[] { "discord.exe" })));
+
+        vm.Apply(new VolumeChangeNotification("Output", 0.5f, true, OsdKind.Mute, null, new[] { "spotify.exe" }));
+        Assert.Empty(vm.Apps);
+        Assert.True(vm.Muted);
+    }
 }

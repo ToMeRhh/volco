@@ -15,7 +15,7 @@ namespace Volco.App.Views;
 /// Drag to swap on the Controls page's drawing (spec controls-page §2.9–10, §11).
 /// <list type="bullet">
 /// <item>A left press on a tile's grip followed by more than <see cref="DragThreshold"/> px of
-/// movement picks it up: a button's action rows, or a whole slider. Missing tiles have no grip.</item>
+/// movement picks it up: a button's action rows, or a slider's label row (what it controls). Missing tiles have no grip.</item>
 /// <item>The drag image is a <see cref="VisualBrush"/> of that source in the window's adorner
 /// layer, following the pointer; the source tile is dimmed (class <c>dragSource</c>), and the tile
 /// of the same kind under the pointer that isn't missing or the source is marked
@@ -214,7 +214,6 @@ internal sealed class TileSwapDrag
         if (drag.Image is not null) drag.Layer?.Children.Remove(drag.Image);
         drag.Pointer.Capture(null);
 
-        // A swap rebuilds slider tiles, so the classes are off before it.
         if (commit && drag.Target?.DataContext is ObservableObject target && drag.Tile.DataContext is ObservableObject source)
             drag.Model.Swap(source, target);
     }
@@ -236,12 +235,12 @@ internal sealed class TileSwapDrag
         return null;
     }
 
-    /// <summary>What the drag carries: a button's action rows, or the whole slider tile (its root
-    /// panel, so the tile's own dimming stays out of the image).</summary>
+    /// <summary>What the drag carries: what a swap moves, a button's action rows or a slider's
+    /// label row (its app icon, and its name, else what it controls).</summary>
     private static Visual? ImageSource(Control tile) => tile switch
     {
         ButtonTile => tile.GetVisualDescendants().OfType<Grid>().FirstOrDefault(g => g.Name == "ActionRows"),
-        SliderTile => tile.GetVisualDescendants().OfType<Panel>().FirstOrDefault(p => p.Classes.Contains("TileRoot")),
+        SliderTile => tile.GetVisualDescendants().OfType<Grid>().FirstOrDefault(g => g.Name == "LabelRow"),
         _ => null,
     };
 }

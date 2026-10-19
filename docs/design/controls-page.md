@@ -41,7 +41,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
 7. **Edit modes:** a pencil at the right end of the tabs. While editing, tabs can be dragged to reorder, clicked to rename, and deleted with × (except the first). The pencil becomes a check mark that ends editing.
 8. **Buttons have no names.** A button's label is its main action, with its other actions listed below.
 9. **Swapping a button moves only its actions.** One grip, beside a button's action rows, drags all its actions onto another button in the edited mode only. The drag image is the action rows, not the cap or light. There are no per-action drag handles.
-10. **Sliders keep optional names and are swapped whole**, by a grip beside the track.
+10. **Sliders keep optional names. Swapping a slider moves only what it controls and its name**, by a grip beside the track. The response settings (curve, dead zone, smoothing, reverse) and the live level stay with the physical slider. The drag image is the label row.
 11. **Inspector "Clear"** removes all of a button's actions in the edited mode, with Undo.
 12. **The light or screen follows the main action** (§7), as today.
 13. **The controller works normally while the window is open.**
@@ -84,7 +84,8 @@ Left to right: the page title "Controls", then the drawing (§4), then the inspe
 - **Each slider tile has:**
   - a fader showing the live level (`VolcoRuntime.SliderLevelChanged`, seeded with `GetSliderLevel`);
   - a grip beside the track;
-  - a label of up to two lines that never breaks inside a word. The label is the slider's name, else its target (§5.1).
+  - a label of up to two lines that never breaks inside a word. The label is the slider's name, else its target (§5.1);
+  - on an apps slider, the icon of its first app that has one before the label (§10.3).
 - **"Not set"** is drawn in the secondary text colour.
 
 ### 4.3 Buttons and the mode tabs
@@ -298,6 +299,8 @@ The pencil switches the strip into edit mode:
 - `DisplayName`: the session's display name, else the exe's file description, else the exe name;
 - `IconPath`: the session's icon path, else the exe path. The App draws the icon through a new `IAppIcons` seam, null on Linux; letter tiles are the fallback.
 
+An apps slider also shows an app's icon on its tile, on the inspector's Controls row and in the volume pop-up (`AppIconLookup`): the first of its apps whose icon Volco has seen this run. The icon comes from a live session, so an app that has not played since Volco started has none yet. Once loaded it is kept until exit, even after the app quits. Without one, the tile shows no icon, the Controls row the generic app icon and the pop-up the output device's icon.
+
 `IAudioEngine` gains `float GetSessionPeak(string instanceId)`, from `IAudioMeterInformation` on the audio thread, for the live meters. The target dialog polls it every 100 ms while open.
 
 ### 10.4 Capture devices on sliders
@@ -308,7 +311,7 @@ The device registry already holds capture endpoints. Slider routing calls `SetDe
 
 - **Tile alignment.** Avalonia has no CSS `subgrid`. Each grid row of button tiles is one `Grid` with four shared rows (`Grid.IsSharedSizeScope` plus `SharedSizeGroup` per row index), or a custom panel that measures every row and arranges tiles by the tallest row. A panel test checks that the caps, main actions and action lists of a row have equal Y.
 - **Drag.** Today's `CardReorder` pointer-based drag is reused:
-  - The drag visual is an adorner holding a copy of the action rows (buttons) or of the slider tile.
+  - The drag visual is an adorner holding a copy of the action rows (buttons) or of the slider's label row.
   - The source tile dims (buttons and sliders); dimming only a button's action rows would dim the drag image too, since it is a live copy of them.
   - Keyboard alternative: the context menu of a tile has **Swap with ▸ Button N / Slider N**.
 - **Dialogs** are overlays over the page, like today's setup and test dialogs: modal, Escape and click-outside close, focus trapped, and focus returns to the row that opened them.
@@ -347,7 +350,7 @@ Headless tests in `Volco.App.Tests`, replacing `ButtonsPageTests`, `ButtonsPageC
   - Add mode creates an empty mode and opens the menu;
   - Copy actions from, with Undo;
   - edit mode: reorder (the first becomes the start-up mode), rename, delete except the first, with Undo.
-- **Swap:** sliders whole; button actions in the edited mode only (timing stays); the context-menu Swap with.
+- **Swap:** a slider's target and name (response and level stay); button actions in the edited mode only (timing stays); the context-menu Swap with.
 - **Core:** `ActionValidator` and `SliderTargetValidator` cases; the v6 → v7 migration (presets → modes, names, enum values, `.bak`); `FuzzyMatcher`.
 - **`SettingsCoverageTests`:** the inventory follows the new page; every setting stays editable and survives a save and reload.
 - **`ArchitectureTests`:** unchanged; the new seams keep Core and App platform-free.

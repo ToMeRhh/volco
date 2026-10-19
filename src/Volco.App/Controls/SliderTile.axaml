@@ -17,7 +17,7 @@
     <Border Name="TileBorder" Classes="Tile" Classes.selected="{Binding IsSelected}">
       <StackPanel Spacing="7" Margin="4,8,4,6">
         <Grid ColumnDefinitions="*,Auto,*">
-          <!-- A drag swaps the whole slider with another (spec §2.10) -->
+          <!-- A drag swaps what the slider controls, and its name, with another (spec §2.10) -->
           <Border Name="Grip" Classes="TileGrip" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,4,0"
                   IsVisible="{Binding !IsMissing}" ToolTip.Tip="Drag onto another slider to swap">
             <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
@@ -44,9 +44,14 @@
             </Border>
           </Panel>
         </Grid>
-        <TextBlock Name="Label" Classes="TileLabel" Classes.unset="{Binding IsUnset}" Text="{Binding Label}"
-                   TextWrapping="WrapWithOverflow" MaxLines="2" TextTrimming="CharacterEllipsis"
-                   TextAlignment="Center" ToolTip.Tip="{Binding Label}"/>
+        <!-- The label, after the app's icon on an apps slider; a drag carries this row -->
+        <Grid Name="LabelRow" ColumnDefinitions="Auto,*" HorizontalAlignment="Center">
+          <Image Name="AppIconImage" Width="16" Height="16" Margin="0,1,5,0" VerticalAlignment="Top"
+                 Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
+          <TextBlock Name="Label" Grid.Column="1" Classes="TileLabel" Classes.unset="{Binding IsUnset}" Text="{Binding Label}"
+                     TextWrapping="WrapWithOverflow" MaxLines="2" TextTrimming="CharacterEllipsis"
+                     TextAlignment="Center" ToolTip.Tip="{Binding Label}"/>
+        </Grid>
         <TextBlock Name="MissingText" Classes="TileMissing" Text="Not on this controller"
                    IsVisible="{Binding IsMissing}"/>
       </StackPanel>

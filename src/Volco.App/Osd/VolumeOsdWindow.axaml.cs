@@ -28,6 +28,7 @@ public sealed partial class VolumeOsdWindow : Window
 
     private readonly IWindowEffects _effects;
     private readonly OsdTimings _timings;
+    private readonly AppIconLookup? _appIcons;
     private readonly VolumeOsdViewModel _vm = new();
     private readonly Border _root;
     private readonly TextBlock _label;
@@ -38,6 +39,7 @@ public sealed partial class VolumeOsdWindow : Window
     private readonly PathIcon _speakerIcon;
     private readonly PathIcon _modeIcon;
     private readonly PathIcon _deviceIcon;
+    private readonly Image _appIcon;
     private readonly Panel _deviceMuteSlash;
     private readonly DispatcherTimer _hideTimer;
     private readonly DispatcherTimer _fadeTimer;
@@ -53,12 +55,13 @@ public sealed partial class VolumeOsdWindow : Window
     private bool _shown;   // hidden -> visible transition tracking (includes the fade)
     private bool _closed;
 
-    public VolumeOsdWindow(IWindowEffects effects) : this(effects, OsdTimings.Default) { }
+    public VolumeOsdWindow(IWindowEffects effects, AppIconLookup? appIcons = null) : this(effects, OsdTimings.Default, appIcons) { }
 
-    internal VolumeOsdWindow(IWindowEffects effects, OsdTimings timings)
+    internal VolumeOsdWindow(IWindowEffects effects, OsdTimings timings, AppIconLookup? appIcons = null)
     {
         _effects = effects;
         _timings = timings;
+        _appIcons = appIcons;
         AvaloniaXamlLoader.Load(this);
         _root = this.FindControl<Border>("Root")!;
         _label = this.FindControl<TextBlock>("LabelText")!;
@@ -69,7 +72,9 @@ public sealed partial class VolumeOsdWindow : Window
         _speakerIcon = this.FindControl<PathIcon>("SpeakerIcon")!;
         _modeIcon = this.FindControl<PathIcon>("ModeIcon")!;
         _deviceIcon = this.FindControl<PathIcon>("DeviceIcon")!;
+        _appIcon = this.FindControl<Image>("AppIcon")!;
         _deviceMuteSlash = this.FindControl<Panel>("DeviceMuteSlash")!;
+        if (appIcons is not null) appIcons.Changed += OnAppIconsChanged;
 
         _hideTimer = new DispatcherTimer { Interval = _timings.Visible };
         _hideTimer.Tick += (_, _) => { _hideTimer.Stop(); BeginFade(); };
@@ -80,6 +85,7 @@ public sealed partial class VolumeOsdWindow : Window
         Closed += (_, _) =>
         {
             _closed = true;
+            if (_appIcons is not null) _appIcons.Changed -= OnAppIconsChanged;
             _hideTimer.Stop();
             _fadeTimer.Stop();
         };
@@ -103,6 +109,13 @@ public sealed partial class VolumeOsdWindow : Window
     internal PathIcon ModeGlyph => _modeIcon;
     internal PathIcon DeviceGlyph => _deviceIcon;
     internal Panel MuteSlash => _deviceMuteSlash;
+    internal Image AppIconImage => _appIcon;
+
+    /// <summary>An app's icon arrived while the OSD shows its slider: it replaces the glyph.</summary>
+    private void OnAppIconsChanged()
+    {
+        if (_shown && !_closed && _vm.Apps.Count > 0) Render();
+    }
 
     /// <summary>Shows the notification. Safe to call from any thread; posts to the UI thread itself.</summary>
     public void Show(VolumeChangeNotification n)
@@ -170,14 +183,18 @@ public sealed partial class VolumeOsdWindow : Window
         _value.Text = _vm.ValueText;
         _bar.Value = _vm.Level;
         _bar.Opacity = _vm.LevelBarOpacity;
-        _mutedIcon.IsVisible = _vm.Glyph == OsdGlyph.Muted;
-        _speakerIcon.IsVisible = _vm.Glyph == OsdGlyph.Speaker;
-        _volumeIcon.IsVisible = _vm.Glyph == OsdGlyph.Volume;
-        _modeIcon.IsVisible = _vm.Glyph == OsdGlyph.Mode;
+        var app = _vm.Apps.Count > 0 ? _appIcons?.Get(_vm.Apps) : null;
+        _appIcon.Source = app;
+        _appIcon.IsVisible = app is not null;
+        _appIcon.Opacity = _vm.Muted ? 0.4 : 1.0;
+        _mutedIcon.IsVisible = app is null && _vm.Glyph == OsdGlyph.Muted;
+        _speakerIcon.IsVisible = app is null && _vm.Glyph == OsdGlyph.Speaker;
+        _volumeIcon.IsVisible = app is null && _vm.Glyph == OsdGlyph.Volume;
+        _modeIcon.IsVisible = app is null && _vm.Glyph == OsdGlyph.Mode;
         _deviceIcon.Data = _vm.DeviceIcon is { } icon ? ScreenIcons.Geometry(icon) : null;
-        _deviceIcon.IsVisible = _vm.Glyph == OsdGlyph.Device;
+        _deviceIcon.IsVisible = app is null && _vm.Glyph == OsdGlyph.Device;
         _deviceIcon.Opacity = _vm.DeviceIconMuted ? 0.4 : 1.0;
-        _deviceMuteSlash.IsVisible = _vm.DeviceIconMuted;
+        _deviceMuteSlash.IsVisible = app is not null ? _vm.Muted : _vm.DeviceIconMuted;
         _bar.IsVisible = _vm.ShowsLevel;
     }
 

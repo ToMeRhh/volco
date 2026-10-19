@@ -226,7 +226,7 @@ public class SwapDragTests
     }
 
     [AvaloniaFact]
-    public void DuringSliderDrag_ImageIsTheWholeTile()
+    public void DuringSliderDrag_ImageIsTheLabelRow()
     {
         using var s = Show();
         var tiles = SliderTiles(s);
@@ -234,10 +234,11 @@ public class SwapDragTests
 
         PickUp(s, Grip(tiles[0]), end);
 
+        // What a swap moves: the name (else what it controls), not the fader and its level.
         var brush = Assert.IsType<VisualBrush>(Assert.Single(DragImages(s)).Background);
-        var root = Assert.IsType<Panel>(brush.Visual);
-        Assert.Same(tiles[0], root.GetVisualAncestors().OfType<SliderTile>().First());
-        Assert.Equal(tiles[0].Bounds.Size, root.Bounds.Size);
+        var row = Assert.IsType<Grid>(brush.Visual);
+        Assert.Equal("LabelRow", row.Name);
+        Assert.Same(tiles[0], row.GetVisualAncestors().OfType<SliderTile>().First());
         Assert.Contains("dropTarget", tiles[3].Classes);
 
         Drop(s, end);
