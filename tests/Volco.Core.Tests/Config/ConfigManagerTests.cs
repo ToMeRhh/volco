@@ -246,6 +246,29 @@ public class ConfigManagerLoadSaveTests : IDisposable
     }
 
     [Fact]
+    public async Task RequestSave_RetriesAFailedWrite()
+    {
+        var manager = new ConfigManager(_configPath) { FirstRetryMs = 1000 };
+        manager.Load();
+        if (File.Exists(_configPath)) File.Delete(_configPath);
+        int writes = 0;
+        manager.ConfigChanged += (_, _) => Interlocked.Increment(ref writes);
+        Directory.CreateDirectory(_configPath);       // a folder in the way: the write fails
+
+        manager.Config.ControllerConfigBlob = "MgIIZA==";
+        manager.RequestSave();
+        await Task.Delay(700);                        // past the debounce: the write failed
+        Assert.Equal(0, Volatile.Read(ref writes));
+
+        Directory.Delete(_configPath);                // no further edit: the retry writes it
+        for (int i = 0; i < 50 && Volatile.Read(ref writes) == 0; i++) await Task.Delay(100);
+        Assert.Equal(1, Volatile.Read(ref writes));
+        var again = new ConfigManager(_configPath);
+        again.Load();
+        Assert.Equal("MgIIZA==", again.Config.ControllerConfigBlob);
+    }
+
+    [Fact]
     public async Task RequestSave_ConnectionChanged_RaisesConnectionEventOnly()
     {
         var manager = new ConfigManager(_configPath);

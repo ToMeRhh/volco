@@ -13,6 +13,12 @@ public class ConfigManager
     private bool _savePending;   // under _saveLock: a debounced save hasn't been written yet
     private bool _pendingConnectionChange;
     private const int DebounceMs = 400;
+    private const int MaxRetryMs = 60_000;
+    private int _retryMs;   // under _saveLock: the wait before the next retry of a failed save; 0 after a write
+
+    /// <summary>The wait before the first retry of a failed debounced save; each further failure
+    /// doubles it, up to a minute.</summary>
+    internal int FirstRetryMs { get; init; } = 2_000;
 
     /// <summary>The config.json path this manager loads from and saves to.</summary>
     public string ConfigPath => _configPath;
@@ -152,12 +158,15 @@ public class ConfigManager
         {
             _pendingConnectionChange |= connectionChanged;
             _savePending = true;
-            _debounceTimer ??= new Timer(_ => FlushDebounced(), null, Timeout.Infinite, Timeout.Infinite);
+            _debounceTimer ??= new Timer(_ => FlushDebounced(retry: true), null, Timeout.Infinite, Timeout.Infinite);
             _debounceTimer.Change(DebounceMs, Timeout.Infinite);
         }
     }
 
-    private void FlushDebounced()
+    /// <summary>Writes the pending save. When the write fails (a file lock, or an edit made while it
+    /// was serialized) and <paramref name="retry"/> is set, it is tried again later, so the edit
+    /// doesn't wait for the next change to reach the disk.</summary>
+    private void FlushDebounced(bool retry)
     {
         bool connChanged;
         lock (_saveLock)
@@ -173,9 +182,22 @@ public class ConfigManager
         }
         catch (Exception ex)
         {
-            AppLog.Error($"Debounced config save failed: {ex}");
+            int wait = 0;
+            lock (_saveLock)
+            {
+                _pendingConnectionChange |= connChanged;
+                // A RequestSave since the write began has already scheduled the next one.
+                if (retry && !_savePending)
+                {
+                    _savePending = true;
+                    _retryMs = wait = _retryMs == 0 ? FirstRetryMs : Math.Min(_retryMs * 2, MaxRetryMs);
+                    _debounceTimer?.Change(wait, Timeout.Infinite);
+                }
+            }
+            AppLog.Error(wait > 0 ? $"Debounced config save failed, retrying in {wait} ms: {ex}" : $"Debounced config save failed: {ex}");
             return;
         }
+        lock (_saveLock) _retryMs = 0;
 
         // A connection-config save raises ONLY ConnectionConfigChanged (which App.xaml.cs
         // listens to in order to restart the hardware connection). All other saves raise
@@ -196,7 +218,7 @@ public class ConfigManager
                 if (!_savePending) return;
                 _debounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             }
-            FlushDebounced();
+            FlushDebounced(retry: false);
         }
         catch (Exception ex)
         {
