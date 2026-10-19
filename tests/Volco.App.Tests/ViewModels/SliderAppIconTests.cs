@@ -135,6 +135,40 @@ public sealed class SliderAppIconTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void AppMovedByAnUpdate_WhileRunning_PathAndIconFollowAtOnce()
+    {
+        const string v1 = @"C:\Foo\v1\Spotify.exe", v2 = @"C:\Foo\v2\Spotify.exe";
+        _rig.Engine.Sessions.Add(Spotify() with { IconPath = v1, ExePath = v1 });
+        using var lookup = new AppIconLookup(_rig.Engine, _icons, _rig.Config);
+        using var sliders = new SlidersViewModel(_rig.Config, _rig.Engine, new UndoToastViewModel(), lookup);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(_icons.Of(v1), sliders.Items[0].AppIcon);
+
+        // The update restarts the app from its new folder.
+        var updated = Spotify(2) with { IconPath = v2, ExePath = v2 };
+        _rig.Engine.Sessions.Clear();
+        _rig.Engine.Sessions.Add(updated);
+        _rig.Engine.RaiseSessionCreated(updated);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(v2, Config.Sliders[0].AppPathFor("spotify.exe"));
+        Assert.Same(_icons.Of(v2), sliders.Items[0].AppIcon);
+    }
+
+    [AvaloniaFact]
+    public void SessionOfAnAppOnNoSlider_SavesNothing()
+    {
+        using var lookup = new AppIconLookup(_rig.Engine, _icons, _rig.Config);
+        var other = new AudioSessionInfo("s-7", 7, "chrome.exe", "dev-1", false, "Chrome", @"C:\Chrome\chrome.exe", @"C:\Chrome\chrome.exe");
+
+        _rig.Engine.RaiseSessionCreated(other);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Null(Config.AppPathFor("chrome.exe"));
+        Assert.All(Config.Sliders, s => Assert.Empty(s.AppPaths));
+    }
+
+    [AvaloniaFact]
     public void Dispose_StopsFollowingTheLookup()
     {
         var sliders = Sliders();

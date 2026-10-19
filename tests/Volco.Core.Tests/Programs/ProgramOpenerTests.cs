@@ -137,6 +137,39 @@ public class ProgramOpenerTests
     }
 
     [Fact]
+    public void Press_RereadsAMovedShortcut_TheNewVersionIsWatchedAndFronted()
+    {
+        const string v1 = @"C:\Foo\v1\foo.exe", v2 = @"C:\Foo\v2\foo.exe", lnk = @"C:\Start\Foo.lnk";
+        _shortcuts[lnk] = v1;
+        _opener.Watch(new[] { Cmd(lnk) });
+        Assert.Equal(new[] { v1 }, _launcher.Watched);
+
+        // An update moved Foo and its shortcut while Volco ran.
+        _shortcuts[lnk] = v2;
+        _launcher.SetRunning(v2, true);
+        Assert.Equal(ProgramState.NotRunning, _opener.State(Cmd(lnk)));   // not read again on its own
+
+        _opener.Open(Cmd(lnk));
+
+        Assert.Equal(new[] { v2 }, _launcher.Fronted);
+        Assert.Equal(new[] { v2 }, _launcher.Watched);
+        Assert.Equal(ProgramState.Running, _opener.State(Cmd(lnk)));
+    }
+
+    [Fact]
+    public void Press_ShortcutUnchanged_PollNotRestarted()
+    {
+        const string lnk = @"C:\Start\Doom.lnk";
+        _shortcuts[lnk] = Game;
+        _opener.Watch(new[] { Cmd(lnk), Cmd(@"C:\a\B.EXE") });
+        var watched = _launcher.Watched;
+
+        _opener.Open(Cmd(lnk));
+
+        Assert.Same(watched, _launcher.Watched);
+    }
+
+    [Fact]
     public void LauncherChanges_AreForwarded()
     {
         var raised = 0;

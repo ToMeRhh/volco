@@ -80,15 +80,26 @@ public sealed class AppIconLookup : IDisposable
         });
     }
 
-    /// <summary>Any thread. A new or changed session may bring an icon (or a better source after a
-    /// failed one), so the failed apps are asked for again.</summary>
+    /// <summary>Any thread. Each new or changed session saves its exe path on the slider that lists
+    /// the app, so a path an update moved is followed at once, and an icon loaded from the old
+    /// path is loaded again from the new one (the old one shows meanwhile). A session may also
+    /// bring an icon (or a better source after a failed one), so the failed apps are asked for again.</summary>
     private void OnSessionsChanged(object? sender, SessionsChangedEventArgs e)
     {
         if (e.Kind == SessionChangeKind.Expired) return;
         Dispatcher.UIThread.Post(() =>
         {
-            if (_disposed || _loaded.ContainsKey(e.Session.ImageName)) return;
-            _loading.Remove(e.Session.ImageName);
+            if (_disposed) return;
+            var session = e.Session;
+            var app = session.ImageName;
+            var moved = session.ExePath.Length > 0 && _config is not null && _config.Config.RememberAppPath(app, session.ExePath);
+            if (moved) _config!.RequestSave();
+            if (_loaded.ContainsKey(app))
+            {
+                if (moved) _ = LoadAsync(app, session.IconPath.Length > 0 ? session.IconPath : session.ExePath);
+                return;
+            }
+            _loading.Remove(app);
             Changed?.Invoke();
         });
     }

@@ -123,6 +123,10 @@ the simulator's `icons.js`.
   names; a program Volco started itself is known at once (its `Exited`). A process Volco cannot
   query (elevated) counts as not running. URLs and documents have no running state: dark, and
   every press opens them.
+- **Shortcut targets** are read when Volco starts, when the live mode or the actions change, and
+  again on every press or Try of that shortcut. An update that points the shortcut at a new
+  version's exe is followed by the next press, and the running poll and the light follow it. An
+  action set to the exe itself keeps that path: pick the Start-menu shortcut for apps that move.
 - **Bringing to front:** Windows restricts a background app taking the foreground; the
   implementation uses the usual workaround (attach to the foreground thread's input, then
   `SetForegroundWindow`). Where that fails, the window flashes in the taskbar.
