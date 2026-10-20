@@ -12,6 +12,7 @@ using Volco.App.ViewModels.Hardware;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
 using Xunit;
+using Button = Avalonia.Controls.Button;
 
 namespace Volco.App.Tests.Controls;
 
