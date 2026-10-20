@@ -183,7 +183,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     /// <summary>An operation runs, a test is on, or firmware is being written: every action that
     /// writes to the controller is disabled.</summary>
-    private bool Busy => _service.Operation != ConfigOperation.Idle || IsTesting || IsFirmwareRunning;
+    internal bool Busy => _service.Operation != ConfigOperation.Idle || IsTesting || IsFirmwareRunning;
 
     [RelayCommand]
     private void UseControllers() => _ = ReadAndReport(_service.ReadAsync(adopt: true));
@@ -273,19 +273,29 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         set
         {
             if (value is null || ReferenceEquals(value, _selectedPreset)) return;
-            if (!value.IsAvailable || !CanEdit)
-            {
-                OnPropertyChanged();   // the combo goes back to the current one
-                return;
-            }
-            if (ControllerDraft.HasHardware(_draft))
-            {
-                Ask($"Replace the current hardware with {value.DisplayName}?", "Replace", () => { if (CanEdit) ApplyPreset(value); });
-                OnPropertyChanged();
-            }
-            else ApplyPreset(value);
+            LoadPreset(value);
         }
     }
+
+    /// <summary>Replaces the draft's wiring with <paramref name="preset"/>, asking first when the
+    /// draft has hardware (the device card's "Load a preset…" and the preset picker).</summary>
+    internal void LoadPreset(ControllerPreset preset)
+    {
+        if (!preset.IsAvailable || !CanEdit)
+        {
+            OnPropertyChanged(nameof(SelectedPreset));   // the combo goes back to the current one
+            return;
+        }
+        if (ControllerDraft.HasHardware(_draft))
+        {
+            Ask($"Replace the current hardware with {preset.DisplayName}?", "Replace", () => { if (CanEdit) ApplyPreset(preset); });
+            OnPropertyChanged(nameof(SelectedPreset));
+        }
+        else ApplyPreset(preset);
+    }
+
+    /// <summary>How Volco talks to the controller (the saved settings).</summary>
+    internal ConnectionConfig ConnectionConfig => _config.Config.Connection;
 
     public string BasedOnText => ControllerDraft.BasedOn(_draft) is { } p && p.Id != ControllerPresets.BlankId
         ? (ControllerDraft.IsModified(_draft, p) ? $"Based on {p.DisplayName} (modified)" : $"Based on {p.DisplayName}")
@@ -589,6 +599,16 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private int _progressVersion;
 
+    /// <summary>The device card's save line (hardware-page spec §4.1) while a save runs; null otherwise.</summary>
+    internal string? SavePhaseText => !IsSaving ? null
+        : _service.Progress is { Phase: SavePhase.Confirming } ? "Restarting…" : "Saving to the controller…";
+
+    /// <summary>The last operation's error (a save's, or a firmware install's, update's or check's),
+    /// which the device card shows instead of its detail line until the next action; null for none.</summary>
+    internal string? Failure => !IsSaving && ProgressText is not null && _progressTone == LinkTone.Danger ? ProgressText
+        : !IsFirmwareRunning && FirmwareMessage is not null && FirmwareMessageTone is LinkTone.Danger or LinkTone.Warning ? FirmwareMessage
+        : null;
+
     [RelayCommand]
     private void DismissFooter()
     {
@@ -697,6 +717,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         SetProgress(text, confirmed ? LinkTone.Good : LinkTone.Danger, autoDismiss: confirmed);
         if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid) _remoteError = (r.Item, r.Field);
         if (r.Status == SaveStatus.Confirmed) _fixIt = false;
+        if (r.Status == SaveStatus.Confirmed && _savingSetup) OfferTest = true;   // the device card offers a test
         var layout = _savingLayout;
         var saved = _savingBlob;
         _savingLayout = null;

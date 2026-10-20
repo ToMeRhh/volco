@@ -37,8 +37,41 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.Buttons.Items.CollectionChanged += OnItemsChanged;
         _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
+        Card = new DeviceCardViewModel(controller, this);
         Refresh();
     }
+
+    /// <summary>The device card at the top of the side panel (spec §4).</summary>
+    public DeviceCardViewModel Card { get; }
+
+    // ── What the card opens (spec §4.2, §7, §10); the views attach in later steps ──────────────
+
+    /// <summary>Compare (spec §7.2) is open.</summary>
+    [ObservableProperty] private bool _isCompareOpen;
+
+    /// <summary>The Connection dialog (spec §10) is open.</summary>
+    [ObservableProperty] private bool _isConnectionDialogOpen;
+
+    /// <summary>The Connection dialog opens on its Wi-Fi tab, else on USB.</summary>
+    [ObservableProperty] private bool _connectionDialogOnWifi;
+
+    /// <summary>The setup chooser (spec §7.1) fills the drawing.</summary>
+    [ObservableProperty] private bool _showChooser;
+
+    /// <summary>The card's Compare…: the controller's setup beside Volco's (spec §7.2).</summary>
+    public void OpenCompare() => IsCompareOpen = true;
+
+    /// <summary>The card's status line and ⋯ Connection…: the Connection dialog, on the Wi-Fi tab
+    /// when <paramref name="wifi"/>.</summary>
+    public void OpenConnection(bool wifi)
+    {
+        ConnectionDialogOnWifi = wifi;
+        IsConnectionDialogOpen = true;
+    }
+
+    /// <summary>⋯ Start over…: the drawing returns to the setup chooser; the draft stays until a
+    /// choice is made.</summary>
+    public void StartOver() => ShowChooser = true;
 
     /// <summary>The draft's sliders, in draft order.</summary>
     public ObservableCollection<SliderItemViewModel> Sliders { get; } = new();
@@ -364,6 +397,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.Buttons.Items.CollectionChanged -= OnItemsChanged;
         _controls.PropertyChanged -= OnControlsPropertyChanged;
         _runtime.RawInput -= OnRawInput;
+        Card.Dispose();
         (Inspected as IDisposable)?.Dispose();
     }
 }

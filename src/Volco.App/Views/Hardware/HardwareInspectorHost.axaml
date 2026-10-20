@@ -4,9 +4,11 @@
              xmlns:views="using:Volco.App.Views.Hardware"
              x:Class="Volco.App.Views.Hardware.HardwareInspectorHost"
              x:DataType="hw:HardwareViewModel">
-  <!-- The Hardware side panel's inspector (hardware-page spec §6): the selected tile's or bus's
-       wiring, and an inline question ("Remove Slider 3?") at the bottom -->
+  <!-- The Hardware side panel (hardware-page spec §3.2): the device card (§4) at the top, then the
+       inspector (§6): the selected tile's or bus's wiring, and an inline question ("Remove Slider 3?")
+       at the bottom -->
   <DockPanel>
+    <views:DeviceCard Name="Card" DockPanel.Dock="Top" DataContext="{Binding Card}"/>
     <Border Name="ConfirmPanel" DockPanel.Dock="Bottom" Classes="InspectorRows" Margin="16,0,16,16"
             Padding="12" IsVisible="{Binding Confirmation, Converter={x:Static ObjectConverters.IsNotNull}}">
       <StackPanel Spacing="10">

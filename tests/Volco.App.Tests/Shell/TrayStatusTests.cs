@@ -1,4 +1,5 @@
 using Volco.Core.Config;
+using Volco.Core.Controller;
 using Volco.Core.Runtime;
 using Xunit;
 
@@ -53,4 +54,24 @@ public class TrayStatusTests
     [Fact]
     public void AudioEngineFailure_KeepsItsTooltip()
         => Assert.Contains("audio engine failed", TrayStatus.For(true, new LinkStatus(LinkState.Searching), Usb).ToolTip);
+
+    [Theory]
+    [InlineData(BannerKind.None, true, "Volco controller firmware update available")]
+    [InlineData(BannerKind.NotSetUp, false, "The Volco controller needs setting up")]
+    [InlineData(BannerKind.DifferentSetup, false, "The Volco controller needs attention")]
+    public void TooltipNamesTheVolcoController(BannerKind kind, bool notice, string line)
+    {
+        var banner = new ControllerBanner(kind, BannerActions.None, notice, false);
+        var tray = TrayStatus.For(false, new LinkStatus(LinkState.Connected), Usb, banner);
+
+        Assert.EndsWith("\n" + line, tray.ToolTip);
+    }
+
+    [Fact]
+    public void NoControllerLineWhenTheHeadlineSaysIt()
+    {
+        var banner = new ControllerBanner(BannerKind.NoAnswer, BannerActions.CheckFirmware, false, false);
+        Assert.Equal("Volco — Controller not responding", TrayStatus.For(false, new LinkStatus(LinkState.NoAnswer), Usb, banner).ToolTip);
+        Assert.DoesNotContain("\n", TrayStatus.For(false, new LinkStatus(LinkState.Connected), Usb, ControllerBanner.Empty).ToolTip);
+    }
 }

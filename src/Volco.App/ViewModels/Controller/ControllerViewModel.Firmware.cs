@@ -167,10 +167,14 @@ public sealed partial class ControllerViewModel
         });
     }
 
-    private bool BeginFirmware()
+    /// <summary>Which firmware operation runs (checking, installing or updating); None when none does.</summary>
+    internal LinkActivity FirmwareActivity { get; private set; }
+
+    private bool BeginFirmware(LinkActivity activity)
     {
         if (!CanUseFirmware || string.IsNullOrEmpty(FirmwarePort)) return false;
         StopTest();
+        FirmwareActivity = activity;
         _firmwareCts = new CancellationTokenSource();
         IsFirmwareRunning = true;
         CanCancelFirmware = true;
@@ -185,6 +189,7 @@ public sealed partial class ControllerViewModel
     private void EndFirmware(string message, LinkTone tone)
     {
         IsFirmwareRunning = false;
+        FirmwareActivity = LinkActivity.None;
         CanCancelFirmware = false;
         FirmwareStage = null;
         FirmwareMessageTone = tone;
@@ -194,7 +199,7 @@ public sealed partial class ControllerViewModel
 
     private async Task RunProbe()
     {
-        if (!BeginFirmware()) return;
+        if (!BeginFirmware(LinkActivity.CheckingFirmware)) return;
         var outcome = await _firmware!.ProbeAsync(FirmwarePort, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {
@@ -212,7 +217,7 @@ public sealed partial class ControllerViewModel
     private async Task RunFlash(FlashMode mode)
     {
         ConfirmInstallPending = false;
-        if (!BeginFirmware()) return;
+        if (!BeginFirmware(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware)) return;
         var outcome = await _firmware!.FlashAsync(FirmwarePort, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {

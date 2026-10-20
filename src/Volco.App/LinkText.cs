@@ -3,8 +3,9 @@ using Volco.Core.Runtime;
 
 namespace Volco.App;
 
-/// <summary>How a status reads: the dot's and the explanation's colour.</summary>
-public enum LinkTone { Neutral, Good, Warning, Danger }
+/// <summary>How a status reads: the dot's and the explanation's colour. Accent marks a next step
+/// that is no problem (a controller not set up yet).</summary>
+public enum LinkTone { Neutral, Good, Warning, Danger, Accent }
 
 /// <summary>
 /// Every word the UI says about the link (spec: 2026-10-06 link state), so the tray, the sidebar

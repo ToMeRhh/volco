@@ -109,6 +109,26 @@ public sealed class HardwareInspectorTests : IDisposable
 
     private static string PinValue(Visual field) => In<TextBlock>(field, "ValueText").Text!;
 
+    /// <summary>Spec §3.2, §4: the device card tops the side panel, over the inspector.</summary>
+    [AvaloniaFact]
+    public void TheDeviceCardTopsTheSidePanel()
+    {
+        using var s = Show();
+        s.Vm.Controls.Select(s.Vm.Sliders.Items[0]);
+        Settle(s.Window);
+
+        var card = In<Volco.App.Views.Hardware.DeviceCard>(s.Host, "Card");
+        Assert.Equal("Volco controller", In<TextBlock>(card, "CardName").Text);
+        Assert.StartsWith("Connected over USB", In<TextBlock>(card, "StatusText").Text);
+        Assert.Equal("Development firmware", In<TextBlock>(card, "DetailText").Text);
+        Assert.False(In<Button>(card, "ActionButton").IsVisible);
+        var cardBottom = card.TranslatePoint(new Point(0, card.Bounds.Height), s.Host)!.Value.Y;
+        Assert.True(In<TextBlock>(s.Host, "HeadingText").TranslatePoint(new Point(0, 0), s.Host)!.Value.Y >= cardBottom);
+
+        Click(s, In<Button>(card, "StatusButton"));
+        Assert.True(s.Hardware.IsConnectionDialogOpen);
+    }
+
     [AvaloniaFact]
     public void SelectingATileShowsItsWiring()
     {

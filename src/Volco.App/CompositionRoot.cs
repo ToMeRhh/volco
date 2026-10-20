@@ -227,15 +227,10 @@ internal sealed class CompositionRoot : IDisposable
         _trayShowsAttention = banner.NeedsAttention;
         if (_trayIcon is not { } tray) return;
 
-        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection);
+        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection, banner);
         var attention = _trayShowsAttention;
         tray.Icon = status.Down ? _disconnectedIcon : attention ? _attentionIcon : _connectedIcon;
-        // No second line where the headline already says it ("Controller not responding",
-        // "Firmware update needed").
-        tray.ToolTipText = !attention || banner.Kind is BannerKind.NoAnswer or BannerKind.Incompatible ? status.ToolTip
-            : _trayShowsUpdate ? $"{status.ToolTip}\nController firmware update available"
-            : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? $"{status.ToolTip}\nThe controller needs setting up"
-            : $"{status.ToolTip}\nThe controller needs attention";
+        tray.ToolTipText = status.ToolTip;
         if (_trayConnectionItem is not null) _trayConnectionItem.Header = status.ConnectionMenuText;
         if (_firmwareMenuItem is not null)
         {

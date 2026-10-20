@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:ctl="using:Volco.Core.Controller"
+             xmlns:conv="using:Volco.App.Converters"
+             x:Class="Volco.App.Views.Hardware.DeviceCard"
+             x:DataType="hw:DeviceCardViewModel">
+  <UserControl.Resources>
+    <conv:LinkToneToBrushConverter x:Key="ToneToBrush"/>
+  </UserControl.Resources>
+  <!-- The device card (hardware-page spec §4): the name, one status line with its dot (the ›
+       opens the Connection dialog), one detail line, at most one primary button, and the ⋯ menu -->
+  <Border Name="CardBorder" Classes="InspectorRows" Margin="16,16,16,0" Padding="14,12">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Name="CardName" Classes="InspectorHeading" VerticalAlignment="Center" Text="{Binding Name}"/>
+        <Button Name="MoreButton" Grid.Column="1" Classes="Icon" Margin="0,-4,-6,-4" ToolTip.Tip="More">
+          <PathIcon Data="{StaticResource Icon.More}" Width="14" Height="14"/>
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Name="ConnectionMenuItem" Header="Connection…" Command="{Binding OpenConnectionCommand}"/>
+              <MenuItem Name="ReconnectMenuItem" Header="Reconnect" Command="{Binding ReconnectCommand}"/>
+              <MenuItem Name="DisconnectMenuItem" Header="Disconnect" Command="{Binding DisconnectCommand}"/>
+              <Separator/>
+              <MenuItem Name="CheckFirmwareMenuItem" Header="Check firmware" Command="{Binding CheckFirmwareCommand}"/>
+              <MenuItem Name="ReinstallMenuItem" Header="Reinstall firmware…" Foreground="{DynamicResource DangerBrush}"
+                        Command="{Binding ReinstallFirmwareCommand}"/>
+              <Separator/>
+              <MenuItem Name="LoadPresetMenuItem" Header="Load a preset…" Command="{Binding LoadPresetCommand}"/>
+              <MenuItem Name="StartOverMenuItem" Header="Start over…" Command="{Binding StartOverCommand}"/>
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </Grid>
+
+      <Button Name="StatusButton" Background="Transparent" BorderThickness="0" Padding="0"
+              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+              Command="{Binding OpenConnectionCommand}" IsHitTestVisible="{Binding State.StatusOpensConnection}"
+              Focusable="{Binding State.StatusOpensConnection}">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Ellipse Name="StatusDot" Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
+                   Fill="{Binding State.Tone, Converter={StaticResource ToneToBrush}}"/>
+          <TextBlock Name="StatusText" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center"
+                     Text="{Binding State.Status}"/>
+          <PathIcon Name="StatusChevron" Grid.Column="2" Data="{StaticResource Icon.ChevronRight}" Width="10" Height="10"
+                    Margin="6,0,0,0" Foreground="{DynamicResource TextTertiaryBrush}"
+                    IsVisible="{Binding State.StatusOpensConnection}"/>
+        </Grid>
+      </Button>
+
+      <ProgressBar Name="CardProgress" Minimum="0" Maximum="1" Height="4" MinHeight="4"
+                   Value="{Binding State.Progress, TargetNullValue=0, FallbackValue=0}" IsVisible="{Binding HasProgress}"/>
+
+      <TextBlock Name="DetailText" Classes="Secondary" TextWrapping="Wrap"
+                 Text="{Binding State.Detail}" IsVisible="{Binding HasDetail}"/>
+
+      <Button Name="ActionButton" Classes="Primary" HorizontalAlignment="Left"
+              Content="{Binding ActionLabel}" Command="{Binding ActionCommand}" IsVisible="{Binding HasAction}"/>
+
+      <!-- ⋯ Reinstall firmware…: today's Install confirmation, since it erases the setup -->
+      <StackPanel Name="ReinstallConfirm" Spacing="10" IsVisible="{Binding Controller.ConfirmInstallPending}">
+        <TextBlock TextWrapping="Wrap"
+                   Text="Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards."/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+          <Button Name="CancelReinstallButton" Content="Cancel" Command="{Binding Controller.CancelInstallCommand}"/>
+          <Button Name="ConfirmReinstallButton" Classes="Danger" Content="Reinstall"
+                  Command="{Binding Controller.ConfirmInstallCommand}"/>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- ⋯ Load a preset…: a small chooser; the draft's wiring is replaced (asked first when it has controls) -->
+      <StackPanel Name="PresetChooser" Spacing="4" IsVisible="{Binding IsPresetChooserOpen}">
+        <ItemsControl Name="PresetList" ItemsSource="{Binding Presets}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="ctl:ControllerPreset">
+              <Button Name="PresetButton" Classes="InspectorRow" Content="{Binding DisplayName}"
+                      Command="{Binding $parent[ItemsControl].((hw:DeviceCardViewModel)DataContext).ChoosePresetCommand, FallbackValue={x:Null}}"
+                      CommandParameter="{Binding}"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Name="ClosePresetsButton" HorizontalAlignment="Right" Content="Cancel"
+                Command="{Binding ClosePresetChooserCommand}"/>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>
