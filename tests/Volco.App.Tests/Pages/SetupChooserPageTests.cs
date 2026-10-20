@@ -14,6 +14,7 @@ using Volco.Core.Config;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
 using Xunit;
+using Button = Avalonia.Controls.Button;
 
 namespace Volco.App.Tests.Pages;
 
