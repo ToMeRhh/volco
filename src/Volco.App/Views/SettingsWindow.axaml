@@ -61,6 +61,20 @@
           <TextBlock Name="FooterText" Classes="Caption FooterLabel" VerticalAlignment="Center"
                      Text="{Binding Connection.FooterText}"/>
         </StackPanel>
+        <!-- Unsaved changes (grey) or a failing save (red, with Retry); hidden while all is saved -->
+        <StackPanel Name="SaveFooter" DockPanel.Dock="Bottom" Orientation="Horizontal" Classes="ConnectionFooter"
+                    IsVisible="{Binding SaveStatus.IsVisible}" ToolTip.Tip="{Binding SaveStatus.ToolTip}"
+                    Spacing="8" Margin="12,8,12,0">
+          <Ellipse Name="SaveDot" Width="8" Height="8" VerticalAlignment="Center"
+                   Fill="{Binding SaveStatus.Tone, Converter={StaticResource ToneToBrush}}"/>
+          <TextBlock Name="SaveText" Classes="Caption FooterLabel" VerticalAlignment="Center"
+                     Text="{Binding SaveStatus.Text}"
+                     Foreground="{Binding SaveStatus.Tone, Converter={StaticResource ToneToBrush}, ConverterParameter=Text}"/>
+          <Panel IsVisible="{Binding SaveStatus.CanRetry}" VerticalAlignment="Center">
+            <HyperlinkButton Name="SaveRetry" Classes="FooterLabel" Padding="0" FontSize="12" Content="Retry"
+                             Command="{Binding SaveStatus.RetryCommand}"/>
+          </Panel>
+        </StackPanel>
         <StackPanel Name="AboutFooter" DockPanel.Dock="Bottom" Spacing="2" Margin="12,8,12,0" Classes="AboutFooter">
           <!-- Non-release builds carry their branch, commit and build time as the tooltip -->
           <TextBlock Name="VersionText" Classes="Caption" Text="{Binding About.VersionText}"

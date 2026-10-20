@@ -18,4 +18,12 @@ internal sealed record TrayStatus(bool Down, string ToolTip, string ConnectionMe
             : $"Volco — {LinkText.Headline(link, connection)}";
         return new TrayStatus(link.IsDown, toolTip, link.State == LinkState.Disconnected ? "Connect" : "Disconnect");
     }
+
+    /// <summary>The tooltip with the settings file's line below it, while changes are unsaved or a
+    /// save keeps failing (<see cref="SaveText.TrayLine"/>).</summary>
+    public static string WithSaveLine(string toolTip, ConfigSaveState save)
+        => SaveText.TrayLine(save) is { Length: > 0 } line ? $"{toolTip}\n{line}" : toolTip;
+
+    /// <summary>A failing save asks for the user like a controller that needs them: the attention icon.</summary>
+    public static bool SaveNeedsAttention(ConfigSaveState save) => save == ConfigSaveState.Failed;
 }

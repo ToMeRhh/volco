@@ -43,6 +43,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>The version, GitHub link and notices at the bottom of the sidebar.</summary>
     public AboutViewModel About { get; } = new();
 
+    /// <summary>The sidebar's save line: unsaved changes, or a save that keeps failing.</summary>
+    public SaveStatusViewModel SaveStatus { get; }
+
     /// <summary>The link status and connection settings: the sidebar footer and the Controller
     /// page's Connection section share it.</summary>
     public ConnectionViewModel Connection =>
@@ -103,6 +106,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _audio = audio;
         _runtime = runtime;
         _ui = ui;
+        SaveStatus = new SaveStatusViewModel(config, ui);
 
         _runtime.DevicesChanged += OnDevicesChanged;
         _runtime.SliderLevelChanged += OnSliderLevelChanged;
@@ -235,6 +239,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _controllerViewModel?.Dispose();
         if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();
+        SaveStatus.Dispose();
         _slidersViewModel?.Dispose();
     }
 }

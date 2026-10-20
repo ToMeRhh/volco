@@ -13,6 +13,30 @@ public class ConfigManager
     private bool _savePending;   // under _saveLock: a debounced save hasn't been written yet
     private bool _pendingConnectionChange;
     private const int DebounceMs = 400;
+    private const int MaxRetryMs = 60_000;
+    private int _retryMs;   // under _saveLock: the wait before the next retry of a failed save; 0 after a write
+    private Timer? _unsavedTimer;
+    private ConfigSaveState _saveState;   // under _saveLock, like the two below
+    private int _failures;                // failed writes in a row
+    private string? _saveError;
+    private const int FailedAfter = 2;
+
+    /// <summary>The wait before the first retry of a failed save; each further failure doubles it,
+    /// up to a minute.</summary>
+    internal int FirstRetryMs { get; init; } = 2_000;
+
+    /// <summary>How long a change waits to be written before <see cref="SaveState"/> says
+    /// <see cref="ConfigSaveState.Unsaved"/>, so the 400 ms debounce of an ordinary edit shows nothing.</summary>
+    internal int UnsavedAfterMs { get; init; } = 1_000;
+
+    /// <summary>Whether the latest changes are on disk. Changes raise <see cref="SaveStateChanged"/>.</summary>
+    public ConfigSaveState SaveState { get { lock (_saveLock) return _saveState; } }
+
+    /// <summary>Why the last write failed, while <see cref="SaveState"/> is not Saved; else null.</summary>
+    public string? SaveError { get { lock (_saveLock) return _saveError; } }
+
+    /// <summary>Raised on a timer or writer thread when <see cref="SaveState"/> changes.</summary>
+    public event EventHandler? SaveStateChanged;
 
     /// <summary>The config.json path this manager loads from and saves to.</summary>
     public string ConfigPath => _configPath;
@@ -151,12 +175,48 @@ public class ConfigManager
         lock (_saveLock)
         {
             _pendingConnectionChange |= connectionChanged;
+            if (!_savePending && _saveState == ConfigSaveState.Saved) StartUnsavedTimer();
             _savePending = true;
-            _debounceTimer ??= new Timer(_ => FlushDebounced(), null, Timeout.Infinite, Timeout.Infinite);
-            _debounceTimer.Change(DebounceMs, Timeout.Infinite);
+            DebounceTimer().Change(DebounceMs, Timeout.Infinite);
         }
     }
 
+    /// <summary>Writes a save that is waiting for its retry now (the UI's Retry). Does nothing when
+    /// no save is waiting.</summary>
+    public void RetrySave()
+    {
+        lock (_saveLock)
+        {
+            if (_savePending) DebounceTimer().Change(0, Timeout.Infinite);
+        }
+    }
+
+    private Timer DebounceTimer()
+        => _debounceTimer ??= new Timer(_ => FlushDebounced(), null, Timeout.Infinite, Timeout.Infinite);
+
+    /// <summary>Under _saveLock: after <see cref="UnsavedAfterMs"/>, a change still waiting says Unsaved.</summary>
+    private void StartUnsavedTimer()
+    {
+        _unsavedTimer ??= new Timer(_ =>
+        {
+            bool changed;
+            lock (_saveLock) changed = _savePending && SetState(ConfigSaveState.Unsaved, onlyFrom: ConfigSaveState.Saved);
+            if (changed) SaveStateChanged?.Invoke(this, EventArgs.Empty);
+        }, null, Timeout.Infinite, Timeout.Infinite);
+        _unsavedTimer.Change(UnsavedAfterMs, Timeout.Infinite);
+    }
+
+    /// <summary>Under _saveLock. Returns whether the state changed.</summary>
+    private bool SetState(ConfigSaveState state, ConfigSaveState? onlyFrom = null)
+    {
+        if (_saveState == state || (onlyFrom is { } from && _saveState != from)) return false;
+        _saveState = state;
+        return true;
+    }
+
+    /// <summary>Writes the pending save. A failed write (a file lock, or an edit made while it was
+    /// serialized) is retried later by <see cref="WriteToDisk"/>, so the edit doesn't wait for the
+    /// next change to reach the disk.</summary>
     private void FlushDebounced()
     {
         bool connChanged;
@@ -173,6 +233,7 @@ public class ConfigManager
         }
         catch (Exception ex)
         {
+            lock (_saveLock) _pendingConnectionChange |= connChanged;
             AppLog.Error($"Debounced config save failed: {ex}");
             return;
         }
@@ -196,6 +257,7 @@ public class ConfigManager
                 if (!_savePending) return;
                 _debounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             }
+            _exiting = true;
             FlushDebounced();
         }
         catch (Exception ex)
@@ -212,7 +274,52 @@ public class ConfigManager
         ConfigChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private bool _exiting;   // the save at exit is not retried
+
+    /// <summary>Every write goes through here: a success makes the state Saved; a failure counts
+    /// toward Failed and schedules a retry (unless a newer change already has one scheduled, or
+    /// Volco is exiting), so no write path leaves a change unsaved until the next edit.</summary>
     private void WriteToDisk()
+    {
+        try { WriteFile(); }
+        catch (Exception ex)
+        {
+            OnWriteFailed(ex);
+            throw;
+        }
+        bool changed;
+        lock (_saveLock)
+        {
+            _failures = 0;
+            _retryMs = 0;
+            _saveError = null;
+            changed = SetState(ConfigSaveState.Saved);
+            if (_savePending) StartUnsavedTimer();   // a change made while this one was written
+        }
+        if (changed) SaveStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnWriteFailed(Exception ex)
+    {
+        bool changed;
+        int wait = 0;
+        lock (_saveLock)
+        {
+            _failures++;
+            _saveError = ex.Message;
+            changed = SetState(_failures >= FailedAfter ? ConfigSaveState.Failed : ConfigSaveState.Unsaved);
+            if (!_exiting && !_savePending)
+            {
+                _savePending = true;
+                _retryMs = wait = _retryMs == 0 ? FirstRetryMs : Math.Min(_retryMs * 2, MaxRetryMs);
+                DebounceTimer().Change(wait, Timeout.Infinite);
+            }
+        }
+        if (wait > 0) AppLog.Info($"Config save will be retried in {wait} ms");
+        if (changed) SaveStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void WriteFile()
     {
         AppLog.Info($"Saving config to {_configPath}");
         var dir = Path.GetDirectoryName(_configPath);
