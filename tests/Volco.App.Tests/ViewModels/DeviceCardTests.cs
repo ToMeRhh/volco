@@ -123,6 +123,32 @@ public sealed class DeviceCardTests : IDisposable
     }
 
     [Fact]
+    public void AFailureNeverHidesARunningOperationOrTheDisconnect()
+    {
+        const string failure = "The controller didn't answer.";
+        var update = DeviceCard.From(Inputs(LinkState.Waiting) with
+        {
+            FirmwareStage = "Updating firmware…", FirmwareProgress = 0.3, Failure = failure,
+        });
+        Assert.Equal("Don't unplug the controller.", update.Detail);
+
+        var save = DeviceCard.From(Inputs(LinkState.Waiting) with { SavePhase = "Saving to the controller…", Failure = failure });
+        Assert.Null(save.Detail);
+
+        var disconnected = DeviceCard.From(Inputs(LinkState.Disconnected) with { Failure = failure });
+        Assert.Equal("You disconnected Volco from the controller.", disconnected.Detail);
+    }
+
+    [Fact]
+    public void NoAnswerOffUsbNamesThePortAndOffersNoCheck()
+    {
+        var card = DeviceCard.From(Inputs(LinkState.NoAnswer, type: ConnectionType.Udp, port: "5005"));
+
+        Assert.Equal("No controller answers on port 5005", card.Status);
+        Assert.Equal(CardAction.None, card.Action);
+    }
+
+    [Fact]
     public void AfterAnUpdateOrAFirstSaveTheCardOffersATest()
     {
         var card = DeviceCard.From(Inputs(LinkState.Connected) with { OfferTest = true });

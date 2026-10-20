@@ -175,6 +175,7 @@ public sealed partial class ControllerViewModel
         if (!CanUseFirmware || string.IsNullOrEmpty(FirmwarePort)) return false;
         StopTest();
         FirmwareActivity = activity;
+        if (!IsSaving) SetProgress(null);   // a save's result belongs to the operation before
         _firmwareCts = new CancellationTokenSource();
         IsFirmwareRunning = true;
         CanCancelFirmware = true;

@@ -680,6 +680,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _savingBlob = blob;
         _savingSetup = IsSettingUp || IsNotSetUp;
         IsSaving = true;
+        FirmwareMessage = null;   // a firmware result belongs to the operation before
         SetProgress("Sending…");
         var save = _service.SaveAsync(blob);
         _ = Finish();

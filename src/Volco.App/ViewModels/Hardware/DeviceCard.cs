@@ -37,7 +37,10 @@ public static class DeviceCard
     public static CardState From(CardInputs i)
     {
         var state = Row(i);
-        return i.Failure is { } failure ? state with { Detail = failure } : state;
+        // A running operation and the user's Disconnect keep their own detail line.
+        bool keepsDetail = i.FirmwareStage is not null || i.SavePhase is not null || i.Banner.Kind == BannerKind.Saving
+                           || i.Link.State == LinkState.Disconnected;
+        return i.Failure is { } failure && !keepsDetail ? state with { Detail = failure } : state;
     }
 
     private static CardState Row(CardInputs i)
@@ -106,9 +109,12 @@ public static class DeviceCard
                    i.OfferTest ? CardAction.TestNow : CardAction.None, null, true);
     }
 
+    /// <summary>Check firmware only where Volco can check it (USB).</summary>
     private static CardState NoAnswer(CardInputs i)
-        => new($"No controller answers on {i.Port ?? "the USB port"}", LinkTone.Danger, "It may not have Volco's firmware yet.",
-               CardAction.CheckFirmware, null, true);
+        => new(i.Transport == ConnectionType.Serial ? $"No controller answers on {i.Port ?? "the USB port"}"
+                                                    : $"No controller answers on port {i.Port}",
+               LinkTone.Danger, "It may not have Volco's firmware yet.",
+               i.Banner.Actions.HasFlag(BannerActions.CheckFirmware) ? CardAction.CheckFirmware : CardAction.None, null, true);
 
     /// <summary>Update only where Volco can update it (USB, with its firmware bundled).</summary>
     private static CardState Incompatible(ControllerBanner banner)
