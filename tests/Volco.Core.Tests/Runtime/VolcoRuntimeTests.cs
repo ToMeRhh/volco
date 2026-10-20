@@ -934,6 +934,43 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void AdvanceTestIndicatorMovesLikeAPress()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c, new HelloMessage(ProtocolVersion.Current, 5,
+                                            new[] { IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen }));
+        var activity = 0;
+        runtime.ButtonActivity += (_, _) => activity++;
+        Assert.Equal(0, runtime.AdvanceTestIndicator(0));   // no test: nothing moves
+
+        using (runtime.EnterTestMode())
+        {
+            Assert.Equal(1, runtime.AdvanceTestIndicator(0));
+            Assert.Equal(ProtocolEncoder.EncodeLed(0, 1), LastLed(c, 0));   // a single LED: On …
+            Assert.Equal(2, runtime.AdvanceTestIndicator(0));
+            Assert.Equal(ProtocolEncoder.EncodeLed(0, 0), LastLed(c, 0));   // … then Off
+
+            runtime.AdvanceTestIndicator(1);
+            Assert.Equal(ProtocolEncoder.EncodeLed(1, 1), LastLed(c, 1));   // a pair: A …
+            runtime.AdvanceTestIndicator(1);
+            Assert.Equal(ProtocolEncoder.EncodeLed(1, 2), LastLed(c, 1));   // … B …
+            runtime.AdvanceTestIndicator(1);
+            Assert.Equal(ProtocolEncoder.EncodeLed(1, 1), LastLed(c, 1));   // … A
+
+            Assert.Equal(1, runtime.AdvanceTestIndicator(2));
+            Assert.True(ContainsFrame(c.SentFrames, ProtocolEncoder.EncodeScreen(2, ScreenTransition.None,
+                ScreenContent.Text("Button 3", ScreenIcon.Generic, false, "1 press"))));
+            Press(c, 2);   // a real press counts on from there
+            Assert.True(ContainsFrame(c.SentFrames, ProtocolEncoder.EncodeScreen(2, ScreenTransition.None,
+                ScreenContent.Text("Button 3", ScreenIcon.Generic, false, "2 presses"))));
+        }
+        Assert.Equal(0, activity);
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+        Assert.Empty(Snapshot(_engine.DeviceVolumeCalls));
+    }
+
+    [Fact]
     public void TestMode_RawInput_CarriesThePressCount_AndANewTestStartsAgain()
     {
         var runtime = StartRuntime();

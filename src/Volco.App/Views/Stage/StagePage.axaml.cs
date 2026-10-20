@@ -150,6 +150,7 @@ public partial class StagePage : UserControl
             UpdateCompare();
             UpdateConnection();
             UpdateSaveBar();
+            UpdateTesting();
         }
         else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
         {
@@ -175,6 +176,18 @@ public partial class StagePage : UserControl
         UpdateCompare();
         UpdateConnection();
         UpdateSaveBar();
+        UpdateTesting();
+        // Leaving Hardware ends a running hardware test (spec §8).
+        if (!hardware) Hardware?.OnModeLeft();
+    }
+
+    /// <summary>While a hardware test runs on Hardware, the case has the accent outline ("testing")
+    /// and the band shows under it (spec §8).</summary>
+    private void UpdateTesting()
+    {
+        var testing = Mode == StageMode.Hardware && Hardware is { IsTesting: true };
+        _case.Classes.Set("testing", testing);
+        this.FindControl<Control>("TestBand")!.IsVisible = testing;
     }
 
     /// <summary>The save bar (spec §6.5) shows on Hardware while the draft is unsaved.</summary>
@@ -190,6 +203,7 @@ public partial class StagePage : UserControl
     {
         if (e.PropertyName is nameof(HardwareViewModel.ShowChooser)) UpdateChooser();
         else if (e.PropertyName is nameof(HardwareViewModel.ShowSaveBar)) UpdateSaveBar();
+        else if (e.PropertyName is nameof(HardwareViewModel.IsTesting)) UpdateTesting();
         else if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
         else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
     }

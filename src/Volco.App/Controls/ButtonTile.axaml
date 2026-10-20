@@ -46,10 +46,36 @@
         <!-- On Hardware, the indicator's wiring in the same cell (spec §5.2) -->
         <TextBlock Name="WiringIndicator" Grid.ColumnSpan="3" Classes="WiringLayer WiringIndicator"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="{Binding Wiring.IndicatorText}"
-                   IsVisible="{Binding Wiring.IndicatorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"/>
+                   IsVisible="{Binding Wiring.ShowIndicatorText, FallbackValue=False}"/>
+
+        <!-- During a hardware test (spec §8): the light's test state, which a click switches, or
+             the test screen -->
+        <Panel Name="TestIndicator" Grid.ColumnSpan="3" Classes="WiringLayer" HorizontalAlignment="Center"
+               VerticalAlignment="Bottom" IsVisible="{Binding Wiring.IsTesting, FallbackValue=False}">
+          <Button Name="TestLight" Classes="TestLight" Command="{Binding Wiring.AdvanceLightCommand, FallbackValue={x:Null}}"
+                  IsVisible="{Binding Wiring.HasTestLight, FallbackValue=False}" ToolTip.Tip="Switch the light">
+            <Panel>
+              <Ellipse Name="TestLed" Classes="Led" Classes.on="{Binding Wiring.TestLedOn, FallbackValue=False}"
+                       IsVisible="{Binding Wiring.IsTestLed, FallbackValue=False}"/>
+              <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding Wiring.IsTestPair, FallbackValue=False}">
+                <Ellipse Name="TestLedA" Classes="Led" Classes.on="{Binding Wiring.TestLedA, FallbackValue=False}"/>
+                <Ellipse Name="TestLedB" Classes="Led" Classes.on="{Binding Wiring.TestLedB, FallbackValue=False}"/>
+              </StackPanel>
+            </Panel>
+          </Button>
+          <Panel IsVisible="{Binding Wiring.IsTestScreen, FallbackValue=False}">
+            <Panel Classes="ScreenFull">
+              <controls:ScreenPreview Name="TestScreenPreview" Scale="0.75" Screen="{Binding Wiring.TestScreen}"/>
+            </Panel>
+            <Border Classes="ScreenText">
+              <TextBlock Text="{Binding Wiring.TestScreen.Main, FallbackValue=''}" TextTrimming="CharacterEllipsis"/>
+            </Border>
+          </Panel>
+        </Panel>
 
         <!-- 2. The cap -->
-        <Ellipse Name="Cap" Grid.Row="1" Grid.ColumnSpan="3" Classes="Cap" HorizontalAlignment="Center"/>
+        <Ellipse Name="Cap" Grid.Row="1" Grid.ColumnSpan="3" Classes="Cap" HorizontalAlignment="Center"
+                 Classes.pressed="{Binding Wiring.IsPressed, FallbackValue=False}"/>
 
         <!-- The grip, beside the action rows: one drag moves all of this button’s actions onto
              another button, in the edited mode (spec §2.9) -->
@@ -121,9 +147,14 @@
             <TextBlock Name="WiringTitle" Classes="TileLabel" Text="{Binding Wiring.Title}"/>
             <Ellipse Classes="ChangeDot" IsVisible="{Binding Wiring.HasChange, FallbackValue=False}"/>
           </StackPanel>
-          <Border Classes="PinPill" IsVisible="{Binding Wiring.PinText, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
-            <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
-          </Border>
+          <!-- The pin, or during a hardware test the test state (spec §8) in its place -->
+          <Panel HorizontalAlignment="Center">
+            <Border Classes="PinPill" IsVisible="{Binding Wiring.ShowPin, FallbackValue=False}">
+              <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
+            </Border>
+            <TextBlock Name="WiringTest" Classes="TestValue" Text="{Binding Wiring.TestText}"
+                       IsVisible="{Binding Wiring.IsTesting, FallbackValue=False}"/>
+          </Panel>
         </StackPanel>
       </Grid>
     </Border>

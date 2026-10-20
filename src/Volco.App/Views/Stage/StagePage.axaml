@@ -163,6 +163,12 @@
             </Grid>
           </Border>
 
+          <!-- The hardware test's band (hardware-page spec §8), under the case so no tile moves -->
+          <Border Name="TestBand" Classes="TestBand" IsVisible="False">
+            <TextBlock Name="TestBandText" TextWrapping="Wrap"
+                       Text="{Binding $parent[stage:StagePage].Hardware.TestBandText, FallbackValue=''}"/>
+          </Border>
+
           <TextBlock Name="ConnectLineText" Classes="Secondary" TextWrapping="Wrap"
                      Text="{Binding ConnectLine}" IsVisible="{Binding ShowConnectLine}"/>
         </StackPanel>

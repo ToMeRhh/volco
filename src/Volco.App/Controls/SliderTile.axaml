@@ -95,9 +95,14 @@
               <TextBlock Name="WiringTitle" Classes="TileLabel" Text="{Binding Wiring.Title}"/>
               <Ellipse Classes="ChangeDot" IsVisible="{Binding Wiring.HasChange, FallbackValue=False}"/>
             </StackPanel>
-            <Border Classes="PinPill" IsVisible="{Binding Wiring.PinText, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
-              <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
-            </Border>
+            <!-- The pin, or during a hardware test the test state (spec §8) in its place -->
+            <Panel HorizontalAlignment="Center">
+              <Border Classes="PinPill" IsVisible="{Binding Wiring.ShowPin, FallbackValue=False}">
+                <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
+              </Border>
+              <TextBlock Name="WiringTest" Classes="TestValue" Text="{Binding Wiring.TestText}"
+                         IsVisible="{Binding Wiring.IsTesting, FallbackValue=False}"/>
+            </Panel>
           </StackPanel>
         </Panel>
         <TextBlock Name="MissingText" Classes="TileMissing" Text="Not on this controller"

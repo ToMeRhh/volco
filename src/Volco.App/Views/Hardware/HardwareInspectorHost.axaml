@@ -22,7 +22,8 @@
         </StackPanel>
       </StackPanel>
     </Border>
-    <ContentControl Name="InspectedContent" Content="{Binding Inspected}">
+    <!-- Hidden while a hardware test runs (spec §8): editing is paused -->
+    <ContentControl Name="InspectedContent" Content="{Binding Inspected}" IsVisible="{Binding !IsTesting}">
       <ContentControl.DataTemplates>
         <DataTemplate DataType="{x:Type hw:SliderWiringViewModel}" x:DataType="hw:SliderWiringViewModel">
           <views:SliderWiringInspector/>

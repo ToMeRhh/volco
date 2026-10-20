@@ -244,8 +244,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         && _service.Mirror is { Length: > 0 } m && h.ConfigCrc == ControllerConfigCodec.Crc32(m);
 
     /// <summary>The draft can be changed: never while a save runs, so the controller's answer is
-    /// about the draft (and layout) that was sent.</summary>
-    public bool CanEdit => _runtime.ControllerState == ControllerState.Ready && (InSync || _hasPermission) && !IsSaving;
+    /// about the draft (and layout) that was sent, nor during a hardware test (editing is paused).</summary>
+    public bool CanEdit => _runtime.ControllerState == ControllerState.Ready && (InSync || _hasPermission) && !IsSaving && !IsTesting;
 
     /// <summary>The baseline is Volco's saved copy, not what the controller holds: while setting up
     /// a controller that doesn't hold the draft, it is always unsaved.</summary>

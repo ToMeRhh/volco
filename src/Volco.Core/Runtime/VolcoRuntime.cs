@@ -232,6 +232,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         return presses;
     }
 
+    /// <summary>A click on a button's light in the hardware test (hardware-page spec §8): its test
+    /// indicator moves on exactly as one press of <paramref name="button"/> (the 0-based input)
+    /// would and is pushed; no action runs and no audio changes. Returns the button's presses so
+    /// far in this test, 0 when no test is running.</summary>
+    public int AdvanceTestIndicator(int button) => IsDisposed ? 0 : CountTestPress(button);
+
     private int TestPresses(int button)
     {
         lock (_testGate) return button >= 0 && button < _testPresses.Length ? _testPresses[button] : 0;

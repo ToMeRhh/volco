@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.Core.Communication;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
 using Volco.Core.Runtime;
@@ -186,6 +187,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         }
         if (e.PropertyName is nameof(ControllerViewModel.Confirmation) or null or "") OnPropertyChanged(nameof(Confirmation));
         if (e.PropertyName == nameof(ControllerViewModel.Layout)) Refresh();
+        if (e.PropertyName is nameof(ControllerViewModel.IsTesting) or null or "") OnTestingChanged();
+        if (e.PropertyName is nameof(ControllerViewModel.CanStartTest) or null or "") OnPropertyChanged(nameof(CanStartTest));
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or nameof(ControllerViewModel.IsSaving)
             or nameof(ControllerViewModel.IsSettingUp) or nameof(ControllerViewModel.CanSave) or null or "") UpdateSaveBar();
         UpdateChooser();
@@ -280,6 +283,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         foreach (var item in _controls.Sliders.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
         foreach (var item in _controls.Buttons.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
 
+        UpdateTestStates();
         SyncBusChips(draft);
         foreach (var field in _pinFields.Values) UpdatePinField(field);
         UpdateInspected();
@@ -513,16 +517,117 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         return mine.Count == 0 ? null : string.Join("\n", mine);
     }
 
+    // ── The hardware test on the drawing (spec §8) ───────────────────────────────────────────
+
+    /// <summary>A hardware test runs (<see cref="ControllerViewModel.IsTesting"/>): the case is
+    /// outlined, the inspector is hidden and the draft can't be edited.</summary>
+    public bool IsTesting => _controller.IsTesting;
+
+    /// <summary>A test can start: the controller is ready and nothing else runs.</summary>
+    public bool CanStartTest => _controller.CanStartTest;
+
+    /// <summary>The title row's Test.</summary>
+    public IRelayCommand StartTestCommand => _controller.StartTestCommand;
+
+    /// <summary>The title row's Stop test.</summary>
+    public IRelayCommand StopTestCommand => _controller.StopTestCommand;
+
+    /// <summary>The band over the case while a test runs.</summary>
+    public string TestBandText => "Testing: sliders and buttons don't change volume or run actions.";
+
+    // Per hardware input: the last raw value of each slider; this test's presses and held state
+    // of each button.
+    private readonly Dictionary<int, int> _raw = new();
+    private readonly Dictionary<int, int> _testPresses = new();
+    private readonly HashSet<int> _testHeld = new();
+
+    /// <summary>The Hardware stage was left (the stage switched to Controls): a running test ends.</summary>
+    public void OnModeLeft()
+    {
+        if (!_disposed) _controller.OnPageLeft();
+    }
+
+    private void OnTestingChanged()
+    {
+        if (_disposed) return;
+        _testPresses.Clear();
+        _testHeld.Clear();
+        OnPropertyChanged(nameof(IsTesting));
+        UpdateTestStates();
+    }
+
+    /// <summary>A click on button tile <paramref name="tile"/>'s light: it moves on as one press
+    /// would (the runtime pushes it to the controller; no action runs).</summary>
+    private void AdvanceLight(int tile)
+    {
+        if (_disposed || !IsTesting || Source(_controller.Layout.Buttons, tile) is not int input) return;
+        var presses = _runtime.AdvanceTestIndicator(input);
+        if (presses <= 0) return;
+        _testPresses[input] = Math.Max(presses, _testPresses.GetValueOrDefault(input));
+        UpdateTestStates();
+    }
+
+    /// <summary>Every tile's test state, from this test's raw input and the controller's Hello.</summary>
+    private void UpdateTestStates()
+    {
+        var testing = IsTesting;
+        var layout = _controller.Layout;
+        var kinds = _runtime.Config.Config.Controller?.Buttons ?? new List<IndicatorKind>();
+        for (int i = 0; i < Sliders.Count; i++)
+        {
+            if (Sliders[i].Wiring is not { } w) continue;
+            w.IsTesting = testing;
+            w.TestText = testing && Source(layout.Sliders, i) is int input && _raw.TryGetValue(input, out var raw) ? $"{raw}" : testing ? "–" : "";
+        }
+        for (int i = 0; i < Buttons.Count; i++)
+        {
+            if (Buttons[i].Wiring is not { } w) continue;
+            var tile = i;
+            w.Advance = () => AdvanceLight(tile);
+            w.IsTesting = testing;
+            if (!testing || Source(layout.Buttons, i) is not int input || input >= kinds.Count)
+            {
+                w.TestKind = null;
+                w.TestLight = TestIndicator.Off;
+                w.TestScreen = null;
+                w.TestText = "";
+                w.IsPressed = false;
+                continue;
+            }
+            var kind = kinds[input];
+            var presses = _testPresses.GetValueOrDefault(input);
+            w.TestKind = kind;
+            w.TestLight = TestMode.Indicator(kind, presses);
+            w.TestScreen = kind == IndicatorKind.Screen ? TestMode.Screen(input, presses) : null;
+            w.TestText = kind switch
+            {
+                IndicatorKind.Led or IndicatorKind.LedPair => w.TestLight.ToString(),
+                _ => TestMode.PressText(presses),
+            };
+            w.IsPressed = _testHeld.Contains(input);
+        }
+    }
+
     // ── Raw input (spec §5.2: the fader shows the live raw level, a press flashes the tile) ──
 
     private void OnRawInput(object? sender, RawInputEventArgs e) => _ui.Post(() =>
     {
         if (_disposed) return;
         var layout = _controller.Layout;
+        if (e.Kind == RawInputKind.Slider) _raw[e.Index] = e.Value;
         if (e.Kind == RawInputKind.Slider && Find(Sliders, layout.Sliders, e.Index) is { } slider)
             slider.Wiring!.RawLevel = Math.Clamp(e.Value / MaxRaw, 0, 1);
         else if (e.Kind == RawInputKind.Button && e.Value != 0 && Find(Buttons, layout.Buttons, e.Index) is { } button)
             button.Pulse();
+        if (!IsTesting || !_runtime.InTestMode) return;
+        if (e.Kind == RawInputKind.Button)
+        {
+            if (e.Value != 0) _testHeld.Add(e.Index);
+            else _testHeld.Remove(e.Index);
+            // A click on a light may have counted on after this message was posted.
+            _testPresses[e.Index] = Math.Max(e.Presses, _testPresses.GetValueOrDefault(e.Index));
+        }
+        UpdateTestStates();
     });
 
     /// <summary>The tile of hardware input <paramref name="input"/>: the draft control whose source it is.</summary>

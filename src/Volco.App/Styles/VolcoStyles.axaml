@@ -718,6 +718,44 @@
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
+  <!-- The hardware test on the drawing (hardware-page spec §8): the case's accent outline (the
+       padding gives back the thicker border, so no tile moves), the band under it, a held
+       button's cap, the clickable test light and the test value in the pin's place -->
+  <Style Selector="Border.Case.testing">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="Padding" Value="13"/>
+  </Style>
+  <Style Selector="Border.TestBand">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="12,7"/>
+  </Style>
+  <Style Selector="Border.Case.hardware Ellipse.Cap.pressed">
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Button.TestLight">
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+  <Style Selector="Button.TestLight:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="TextBlock.TestValue">
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="Margin" Value="0,1,0,2"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
   <!-- ── Controls page: the inspector (spec §5) ──────────────────────────
        A fixed column: a header, then one-line rows of 44 px, and the collapsed sections. -->
   <Style Selector="Border.Inspector">
