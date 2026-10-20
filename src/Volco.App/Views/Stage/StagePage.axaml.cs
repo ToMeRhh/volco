@@ -48,6 +48,7 @@ public partial class StagePage : UserControl
         };
         var compareOverlay = this.FindControl<Border>("CompareOverlay")!;
         compareOverlay.PointerPressed += OnCompareOverlayPressed;
+        this.FindControl<Border>("ConnectionOverlay")!.PointerPressed += OnConnectionOverlayPressed;
         InitModeTabs();
         InitStage();
         // Drag to swap is a Controls thing: on Hardware the grips are faded out and inactive.
@@ -93,6 +94,8 @@ public partial class StagePage : UserControl
     private TransitioningContentControl _chooserHost = null!;
     private Border _compareOverlay = null!;
     private ContentControl _compareHost = null!;
+    private Border _connectionOverlay = null!;
+    private ContentControl _connectionHost = null!;
     private SetupChooser? _chooser;
     private TransitioningContentControl _titleHost = null!;
     private TransitioningContentControl _sidePanelHost = null!;
@@ -110,6 +113,8 @@ public partial class StagePage : UserControl
         _chooserHost.PageTransition = null;
         _compareOverlay = this.FindControl<Border>("CompareOverlay")!;
         _compareHost = this.FindControl<ContentControl>("CompareHost")!;
+        _connectionOverlay = this.FindControl<Border>("ConnectionOverlay")!;
+        _connectionHost = this.FindControl<ContentControl>("ConnectionHost")!;
         _titleHost = this.FindControl<TransitioningContentControl>("TitleHost")!;
         _sidePanelHost = this.FindControl<TransitioningContentControl>("SidePanelHost")!;
         _inspector = this.FindControl<ContentControl>("InspectorContent")!;
@@ -143,6 +148,7 @@ public partial class StagePage : UserControl
             UpdateTileSources();
             UpdateChooser();
             UpdateCompare();
+            UpdateConnection();
         }
         else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
         {
@@ -166,12 +172,14 @@ public partial class StagePage : UserControl
         UpdateTileSources();
         UpdateChooser();
         UpdateCompare();
+        UpdateConnection();
     }
 
     private void OnHardwarePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(HardwareViewModel.ShowChooser)) UpdateChooser();
         else if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
+        else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
     }
 
     /// <summary>On Hardware, the setup chooser takes the case's rectangle (spec §3.3, §7.1): the
@@ -216,6 +224,35 @@ public partial class StagePage : UserControl
             if (first is not null) first.Focus(NavigationMethod.Tab);
             else card.Focus();
         });
+    }
+
+    /// <summary>The Connection dialog's card over the stage while Hardware has it open; the focus moves into it.</summary>
+    private void UpdateConnection()
+    {
+        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        var open = hw is { IsConnectionDialogOpen: true, ConnectionDialog: not null };
+        _connectionHost.Content = open ? hw!.ConnectionDialog : null;
+        if (_connectionOverlay.IsVisible == open) return;
+        _connectionOverlay.IsVisible = open;
+        if (!open) return;
+        var card = this.FindControl<Border>("ConnectionCard")!;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
+            card.UpdateLayout();
+            var first = card.GetVisualDescendants().OfType<InputElement>()
+                .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+            if (first is not null) first.Focus(NavigationMethod.Tab);
+            else card.Focus();
+        });
+    }
+
+    /// <summary>A click on the Connection dialog's scrim closes it.</summary>
+    private void OnConnectionOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, sender) || Hardware is not { IsConnectionDialogOpen: true } hw) return;
+        hw.CloseConnection();
+        e.Handled = true;
     }
 
     /// <summary>A click on Compare's scrim closes it.</summary>
@@ -423,6 +460,16 @@ public partial class StagePage : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (_connectionOverlay.IsVisible && Hardware is { } cx)
+        {
+            // The Connection dialog is modal too.
+            if (e.Key == Key.Escape)
+            {
+                cx.CloseConnection();
+                e.Handled = true;
+            }
+            return;
+        }
         if (_compareOverlay.IsVisible && Hardware is { } hw)
         {
             // Compare is modal: Escape closes it, and no key reaches the tiles under it.

@@ -56,6 +56,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The Connection dialog opens on its Wi-Fi tab, else on USB.</summary>
     [ObservableProperty] private bool _connectionDialogOnWifi;
 
+    /// <summary>The open Connection dialog's view model, or null.</summary>
+    [ObservableProperty] private ConnectionDialogViewModel? _connectionDialog;
+
     /// <summary>The setup chooser (spec §7.1), shown in the drawing's place by <see cref="ShowChooser"/>.</summary>
     public SetupChooserViewModel Chooser { get; }
 
@@ -116,8 +119,17 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// when <paramref name="wifi"/>.</summary>
     public void OpenConnection(bool wifi)
     {
+        if (_disposed) return;
         ConnectionDialogOnWifi = wifi;
+        ConnectionDialog = new ConnectionDialogViewModel(_controller, CloseConnection);
         IsConnectionDialogOpen = true;
+    }
+
+    /// <summary>Closes the Connection dialog (Done, Escape, or a click outside).</summary>
+    public void CloseConnection()
+    {
+        IsConnectionDialogOpen = false;
+        ConnectionDialog = null;
     }
 
     /// <summary>⋯ Start over…: the drawing returns to the setup chooser; the draft stays until a

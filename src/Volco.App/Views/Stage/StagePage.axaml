@@ -215,6 +215,20 @@
       </Border>
     </Border>
 
+    <!-- Hardware's Connection dialog (spec §10): the same kind of modal card -->
+    <Border Name="ConnectionOverlay" Background="#66000000" IsVisible="False">
+      <Border Name="ConnectionCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="ConnectionHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:ConnectionDialogViewModel}" x:DataType="hw:ConnectionDialogViewModel">
+              <hwviews:ConnectionDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
     <!-- The device dialog, over the dialog that opened it, with its own scrim: Escape or a click
          on that scrim closes only this one -->
     <Border Name="DeviceOverlay" Background="#33000000" IsVisible="{Binding HasDeviceDialog}">
