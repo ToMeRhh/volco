@@ -840,7 +840,7 @@
   <Style Selector=":is(Window).compact DockPanel.NavPane">
     <Setter Property="Width" Value="36"/>
   </Style>
-  <Style Selector=":is(Window).compact TextBlock.NavLabel, :is(Window).compact TextBlock.Brand, :is(Window).compact StackPanel.AboutFooter, :is(Window).compact TextBlock.FooterLabel">
+  <Style Selector=":is(Window).compact TextBlock.NavLabel, :is(Window).compact TextBlock.Brand, :is(Window).compact StackPanel.AboutFooter, :is(Window).compact TextBlock.FooterLabel, :is(Window).compact HyperlinkButton.FooterLabel">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
   <Style Selector=":is(Window).compact ListBox.Nav ListBoxItem">
@@ -867,7 +867,7 @@
   <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover DockPanel.NavPane">
     <Setter Property="Width" Value="148"/>
   </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.FooterLabel">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.FooterLabel, :is(Window).compact Grid.SidebarHost:pointerover HyperlinkButton.FooterLabel">
     <Setter Property="IsVisible" Value="True"/>
   </Style>
 
