@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:hwviews="using:Volco.App.Views.Hardware"
              xmlns:hw="using:Volco.App.ViewModels.Hardware"
              xmlns:conv="using:Volco.App.Converters"
              xmlns:controls="using:Volco.App.Controls"
@@ -18,15 +19,15 @@
     <Border Name="ConnectionSegment" Classes="SegmentTrack" HorizontalAlignment="Left">
       <StackPanel Orientation="Horizontal" Spacing="2">
         <RadioButton Name="UsbOption" Classes="Segment" Content="USB"
-                     IsChecked="{Binding Connection.IsSerial, Mode=TwoWay}"/>
+                     IsChecked="{Binding IsUsbTab, Mode=TwoWay}"/>
         <RadioButton Name="WifiOption" Classes="Segment" Content="Wi-Fi"
-                     IsChecked="{Binding Connection.IsUdp, Mode=TwoWay}"/>
+                     IsChecked="{Binding IsWifiTab, Mode=TwoWay}"/>
         <RadioButton Name="SimulatorOption" Classes="Segment" Content="Simulator"
-                     IsChecked="{Binding Connection.IsWebSocket, Mode=TwoWay}"/>
+                     IsChecked="{Binding IsSimulatorTab, Mode=TwoWay}"/>
       </StackPanel>
     </Border>
 
-    <StackPanel Name="UsbSection" Spacing="12" IsVisible="{Binding Connection.IsSerial}">
+    <StackPanel Name="UsbSection" Spacing="12" IsVisible="{Binding IsUsbTab}">
       <Grid ColumnDefinitions="150,Auto,Auto">
         <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
         <ComboBox Name="PortCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
@@ -40,7 +41,7 @@
       </Grid>
     </StackPanel>
 
-    <StackPanel Name="WifiSection" Spacing="12" IsVisible="{Binding Connection.IsUdp}">
+    <StackPanel Name="WifiSection" Spacing="12" IsVisible="{Binding IsWifiTab}">
       <Grid ColumnDefinitions="150,Auto">
         <TextBlock Text="Listen port" Classes="Secondary" VerticalAlignment="Center"/>
         <NumericUpDown Name="UdpPortBox" Grid.Column="1" Width="160"
@@ -88,7 +89,7 @@
       </StackPanel>
     </StackPanel>
 
-    <StackPanel Name="SimulatorSection" Spacing="12" IsVisible="{Binding Connection.IsWebSocket}">
+    <StackPanel Name="SimulatorSection" Spacing="12" IsVisible="{Binding IsSimulatorTab}">
       <Grid ColumnDefinitions="150,Auto">
         <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
         <NumericUpDown Name="WebSocketPortBox" Grid.Column="1" Width="160"
@@ -96,6 +97,10 @@
                        Value="{Binding Connection.WebSocketPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
       </Grid>
     </StackPanel>
+
+    <TextBlock Name="InUseNote" Classes="Caption" Text="In use" IsVisible="{Binding TabInUse}"/>
+    <Button Name="UseButton" HorizontalAlignment="Left" Click="OnUse" IsVisible="{Binding CanUseTab}"
+            Content="{Binding Tab, Converter={x:Static hwviews:ConnectionDialog.UseText}}"/>
 
     <Button Name="ConnectionDone" Classes="Primary" Content="Done" HorizontalAlignment="Right" Click="OnDone"/>
   </StackPanel>

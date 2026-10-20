@@ -121,7 +121,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         ConnectionDialogOnWifi = wifi;
-        ConnectionDialog = new ConnectionDialogViewModel(_controller, CloseConnection);
+        ConnectionDialog = new ConnectionDialogViewModel(_controller, wifi, CloseConnection);
         IsConnectionDialogOpen = true;
     }
 

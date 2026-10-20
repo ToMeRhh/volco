@@ -81,7 +81,7 @@ public sealed class ConnectionDialogTests : IDisposable
         => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void SegmentSwitchesTheTransport()
+    public void SegmentSelectsTheTabAndUseSwitchesTheTransport()
     {
         using var s = Show();
         s.Vm.Hardware.OpenConnection(false);
@@ -89,17 +89,38 @@ public sealed class ConnectionDialogTests : IDisposable
         Assert.True(In<Border>(s.Page, "ConnectionOverlay").IsVisible);
         Assert.Equal("Connection", In<TextBlock>(s.Page, "ConnectionTitle").Text);
         Assert.True(In<StackPanel>(s.Page, "UsbSection").IsVisible);
+        Assert.True(In<TextBlock>(s.Page, "InUseNote").IsVisible);
 
         In<RadioButton>(s.Page, "WifiOption").IsChecked = true;
         Settle(s.Window);
-        Assert.Equal(ConnectionType.Udp, s.Rig.Config.Config.Connection.Type);
+        Assert.Equal(ConnectionType.Serial, s.Rig.Config.Config.Connection.Type);
         Assert.True(In<StackPanel>(s.Page, "WifiSection").IsVisible);
         Assert.False(In<StackPanel>(s.Page, "UsbSection").IsVisible);
+        Assert.False(In<TextBlock>(s.Page, "InUseNote").IsVisible);
+        var use = In<Button>(s.Page, "UseButton");
+        Assert.Equal("Use Wi-Fi", use.Content);
+
+        use.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle(s.Window);
+        Assert.Equal(ConnectionType.Udp, s.Rig.Config.Config.Connection.Type);
+        Assert.True(In<TextBlock>(s.Page, "InUseNote").IsVisible);
 
         In<RadioButton>(s.Page, "SimulatorOption").IsChecked = true;
         Settle(s.Window);
-        Assert.Equal(ConnectionType.WebSocket, s.Rig.Config.Config.Connection.Type);
+        Assert.Equal(ConnectionType.Udp, s.Rig.Config.Config.Connection.Type);
         Assert.True(In<StackPanel>(s.Page, "SimulatorSection").IsVisible);
+        Assert.Equal("Use the simulator", In<Button>(s.Page, "UseButton").Content);
+    }
+
+    [AvaloniaFact]
+    public void OpenedFromWifiShowsTheWifiTab()
+    {
+        using var s = Show();
+        s.Vm.Hardware.OpenConnection(true);
+        Settle(s.Window);
+        Assert.True(In<StackPanel>(s.Page, "WifiSection").IsVisible);
+        Assert.False(In<StackPanel>(s.Page, "UsbSection").IsVisible);
+        Assert.Equal(ConnectionType.Serial, s.Rig.Config.Config.Connection.Type);
     }
 
     [AvaloniaFact]
@@ -108,7 +129,6 @@ public sealed class ConnectionDialogTests : IDisposable
         using var s = Show();
         s.Vm.Controller.UdpEnabled = true;
         s.Vm.Hardware.OpenConnection(true);
-        s.Vm.Controller.Connection.IsUdp = true;
         Settle(s.Window);
         var saved = s.Rig.Config.Config.ControllerConfigBlob;
         s.Vm.Controller.Ssid = "";
