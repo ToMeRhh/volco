@@ -657,6 +657,23 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="BorderThickness" Value="1.5"/>
   </Style>
+  <!-- Hardware inspector rows (hardware-page spec §6): a 44 px Grid.InspectorRow, the label left
+       and the control right; a pin field's problem and fix go in the RowFooter under it -->
+  <Style Selector="Grid.InspectorRow :is(Control).RowControl">
+    <Setter Property="Width" Value="160"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Grid.InspectorRow Border.SegmentTrack">
+    <Setter Property="Padding" Value="2"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Grid.InspectorRow RadioButton.Segment /template/ Border#PART_Segment">
+    <Setter Property="Padding" Value="7,3"/>
+  </Style>
+  <Style Selector="StackPanel.RowFooter">
+    <Setter Property="Margin" Value="12,0,8,10"/>
+    <Setter Property="Spacing" Value="6"/>
+  </Style>
   <Style Selector="StackPanel.ModeFrameContent">
     <!-- The tint's border (1.5) plus the frame's padding (8,0,8,8) -->
     <Setter Property="Margin" Value="9.5,1.5,9.5,9.5"/>

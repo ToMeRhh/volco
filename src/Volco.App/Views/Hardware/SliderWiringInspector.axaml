@@ -4,17 +4,19 @@
              xmlns:controls="using:Volco.App.Controls"
              x:Class="Volco.App.Views.Hardware.SliderWiringInspector"
              x:DataType="hw:SliderWiringViewModel">
-  <!-- A slider's wiring (hardware-page spec §6.1): what it controls, its pin, Remove -->
+  <!-- A slider's wiring (hardware-page spec §6.1): what it controls, its pin, and Remove at the bottom -->
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
       <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding Title}"/>
       <TextBlock Name="SubtitleText" Classes="Secondary" TextWrapping="Wrap" Text="{Binding Subtitle}"/>
     </StackPanel>
+    <Button Name="RemoveButton" DockPanel.Dock="Bottom" Classes="Danger" Margin="16,8,16,16"
+            Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" IsEnabled="{Binding IsEditable}"/>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel Classes="InspectorBody">
-        <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
-        <Button Name="RemoveButton" Classes="Danger" Content="{Binding RemoveText}"
-                Command="{Binding RemoveCommand}" IsEnabled="{Binding IsEditable}"/>
+        <Border Classes="InspectorRows">
+          <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
+        </Border>
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

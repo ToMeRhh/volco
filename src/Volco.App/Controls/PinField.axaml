@@ -50,44 +50,50 @@
     </Style>
   </UserControl.Styles>
 
-  <StackPanel Classes="Field">
-    <TextBlock Name="LabelText" Classes="FieldLabel" Text="{Binding Label}"/>
-    <Panel>
-      <Button Name="ValueButton" Classes="PinValue" Classes.invalid="{Binding HasError}"
-              IsVisible="{Binding !IsOpen}" IsEnabled="{Binding IsEditable}" Click="ValueButton_Click">
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Name="ValueText" Text="{Binding ValueText}" VerticalAlignment="Center"/>
-          <PathIcon Grid.Column="1" Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
-                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-        </Grid>
-      </Button>
-      <TextBox Name="QueryBox" Classes.invalid="{Binding HasError}" IsVisible="{Binding IsOpen}"
-               Text="{Binding Query, Mode=TwoWay}" PlaceholderText="{Binding ValueText}"/>
-      <Popup Name="ListPopup" IsOpen="{Binding IsOpen}" PlacementTarget="{Binding #QueryBox}"
-             Placement="BottomEdgeAlignedLeft" ShouldUseOverlayLayer="True" IsLightDismissEnabled="False"
-             Width="{Binding #QueryBox.Bounds.Width}">
-        <Border Classes="PinList">
-          <ScrollViewer Name="ListScroll" MaxHeight="280" VerticalScrollBarVisibility="Auto">
-            <ItemsControl Name="RowList" ItemsSource="{Binding Rows}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="hw:PinRowViewModel">
-                  <Button Name="PinRowButton" Classes="PinRow" Classes.highlighted="{Binding IsHighlighted}"
-                          Classes.current="{Binding IsCurrent}" IsEnabled="{Binding IsPickable}" Click="Row_Click">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                      <controls:HighlightText Name="RowText" Source="{Binding Text}" Highlight="{Binding Matches}"/>
-                      <controls:HighlightText Grid.Column="1" Name="RowNote" Classes="PinNote" Source="{Binding Note}"
-                                              Highlight="{Binding NoteMatches}" HorizontalAlignment="Right"/>
-                    </Grid>
-                  </Button>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-        </Border>
-      </Popup>
-    </Panel>
-    <TextBlock Name="ErrorText" Classes="FieldError" Text="{Binding Error}" IsVisible="{Binding HasError}"/>
-    <Button Name="FixButton" Content="{Binding FixLabel}" Command="{Binding FixCommand}" IsVisible="{Binding HasFix}"
-            HorizontalAlignment="Left"/>
+  <!-- One inspector row (44 px): the label on the left, the value on the right; the list drops
+       below the row, and a problem and its fix sit under it -->
+  <StackPanel>
+    <Grid Name="PinRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+      <TextBlock Name="LabelText" Classes="RowLabel" Text="{Binding Label}"/>
+      <Panel Grid.Column="1" Classes="RowControl" VerticalAlignment="Center">
+        <Button Name="ValueButton" Classes="PinValue" Classes.invalid="{Binding HasError}"
+                IsVisible="{Binding !IsOpen}" IsEnabled="{Binding IsEditable}" Click="ValueButton_Click">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Name="ValueText" Text="{Binding ValueText}" VerticalAlignment="Center"/>
+            <PathIcon Grid.Column="1" Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                      Foreground="{DynamicResource TextSecondaryBrush}"/>
+          </Grid>
+        </Button>
+        <TextBox Name="QueryBox" Classes.invalid="{Binding HasError}" IsVisible="{Binding IsOpen}"
+                 Text="{Binding Query, Mode=TwoWay}" PlaceholderText="{Binding ValueText}"/>
+        <Popup Name="ListPopup" IsOpen="{Binding IsOpen}" PlacementTarget="{Binding #QueryBox}"
+               Placement="BottomEdgeAlignedRight" ShouldUseOverlayLayer="True" IsLightDismissEnabled="False"
+               MinWidth="{Binding #QueryBox.Bounds.Width}">
+          <Border Classes="PinList">
+            <ScrollViewer Name="ListScroll" MaxHeight="280" VerticalScrollBarVisibility="Auto">
+              <ItemsControl Name="RowList" ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="hw:PinRowViewModel">
+                    <Button Name="PinRowButton" Classes="PinRow" Classes.highlighted="{Binding IsHighlighted}"
+                            Classes.current="{Binding IsCurrent}" IsEnabled="{Binding IsPickable}" Click="Row_Click">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <controls:HighlightText Name="RowText" Source="{Binding Text}" Highlight="{Binding Matches}"/>
+                        <controls:HighlightText Grid.Column="1" Name="RowNote" Classes="PinNote" Source="{Binding Note}"
+                                                Highlight="{Binding NoteMatches}" HorizontalAlignment="Right"/>
+                      </Grid>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+        </Popup>
+      </Panel>
+    </Grid>
+    <StackPanel Classes="RowFooter" IsVisible="{Binding HasError}">
+      <TextBlock Name="ErrorText" Classes="FieldError" Text="{Binding Error}" IsVisible="{Binding HasError}"/>
+      <Button Name="FixButton" Content="{Binding FixLabel}" Command="{Binding FixCommand}" IsVisible="{Binding HasFix}"
+              HorizontalAlignment="Left"/>
+    </StackPanel>
   </StackPanel>
 </UserControl>

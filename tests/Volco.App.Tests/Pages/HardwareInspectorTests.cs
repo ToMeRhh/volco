@@ -145,17 +145,48 @@ public sealed class HardwareInspectorTests : IDisposable
         Assert.Equal("GPIO 12", PinValue(In<PinField>(s.Host, "LightPinField")));
         Assert.True(In<RadioButton>(s.Host, "LightLed").IsChecked);
 
-        var wiring = Assert.IsType<ButtonWiringViewModel>(s.Hardware.Inspected);
-        wiring.LightIndex = 3;
-        Settle(s.Window);
+        Click(s, In<RadioButton>(s.Host, "LightScreen"));
+        Assert.Equal(3, Assert.IsType<ButtonWiringViewModel>(s.Hardware.Inspected).LightIndex);
 
         Assert.Same(pin, In<PinField>(s.Host, "PinField"));
         Assert.Equal(y, pin.TranslatePoint(new Point(0, 0), s.Host)!.Value.Y, 0.5);
-        Assert.True(In<StackPanel>(s.Host, "BusRow").IsVisible);
-        Assert.True(In<StackPanel>(s.Host, "AddressRow").IsVisible);
+        Assert.True(In<Grid>(s.Host, "BusRow").IsVisible);
+        Assert.True(In<Grid>(s.Host, "AddressRow").IsVisible);
         Assert.False(In<Panel>(s.Host, "LightPinRow").IsVisible);
-        Assert.False(In<StackPanel>(s.Host, "LitRow").IsVisible);
+        Assert.False(In<Grid>(s.Host, "LitRow").IsVisible);
         Assert.Equal(Volco.Core.Controller.Proto.Button.IndicatorOneofCase.Screen, s.Vm.Controller.Draft.Buttons[0].IndicatorCase);
+    }
+
+    /// <summary>Spec §6: every row is one line of 44 px, its label on the left and its control on
+    /// the right, at the same height.</summary>
+    [AvaloniaTheory]
+    [InlineData("LightLed", 4)]
+    [InlineData("LightPair", 5)]
+    [InlineData("LightScreen", 4)]
+    [InlineData("LightNone", 2)]
+    public void ButtonInspectorRowsAreOneLineEach(string light, int rows)
+    {
+        using var s = Show();
+        s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
+        Settle(s.Window);
+        Click(s, In<RadioButton>(s.Host, light));
+
+        var shown = s.Host.GetVisualDescendants().OfType<Grid>()
+            .Where(g => g.Classes.Contains("InspectorRow") && g.IsEffectivelyVisible).ToList();
+        Assert.Equal(rows, shown.Count);
+        foreach (var row in shown)
+        {
+            Assert.Equal(44, row.Bounds.Height, 1.0);
+            var label = row.Children.OfType<TextBlock>().Single(t => t.Classes.Contains("RowLabel"));
+            var control = row.Children.Single(c => Grid.GetColumn(c) == 1);
+            var labelBox = new Rect(label.TranslatePoint(new Point(0, 0), s.Host)!.Value, label.Bounds.Size);
+            var controlBox = new Rect(control.TranslatePoint(new Point(0, 0), s.Host)!.Value, control.Bounds.Size);
+            Assert.Equal(labelBox.Center.Y, controlBox.Center.Y, 2.0);
+            Assert.True(labelBox.Right <= controlBox.Left, $"{label.Text}: the label is left of its control");
+        }
+        // Remove stays at the bottom, outside the scrolling rows.
+        var remove = In<Button>(s.Host, "RemoveButton");
+        Assert.Null(remove.FindAncestorOfType<ScrollViewer>());
     }
 
     [AvaloniaFact]
@@ -165,8 +196,7 @@ public sealed class HardwareInspectorTests : IDisposable
         Assert.False(In<ItemsControl>(s.Page, "BusChipList").IsVisible);   // no screen yet
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
-        Assert.IsType<ButtonWiringViewModel>(s.Hardware.Inspected).LightIndex = 3;   // a screen on bus 0
-        Settle(s.Window);
+        Click(s, In<RadioButton>(s.Host, "LightScreen"));   // a screen on bus 0
 
         var chip = Tiles<Button>(s.Page).Single(b => b.Name == "BusChip");
         Assert.Equal("I2C bus 0 · SDA 25 · SCL 26", chip.Content);
