@@ -194,7 +194,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ApplyMine()
     {
-        if (_service.Mirror is { Length: > 0 } mirror) SaveBytes(mirror, udpChanged: false);   // the mirror's own bytes
+        if (_service.Mirror is { Length: > 0 } mirror) SaveBytes(mirror, udpChanged: false, layout: null);   // the mirror's own bytes
     }
 
     [RelayCommand]
@@ -222,6 +222,22 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     /// <summary>The config the page edits. Rows edit its messages in place.</summary>
     public ControllerConfig Draft => _draft;
+
+    /// <summary>Which of Volco's saved sliders and buttons each draft control is (hardware-page spec
+    /// §6.5): identity whenever a whole draft is set, changed by <see cref="RemoveSlider"/>,
+    /// <see cref="RemoveButton"/> and the Add commands.</summary>
+    public ControlLayout Layout { get; private set; } = ControlLayout.Identity(0, 0);
+
+    /// <summary>A confirmed save applied a layout that removed or added controls: Volco's sliders
+    /// and buttons were rewritten to match, so their view models must be rebuilt.</summary>
+    public event EventHandler? ControlsShifted;
+
+    /// <summary>After every change to the draft, its layout, its problems or whether it can be
+    /// edited. UI thread.</summary>
+    internal event EventHandler? DraftChanged;
+
+    /// <summary>The draft's problems, as marked on its rows; empty while it can't be edited.</summary>
+    internal IReadOnlyList<DraftProblem> Problems => _problems;
 
     /// <summary>Hello configState 1 with the mirror's CRC.</summary>
     public bool InSync =>
@@ -313,6 +329,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _pcIpText = null;          // Important 3: the box shows the new draft's address
         Confirmation = null;       // a question about the old draft must not act on the new one
         _draft = draft;
+        Layout = ControlLayout.Identity(draft.Sliders.Count, draft.Buttons.Count);
         _selectedPreset = ControllerDraft.BasedOn(draft);
         RebuildRows();
         Recompute(structural: true);
@@ -364,6 +381,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(BasedOnText));
         OnPropertyChanged(nameof(ShowBehaviour));
         SaveCommand.NotifyCanExecuteChanged();
+        DraftChanged?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand]
@@ -371,6 +389,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (!CanEdit) return;
         _draft.Sliders.Add(new Slider());
+        Layout.AddSlider();
         Sliders.Add(new HwSliderRowViewModel(this, _draft.Sliders.Count - 1, _draft.Sliders[^1]));
         OnDraftEdited();
     }
@@ -380,38 +399,45 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (!CanEdit) return;
         _draft.Buttons.Add(new Button());
+        Layout.AddButton();
         Buttons.Add(new HwButtonRowViewModel(this, _draft.Buttons.Count - 1, _draft.Buttons[^1]));
         OnDraftEdited();
     }
 
-    internal void RequestRemoveSlider(int index)
+    /// <summary>Removes slider <paramref name="index"/> from the draft. The later ones move down
+    /// and keep what they control (spec §6.5); the view asks first.</summary>
+    internal void RemoveSlider(int index)
     {
-        if (!CanEdit || index >= _draft.Sliders.Count) return;
-        void Remove()
-        {
-            if (!CanEdit || index >= _draft.Sliders.Count) return;
-            _draft.Sliders.RemoveAt(index);
-            RebuildRows();
-            OnDraftEdited(structural: true);
-        }
-        if (index < _draft.Sliders.Count - 1)
-            Ask("Sliders after it are renumbered, and their actions move with the number.", "Remove", Remove);
-        else Remove();
+        if (!CanEdit || index < 0 || index >= _draft.Sliders.Count) return;
+        _draft.Sliders.RemoveAt(index);
+        Layout.RemoveSlider(index);
+        RebuildRows();
+        OnDraftEdited(structural: true);
     }
 
-    internal void RequestRemoveButton(int index)
+    /// <summary>Removes button <paramref name="index"/> from the draft. The later ones move down
+    /// and keep their actions (spec §6.5); the view asks first.</summary>
+    internal void RemoveButton(int index)
     {
-        if (!CanEdit || index >= _draft.Buttons.Count) return;
-        void Remove()
-        {
-            if (!CanEdit || index >= _draft.Buttons.Count) return;
-            _draft.Buttons.RemoveAt(index);
-            RebuildRows();
-            OnDraftEdited(structural: true);
-        }
-        if (index < _draft.Buttons.Count - 1)
-            Ask("Buttons after it are renumbered, and their actions move with the number.", "Remove", Remove);
-        else Remove();
+        if (!CanEdit || index < 0 || index >= _draft.Buttons.Count) return;
+        _draft.Buttons.RemoveAt(index);
+        Layout.RemoveButton(index);
+        RebuildRows();
+        OnDraftEdited(structural: true);
+    }
+
+    /// <summary>The old Controller page's Remove: "Remove Slider N?", then <see cref="RemoveSlider"/>.</summary>
+    internal void AskRemoveSlider(int index)
+    {
+        if (!CanEdit || index < 0 || index >= _draft.Sliders.Count) return;
+        Ask($"Remove Slider {index + 1}?", "Remove", () => RemoveSlider(index));
+    }
+
+    /// <summary>The old Controller page's Remove: "Remove Button N?", then <see cref="RemoveButton"/>.</summary>
+    internal void AskRemoveButton(int index)
+    {
+        if (!CanEdit || index < 0 || index >= _draft.Buttons.Count) return;
+        Ask($"Remove Button {index + 1}?", "Remove", () => RemoveButton(index));
     }
 
     // ── Errors and hints ─────────────────────────────────────────────────────────────────────
@@ -423,6 +449,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         WifiError = null;
         InputError = null;
         PageError = null;
+        _problems = Array.Empty<DraftProblem>();
         _wifiFields.Clear();
         OnWifiFieldsChanged();
     }
@@ -593,10 +620,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             SetProgress($"This setup can't be saved: {ex.Message}", LinkTone.Danger);
             return;
         }
-        SaveBytes(blob, udpChanged);
+        SaveBytes(blob, udpChanged, Layout);
     }
 
-    private ControllerConfig BaselineConfig()
+    /// <summary>Volco's saved copy of the controller's config (empty when there is none).</summary>
+    internal ControllerConfig BaselineConfig()
     {
         try { return _baseline.Length > 0 ? ControllerConfig.Parser.ParseFrom(_baseline) : new ControllerConfig(); }
         catch (InvalidProtocolBufferException) { return new ControllerConfig(); }
@@ -606,9 +634,14 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private bool _savingSetup;
 
-    private void SaveBytes(byte[] blob, bool udpChanged)
+    /// <summary>The layout of the draft being saved; applied to Volco's settings once the controller
+    /// confirms (the mirror's change may reset <see cref="Layout"/> before the result arrives).</summary>
+    private ControlLayout? _savingLayout;
+
+    private void SaveBytes(byte[] blob, bool udpChanged, ControlLayout? layout)
     {
         _udpChangedInSave = udpChanged;
+        _savingLayout = layout;
         _savingSetup = IsSettingUp || IsNotSetUp;
         IsSaving = true;
         SetProgress("Sending…");
@@ -648,7 +681,25 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         SetProgress(text, confirmed ? LinkTone.Good : LinkTone.Danger, autoDismiss: confirmed);
         if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid) _remoteError = (r.Item, r.Field);
         if (r.Status == SaveStatus.Confirmed) _fixIt = false;
+        var layout = _savingLayout;
+        _savingLayout = null;
+        if (r.Status == SaveStatus.Confirmed && layout is not null) ApplyLayout(layout);
         RefreshAll();
+    }
+
+    /// <summary>Spec §6.5: the controller has the saved draft, so Volco's sliders and buttons follow
+    /// its removed and added controls. A failed or discarded save never gets here.</summary>
+    private void ApplyLayout(ControlLayout layout)
+    {
+        if (ReferenceEquals(layout, Layout))
+        {
+            Layout = ControlLayout.Identity(_draft.Sliders.Count, _draft.Buttons.Count);
+            OnPropertyChanged(nameof(Layout));
+        }
+        if (layout.IsIdentity) return;
+        layout.ApplyTo(_config.Config);
+        _config.RequestSave();
+        ControlsShifted?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand]

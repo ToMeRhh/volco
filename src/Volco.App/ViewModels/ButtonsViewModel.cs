@@ -401,6 +401,22 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         Save();
     }
 
+    /// <summary>An empty button for a control the Hardware page's draft adds: not in
+    /// <see cref="Items"/> and never saved (Volco's settings get it once the controller confirms).</summary>
+    public ButtonItemViewModel CreateDetached(int index)
+        => new(new ButtonConfig { Index = index }, index, _devices, this);
+
+    /// <summary>Rebuilds <see cref="Items"/> from <c>config.json</c> after its list was rewritten
+    /// (a confirmed save removed or added controls).</summary>
+    public void Reload()
+    {
+        Items.Clear();
+        for (int i = 0; i < Buttons.Count; i++)
+            Items.Add(new ButtonItemViewModel(Buttons[i], i, _devices, this));
+        Renumber();
+        RefreshController();
+    }
+
     public void RemoveLast()
     {
         if (Items.Count == 0) return;

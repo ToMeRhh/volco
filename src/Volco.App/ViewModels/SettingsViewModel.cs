@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.App.Platform;
+using Volco.App.ViewModels.Hardware;
 using Volco.Core.Input;
 using Volco.Core.Audio;
 using Volco.Core.Config;
@@ -36,6 +37,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private ControlsViewModel? _controlsViewModel;
     private GeneralViewModel? _generalViewModel;
     private ControllerViewModel? _controllerViewModel;
+    private HardwareViewModel? _hardwareViewModel;
 
     /// <summary>The window's one "… · Undo" message.</summary>
     public UndoToastViewModel Toast { get; } = new();
@@ -69,9 +71,30 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
                                                    ActionCapabilities.Of(_runtime));
 
     /// <summary>The Controls page: the drawing and inspector over <see cref="Sliders"/> and
-    /// <see cref="Buttons"/>, whose dialogs edit device names through <see cref="Devices"/>.</summary>
-    public ControlsViewModel Controls =>
-        _controlsViewModel ??= new ControlsViewModel(Sliders, Buttons, _config, Toast, _appIcons, Devices);
+    /// <see cref="Buttons"/>, whose dialogs edit device names through <see cref="Devices"/>. The
+    /// <see cref="Hardware"/> view model is made with it, so every tile has its wiring from the start.</summary>
+    public ControlsViewModel Controls
+    {
+        get
+        {
+            if (_controlsViewModel is null)
+            {
+                _controlsViewModel = new ControlsViewModel(Sliders, Buttons, _config, Toast, _appIcons, Devices);
+                _hardwareViewModel = new HardwareViewModel(Controller, _controlsViewModel, _runtime, _ui);
+            }
+            return _controlsViewModel;
+        }
+    }
+
+    /// <summary>The Hardware page: the draft's controls over the Controls items, with their wiring.</summary>
+    public HardwareViewModel Hardware
+    {
+        get
+        {
+            _ = Controls;
+            return _hardwareViewModel!;
+        }
+    }
 
     /// <summary>The Controls page's view model if the page was ever opened; null otherwise.</summary>
     public ControlsViewModel? ControlsIfCreated => _controlsViewModel;
@@ -79,8 +102,18 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public GeneralViewModel General =>
         _generalViewModel ??= new GeneralViewModel(_config, _startWithSystem);
 
-    public ControllerViewModel Controller =>
-        _controllerViewModel ??= new ControllerViewModel(_config, _runtime, _ui, _firmware, Connection);
+    public ControllerViewModel Controller
+    {
+        get
+        {
+            if (_controllerViewModel is null)
+            {
+                _controllerViewModel = new ControllerViewModel(_config, _runtime, _ui, _firmware, Connection);
+                _controllerViewModel.ControlsShifted += OnControlsShifted;
+            }
+            return _controllerViewModel;
+        }
+    }
 
     /// <summary>The Controller page's view model if the page was ever opened; null otherwise.</summary>
     public ControllerViewModel? ControllerIfCreated => _controllerViewModel;
@@ -121,6 +154,15 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         // existed would never reach the bars. Seed them now; the subscription above (kept for the
         // VM's whole lifetime, even while the window is hidden) keeps them current.
         Sliders.SeedLiveLevels(_runtime.GetSliderLevel);
+    }
+
+    /// <summary>A confirmed save removed or added controls and rewrote <c>config.json</c>'s lists
+    /// (UI thread): the sliders and buttons are rebuilt from them.</summary>
+    private void OnControlsShifted(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+        _slidersViewModel?.Reload();
+        _buttonsViewModel?.Reload();
     }
 
     // ── Runtime / engine event handlers (any thread) ──────────────────────────
@@ -232,6 +274,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _audio.DeviceVolumeChanged -= OnDeviceVolumeChanged;
         _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
         _runtime.ActionStateChanged -= OnActionStateChanged;
+        _hardwareViewModel?.Dispose();
+        if (_controllerViewModel is not null) _controllerViewModel.ControlsShifted -= OnControlsShifted;
         _controllerViewModel?.Dispose();
         if (_devicesViewModel is not null) _devicesViewModel.DeviceSettingsChanged -= OnDeviceSettingsChanged;
         _connectionViewModel?.Dispose();

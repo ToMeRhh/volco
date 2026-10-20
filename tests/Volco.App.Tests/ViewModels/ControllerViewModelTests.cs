@@ -337,18 +337,19 @@ public sealed class ControllerViewModelTests : IDisposable
     // ── Rows ───────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void RemovingARowWithLaterRows_AsksAboutRenumbering()
+    public void RemovingARow_AsksFirst()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
         vm.Sliders[0].RemoveCommand.Execute(null);
-        Assert.Equal("Sliders after it are renumbered, and their actions move with the number.", vm.Confirmation!.Message);
+        Assert.Equal("Remove Slider 1?", vm.Confirmation!.Message);
         vm.Confirmation.CancelCommand.Execute(null);
         Assert.Equal(5, vm.Sliders.Count);
 
-        vm.Sliders[4].RemoveCommand.Execute(null);     // the last one: no question
-        Assert.Null(vm.Confirmation);
+        vm.Sliders[4].RemoveCommand.Execute(null);     // the last one asks too
+        vm.Confirmation!.ConfirmCommand.Execute(null);
         Assert.Equal(4, vm.Sliders.Count);
+        Assert.False(vm.Layout.IsIdentity);
 
         vm.Buttons[0].RemoveCommand.Execute(null);
         vm.Confirmation!.ConfirmCommand.Execute(null);
@@ -531,7 +532,7 @@ public sealed class ControllerViewModelTests : IDisposable
         GreetInSync(DiyBlob);
         vm.AddSliderCommand.Execute(null);
         vm.PcIp = "192.168.1.5";
-        vm.Sliders[4].RemoveCommand.Execute(null);   // later rows exist: asks
+        vm.Sliders[4].RemoveCommand.Execute(null);   // asks
         var stale = vm.Confirmation!;
 
         vm.RevertCommand.Execute(null);

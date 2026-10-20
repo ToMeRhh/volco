@@ -65,6 +65,9 @@ public sealed class StageGeometryTests : IDisposable
         var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 1100, Height = 720 };
         window.Show();
+        // The Hardware view model wires every Controls tile; an unwired tile is one it doesn't draw.
+        for (var i = 0; !wired && i < vm.Sliders.Items.Count; i++) vm.Sliders.Items[i].Wiring = null;
+        for (var i = 0; !wired && i < vm.Buttons.Items.Count; i++) vm.Buttons.Items[i].Wiring = null;
         for (var i = 0; wired && i < vm.Sliders.Items.Count; i++)
             vm.Sliders.Items[i].Wiring = new TileWiring { Title = $"Slider {i + 1}", PinText = $"GPIO {33 + i}", RawLevel = 0.3 };
         for (var i = 0; wired && i < vm.Buttons.Items.Count; i++)

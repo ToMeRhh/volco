@@ -174,7 +174,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     private int _testGeneration;                 // guarded by _testGate; 0 = not testing
     private int[] _testPresses = Array.Empty<int>();   // guarded by _testGate; presses per button this test
 
-    /// <summary>A hardware test is running: Slider and Button messages raise <see cref="RawInput"/>
+    /// <summary>A hardware test is running: Slider and Button messages raise only <see cref="RawInput"/>
     /// and reach neither audio nor actions.</summary>
     public bool InTestMode { get { lock (_testGate) return _testGeneration != 0; } }
 
@@ -182,7 +182,8 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// (Detach, connection replaced, dispose). Any thread.</summary>
     public event EventHandler<bool>? InTestModeChanged;
 
-    /// <summary>Slider and Button messages, in test mode only. Any thread (the transport's).</summary>
+    /// <summary>Every Slider and Button message, raw (in a test, with its press count). Any thread
+    /// (the transport's).</summary>
     public event EventHandler<RawInputEventArgs>? RawInput;
 
     private int _nextTestGeneration;
@@ -916,9 +917,13 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                 // Same stale-sender filter as Hello (spec §8.2).
                 if (ReferenceEquals(sender, Volatile.Read(ref _connection))) ControllerConfig.OnMessage(sender!, msg);
                 break;
-            case SliderMessage testSlider when InTestMode:
-                // Spec §8.5: raw input only; nothing reaches the slider processor or the detector.
-                RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Slider, testSlider.SliderIndex, testSlider.Value));
+            case SliderMessage slider:
+                // Every slider and button raises raw input (hardware-page spec §12.1); in a test
+                // (spec §8.5) that is all: nothing reaches the slider processor or the detector.
+                RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Slider, slider.SliderIndex, slider.Value));
+                if (InTestMode) break;
+                AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
+                _sliderProcessor?.HandleSliderEvent(slider.SliderIndex, slider.Value);
                 break;
             case ButtonMessage testButton when InTestMode:
             {
@@ -928,11 +933,9 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, testButton.ButtonIndex, pressed ? 1 : 0, presses));
                 break;
             }
-            case SliderMessage slider:
-                AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
-                _sliderProcessor?.HandleSliderEvent(slider.SliderIndex, slider.Value);
-                break;
             case ButtonMessage button:
+                RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, button.ButtonIndex,
+                                                             button.State == ButtonState.Pressed ? 1 : 0));
                 AppLog.Debug($"Button event: Index={button.ButtonIndex}, State={button.State}");
                 if (button.State == ButtonState.Pressed)
                 {

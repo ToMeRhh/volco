@@ -68,7 +68,7 @@ public sealed partial class HwSliderRowViewModel : HardwareRowViewModel
     public HwSliderRowViewModel(ControllerViewModel owner, int index, Slider slider) : base(owner, index)
     {
         _slider = slider;
-        RemoveCommand = new RelayCommand(() => owner.RequestRemoveSlider(Index));
+        RemoveCommand = new RelayCommand(() => owner.AskRemoveSlider(Index));
     }
 
     public string Title => $"Slider {Index + 1}";
@@ -89,7 +89,7 @@ public sealed partial class HwButtonRowViewModel : HardwareRowViewModel
     public HwButtonRowViewModel(ControllerViewModel owner, int index, Button button) : base(owner, index)
     {
         _button = button;
-        RemoveCommand = new RelayCommand(() => owner.RequestRemoveButton(Index));
+        RemoveCommand = new RelayCommand(() => owner.AskRemoveButton(Index));
     }
 
     public string Title => $"Button {Index + 1}";

@@ -850,16 +850,17 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void TestMode_RawInputIsNotRaisedOutsideTestMode()
+    public void RawInputIsRaisedOutsideTestMode_AndInputStillWorks()
     {
         var runtime = StartRuntime();
         var c = Connection(0);
         ConnectAndGreet(c);
-        var raw = 0;
-        runtime.RawInput += (_, _) => raw++;
+        var raw = new ConcurrentQueue<RawInputEventArgs>();
+        runtime.RawInput += (_, e) => raw.Enqueue(e);
         c.RaiseMessage(new SliderMessage(0, 100));
         Press(c, 0);
-        Assert.Equal(0, raw);
+        Assert.Equal(new[] { (RawInputKind.Slider, 0, 100), (RawInputKind.Button, 0, 1), (RawInputKind.Button, 0, 0) },
+                     raw.Select(e => (e.Kind, e.Index, e.Value)).ToArray());
         Assert.True(WaitUntil(() => Snapshot(_engine.ToggleMuteCalls).Count == 1));
     }
 
