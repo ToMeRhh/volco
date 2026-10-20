@@ -21,12 +21,11 @@ public static class ControllerPresets
     public const string VolcoPcbId = "volco-pcb";
     public const string BlankId = "blank";
 
-    /// <summary>DIY reference, the Volco PCB placeholder (not available until its pins are known),
-    /// then Blank.</summary>
+    /// <summary>DIY reference, Volco PCB, then Blank.</summary>
     public static IReadOnlyList<ControllerPreset> All { get; } = new[]
     {
         new ControllerPreset(DiyReferenceId, "DIY reference", true, LoadEmbedded(DiyReferenceId)),
-        new ControllerPreset(VolcoPcbId, "Volco PCB (coming soon)", false, null),
+        new ControllerPreset(VolcoPcbId, "Volco PCB", true, LoadEmbedded(VolcoPcbId)),
         new ControllerPreset(BlankId, "Blank", true, new ControllerConfig { Preset = BlankId }),
     };
 

@@ -40,7 +40,7 @@ public class ControllerDraftTests
         Assert.Equal(ControllerPresets.BlankId, ControllerDraft.BasedOn(new ControllerConfig { Preset = "blank" })!.Id);
         Assert.Null(ControllerDraft.BasedOn(new ControllerConfig { Preset = "my-board" }));
         Assert.Null(ControllerDraft.BasedOn(new ControllerConfig()));
-        Assert.Null(ControllerDraft.BasedOn(new ControllerConfig { Preset = ControllerPresets.VolcoPcbId }));   // no hardware yet
+        Assert.Equal(ControllerPresets.VolcoPcbId, ControllerDraft.BasedOn(new ControllerConfig { Preset = "volco-pcb" })!.Id);
     }
 
     [Fact]

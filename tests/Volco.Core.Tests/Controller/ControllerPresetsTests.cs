@@ -7,15 +7,14 @@ namespace Volco.Core.Tests.Controller;
 public class ControllerPresetsTests
 {
     private static ControllerPreset Diy => ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId);
+    private static ControllerPreset Pcb => ControllerPresets.All.Single(p => p.Id == ControllerPresets.VolcoPcbId);
 
     [Fact]
-    public void All_ListsDiyThenThePcbPlaceholderThenBlank()
+    public void All_ListsDiyThenThePcbThenBlank()
     {
         Assert.Equal(new[] { "diy-reference", "volco-pcb", "blank" }, ControllerPresets.All.Select(p => p.Id));
-        var pcb = ControllerPresets.All[1];
-        Assert.False(pcb.IsAvailable);
-        Assert.Null(pcb.Hardware);
-        Assert.Equal("Volco PCB (coming soon)", pcb.DisplayName);
+        Assert.All(ControllerPresets.All, p => Assert.True(p.IsAvailable));
+        Assert.Equal("Volco PCB", Pcb.DisplayName);
     }
 
     [Fact]
@@ -37,6 +36,29 @@ public class ControllerPresetsTests
     [Fact]
     public void Diy_PassesValidation()
         => Assert.True(ControllerConfigValidator.Validate(Diy.Hardware!, ChipInfo.Esp32).IsOk);
+
+    // The Volco PCB's pin map (deej-board repo, boards/5-volco-smd/hw/volco_pinout.py): SLIDER 1-6,
+    // BUTTON 1-4, and DISPLAY n (one 0x3C screen per bus) on BUTTON n.
+    [Fact]
+    public void Pcb_MatchesTheBoardsPinMap()
+    {
+        var h = Pcb.Hardware!;
+        Assert.Equal("volco-pcb", h.Preset);
+        Assert.Equal(new uint[] { 33, 32, 35, 34, 39, 36 }, h.Sliders.Select(s => s.Pin));
+        Assert.Equal(new uint[] { 13, 27, 26, 25 }, h.Buttons.Select(b => b.Pin));
+        Assert.Equal(new[] { (0u, 0x3Cu), (1u, 0x3Cu), (2u, 0x3Cu), (3u, 0x3Cu) },
+            h.Buttons.Select(b => (b.Screen.Bus, b.Screen.Address)));
+        Assert.Equal((16u, 4u), (h.I2C0.Sda, h.I2C0.Scl));
+        Assert.Equal((18u, 17u), (h.I2C1.Sda, h.I2C1.Scl));
+        Assert.Equal((21u, 19u), (h.I2C2.Sda, h.I2C2.Scl));
+        Assert.Equal((23u, 22u), (h.I2C3.Sda, h.I2C3.Scl));
+        Assert.Null(h.Screens);
+        Assert.Null(h.Udp);
+    }
+
+    [Fact]
+    public void Pcb_PassesValidation()
+        => Assert.True(ControllerConfigValidator.Validate(Pcb.Hardware!, ChipInfo.Esp32).IsOk);
 
     [Fact]
     public void ApplyTo_ReplacesHardwareAndKeepsEverythingElse()
@@ -77,7 +99,8 @@ public class ControllerPresetsTests
 
     [Fact]
     public void ApplyTo_UnavailablePreset_Throws()
-        => Assert.Throws<InvalidOperationException>(() => ControllerPresets.ApplyTo(new ControllerConfig(), ControllerPresets.All[1]));
+        => Assert.Throws<InvalidOperationException>(() =>
+            ControllerPresets.ApplyTo(new ControllerConfig(), new ControllerPreset("later", "Later", false, null)));
 
     [Fact]
     public void Hardware_IsACopy_EditingItLeavesThePresetAlone()

@@ -25,7 +25,7 @@ These were settled while brainstorming and are not reopened by this spec.
 | D3 | Button and slider *actions* stay in Volco's `config.json`, keyed by input number, as today. They are not part of the controller config. |
 | D4 | The protocol stays **v1**. There are no existing users, so frames are redesigned freely. App, firmware and simulator update together. |
 | D5 | Hardware is entered manually (a pin per thing). Learn mode is deferred to a later task. The app does no electrical pin validation; the firmware rejects only configs that **cannot work on the chip** (§6.4). |
-| D6 | Presets: "DIY reference" (today's `config.h`), "Volco PCB" (a placeholder until its pins are known) and Blank. Choosing a preset fills the form, and the user may edit the result. |
+| D6 | Presets: "DIY reference" (today's `config.h`), "Volco PCB" (`proto/presets/volco-pcb.json`) and Blank. Choosing a preset fills the form, and the user may edit the result. |
 | D7 | USB serial is always on. UDP over Wi-Fi is an **advanced, opt-in** setting. It needs an explicit SSID, password, PC IP address and PC port. There is **no discovery and no broadcast**: the controller sends only to the configured IP and accepts UDP only from it. |
 | D8 | The ESP32 firmware drops its WebSocket client and the `TRANSPORT_LOCAL_DEBUG` mode. Volco keeps its WebSocket *server* for the simulator and alternative controllers. |
 | D9 | The config blob is **Protocol Buffers, proto2 syntax** (explicit defaults): nanopb on the firmware, Google.Protobuf in C#, protobufjs in the simulator. Code is generated at build time from one `.proto`. The wire frames stay hand-written binary. (Editions are not used: nanopb 0.4.9.2 has only minimal editions support, mapping presence but not defaults.) |
@@ -395,8 +395,8 @@ Notes:
 }
 ```
 
-- **The "Volco PCB" placeholder is hard-coded in the app's preset list** as a disabled entry "Volco PCB (coming soon)", with no file. Once the PCB's pins are known, it becomes `proto/presets/volco-pcb.json` and the hard-coded entry goes away.
-- **A preset carries only the hardware fields** (`sliders`, `buttons`, `i2c0`, `i2c1`, `preset`). Applying it replaces exactly those fields in the draft. Behaviour, input tuning and UDP fields are kept.
+- **The "Volco PCB" preset is `proto/presets/volco-pcb.json`**: the PCB's pin map (6 sliders; 4 buttons, button N showing on screen N, a 0x3C SSD1306 alone on I2C bus N-1). A test asserts that it passes §6.4 validation and equals that pin map.
+- **A preset carries only the hardware fields** (`sliders`, `buttons`, `i2c0`..`i2c3`, `preset`). Applying it replaces exactly those fields in the draft. Behaviour, input tuning and UDP fields are kept.
 - **Packaging:** preset files are embedded as resources in `Volco.Core` and loaded with `Google.Protobuf.JsonParser`.
 - **Tests:** a test asserts that the DIY reference passes §6.4 validation and equals the table above.
 
@@ -822,7 +822,7 @@ A sixth settings page, **Controller**, after Connection. The sections, top to bo
 - The §8.3 banner appears here.
 
 **2. Hardware**
-- **Preset picker:** DIY reference / Volco PCB (coming soon, disabled) / Blank.
+- **Preset picker:** DIY reference / Volco PCB / Blank.
   - Choosing one when the draft's hardware is non-empty asks "Replace the current hardware with <preset>?"
   - A caption shows "Based on DIY reference" or "Based on DIY reference (modified)". "Modified" means the draft's hardware fields encode differently from the preset's hardware fields.
 - **Sliders:** a list. Each row: "Slider N" and pin. "Add slider" appends at the end. Removing a row asks for confirmation when later rows exist: "Sliders after it are renumbered, and their actions move with the number." **No drag reordering:** under D3, actions are tied to input numbers, so reordering would silently move actions to other physical controls.
