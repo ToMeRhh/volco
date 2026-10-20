@@ -18,7 +18,7 @@
       <TextBlock Name="SubtitleText" Classes="Secondary" Text="{Binding Subtitle}"/>
     </StackPanel>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Classes="InspectorBody" IsEnabled="{Binding IsEditable}">
+      <StackPanel Classes="InspectorBody">
         <Border Name="ScreensSection" Classes="InspectorRows" IsVisible="{Binding ShowScreens}">
           <StackPanel>
             <Button Name="ScreensHeader" Classes="InspectorRow" Classes.open="{Binding IsScreensOpen}"
@@ -29,7 +29,7 @@
                 <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
               </Grid>
             </Button>
-            <StackPanel Name="ScreensBody" IsVisible="{Binding IsScreensOpen}">
+            <StackPanel Name="ScreensBody" IsEnabled="{Binding IsEditable}" IsVisible="{Binding IsScreensOpen}">
               <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto,40" ColumnSpacing="12">
                 <TextBlock Classes="RowLabel" Text="Brightness"/>
                 <Slider Name="BrightnessSlider" Grid.Column="1" Width="120" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
@@ -108,7 +108,7 @@
                 <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
               </Grid>
             </Button>
-            <StackPanel Name="InputBody" IsVisible="{Binding IsInputOpen}">
+            <StackPanel Name="InputBody" IsEnabled="{Binding IsEditable}" IsVisible="{Binding IsInputOpen}">
               <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <TextBlock Classes="RowLabel" Text="Slider smoothing"/>
                 <Border Name="FeelSegment" Grid.Column="1" Classes="SegmentTrack">
@@ -155,7 +155,7 @@
         </Border>
 
         <Border Name="WifiSection" Classes="InspectorRows">
-          <Button Name="WifiHeader" Classes="InspectorRow" Classes.open="{Binding IsWifiOpen}"
+          <Button Name="WifiHeader" Classes="InspectorRow"
                     Command="{Binding OpenWifiCommand}">
               <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Wi-Fi"/>

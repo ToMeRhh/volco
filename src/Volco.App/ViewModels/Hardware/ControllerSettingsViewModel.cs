@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>One entry of a duration list: its words and its seconds (null for Never).</summary>
-public sealed record DurationChoice(string Label, uint? Seconds)
+public sealed record DurationChoice(string Label, uint? Seconds, bool IsCustom = false)
 {
     /// <summary>The label: what a combo box shows.</summary>
     public override string ToString() => Label;
@@ -74,12 +74,11 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
     /// <summary>The open section (<see cref="ScreensSection"/>, <see cref="InputSection"/>,
     /// <see cref="WifiSection"/>), or -1 for none; opening one closes the others.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsScreensOpen), nameof(IsInputOpen), nameof(IsWifiOpen))]
+    [NotifyPropertyChangedFor(nameof(IsScreensOpen), nameof(IsInputOpen))]
     private int _openSection;
 
     public bool IsScreensOpen => ShowScreens && OpenSection == ScreensSection;
     public bool IsInputOpen => OpenSection == InputSection;
-    public bool IsWifiOpen => OpenSection == WifiSection;
 
     /// <summary>A header's click: opens its section, or closes it when it is the open one.</summary>
     public void ToggleSection(int section) => OpenSection = OpenSection == section ? -1 : section;
@@ -130,8 +129,16 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         set => BrightnessPct = (int)Math.Round(value);
     }
 
-    public IReadOnlyList<DurationChoice> DimAfter => ListFor(_controller.DimEnabled, Seconds(_controller.DimAfterS));
-    public IReadOnlyList<DurationChoice> OffAfter => ListFor(_controller.OffEnabled, Seconds(_controller.OffAfterS));
+    // Each list is one instance until its contents change, so an unrelated draft change doesn't hand
+    // a combo box a new ItemsSource (which would reset its selection).
+    private IReadOnlyList<DurationChoice> _dimAfter = Durations;
+    private IReadOnlyList<DurationChoice> _offAfter = Durations;
+    private IReadOnlyList<string> _dimmedTo = new[] { "Low", "Medium" };
+
+    public IReadOnlyList<DurationChoice> DimAfter
+        => _dimAfter = Cached(_dimAfter, _controller.DimEnabled, Seconds(_controller.DimAfterS));
+    public IReadOnlyList<DurationChoice> OffAfter
+        => _offAfter = Cached(_offAfter, _controller.OffEnabled, Seconds(_controller.OffAfterS));
 
     /// <summary>The selected entry of <see cref="DimAfter"/>.</summary>
     public int DimAfterIndex
@@ -140,7 +147,7 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         set
         {
             var list = DimAfter;
-            if (value < 0 || value >= list.Count || value == DimAfterIndex || list[value].Label.StartsWith("Custom")) return;
+            if (value < 0 || value >= list.Count || value == DimAfterIndex || list[value].IsCustom) return;
             if (list[value].Seconds is { } s) { _controller.DimEnabled = true; _controller.DimAfterS = s; }
             else _controller.DimEnabled = false;
         }
@@ -153,7 +160,7 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         set
         {
             var list = OffAfter;
-            if (value < 0 || value >= list.Count || value == OffAfterIndex || list[value].Label.StartsWith("Custom")) return;
+            if (value < 0 || value >= list.Count || value == OffAfterIndex || list[value].IsCustom) return;
             if (list[value].Seconds is { } s) { _controller.OffEnabled = true; _controller.OffAfterS = s; }
             else _controller.OffEnabled = false;
         }
@@ -164,9 +171,9 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
     {
         get
         {
-            var list = new List<string> { "Low", "Medium" };
-            if (Level is not (Low or Medium)) list.Add($"Custom ({Level})");
-            return list;
+            var wanted = Level is Low or Medium ? null : $"Custom ({Level})";
+            if (_dimmedTo.Count == (wanted is null ? 2 : 3) && (wanted is null || _dimmedTo[2] == wanted)) return _dimmedTo;
+            return _dimmedTo = wanted is null ? new[] { "Low", "Medium" } : new[] { "Low", "Medium", wanted };
         }
     }
 
@@ -198,10 +205,11 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     private static uint Seconds(decimal? value) => (uint)(value ?? 0);
 
-    private static IReadOnlyList<DurationChoice> ListFor(bool enabled, uint seconds)
+    private static IReadOnlyList<DurationChoice> Cached(IReadOnlyList<DurationChoice> current, bool enabled, uint seconds)
     {
         if (!enabled || Durations.Any(d => d.Seconds == seconds)) return Durations;
-        return Durations.Append(new DurationChoice($"Custom ({Long(seconds)})", seconds)).ToArray();
+        if (current.Count > Durations.Length && current[^1].Seconds == seconds) return current;
+        return Durations.Append(new DurationChoice($"Custom ({Long(seconds)})", seconds, IsCustom: true)).ToArray();
     }
 
     private static int IndexOf(IReadOnlyList<DurationChoice> list, bool enabled, uint seconds)
@@ -236,7 +244,14 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         }
         set
         {
-            if (value is < 0 or > 2 || !_controller.CanEdit) { OnPropertyChanged(); return; }
+            if (value is < 0 or > 2 || !_controller.CanEdit)
+            {
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsFeelLow));
+                OnPropertyChanged(nameof(IsFeelNormal));
+                OnPropertyChanged(nameof(IsFeelHigh));
+                return;
+            }
             _controller.SmoothingPct = Feels[value].Weight;
             _controller.Deadband = Feels[value].Deadband;
         }
@@ -258,10 +273,19 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     // ── Keeping current ──────────────────────────────────────────────────────────────────────
 
+    private static readonly string[] Watched =
+    {
+        nameof(Subtitle), nameof(IsEditable), nameof(ShowScreens), nameof(IsScreensOpen), nameof(ScreensSummary),
+        nameof(BrightnessPct), nameof(BrightnessSlider), nameof(DimAfter), nameof(DimAfterIndex), nameof(OffAfter),
+        nameof(OffAfterIndex), nameof(DimmedTo), nameof(DimmedToIndex), nameof(PreventBurnIn), nameof(FirstPressOnlyWakes),
+        nameof(InputSummary), nameof(InputFeel), nameof(IsFeelLow), nameof(IsFeelNormal), nameof(IsFeelHigh),
+        nameof(IsFeelCustom), nameof(WifiSummary),
+    };
+
     private void OnControllerChanged(object? sender, PropertyChangedEventArgs e)
     {
         // Any draft or state change can move a summary, a list's custom entry or the feel.
-        OnPropertyChanged(string.Empty);
+        foreach (var name in Watched) OnPropertyChanged(name);
         if (!ShowScreens && OpenSection == ScreensSection) OpenSection = InputSection;
     }
 

@@ -1,3 +1,7 @@
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 using Volco.App.ViewModels.Hardware;
 using Volco.Core.Communication;
@@ -5,6 +9,7 @@ using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
 using Volco.Core.Runtime;
 using Volco.Core.Tests.Runtime;
+using Volco.App.Views.Hardware;
 using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
@@ -154,5 +159,51 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         Assert.Null(_settings.Controls.Selected);
         _settings.Controls.Select(_settings.Controls.Sliders.Items[1]);
         Assert.IsType<SliderWiringViewModel>(hardware.Inspected);
+    }
+
+    [Fact]
+    public void ListsKeepTheirInstanceUntilTheirContentsChange()
+    {
+        var vm = SetUp();
+        Controller.OffEnabled = true;
+        Controller.OffAfterS = 90;
+        Controller.DimBrightness = 100;
+        var off = vm.OffAfter;
+        var dimmed = vm.DimmedTo;
+        Controller.Brightness = 100;   // unrelated
+        Assert.Same(off, vm.OffAfter);
+        Assert.Same(dimmed, vm.DimmedTo);
+        Controller.OffAfterS = 91;
+        Assert.NotSame(off, vm.OffAfter);
+        Assert.True(vm.OffAfter[vm.OffAfterIndex].IsCustom);
+    }
+
+    [Fact]
+    public void RefusedFeelEditRaisesTheSegments()
+    {
+        var vm = SetUp();
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        vm.InputFeel = 3;
+        Assert.Contains(nameof(ControllerSettingsViewModel.IsFeelLow), raised);
+        Assert.Contains(nameof(ControllerSettingsViewModel.IsFeelNormal), raised);
+        Assert.Contains(nameof(ControllerSettingsViewModel.IsFeelHigh), raised);
+    }
+
+    [AvaloniaFact]
+    public void BoxesKeepTheirSelectionAfterAnUnrelatedChange()
+    {
+        var vm = SetUp();
+        Controller.DimBrightness = 100;
+        var view = new ControllerSettingsInspector { DataContext = vm };
+        var window = new Window { Content = view, Width = 500, Height = 800 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var box = view.GetVisualDescendants().OfType<ComboBox>().First(c => c.Name == "DimmedToBox");
+        Assert.Equal(2, box.SelectedIndex);
+        Controller.Brightness = 100;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, box.SelectedIndex);
+        window.Close();
     }
 }
