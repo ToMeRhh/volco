@@ -38,6 +38,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
         Card = new DeviceCardViewModel(controller, this);
+        Chooser = new SetupChooserViewModel(controller, OnChooserPicked);
         Refresh();
     }
 
@@ -55,11 +56,61 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The Connection dialog opens on its Wi-Fi tab, else on USB.</summary>
     [ObservableProperty] private bool _connectionDialogOnWifi;
 
-    /// <summary>The setup chooser (spec §7.1) fills the drawing.</summary>
-    [ObservableProperty] private bool _showChooser;
+    /// <summary>The setup chooser (spec §7.1), shown in the drawing's place by <see cref="ShowChooser"/>.</summary>
+    public SetupChooserViewModel Chooser { get; }
 
-    /// <summary>The card's Compare…: the controller's setup beside Volco's (spec §7.2).</summary>
-    public void OpenCompare() => IsCompareOpen = true;
+    /// <summary>The open Compare dialog's view model, or null.</summary>
+    [ObservableProperty] private CompareViewModel? _compare;
+
+    /// <summary>The user chose Start over and hasn't picked a card yet.</summary>
+    private bool _startingOver;
+
+    private bool _showChooser;
+
+    /// <summary>The setup chooser (spec §7.1) fills the case: the controller isn't set up or its
+    /// setup can't be used and no new draft was started, or the user chose Start over.</summary>
+    public bool ShowChooser
+    {
+        get => _showChooser;
+        private set
+        {
+            if (_showChooser == value) return;
+            _showChooser = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private void UpdateChooser()
+    {
+        var needsSetup = _controller.Banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror or BannerKind.Unusable;
+        ShowChooser = _startingOver || (needsSetup && !_controller.HasNewDraft);
+        if (ShowChooser) Chooser.Refresh();
+    }
+
+    private void OnChooserPicked()
+    {
+        _startingOver = false;
+        UpdateChooser();
+    }
+
+    /// <summary>The card's Compare…: the controller's setup beside Volco's (spec §7.2); opening it
+    /// reads the controller's setup.</summary>
+    public void OpenCompare()
+    {
+        if (_disposed) return;
+        Compare?.Dispose();
+        Compare = new CompareViewModel(_controller, _runtime.ControllerConfig, _ui, CloseCompare);
+        IsCompareOpen = true;
+        Compare.Start();
+    }
+
+    /// <summary>Closes Compare (Escape, a click outside, or after Keep or Send).</summary>
+    public void CloseCompare()
+    {
+        IsCompareOpen = false;
+        Compare?.Dispose();
+        Compare = null;
+    }
 
     /// <summary>The card's status line and ⋯ Connection…: the Connection dialog, on the Wi-Fi tab
     /// when <paramref name="wifi"/>.</summary>
@@ -71,7 +122,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     /// <summary>⋯ Start over…: the drawing returns to the setup chooser; the draft stays until a
     /// choice is made.</summary>
-    public void StartOver() => ShowChooser = true;
+    public void StartOver()
+    {
+        _startingOver = true;
+        UpdateChooser();
+    }
 
     /// <summary>The draft's sliders, in draft order.</summary>
     public ObservableCollection<SliderItemViewModel> Sliders { get; } = new();
@@ -116,6 +171,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         }
         if (e.PropertyName is nameof(ControllerViewModel.Confirmation) or null or "") OnPropertyChanged(nameof(Confirmation));
         if (e.PropertyName == nameof(ControllerViewModel.Layout)) Refresh();
+        UpdateChooser();
     }
 
     private void Refresh()
@@ -158,6 +214,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         SyncBusChips(draft);
         foreach (var field in _pinFields.Values) UpdatePinField(field);
         UpdateInspected();
+        UpdateChooser();
     }
 
     // ── The inspector and the bus chips (spec §5.3, §6.1, §6.2, §6.4) ───────────────────────
@@ -417,6 +474,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.PropertyChanged -= OnControlsPropertyChanged;
         _runtime.RawInput -= OnRawInput;
         Card.Dispose();
+        Compare?.Dispose();
         (Inspected as IDisposable)?.Dispose();
     }
 }

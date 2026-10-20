@@ -129,8 +129,6 @@
                 <WrapPanel Orientation="Horizontal">
                   <Button Name="CheckFirmwareBannerButton" Classes="Primary" Content="Check firmware" Margin="0,0,8,0"
                           Command="{Binding CheckWhatsConnectedCommand}" IsVisible="{Binding ShowCheckFirmware}"/>
-                  <Button Name="OpenSetupButton" Classes="Primary" Content="Set up…" Margin="0,0,8,0"
-                          Command="{Binding OpenSetupCommand}" IsVisible="{Binding ShowOpenSetup}"/>
                   <Button Name="UseControllersButton" Content="Use the controller's" Margin="0,0,8,0"
                           Command="{Binding UseControllersCommand}" IsVisible="{Binding ShowUseControllers}"/>
                   <Button Name="ApplyMineButton" Content="Apply mine" Margin="0,0,8,0"
@@ -528,33 +526,6 @@
             <Button Name="CancelInstallButton" Content="Cancel" Command="{Binding CancelInstallCommand}"/>
             <Button Name="ConfirmInstallButton" Classes="Primary" Content="Install" Command="{Binding ConfirmInstallCommand}"/>
           </StackPanel>
-        </StackPanel>
-
-        <!-- Onboarding: a controller with no setup stored on it -->
-        <StackPanel Name="SetupDialog" Spacing="16" IsVisible="{Binding IsSetupDialogOpen}">
-          <TextBlock Classes="Subtitle" Text="Set up your controller"/>
-          <TextBlock Name="SetupIntroText" TextWrapping="Wrap" Text="{Binding SetupIntro}"/>
-          <Button Name="SetupApplySavedButton" Classes="Primary" HorizontalAlignment="Stretch"
-                  HorizontalContentAlignment="Center" Content="Apply my saved setup"
-                  Command="{Binding SetupApplySavedCommand}" IsVisible="{Binding SetupHasSavedSetup}"/>
-          <StackPanel Spacing="6">
-            <TextBlock Classes="Secondary" Text="Start a new setup from"/>
-            <Grid ColumnDefinitions="*,Auto">
-              <ComboBox Name="SetupPresetCombo" HorizontalAlignment="Stretch" ItemsSource="{Binding SetupPresets}"
-                        SelectedItem="{Binding SetupPreset, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="ctl:ControllerPreset">
-                    <TextBlock Text="{Binding DisplayName}"/>
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <Button Name="SetupFromPresetButton" Grid.Column="1" Margin="8,0,0,0" Content="Start"
-                      Classes.Primary="{Binding !SetupHasSavedSetup}" Command="{Binding StartFromPresetCommand}"/>
-            </Grid>
-            <Button Name="SetupFromScratchButton" Classes="Ghost" Content="Start from scratch (no inputs)"
-                    Command="{Binding StartFromScratchCommand}"/>
-          </StackPanel>
-          <Button Name="CloseSetupButton" HorizontalAlignment="Right" Content="Not now" Command="{Binding CloseSetupCommand}"/>
         </StackPanel>
 
         <!-- The hardware test (spec 8.5): open while testing; closing it ends the test -->

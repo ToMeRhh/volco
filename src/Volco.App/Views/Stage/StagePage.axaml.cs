@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.ViewModels.Hardware;
+using Volco.App.Views.Hardware;
 using Volco.Core.Input;
 
 namespace Volco.App.Views.Stage;
@@ -45,6 +46,8 @@ public partial class StagePage : UserControl
             if (deviceOverlay.IsVisible) OnDeviceDialogOpened();
             else OnDeviceDialogClosed();
         };
+        var compareOverlay = this.FindControl<Border>("CompareOverlay")!;
+        compareOverlay.PointerPressed += OnCompareOverlayPressed;
         InitModeTabs();
         InitStage();
         // Drag to swap is a Controls thing: on Hardware the grips are faded out and inactive.
@@ -86,6 +89,11 @@ public partial class StagePage : UserControl
     }
 
     private Border _case = null!;
+    private Control _drawing = null!;
+    private TransitioningContentControl _chooserHost = null!;
+    private Border _compareOverlay = null!;
+    private ContentControl _compareHost = null!;
+    private SetupChooser? _chooser;
     private TransitioningContentControl _titleHost = null!;
     private TransitioningContentControl _sidePanelHost = null!;
     private Control _inspector = null!;
@@ -97,6 +105,11 @@ public partial class StagePage : UserControl
     private void InitStage()
     {
         _case = this.FindControl<Border>("Case")!;
+        _drawing = this.FindControl<StackPanel>("Drawing")!;
+        _chooserHost = this.FindControl<TransitioningContentControl>("ChooserHost")!;
+        _chooserHost.PageTransition = null;
+        _compareOverlay = this.FindControl<Border>("CompareOverlay")!;
+        _compareHost = this.FindControl<ContentControl>("CompareHost")!;
         _titleHost = this.FindControl<TransitioningContentControl>("TitleHost")!;
         _sidePanelHost = this.FindControl<TransitioningContentControl>("SidePanelHost")!;
         _inspector = this.FindControl<ContentControl>("InspectorContent")!;
@@ -118,13 +131,18 @@ public partial class StagePage : UserControl
             {
                 old.Sliders.CollectionChanged -= OnDrawnChanged;
                 old.Buttons.CollectionChanged -= OnDrawnChanged;
+                old.PropertyChanged -= OnHardwarePropertyChanged;
             }
             if (change.NewValue is HardwareViewModel hw)
             {
                 hw.Sliders.CollectionChanged += OnDrawnChanged;
                 hw.Buttons.CollectionChanged += OnDrawnChanged;
+                hw.PropertyChanged += OnHardwarePropertyChanged;
             }
+            _chooser = null;
             UpdateTileSources();
+            UpdateChooser();
+            UpdateCompare();
         }
         else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
         {
@@ -146,6 +164,66 @@ public partial class StagePage : UserControl
         _sidePanelHost.PageTransition = StageTransitions.PageTransition();
         _sidePanelHost.Content = hardware ? HardwareSidePanel : _inspector;
         UpdateTileSources();
+        UpdateChooser();
+        UpdateCompare();
+    }
+
+    private void OnHardwarePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(HardwareViewModel.ShowChooser)) UpdateChooser();
+        else if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
+    }
+
+    /// <summary>On Hardware, the setup chooser takes the case's rectangle (spec §3.3, §7.1): the
+    /// drawing fades out and keeps its measure, out of pointer and keyboard reach, and the chooser
+    /// crossfades in over it.</summary>
+    private void UpdateChooser()
+    {
+        var show = Mode == StageMode.Hardware && Hardware is { ShowChooser: true };
+        if (show && Hardware is { } hw) _chooser ??= new SetupChooser { DataContext = hw.Chooser };
+        if (StageTransitions.Enabled && _drawing.Transitions is not { Count: > 0 })
+            _drawing.Transitions = new Avalonia.Animation.Transitions
+            {
+                new Avalonia.Animation.DoubleTransition { Property = OpacityProperty, Duration = StageTransitions.Duration },
+            };
+        else if (!StageTransitions.Enabled) _drawing.Transitions = null;
+        _drawing.Opacity = show ? 0 : 1;
+        _drawing.IsHitTestVisible = !show;
+        _drawing.IsEnabled = !show;
+        var content = show ? _chooser : null;
+        if (ReferenceEquals(_chooserHost.Content, content)) return;
+        _chooserHost.PageTransition = StageTransitions.PageTransition();
+        _chooserHost.Content = content;
+    }
+
+    /// <summary>Compare's card over the stage while Hardware has it open; the focus moves into it.</summary>
+    private void UpdateCompare()
+    {
+        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        var open = hw is { IsCompareOpen: true, Compare: not null };
+        _compareHost.Content = open ? hw!.Compare : null;
+        if (_compareOverlay.IsVisible == open) return;
+        _compareOverlay.IsVisible = open;
+        if (!open) return;
+        var card = this.FindControl<Border>("CompareCard")!;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
+            card.UpdateLayout();
+            // While the read runs nothing in it can take the focus: the card takes it, so Escape works.
+            var first = card.GetVisualDescendants().OfType<InputElement>()
+                .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+            if (first is not null) first.Focus(NavigationMethod.Tab);
+            else card.Focus();
+        });
+    }
+
+    /// <summary>A click on Compare's scrim closes it.</summary>
+    private void OnCompareOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, sender) || Hardware is not { IsCompareOpen: true } hw) return;
+        hw.CloseCompare();
+        e.Handled = true;
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -345,6 +423,16 @@ public partial class StagePage : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (_compareOverlay.IsVisible && Hardware is { } hw)
+        {
+            // Compare is modal: Escape closes it, and no key reaches the tiles under it.
+            if (e.Key == Key.Escape)
+            {
+                hw.CloseCompare();
+                e.Handled = true;
+            }
+            return;
+        }
         if (Vm is not { } vm) return;
         if (vm.HasDeviceDialog)
         {

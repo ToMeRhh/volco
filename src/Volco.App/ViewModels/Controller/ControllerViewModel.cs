@@ -167,10 +167,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public bool ShowUseControllers => Has(BannerActions.UseControllers);
     public bool ShowApplyMine => Has(BannerActions.ApplyMine);
     public bool ShowRetry => Has(BannerActions.Retry);
-    // A controller that isn't set up gets the setup dialog instead (ShowOpenSetup reopens it).
-    public bool ShowSetUpFromScratch => Has(BannerActions.SetUpFromScratch) && !IsNotSetUp;
-    public bool ShowApplySaved => Has(BannerActions.ApplySaved) && !IsNotSetUp;
-    public bool ShowSetUp => Has(BannerActions.SetUp) && !IsNotSetUp;
+    public bool ShowSetUpFromScratch => Has(BannerActions.SetUpFromScratch);
+    public bool ShowApplySaved => Has(BannerActions.ApplySaved);
+    public bool ShowSetUp => Has(BannerActions.SetUp);
     public bool ShowFixIt => Has(BannerActions.FixIt);
     public bool ShowCheckFirmware => Has(BannerActions.CheckFirmware) && CanUseFirmware;
 
@@ -317,7 +316,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         SetDraft(draft, keepFixIt: true);
     }
 
-    private ControllerConfig? DecodeMirror()
+    internal ControllerConfig? DecodeMirror()
     {
         var mirror = _service.Mirror;
         if (mirror is not { Length: > 0 }) return null;
@@ -773,8 +772,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             () => Confirmation = null);
     }
 
-    /// <summary>A modal dialog covers the page: the setup dialog, the Install confirmation or the test.</summary>
-    public bool HasDialog => IsSetupDialogOpen || ConfirmInstallPending || IsTesting;
+    /// <summary>A modal dialog covers the page: the Install confirmation or the test.</summary>
+    public bool HasDialog => ConfirmInstallPending || IsTesting;
 
     /// <summary>Escape or a click outside the card: the dialog closes as its Cancel would.</summary>
     [RelayCommand]
@@ -782,7 +781,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (IsTesting) StopTest();
         else if (ConfirmInstallPending) ConfirmInstallPending = false;
-        else if (IsSetupDialogOpen) CloseSetupCommand.Execute(null);
     }
 
     // ── Behaviour (ScreenBehaviour) ──────────────────────────────────────────────────────────
@@ -1029,7 +1027,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         foreach (var n in new[] { nameof(ShowUseControllers), nameof(ShowApplyMine), nameof(ShowRetry), nameof(ShowSetUpFromScratch),
                                   nameof(ShowApplySaved), nameof(ShowSetUp), nameof(ShowFixIt), nameof(FirmwareUpdateAvailable),
                                   nameof(ShowCheckFirmware), nameof(IsWaiting), nameof(ShowEditor), nameof(EditorPlaceholder),
-                                  nameof(IsNotSetUp), nameof(ShowOpenSetup), nameof(SetupHasSavedSetup), nameof(SetupIntro) })
+                                  nameof(IsNotSetUp) })
             OnPropertyChanged(n);
     }
 
@@ -1045,7 +1043,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         Recompute();
         RefreshFirmware();
         StartTestCommand.NotifyCanExecuteChanged();
-        UpdateSetupDialog();
     }
 
     public void Dispose()

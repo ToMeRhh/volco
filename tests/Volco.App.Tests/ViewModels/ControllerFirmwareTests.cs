@@ -105,8 +105,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.Equal("flash COM3 Install", _flasher.Calls.Single());
         Assert.StartsWith("Firmware 3f9c2a1b5d07 (from Volco ", vm.FirmwareText);
         // The controller has no setup now: setting it up is the next step.
-        Assert.True(vm.IsSetupDialogOpen);
-        Assert.StartsWith("The firmware is installed. ", vm.SetupIntro);
+        Assert.True(vm.IsNotSetUp);
     }
 
     [Fact]

@@ -126,31 +126,13 @@ public sealed class ControllerViewModelTests : IDisposable
     // ── Onboarding ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ANotSetUpController_OpensTheSetupDialogOnce_TheBannerReopensIt()
+    public void ANotSetUpController_OpensNoDialog_TheBannerOffersSetUp()
     {
         var vm = Vm();
         Greet(Hello(ControllerConfigState.None, 0));
-        Assert.True(vm.IsSetupDialogOpen);
-        Assert.True(vm.HasDialog);
-        Assert.False(vm.SetupHasSavedSetup);
-        Assert.False(vm.ShowSetUp);                   // the banner's own buttons moved into the dialog
-        Assert.False(vm.ShowOpenSetup);
-
-        vm.CloseSetupCommand.Execute(null);
-        Assert.False(vm.HasDialog);
-        Assert.True(vm.ShowOpenSetup);
-        Conn.RaiseMessage(Hello(ControllerConfigState.None, 0));   // the same Hello: not asked again
-        _ui.RunAll();
-        Assert.False(vm.IsSetupDialogOpen);
-
-        vm.OpenSetupCommand.Execute(null);
-        Assert.True(vm.IsSetupDialogOpen);
-
-        Conn.SetStatus(TransportStatus.Closed);       // unplugged: the dialog goes, a replug asks again
-        _ui.RunAll();
-        Assert.False(vm.IsSetupDialogOpen);
-        Greet(Hello(ControllerConfigState.None, 0));
-        Assert.True(vm.IsSetupDialogOpen);
+        Assert.False(vm.HasDialog);                    // the Hardware page's chooser replaces the dialog
+        Assert.True(vm.ShowSetUp);
+        Assert.False(vm.CanEdit);
     }
 
     [Fact]
@@ -158,9 +140,8 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm();
         Greet(Hello(ControllerConfigState.None, 0));
-        Assert.Equal(Diy, vm.SetupPreset);
-        vm.StartFromPresetCommand.Execute(null);
-        Assert.False(vm.IsSetupDialogOpen);
+        Assert.Equal(Diy, vm.SetupPresets[0]);
+        vm.StartFromPresetCommand.Execute(Diy);
         Assert.True(vm.CanEdit);
         Assert.Equal(5, vm.Sliders.Count);
         Assert.True(vm.IsSettingUp);
@@ -176,8 +157,8 @@ public sealed class ControllerViewModelTests : IDisposable
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.None, 0));
         Assert.Equal(BannerKind.NotSetUpHasMirror, vm.Banner.Kind);
-        Assert.True(vm.SetupHasSavedSetup);
-        vm.StartFromPresetCommand.Execute(null);
+        Assert.True(vm.ShowApplySaved);
+        vm.StartFromPresetCommand.Execute(Diy);
         Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(vm.Draft));
         Assert.True(vm.IsDirty);
         Assert.True(vm.CanSave);
@@ -189,16 +170,18 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.True(vm.InSync);
         Assert.False(vm.IsSettingUp);
         Assert.False(vm.IsDirty);
-        Assert.False(vm.IsSetupDialogOpen);
     }
 
     [Fact]
-    public void SetupApplySaved_SendsTheMirror()
+    public void SetupApplySaved_StartsADraftOfTheMirror_SentBySave()
     {
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.None, 0));
         vm.SetupApplySavedCommand.Execute(null);
-        Assert.False(vm.IsSetupDialogOpen);
+        Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);   // nothing is sent before Save
+        Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(vm.Draft));
+        Assert.Equal("This setup isn't on the controller yet.", vm.FooterText);
+        vm.SaveCommand.Execute(null);
         Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
     }
 

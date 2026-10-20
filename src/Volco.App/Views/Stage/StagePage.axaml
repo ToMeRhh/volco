@@ -6,6 +6,7 @@
              xmlns:dialogs="using:Volco.App.Views.Dialogs"
              xmlns:hw="using:Volco.App.ViewModels.Hardware"
              xmlns:stage="using:Volco.App.Views.Stage"
+             xmlns:hwviews="using:Volco.App.Views.Hardware"
              x:Class="Volco.App.Views.Stage.StagePage"
              x:DataType="vm:ControlsViewModel">
   <!-- The stage (spec docs/design/controls-page.md, hardware-page.md §3.3): the title, a drawing
@@ -24,134 +25,140 @@
           </Grid>
 
           <Border Name="Case" Classes="Case" Classes.dense="{Binding IsDense}">
-            <StackPanel Spacing="14">
-              <ItemsControl Name="SliderList">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <controls:FillWrapPanel Name="SliderGrid" Classes="SliderGrid"/>
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:SliderItemViewModel">
-                    <controls:SliderTile/>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+            <!-- The drawing and, in the same cell, the setup chooser (hardware-page spec §3.3, §7.1):
+                 while it is shown the drawing fades out and keeps its space, so the chooser fills
+                 the case's rectangle -->
+            <Grid>
+              <StackPanel Name="Drawing" Spacing="14">
+                <ItemsControl Name="SliderList">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <controls:FillWrapPanel Name="SliderGrid" Classes="SliderGrid"/>
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SliderItemViewModel">
+                      <controls:SliderTile/>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-              <!-- The buttons, framed in the edited mode's colour, with the mode tabs on its top edge
-                   (spec §9): a click edits a mode, a right-click opens its menu; the pencil turns on
-                   edit mode (drag to reorder, click to rename, × to delete). -->
-              <!-- The frame's tint and its tabs fade out on Hardware and keep their space -->
-              <Panel Name="ButtonFrame" controls:ModeTint.Index="{Binding Buttons.EditingTintIndex}">
-                <Border Name="ModeFrameTint" Classes="ModeFrame ControlsLayer"/>
-                <StackPanel Classes="ModeFrameContent" Spacing="8">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <ItemsControl Name="ModeTabs" Classes="ControlsLayer" ItemsSource="{Binding Buttons.Modes}"
-                                  Classes.editing="{Binding Buttons.IsEditingModes}">
+                <!-- The buttons, framed in the edited mode's colour, with the mode tabs on its top edge
+                     (spec §9): a click edits a mode, a right-click opens its menu; the pencil turns on
+                     edit mode (drag to reorder, click to rename, × to delete). -->
+                <!-- The frame's tint and its tabs fade out on Hardware and keep their space -->
+                <Panel Name="ButtonFrame" controls:ModeTint.Index="{Binding Buttons.EditingTintIndex}">
+                  <Border Name="ModeFrameTint" Classes="ModeFrame ControlsLayer"/>
+                  <StackPanel Classes="ModeFrameContent" Spacing="8">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <ItemsControl Name="ModeTabs" Classes="ControlsLayer" ItemsSource="{Binding Buttons.Modes}"
+                                    Classes.editing="{Binding Buttons.IsEditingModes}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel/>
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:ModeTabViewModel">
+                            <RadioButton Name="ModeTab" Classes="ModeTab" GroupName="ControlsModeTabs"
+                                         controls:ModeTint.Index="{Binding TintIndex}"
+                                         IsChecked="{Binding IsEditing, Mode=OneWay}"
+                                         Command="{Binding SelectCommand}">
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Ellipse Name="LiveDot" Classes="LiveDot" IsVisible="{Binding IsLive}"
+                                         ToolTip.Tip="Live on the controller"/>
+                                <TextBlock Name="TabName" Text="{Binding Name}" IsVisible="{Binding ShowName}"
+                                           VerticalAlignment="Center"/>
+                                <TextBox Name="TabNameBox" Classes="TabNameBox" IsVisible="{Binding IsRenaming}"/>
+                                <TextBlock Name="StartLabel" Classes="StartLabel" Text="start"
+                                           IsVisible="{Binding ShowStartLabel}"/>
+                                <Button Name="DeleteTabButton" Classes="DeleteTab" Command="{Binding DeleteCommand}"
+                                        IsVisible="{Binding ShowDelete}" ToolTip.Tip="Delete mode">
+                                  <PathIcon Data="{StaticResource Icon.Close}" Width="8" Height="8"/>
+                                </Button>
+                              </StackPanel>
+                            </RadioButton>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                        <FlyoutBase.AttachedFlyout>
+                          <!-- The mode's menu (spec §9.2); the code-behind fills it when it opens -->
+                          <Flyout Placement="BottomEdgeAlignedLeft">
+                            <StackPanel Name="ModeMenuPanel" Spacing="6" Width="200">
+                              <TextBox Name="MenuNameBox"/>
+                              <Button Name="MenuMakeLive" Classes="MenuItem" Content="Make live"/>
+                              <Button Name="MenuCopyFrom" Classes="MenuItem">
+                                <Grid ColumnDefinitions="*,Auto">
+                                  <TextBlock Text="Copy actions from"/>
+                                  <PathIcon Grid.Column="1" Data="{StaticResource Icon.ChevronRight}" Width="10" Height="10"/>
+                                </Grid>
+                                <Button.Flyout>
+                                  <MenuFlyout Placement="RightEdgeAlignedTop"/>
+                                </Button.Flyout>
+                              </Button>
+                            </StackPanel>
+                          </Flyout>
+                        </FlyoutBase.AttachedFlyout>
+                      </ItemsControl>
+                      <StackPanel Name="ModeActions" Grid.Column="1" Classes="ControlsLayer"
+                                  Orientation="Horizontal" Spacing="2" VerticalAlignment="Top">
+                        <Button Name="MakeLiveButton" Classes="ModeAction Live" Content="Make live"
+                                Command="{Binding Buttons.MakeLiveCommand}" IsVisible="{Binding !Buttons.IsEditingLive}"
+                                ToolTip.Tip="{Binding Buttons.MakeLiveText}"/>
+                        <Button Name="AddModeButton" Classes="ModeAction" Command="{Binding Buttons.AddModeCommand}"
+                                ToolTip.Tip="Add an empty mode">
+                          <StackPanel Orientation="Horizontal" Spacing="4">
+                            <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
+                            <TextBlock Text="Add mode"/>
+                          </StackPanel>
+                        </Button>
+                        <Button Name="EditModesButton" Classes="ModeAction EditModes"
+                                Classes.editing="{Binding Buttons.IsEditingModes}"
+                                Command="{Binding Buttons.ToggleEditModesCommand}">
+                          <Panel>
+                            <PathIcon Name="PencilIcon" Data="{StaticResource Icon.Pencil}" Width="12" Height="12"
+                                      IsVisible="{Binding !Buttons.IsEditingModes}"/>
+                            <PathIcon Name="CheckIcon" Data="{StaticResource Icon.Check}" Width="12" Height="12"
+                                      IsVisible="{Binding Buttons.IsEditingModes}"/>
+                          </Panel>
+                        </Button>
+                      </StackPanel>
+                    </Grid>
+
+                    <ItemsControl Name="ButtonList" Grid.IsSharedSizeScope="True">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                          <WrapPanel/>
+                          <controls:FillWrapPanel Name="ButtonGrid" Classes="ButtonGrid"/>
                         </ItemsPanelTemplate>
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ModeTabViewModel">
-                          <RadioButton Name="ModeTab" Classes="ModeTab" GroupName="ControlsModeTabs"
-                                       controls:ModeTint.Index="{Binding TintIndex}"
-                                       IsChecked="{Binding IsEditing, Mode=OneWay}"
-                                       Command="{Binding SelectCommand}">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                              <Ellipse Name="LiveDot" Classes="LiveDot" IsVisible="{Binding IsLive}"
-                                       ToolTip.Tip="Live on the controller"/>
-                              <TextBlock Name="TabName" Text="{Binding Name}" IsVisible="{Binding ShowName}"
-                                         VerticalAlignment="Center"/>
-                              <TextBox Name="TabNameBox" Classes="TabNameBox" IsVisible="{Binding IsRenaming}"/>
-                              <TextBlock Name="StartLabel" Classes="StartLabel" Text="start"
-                                         IsVisible="{Binding ShowStartLabel}"/>
-                              <Button Name="DeleteTabButton" Classes="DeleteTab" Command="{Binding DeleteCommand}"
-                                      IsVisible="{Binding ShowDelete}" ToolTip.Tip="Delete mode">
-                                <PathIcon Data="{StaticResource Icon.Close}" Width="8" Height="8"/>
-                              </Button>
-                            </StackPanel>
-                          </RadioButton>
+                        <DataTemplate x:DataType="vm:ButtonItemViewModel">
+                          <controls:ButtonTile/>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
-                      <FlyoutBase.AttachedFlyout>
-                        <!-- The mode's menu (spec §9.2); the code-behind fills it when it opens -->
-                        <Flyout Placement="BottomEdgeAlignedLeft">
-                          <StackPanel Name="ModeMenuPanel" Spacing="6" Width="200">
-                            <TextBox Name="MenuNameBox"/>
-                            <Button Name="MenuMakeLive" Classes="MenuItem" Content="Make live"/>
-                            <Button Name="MenuCopyFrom" Classes="MenuItem">
-                              <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="Copy actions from"/>
-                                <PathIcon Grid.Column="1" Data="{StaticResource Icon.ChevronRight}" Width="10" Height="10"/>
-                              </Grid>
-                              <Button.Flyout>
-                                <MenuFlyout Placement="RightEdgeAlignedTop"/>
-                              </Button.Flyout>
-                            </Button>
-                          </StackPanel>
-                        </Flyout>
-                      </FlyoutBase.AttachedFlyout>
                     </ItemsControl>
-                    <StackPanel Name="ModeActions" Grid.Column="1" Classes="ControlsLayer"
-                                Orientation="Horizontal" Spacing="2" VerticalAlignment="Top">
-                      <Button Name="MakeLiveButton" Classes="ModeAction Live" Content="Make live"
-                              Command="{Binding Buttons.MakeLiveCommand}" IsVisible="{Binding !Buttons.IsEditingLive}"
-                              ToolTip.Tip="{Binding Buttons.MakeLiveText}"/>
-                      <Button Name="AddModeButton" Classes="ModeAction" Command="{Binding Buttons.AddModeCommand}"
-                              ToolTip.Tip="Add an empty mode">
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                          <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
-                          <TextBlock Text="Add mode"/>
-                        </StackPanel>
-                      </Button>
-                      <Button Name="EditModesButton" Classes="ModeAction EditModes"
-                              Classes.editing="{Binding Buttons.IsEditingModes}"
-                              Command="{Binding Buttons.ToggleEditModesCommand}">
-                        <Panel>
-                          <PathIcon Name="PencilIcon" Data="{StaticResource Icon.Pencil}" Width="12" Height="12"
-                                    IsVisible="{Binding !Buttons.IsEditingModes}"/>
-                          <PathIcon Name="CheckIcon" Data="{StaticResource Icon.Check}" Width="12" Height="12"
-                                    IsVisible="{Binding Buttons.IsEditingModes}"/>
-                        </Panel>
-                      </Button>
-                    </StackPanel>
-                  </Grid>
+                  </StackPanel>
+                </Panel>
 
-                  <ItemsControl Name="ButtonList" Grid.IsSharedSizeScope="True">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <controls:FillWrapPanel Name="ButtonGrid" Classes="ButtonGrid"/>
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:ButtonItemViewModel">
-                        <controls:ButtonTile/>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </StackPanel>
-              </Panel>
-
-              <!-- The I2C bus chips (spec §5.2), shown on Hardware; their row keeps its space on
-                   Controls whenever a screen uses a bus -->
-              <ItemsControl Name="BusChipList" Classes="BusChips WiringLayer"
-                            ItemsSource="{Binding $parent[stage:StagePage].Hardware.BusChips, FallbackValue={x:Null}}"
-                            IsVisible="{Binding $parent[stage:StagePage].Hardware.HasBusChips, FallbackValue=False}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel/>
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="hw:BusChipViewModel">
-                    <Button Name="BusChip" Classes="BusChip" Classes.selected="{Binding IsSelected}"
-                            Content="{Binding Text}" Command="{Binding SelectCommand}"/>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
+                <!-- The I2C bus chips (spec §5.2), shown on Hardware; their row keeps its space on
+                     Controls whenever a screen uses a bus -->
+                <ItemsControl Name="BusChipList" Classes="BusChips WiringLayer"
+                              ItemsSource="{Binding $parent[stage:StagePage].Hardware.BusChips, FallbackValue={x:Null}}"
+                              IsVisible="{Binding $parent[stage:StagePage].Hardware.HasBusChips, FallbackValue=False}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel/>
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="hw:BusChipViewModel">
+                      <Button Name="BusChip" Classes="BusChip" Classes.selected="{Binding IsSelected}"
+                              Content="{Binding Text}" Command="{Binding SelectCommand}"/>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <TransitioningContentControl Name="ChooserHost"/>
+            </Grid>
           </Border>
 
           <TextBlock Name="ConnectLineText" Classes="Secondary" TextWrapping="Wrap"
@@ -188,6 +195,20 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:TargetDialogViewModel}" x:DataType="vm:TargetDialogViewModel">
               <dialogs:TargetDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
+    <!-- Hardware's Compare (spec §7.2): a modal card over the stage; Escape or a click outside closes it -->
+    <Border Name="CompareOverlay" Background="#66000000" IsVisible="False">
+      <Border Name="CompareCard" Classes="Panel DialogCard" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="CompareHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:CompareViewModel}" x:DataType="hw:CompareViewModel">
+              <hwviews:CompareDialog/>
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>
