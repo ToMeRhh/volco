@@ -1,0 +1,14 @@
+{
+  "preset": "volco-pcb",
+  "sliders": [ {"pin": 33}, {"pin": 32}, {"pin": 35}, {"pin": 34}, {"pin": 39}, {"pin": 36} ],
+  "buttons": [
+    {"pin": 13, "screen": {"bus": 0, "address": 60}},
+    {"pin": 27, "screen": {"bus": 1, "address": 60}},
+    {"pin": 26, "screen": {"bus": 2, "address": 60}},
+    {"pin": 25, "screen": {"bus": 3, "address": 60}}
+  ],
+  "i2c0": {"sda": 16, "scl": 4},
+  "i2c1": {"sda": 18, "scl": 17},
+  "i2c2": {"sda": 21, "scl": 19},
+  "i2c3": {"sda": 23, "scl": 22}
+}
