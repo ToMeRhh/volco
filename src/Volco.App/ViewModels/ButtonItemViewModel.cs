@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.App.ViewModels.Hardware;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -43,6 +44,10 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>The button's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Button {Index + 1}";
+
+    /// <summary>The tile's captions on Hardware; null until the Hardware page fills them.</summary>
+    [ObservableProperty]
+    private TileWiring? _wiring;
 
     /// <summary>The Controls page's selected tile.</summary>
     [ObservableProperty]

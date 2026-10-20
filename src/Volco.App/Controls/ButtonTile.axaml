@@ -26,7 +26,7 @@
         </Grid.RowDefinitions>
 
         <!-- 1. The light or screen, in the edited mode, aligned to the bottom of its row -->
-        <Panel Name="Indicator" Grid.ColumnSpan="3" Classes="Indicator" HorizontalAlignment="Center"
+        <Panel Name="Indicator" Grid.ColumnSpan="3" Classes="Indicator ControlsLayer" HorizontalAlignment="Center"
                VerticalAlignment="Bottom" ToolTip.Tip="{Binding LightDescription}">
           <Ellipse Name="Led" Classes="Led" Classes.on="{Binding LedOn}" IsVisible="{Binding IsLed}"/>
           <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsLedPair}">
@@ -43,19 +43,26 @@
           </Panel>
         </Panel>
 
+        <!-- On Hardware, the indicator's wiring in the same cell (spec §5.2) -->
+        <TextBlock Name="WiringIndicator" Grid.ColumnSpan="3" Classes="WiringLayer WiringIndicator"
+                   HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="{Binding Wiring.IndicatorText}"
+                   IsVisible="{Binding Wiring.IndicatorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
         <!-- 2. The cap -->
         <Ellipse Name="Cap" Grid.Row="1" Grid.ColumnSpan="3" Classes="Cap" HorizontalAlignment="Center"/>
 
         <!-- The grip, beside the action rows: one drag moves all of this button’s actions onto
              another button, in the edited mode (spec §2.9) -->
-        <Border Name="Grip" Grid.Row="2" Classes="TileGrip" VerticalAlignment="Top"
-                IsVisible="{Binding !IsMissing}" ToolTip.Tip="Drag onto another button to swap actions">
-          <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
-        </Border>
+        <Panel Grid.Row="2" Classes="ControlsLayer">
+          <Border Name="Grip" Classes="TileGrip" VerticalAlignment="Top"
+                  IsVisible="{Binding !IsMissing}" ToolTip.Tip="Drag onto another button to swap actions">
+            <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
+          </Border>
+        </Panel>
 
         <!-- The action rows, which a drag carries as its image. Their rows keep sharing heights
              with every tile's (a nested grid in the same shared-size scope). -->
-        <Grid Name="ActionRows" Grid.Row="2" Grid.Column="1" Background="Transparent">
+        <Grid Name="ActionRows" Grid.Row="2" Grid.Column="1" Classes="ControlsLayer" Background="Transparent">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" SharedSizeGroup="BtnMain"/>
             <RowDefinition Height="Auto" SharedSizeGroup="BtnSecs"/>
@@ -104,10 +111,25 @@
                        IsVisible="{Binding IsMissing}"/>
           </Panel>
         </Grid>
+
+        <!-- On Hardware, "Button N" and its pin, in the same row as the actions; both are always
+             measured, so the tile keeps its size in both modes -->
+        <StackPanel Name="WiringRow" Grid.Row="2" Grid.ColumnSpan="3" Classes="WiringLayer WiringCaptions"
+                    IsVisible="{Binding Wiring, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    ToolTip.Tip="{Binding Wiring.Problem}">
+          <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+            <TextBlock Name="WiringTitle" Classes="TileLabel" Text="{Binding Wiring.Title}"/>
+            <Ellipse Classes="ChangeDot" IsVisible="{Binding Wiring.HasChange}"/>
+          </StackPanel>
+          <Border Classes="PinPill" IsVisible="{Binding Wiring.PinText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
+          </Border>
+        </StackPanel>
       </Grid>
     </Border>
     <Rectangle Classes="MissingOutline" IsVisible="{Binding IsMissing}"/>
     <Rectangle Classes="DropOutline"/>
+    <Rectangle Classes="ProblemOutline" IsVisible="{Binding Wiring.HasProblem}"/>
     <Border Classes="TileActive"/>
   </Panel>
 </UserControl>

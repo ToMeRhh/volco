@@ -13,7 +13,8 @@ using Volco.Core.Input;
 namespace Volco.App.Views.Stage;
 
 /// <summary>
-/// The drawing and the inspector. Bindings do the work; the code-behind selects a tile on a click,
+/// The stage: the drawing and the side panel, decorated for Controls or Hardware by
+/// <see cref="Mode"/> (spec hardware-page.md §3.3). Bindings do the work; the code-behind selects a tile on a click,
 /// Enter or Space, moves the focus between tiles with the arrow keys (spec §4.5), closes the
 /// dialog on Escape or a click on the scrim (the device dialog over it first), runs the mode tabs (StagePage.ModeTabs.cs), drag
 /// to swap (<see cref="TileSwapDrag"/>) and the tiles' "Swap with" menu.
@@ -42,9 +43,76 @@ public partial class StagePage : UserControl
             else OnDeviceDialogClosed();
         };
         InitModeTabs();
-        SwapDrag = TileSwapDrag.Attach(this.FindControl<Border>("Case")!, () => Vm);
+        InitStage();
+        // Drag to swap is a Controls thing: on Hardware the grips are faded out and inactive.
+        SwapDrag = TileSwapDrag.Attach(_case, () => Mode == StageMode.Controls ? Vm : null);
         // Tunnel, so "Swap with" is filled before the tile's own handler opens its menu.
         AddHandler(ContextRequestedEvent, OnTileContextRequested, RoutingStrategies.Tunnel);
+    }
+
+    public static readonly StyledProperty<StageMode> ModeProperty =
+        AvaloniaProperty.Register<StagePage, StageMode>(nameof(Mode));
+
+    public static readonly StyledProperty<Control?> HardwareSidePanelProperty =
+        AvaloniaProperty.Register<StagePage, Control?>(nameof(HardwareSidePanel));
+
+    /// <summary>Which page the stage decorates (spec hardware-page.md §3.3). Switching crossfades
+    /// the title, the tiles' captions, the mode frame and the side panel; no tile moves.</summary>
+    public StageMode Mode
+    {
+        get => GetValue(ModeProperty);
+        set => SetValue(ModeProperty, value);
+    }
+
+    /// <summary>The side panel's content on Hardware; Controls shows the inspector.</summary>
+    public Control? HardwareSidePanel
+    {
+        get => GetValue(HardwareSidePanelProperty);
+        set => SetValue(HardwareSidePanelProperty, value);
+    }
+
+    private Border _case = null!;
+    private TransitioningContentControl _titleHost = null!;
+    private TransitioningContentControl _sidePanelHost = null!;
+    private Control _inspector = null!;
+    private readonly TextBlock _controlsTitle = new() { Name = "PageTitle", Classes = { "Title" }, Text = "Controls" };
+    private readonly TextBlock _hardwareTitle = new() { Name = "PageTitle", Classes = { "Title" }, Text = "Hardware" };
+
+    private void InitStage()
+    {
+        _case = this.FindControl<Border>("Case")!;
+        _titleHost = this.FindControl<TransitioningContentControl>("TitleHost")!;
+        _sidePanelHost = this.FindControl<TransitioningContentControl>("SidePanelHost")!;
+        _inspector = this.FindControl<ContentControl>("InspectorContent")!;
+        _titleHost.PageTransition = null;
+        _sidePanelHost.PageTransition = null;
+        _titleHost.Content = _controlsTitle;
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (_case is null) return;   // still loading
+        if (change.Property == ModeProperty) ApplyMode();
+        else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
+        {
+            _sidePanelHost.PageTransition = StageTransitions.PageTransition();
+            _sidePanelHost.Content = HardwareSidePanel;
+        }
+    }
+
+    /// <summary>Swaps the decorations: the "hardware" class (styles fade the tiles' layers and the
+    /// mode frame), the title word and the side panel's content.</summary>
+    private void ApplyMode()
+    {
+        var hardware = Mode == StageMode.Hardware;
+        StageTransitions.Prepare(_case);
+        Classes.Set("hardware", hardware);
+        _case.Classes.Set("hardware", hardware);
+        _titleHost.PageTransition = StageTransitions.PageTransition();
+        _titleHost.Content = hardware ? _hardwareTitle : _controlsTitle;
+        _sidePanelHost.PageTransition = StageTransitions.PageTransition();
+        _sidePanelHost.Content = hardware ? HardwareSidePanel : _inspector;
     }
 
     /// <summary>Drag a tile's grip onto another tile of its kind to swap them (spec §2.9–10).</summary>
@@ -55,8 +123,16 @@ public partial class StagePage : UserControl
     private void OnTileContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (TileOf(e.Source as Visual) is not { ContextMenu: { } menu } tile || Vm is not { } vm) return;
-        if (tile.DataContext is not ObservableObject item) return;
         var swapWith = menu.Items.OfType<MenuItem>().First();
+        if (Mode == StageMode.Hardware)
+        {
+            // The menu only has "Swap with", which Hardware doesn't offer.
+            swapWith.ItemsSource = null;
+            swapWith.IsEnabled = false;
+            e.Handled = true;
+            return;
+        }
+        if (tile.DataContext is not ObservableObject item) return;
         var missing = item is SliderItemViewModel { IsMissing: true } or ButtonItemViewModel { IsMissing: true };
         var choices = missing ? Array.Empty<SwapChoice>() : vm.SwapChoices(item);
         swapWith.ItemsSource = choices.Select(choice =>

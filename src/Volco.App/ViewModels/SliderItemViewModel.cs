@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.App.ViewModels.Hardware;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Programs;
@@ -176,6 +177,10 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     }
 
     // ── View state ────────────────────────────────────────────────────────────
+
+    /// <summary>The tile's captions on Hardware; null until the Hardware page fills them.</summary>
+    [ObservableProperty]
+    private TileWiring? _wiring;
 
     /// <summary>Live volume 0..1 from the controller; display only, never saved.</summary>
     [ObservableProperty]

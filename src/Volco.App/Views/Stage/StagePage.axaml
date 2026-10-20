@@ -6,14 +6,20 @@
              xmlns:dialogs="using:Volco.App.Views.Dialogs"
              x:Class="Volco.App.Views.Stage.StagePage"
              x:DataType="vm:ControlsViewModel">
-  <!-- The Controls page (spec docs/design/controls-page.md): the title, a drawing of the
-       controller (sliders, then the buttons in the edited mode's frame) and an inspector for the
-       selected control. Only the drawing scrolls. -->
+  <!-- The stage (spec docs/design/controls-page.md, hardware-page.md §3.3): the title, a drawing
+       of the controller (sliders, then the buttons in the edited mode's frame) and a side panel.
+       Mode decorates the same tiles with their actions (Controls) or their wiring (Hardware).
+       Only the drawing scrolls. -->
   <Panel>
     <Grid ColumnDefinitions="*,Auto">
       <ScrollViewer Name="DrawingScroll" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,8,20,20" Spacing="14">
-          <TextBlock Name="PageTitle" Classes="Title" Text="Controls"/>
+          <!-- The title row, the same height in both modes (spec §3.2–3.3): the page's word
+               (PageTitle, crossfaded) and the page's buttons -->
+          <Grid Name="TitleRow" Classes="StageTitleRow" ColumnDefinitions="*,Auto">
+            <TransitioningContentControl Name="TitleHost" VerticalAlignment="Center"/>
+            <ContentControl Name="TitleActions" Grid.Column="1" VerticalAlignment="Center"/>
+          </Grid>
 
           <Border Name="Case" Classes="Case" Classes.dense="{Binding IsDense}">
             <StackPanel Spacing="14">
@@ -33,11 +39,12 @@
               <!-- The buttons, framed in the edited mode's colour, with the mode tabs on its top edge
                    (spec §9): a click edits a mode, a right-click opens its menu; the pencil turns on
                    edit mode (drag to reorder, click to rename, × to delete). -->
-              <Border Name="ButtonFrame" Classes="ModeFrame"
-                      controls:ModeTint.Index="{Binding Buttons.EditingTintIndex}">
-                <StackPanel Spacing="8">
+              <!-- The frame's tint and its tabs fade out on Hardware and keep their space -->
+              <Panel Name="ButtonFrame" controls:ModeTint.Index="{Binding Buttons.EditingTintIndex}">
+                <Border Name="ModeFrameTint" Classes="ModeFrame ControlsLayer"/>
+                <StackPanel Classes="ModeFrameContent" Spacing="8">
                   <Grid ColumnDefinitions="*,Auto">
-                    <ItemsControl Name="ModeTabs" ItemsSource="{Binding Buttons.Modes}"
+                    <ItemsControl Name="ModeTabs" Classes="ControlsLayer" ItemsSource="{Binding Buttons.Modes}"
                                   Classes.editing="{Binding Buttons.IsEditingModes}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -85,7 +92,8 @@
                         </Flyout>
                       </FlyoutBase.AttachedFlyout>
                     </ItemsControl>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Top">
+                    <StackPanel Name="ModeActions" Grid.Column="1" Classes="ControlsLayer"
+                                Orientation="Horizontal" Spacing="2" VerticalAlignment="Top">
                       <Button Name="MakeLiveButton" Classes="ModeAction Live" Content="Make live"
                               Command="{Binding Buttons.MakeLiveCommand}" IsVisible="{Binding !Buttons.IsEditingLive}"
                               ToolTip.Tip="{Binding Buttons.MakeLiveText}"/>
@@ -122,7 +130,7 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </StackPanel>
-              </Border>
+              </Panel>
             </StackPanel>
           </Border>
 
@@ -131,18 +139,21 @@
         </StackPanel>
       </ScrollViewer>
 
-      <!-- The inspector keeps its place and size; only its body scrolls -->
+      <!-- The side panel keeps its place and size in both modes; only its body scrolls. On
+           Controls it holds the inspector, on Hardware the page's own panel (HardwareSidePanel). -->
       <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
-        <ContentControl Name="InspectorContent" Content="{Binding Selected}">
-          <ContentControl.DataTemplates>
-            <DataTemplate DataType="{x:Type vm:SliderItemViewModel}" x:DataType="vm:SliderItemViewModel">
-              <inspector:SliderInspector/>
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ButtonItemViewModel}" x:DataType="vm:ButtonItemViewModel">
-              <inspector:ButtonInspector/>
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
+        <TransitioningContentControl Name="SidePanelHost">
+          <ContentControl Name="InspectorContent" Content="{Binding Selected}">
+            <ContentControl.DataTemplates>
+              <DataTemplate DataType="{x:Type vm:SliderItemViewModel}" x:DataType="vm:SliderItemViewModel">
+                <inspector:SliderInspector/>
+              </DataTemplate>
+              <DataTemplate DataType="{x:Type vm:ButtonItemViewModel}" x:DataType="vm:ButtonItemViewModel">
+                <inspector:ButtonInspector/>
+              </DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+        </TransitioningContentControl>
       </Border>
     </Grid>
 

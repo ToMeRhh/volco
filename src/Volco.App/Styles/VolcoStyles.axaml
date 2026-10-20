@@ -620,6 +620,67 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
   </Style>
 
+  <!-- ── The stage's two modes (spec hardware-page.md §3.3, §5.2) ─────────
+       Controls and Hardware draw the same tiles: each tile, the mode frame and its tabs hold a
+       ControlsLayer and a WiringLayer in the same cells, both always measured, and the mode only
+       swaps their opacity (Views/Stage/StageTransitions crossfades it), so no tile moves. The
+       stage puts "hardware" on Border.Case. -->
+  <Style Selector=":is(Control).WiringLayer">
+    <Setter Property="Opacity" Value="0"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <Style Selector="Border.Case.hardware :is(Control).ControlsLayer">
+    <Setter Property="Opacity" Value="0"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <Style Selector="Border.Case.hardware :is(Control).WiringLayer">
+    <Setter Property="Opacity" Value="1"/>
+    <Setter Property="IsHitTestVisible" Value="True"/>
+  </Style>
+  <Style Selector="StackPanel.ModeFrameContent">
+    <!-- The tint's border (1.5) plus the frame's padding (8,0,8,8) -->
+    <Setter Property="Margin" Value="9.5,1.5,9.5,9.5"/>
+  </Style>
+  <Style Selector="Grid.StageTitleRow">
+    <Setter Property="Height" Value="32"/>
+  </Style>
+  <Style Selector="StackPanel.WiringCaptions">
+    <Setter Property="Spacing" Value="3"/>
+  </Style>
+  <Style Selector="controls|ButtonTile StackPanel.WiringCaptions">
+    <Setter Property="Margin" Value="0,6,0,0"/>
+  </Style>
+  <Style Selector="Border.PinPill">
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="6,0,6,1"/>
+  </Style>
+  <Style Selector="Border.PinPill TextBlock, TextBlock.WiringIndicator">
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Ellipse.ChangeDot">
+    <Setter Property="Width" Value="6"/>
+    <Setter Property="Height" Value="6"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <!-- A problem with the draft's control: the danger outline, on Hardware only -->
+  <Style Selector="Rectangle.ProblemOutline">
+    <Setter Property="Stroke" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="RadiusX" Value="11"/>
+    <Setter Property="RadiusY" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="Border.Case.hardware Rectangle.ProblemOutline">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+
   <!-- ── Controls page: the inspector (spec §5) ──────────────────────────
        A fixed column: a header, then one-line rows of 44 px, and the collapsed sections. -->
   <Style Selector="Border.Inspector">
