@@ -165,11 +165,26 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The bus the inspector shows; null when it shows the selected tile.</summary>
     private int? _selectedBus;
 
+    /// <summary>The inspector shows the controller's settings (spec §6.6).</summary>
+    private bool _settingsSelected;
+
+    /// <summary>The title row's "Controller settings" chip: the inspector shows the controller's
+    /// settings and the tile and bus selection is cleared.</summary>
+    public void SelectControllerSettings()
+    {
+        if (_disposed) return;
+        _settingsSelected = true;
+        _selectedBus = null;
+        _controls.Selected = null;
+        UpdateInspected();
+    }
+
     /// <summary>Selects bus <paramref name="bus"/>'s chip: the tile selection is cleared.</summary>
     public void SelectBus(int bus)
     {
         if (_disposed || BusChips.All(c => c.Bus != bus)) return;
         _selectedBus = bus;
+        _settingsSelected = false;
         _controls.Selected = null;
         UpdateInspected();
     }
@@ -177,7 +192,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private void OnControlsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_disposed || e.PropertyName != nameof(ControlsViewModel.Selected)) return;
-        if (_controls.Selected is not null) _selectedBus = null;
+        if (_controls.Selected is not null) { _selectedBus = null; _settingsSelected = false; }
         UpdateInspected();
     }
 
@@ -207,7 +222,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         foreach (var chip in BusChips) chip.IsSelected = chip.Bus == _selectedBus;
 
         object? next = Inspected;
-        if (_selectedBus is int bus)
+        if (_settingsSelected)
+        {
+            if (Inspected is not ControllerSettingsViewModel) next = new ControllerSettingsViewModel(_controller, () => OpenConnection(true));
+        }
+        else if (_selectedBus is int bus)
         {
             if (Inspected is not BusWiringViewModel { } shown || shown.Bus != bus)
                 next = new BusWiringViewModel(bus, _controller, PinField(new PinOwner(PinOwnerKind.BusSda, bus)),

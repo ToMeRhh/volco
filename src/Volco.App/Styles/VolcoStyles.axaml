@@ -825,6 +825,9 @@
     <Setter Property="Height" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
   </Style>
+  <Style Selector="Button.InspectorRow.open PathIcon.RowChevron">
+    <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+  </Style>
   <Style Selector="Border.UsbTag">
     <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>

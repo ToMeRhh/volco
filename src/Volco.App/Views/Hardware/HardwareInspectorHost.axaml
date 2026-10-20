@@ -33,6 +33,9 @@
         <DataTemplate DataType="{x:Type hw:BusWiringViewModel}" x:DataType="hw:BusWiringViewModel">
           <views:BusInspector/>
         </DataTemplate>
+        <DataTemplate DataType="{x:Type hw:ControllerSettingsViewModel}" x:DataType="hw:ControllerSettingsViewModel">
+          <views:ControllerSettingsInspector/>
+        </DataTemplate>
       </ContentControl.DataTemplates>
     </ContentControl>
   </DockPanel>
