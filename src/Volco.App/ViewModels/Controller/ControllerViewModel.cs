@@ -244,7 +244,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _service.LastHello is { Version: ProtocolVersion.Current, ConfigState: ControllerConfigState.Stored } h
         && _service.Mirror is { Length: > 0 } m && h.ConfigCrc == ControllerConfigCodec.Crc32(m);
 
-    public bool CanEdit => _runtime.ControllerState == ControllerState.Ready && (InSync || _hasPermission);
+    /// <summary>The draft can be changed: never while a save runs, so the controller's answer is
+    /// about the draft (and layout) that was sent.</summary>
+    public bool CanEdit => _runtime.ControllerState == ControllerState.Ready && (InSync || _hasPermission) && !IsSaving;
 
     /// <summary>The baseline is Volco's saved copy, not what the controller holds: while setting up
     /// a controller that doesn't hold the draft, it is always unsaved.</summary>
@@ -564,6 +566,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(ShowFooter));
         OnPropertyChanged(nameof(CanDismissFooter));
+        OnPropertyChanged(nameof(CanEdit));
+        foreach (var r in AllRows()) r.RefreshCanEdit();
     }
 
     /// <summary>Shows a save's progress or result. A good result goes by itself after
@@ -620,7 +624,13 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             SetProgress($"This setup can't be saved: {ex.Message}", LinkTone.Danger);
             return;
         }
-        SaveBytes(blob, udpChanged, Layout);
+        SaveBytes(blob, udpChanged, Layout.Clone());
+    }
+
+    private bool DraftEquals(byte[] blob)
+    {
+        try { return ControllerConfigCodec.Encode(_draft).AsSpan().SequenceEqual(blob); }
+        catch (ControllerConfigFormatException) { return false; }
     }
 
     /// <summary>Volco's saved copy of the controller's config (empty when there is none).</summary>
@@ -634,14 +644,18 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private bool _savingSetup;
 
-    /// <summary>The layout of the draft being saved; applied to Volco's settings once the controller
-    /// confirms (the mirror's change may reset <see cref="Layout"/> before the result arrives).</summary>
+    /// <summary>A copy of the layout of the draft being saved; applied to Volco's settings once the
+    /// controller confirms (the mirror's change may reset <see cref="Layout"/> before the result arrives).</summary>
     private ControlLayout? _savingLayout;
+
+    /// <summary>The bytes being saved.</summary>
+    private byte[]? _savingBlob;
 
     private void SaveBytes(byte[] blob, bool udpChanged, ControlLayout? layout)
     {
         _udpChangedInSave = udpChanged;
         _savingLayout = layout;
+        _savingBlob = blob;
         _savingSetup = IsSettingUp || IsNotSetUp;
         IsSaving = true;
         SetProgress("Sending…");
@@ -682,16 +696,19 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid) _remoteError = (r.Item, r.Field);
         if (r.Status == SaveStatus.Confirmed) _fixIt = false;
         var layout = _savingLayout;
+        var saved = _savingBlob;
         _savingLayout = null;
-        if (r.Status == SaveStatus.Confirmed && layout is not null) ApplyLayout(layout);
+        _savingBlob = null;
+        if (r.Status == SaveStatus.Confirmed && layout is not null) ApplyLayout(layout, saved);
         RefreshAll();
     }
 
     /// <summary>Spec §6.5: the controller has the saved draft, so Volco's sliders and buttons follow
     /// its removed and added controls. A failed or discarded save never gets here.</summary>
-    private void ApplyLayout(ControlLayout layout)
+    private void ApplyLayout(ControlLayout layout, byte[]? saved)
     {
-        if (ReferenceEquals(layout, Layout))
+        // Volco's lists now match the saved draft: its controls are the saved ones at their positions.
+        if (saved is not null && DraftEquals(saved))
         {
             Layout = ControlLayout.Identity(_draft.Sliders.Count, _draft.Buttons.Count);
             OnPropertyChanged(nameof(Layout));

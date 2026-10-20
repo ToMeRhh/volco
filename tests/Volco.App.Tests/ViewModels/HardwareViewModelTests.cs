@@ -168,6 +168,33 @@ public sealed class HardwareViewModelTests : IDisposable
     }
 
     [Fact]
+    public void TheDraftCantChangeDuringASave_SoTheSettingsMatchWhatWasSaved()
+    {
+        SetUpInSync();
+        Controller.RemoveSlider(2);
+        var blob = ControllerConfigCodec.Encode(Controller.Draft);
+        Controller.SaveCommand.Execute(null);
+        Assert.True(Controller.IsSaving);
+        Assert.False(Controller.CanEdit);
+        Assert.True(Hardware.IsReadOnly);
+
+        Controller.RemoveSlider(0);                    // refused while saving
+        Controller.AddSliderCommand.Execute(null);
+        Assert.Equal(4, Hardware.Sliders.Count);
+        Assert.Equal(blob, ControllerConfigCodec.Encode(Controller.Draft));
+
+        WaitForWrite();
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(blob), sliders: 4));
+        Until(() => !Controller.IsSaving);
+        _ui.RunAll();
+        Assert.Equal(new[] { "a", "b", "d", "e" }, SavedNames());
+        Assert.True(Controller.Layout.IsIdentity);
+        Assert.True(Controller.CanEdit);
+        Assert.Equal(new[] { "a", "b", "d", "e" }, Hardware.Sliders.Select(s => s.Config.Name));
+    }
+
+    [Fact]
     public void FailedSaveLeavesTheSettings()
     {
         SetUpInSync();

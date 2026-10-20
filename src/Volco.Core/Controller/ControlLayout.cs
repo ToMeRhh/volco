@@ -20,6 +20,17 @@ public sealed class ControlLayout
         _buttons = Enumerable.Range(0, buttons).Select(i => (int?)i).ToList();
     }
 
+    private ControlLayout(ControlLayout other)
+    {
+        _savedSliders = other._savedSliders;
+        _savedButtons = other._savedButtons;
+        _sliders = new List<int?>(other._sliders);
+        _buttons = new List<int?>(other._buttons);
+    }
+
+    /// <summary>An independent copy: later changes to either don't reach the other.</summary>
+    public ControlLayout Clone() => new(this);
+
     /// <summary>A layout where every draft control is the saved one at its position.</summary>
     public static ControlLayout Identity(int sliders, int buttons) => new(sliders, buttons);
 

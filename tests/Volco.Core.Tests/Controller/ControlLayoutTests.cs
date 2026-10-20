@@ -95,4 +95,18 @@ public class ControlLayoutTests
         ControlLayout.Identity(5, 0).ApplyTo(c);
         Assert.Equal(5, c.Sliders.Count);
     }
+
+    [Fact]
+    public void ACloneIsIndependent()
+    {
+        var layout = ControlLayout.Identity(5, 2);
+        layout.RemoveSlider(2);
+        var copy = layout.Clone();
+        layout.RemoveSlider(0);
+        layout.AddButton();
+        Assert.Equal(new int?[] { 0, 1, 3, 4 }, copy.Sliders);
+        Assert.Equal(new int?[] { 0, 1 }, copy.Buttons);
+        Assert.False(copy.IsIdentity);
+        Assert.True(ControlLayout.Identity(3, 1).Clone().IsIdentity);
+    }
 }
