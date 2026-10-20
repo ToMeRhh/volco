@@ -65,7 +65,7 @@ public class PinChoicesTests
     public void SelfIsFreeWithNoNote()
     {
         var d = new ControllerConfig();
-        for (var i = 0; i < 5; i++) d.Sliders.Add(new Slider { Pin = (uint)(32 + i) });
+        for (var i = 0; i < 5; i++) d.Sliders.Add(new Slider { Pin = (uint)(12 + i) });
         d.Sliders.Add(new Slider { Pin = 36 });
         var c = At(d, PinRole.SliderInput, Slider6, 36);
         Assert.Equal(PinChoiceState.Free, c.State);
