@@ -93,9 +93,9 @@
                       ToolTip.Tip="{Binding Wiring.Problem}">
             <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
               <TextBlock Name="WiringTitle" Classes="TileLabel" Text="{Binding Wiring.Title}"/>
-              <Ellipse Classes="ChangeDot" IsVisible="{Binding Wiring.HasChange}"/>
+              <Ellipse Classes="ChangeDot" IsVisible="{Binding Wiring.HasChange, FallbackValue=False}"/>
             </StackPanel>
-            <Border Classes="PinPill" IsVisible="{Binding Wiring.PinText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Border Classes="PinPill" IsVisible="{Binding Wiring.PinText, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
               <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
             </Border>
           </StackPanel>
@@ -106,7 +106,7 @@
     </Border>
     <Rectangle Classes="MissingOutline" IsVisible="{Binding IsMissing}"/>
     <Rectangle Classes="DropOutline"/>
-    <Rectangle Classes="ProblemOutline" IsVisible="{Binding Wiring.HasProblem}"/>
+    <Rectangle Classes="ProblemOutline" IsVisible="{Binding Wiring.HasProblem, FallbackValue=False}"/>
     <Border Classes="TileActive"/>
   </Panel>
 </UserControl>

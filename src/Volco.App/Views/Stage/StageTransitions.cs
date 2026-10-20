@@ -26,14 +26,15 @@ public static class StageTransitions
     /// <summary>The crossfade for a <see cref="TransitioningContentControl"/>, or none.</summary>
     internal static IPageTransition? PageTransition() => Enabled ? new CrossFade(Duration) : null;
 
-    /// <summary>Gives every layer under <paramref name="root"/> its opacity transition (or takes it
+    /// <summary>Gives every layer (and each tile's problem outline) under <paramref name="root"/> its opacity transition (or takes it
     /// away when <see cref="Enabled"/> is false). Called just before a mode change, so a tile
     /// never fades in when it is first shown.</summary>
     internal static void Prepare(Visual root)
     {
         foreach (var layer in root.GetVisualDescendants().OfType<Control>())
         {
-            if (!layer.Classes.Contains(ControlsLayer) && !layer.Classes.Contains(WiringLayer)) continue;
+            if (!layer.Classes.Contains(ControlsLayer) && !layer.Classes.Contains(WiringLayer)
+                && !layer.Classes.Contains("ProblemOutline")) continue;
             if (!Enabled) layer.Transitions = null;
             else if (layer.Transitions is not { Count: > 0 })
                 layer.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = Duration } };

@@ -37,7 +37,10 @@ public sealed class StageGeometryTests : IDisposable
     private static readonly string[] IndicatorTexts = { "12", "18 · 19", "Bus 0 · 3C", "" };
 
     /// <summary>The stage in a 1100 × 720 window, every tile with its wiring.</summary>
-    private static Shown Show(int sliders, params IndicatorKind[] buttons)
+    private static Shown Show(int sliders, params IndicatorKind[] buttons) => Show(true, sliders, buttons);
+
+    /// <summary>The stage in a 1100 × 720 window; <paramref name="wired"/>: every tile gets its wiring.</summary>
+    private static Shown Show(bool wired, int sliders, params IndicatorKind[] buttons)
     {
         var speakers = new AudioDevice("dev-1", "Living room surround speakers", AudioFlow.Render, true);
         var engine = new FakeAudioEngine
@@ -62,9 +65,9 @@ public sealed class StageGeometryTests : IDisposable
         var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 1100, Height = 720 };
         window.Show();
-        for (var i = 0; i < vm.Sliders.Items.Count; i++)
+        for (var i = 0; wired && i < vm.Sliders.Items.Count; i++)
             vm.Sliders.Items[i].Wiring = new TileWiring { Title = $"Slider {i + 1}", PinText = $"GPIO {33 + i}", RawLevel = 0.3 };
-        for (var i = 0; i < vm.Buttons.Items.Count; i++)
+        for (var i = 0; wired && i < vm.Buttons.Items.Count; i++)
             vm.Buttons.Items[i].Wiring = new TileWiring
             {
                 Title = $"Button {i + 1}", PinText = $"GPIO {13 + i}", IndicatorText = IndicatorTexts[i % IndicatorTexts.Length],
@@ -210,5 +213,54 @@ public sealed class StageGeometryTests : IDisposable
         SetMode(s, StageMode.Controls);
         Assert.Same(s.Page.FindControl<ContentControl>("InspectorContent"),
                     In<TransitioningContentControl>(s.Page, "SidePanelHost").Content);
+    }
+
+    [AvaloniaFact]
+    public void UnwiredTiles_ShowNoWiringParts_AndKeepTheirControlsSize()
+    {
+        using var s = Show(false, 5, IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.Led);
+        foreach (var mode in new[] { StageMode.Controls, StageMode.Hardware })
+        {
+            SetMode(s, mode);
+            foreach (var tile in Tiles(s.Page))
+            {
+                Assert.All(tile.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>()
+                               .Where(r => r.Classes.Contains("ProblemOutline")), r => Assert.False(r.IsVisible));
+                Assert.All(tile.GetVisualDescendants().OfType<Control>().Where(c => c.Name == "WiringRow"),
+                           c => Assert.False(c.IsVisible));
+            }
+            foreach (var tile in Tiles(s.Page).OfType<ButtonTile>())
+            {
+                Assert.False(In<TextBlock>(tile, "WiringIndicator").IsVisible);
+                // Row 0 is the LED's height alone: the cap (top margin 7) starts where the LED ends.
+                var led = In<Avalonia.Controls.Shapes.Ellipse>(tile, "Led");
+                var ledBottom = led.TranslatePoint(new Point(0, led.Bounds.Height), tile)!.Value.Y;
+                var capTop = In<Avalonia.Controls.Shapes.Ellipse>(tile, "Cap").TranslatePoint(new Point(0, 0), tile)!.Value.Y;
+                Assert.Equal(ledBottom + 7, capTop, 0.5);
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void ModeButtonsAreOutOfKeyboardReachInHardware()
+    {
+        using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
+        var add = In<Button>(s.Page, "AddModeButton");
+        var modes = s.Vm.Controls.Buttons.Modes.Count;
+        Assert.True(add.IsEffectivelyEnabled);
+
+        SetMode(s, StageMode.Hardware);
+        foreach (var name in new[] { "AddModeButton", "MakeLiveButton", "EditModesButton" })
+            Assert.False(In<Button>(s.Page, name).IsEffectivelyEnabled, name);
+        Assert.All(s.Page.GetVisualDescendants().OfType<RadioButton>().Where(r => r.Name == "ModeTab"),
+                   tab => Assert.False(tab.IsEffectivelyEnabled));
+        Assert.False(add.Focus(Avalonia.Input.NavigationMethod.Tab));
+        add.Focus(Avalonia.Input.NavigationMethod.Tab);
+        Settle(s.Window);
+        Assert.False(add.IsFocused);
+        Assert.Equal(modes, s.Vm.Controls.Buttons.Modes.Count);
+
+        SetMode(s, StageMode.Controls);
+        Assert.True(add.IsEffectivelyEnabled);
     }
 }

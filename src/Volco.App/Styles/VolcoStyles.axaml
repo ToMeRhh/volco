@@ -629,9 +629,11 @@
     <Setter Property="Opacity" Value="0"/>
     <Setter Property="IsHitTestVisible" Value="False"/>
   </Style>
+  <!-- Disabled too, so the faded mode tabs and buttons are out of keyboard reach (layout is kept) -->
   <Style Selector="Border.Case.hardware :is(Control).ControlsLayer">
     <Setter Property="Opacity" Value="0"/>
     <Setter Property="IsHitTestVisible" Value="False"/>
+    <Setter Property="IsEnabled" Value="False"/>
   </Style>
   <Style Selector="Border.Case.hardware :is(Control).WiringLayer">
     <Setter Property="Opacity" Value="1"/>
