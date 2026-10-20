@@ -10,6 +10,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -24,7 +25,7 @@ namespace Volco.App.Tests.Pages;
 
 /// <summary>Spec docs/design/controls-page.md §3–§5: the Controls page's navigation, window,
 /// drawing and inspector.</summary>
-public class ControlsPageTests
+public class StagePageTests
 {
     private static FakeAudioEngine EngineWithAudio()
     {
@@ -41,7 +42,7 @@ public class ControlsPageTests
     private static void Hardware(AppConfig c, int sliders, params IndicatorKind[] buttons)
         => c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = sliders, Buttons = buttons.ToList() };
 
-    private sealed record Shown(ControlsPage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
+    private sealed record Shown(StagePage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
     {
         public ControlsViewModel Controls => Vm.Controls;
         public AppConfig Config => Rig.Config.Config;
@@ -59,7 +60,7 @@ public class ControlsPageTests
         var rig = new TestRig(EngineWithAudio());
         configure?.Invoke(rig.Config.Config);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Settle(window);
@@ -90,10 +91,10 @@ public class ControlsPageTests
     private static List<T> Tiles<T>(Visual root) where T : Control
         => root.GetVisualDescendants().OfType<T>().ToList();
 
-    private static Border Inspector(ControlsPage page) => page.FindControl<Border>("Inspector")!;
+    private static Border Inspector(StagePage page) => page.FindControl<Border>("Inspector")!;
 
     /// <summary>A control in one of the inspector's action rows ("Press", "Double", "Hold").</summary>
-    private static T InRow<T>(ControlsPage page, string row, string name) where T : Control
+    private static T InRow<T>(StagePage page, string row, string name) where T : Control
         => In<T>(In<ContentControl>(Inspector(page), $"ActionRow_{row}"), name);
 
     private static double TopIn(Visual part, Visual tile) => part.TranslatePoint(new Point(0, 0), tile)!.Value.Y;
@@ -115,7 +116,7 @@ public class ControlsPageTests
         Assert.Same(sliders, items[1].Icon);
 
         window.ShowPage("controls");
-        Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.IsType<StagePage>(window.CurrentPage);
         window.Close();
     }
 
@@ -144,7 +145,7 @@ public class ControlsPageTests
         Assert.DoesNotContain("compact", wide.Classes);
         Assert.Equal(168, wide.FindControl<Border>("Sidebar")!.Bounds.Width);
         Assert.All(Tiles<TextBlock>(wide).Where(t => t.Classes.Contains("NavLabel")), t => Assert.True(t.IsEffectivelyVisible));
-        Assert.Equal(380, Inspector((ControlsPage)wide.CurrentPage!).Bounds.Width);
+        Assert.Equal(380, Inspector((StagePage)wide.CurrentPage!).Bounds.Width);
         wide.Close();
 
         using var vm2 = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -156,7 +157,7 @@ public class ControlsPageTests
         var labels = Tiles<TextBlock>(narrow).Where(t => t.Classes.Contains("NavLabel")).ToList();
         Assert.Equal(3, labels.Count);
         Assert.All(labels, t => Assert.False(t.IsEffectivelyVisible));
-        var page = (ControlsPage)narrow.CurrentPage!;
+        var page = (StagePage)narrow.CurrentPage!;
         Assert.Equal(300, Inspector(page).Bounds.Width);
         // The drawing still sits beside the inspector.
         var drawing = page.FindControl<ScrollViewer>("DrawingScroll")!;
@@ -461,7 +462,7 @@ public class ControlsPageTests
         var sliders = new SlidersViewModel(rig.Config, rig.Engine, toast);
         var buttons = new ButtonsViewModel(rig.Config, rig.Engine, rig.Runtime, (a, o) => runs.Add((a, o)), toast);
         var controls = new ControlsViewModel(sliders, buttons, rig.Config, toast);
-        var page = new ControlsPage(controls);
+        var page = new StagePage(controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         controls.Select(buttons.Items[0]);
@@ -698,7 +699,7 @@ public class ControlsPageTests
                 Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = script, Name = "Lights" },
             };
             using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-            var page = new ControlsPage(vm.Controls);
+            var page = new StagePage(vm.Controls);
             var window = new Window { Content = page, Width = 932, Height = 680 };
             window.Show();
             vm.Controls.Select(vm.Buttons.Items[0]);

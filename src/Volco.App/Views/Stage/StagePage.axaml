@@ -4,7 +4,7 @@
              xmlns:controls="using:Volco.App.Controls"
              xmlns:inspector="using:Volco.App.Views.Inspector"
              xmlns:dialogs="using:Volco.App.Views.Dialogs"
-             x:Class="Volco.App.Views.Pages.ControlsPage"
+             x:Class="Volco.App.Views.Stage.StagePage"
              x:DataType="vm:ControlsViewModel">
   <!-- The Controls page (spec docs/design/controls-page.md): the title, a drawing of the
        controller (sliders, then the buttons in the edited mode's frame) and an inspector for the

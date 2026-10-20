@@ -9,6 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Runtime;
 
 namespace Volco.App.Views;
@@ -63,7 +64,7 @@ public partial class SettingsWindow : Window
         _navList.ItemsSource = new[]
         {
             Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
-            Nav("Controls", "controls", "Icon.Sliders", () => new ControlsPage(vm.Controls)),
+            Nav("Controls", "controls", "Icon.Sliders", () => new StagePage(vm.Controls)),
             _controllerNav = Nav("Hardware", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
         };
         _navList.SelectionChanged += OnNavSelectionChanged;

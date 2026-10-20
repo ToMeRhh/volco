@@ -13,6 +13,7 @@ using Avalonia.VisualTree;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Config;
 using Volco.Core.Input.Actions;
 using Volco.Core.Communication;
@@ -24,7 +25,7 @@ namespace Volco.App.Tests.Pages;
 /// tile of its kind to swap, and the tile menu's "Swap with".</summary>
 public class SwapDragTests
 {
-    private sealed record Shown(ControlsPage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
+    private sealed record Shown(StagePage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
     {
         public AppConfig Config => Rig.Config.Config;
 
@@ -52,7 +53,7 @@ public class SwapDragTests
         c.Buttons[2].Default().SinglePress.Action = ButtonActionType.MediaPlayPause;
         configure?.Invoke(c);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Settle(window);

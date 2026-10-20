@@ -10,6 +10,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views.Dialogs;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -82,7 +83,7 @@ public class SettingsCoverageTests
 
     // ── The Controls page ─────────────────────────────────────────────────────
 
-    private static Border Inspector(ControlsPage page) => page.FindControl<Border>("Inspector")!;
+    private static Border Inspector(StagePage page) => page.FindControl<Border>("Inspector")!;
 
     private static void Settle(Window window)
     {
@@ -94,7 +95,7 @@ public class SettingsCoverageTests
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     /// <summary>Selects the slider and opens its target dialog from the inspector's Controls row.</summary>
-    private static TargetDialog OpenTarget(ControlsPage page, Window window, SettingsViewModel vm, int slider)
+    private static TargetDialog OpenTarget(StagePage page, Window window, SettingsViewModel vm, int slider)
     {
         vm.Controls.Select(vm.Sliders.Items[slider]);
         Settle(window);
@@ -116,7 +117,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = Host(page);
 
         // Slider 0: apps, one playing and one picked as an .exe.
@@ -172,7 +173,7 @@ public class SettingsCoverageTests
 
     /// <summary>Selects the button and opens the action dialog of one row ("Press", "Double", "Hold"),
     /// then picks <paramref name="action"/> from its list.</summary>
-    private static ActionDialog OpenAction(ControlsPage page, Window window, SettingsViewModel vm, int button, string row, string action)
+    private static ActionDialog OpenAction(StagePage page, Window window, SettingsViewModel vm, int button, string row, string action)
     {
         vm.Controls.Select(vm.Buttons.Items[button]);
         Settle(window);
@@ -206,7 +207,7 @@ public class SettingsCoverageTests
             using var rig = new TestRig(Engine(), custom: custom);
             rig.Config.Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
             using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-            var page = new ControlsPage(vm.Controls);
+            var page = new StagePage(vm.Controls);
             var window = Host(page);
 
             // Button 0: a device action on each gesture's own settings.
@@ -304,7 +305,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         Host(page);
 
         Named<Button>(page, "AddModeButton").Command!.Execute(null);           // Modes[] (added)
@@ -324,7 +325,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = Host(page);
 
         // From a device row of the target dialog: ⋯ > Rename opens the device dialog.

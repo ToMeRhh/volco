@@ -13,6 +13,7 @@ using Volco.App.Platform;
 using Volco.App.ViewModels;
 using Volco.App.Views.Dialogs;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Tests.Audio;
@@ -23,7 +24,7 @@ namespace Volco.App.Tests.Pages;
 /// <summary>Spec docs/design/controls-page.md §6.2, §6.3, §6.4 and §11: the slider target dialog.</summary>
 public class TargetDialogTests
 {
-    private sealed record Shown(ControlsPage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
+    private sealed record Shown(StagePage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
     {
         public ControlsViewModel Controls => Vm.Controls;
         public AppConfig Config => Rig.Config.Config;
@@ -66,7 +67,7 @@ public class TargetDialogTests
         };
         configure?.Invoke(c);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher(), icons);
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Settle(window);

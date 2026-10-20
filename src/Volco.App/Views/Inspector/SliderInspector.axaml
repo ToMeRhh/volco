@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:conv="using:Volco.App.Converters"
-             xmlns:pages="using:Volco.App.Views.Pages"
+             xmlns:stage="using:Volco.App.Views.Stage"
              x:Class="Volco.App.Views.Inspector.SliderInspector"
              x:DataType="vm:SliderItemViewModel">
   <!-- The selected slider (spec §5.1): its name, what it controls, and its response. -->
@@ -32,7 +32,7 @@
 
         <Border Classes="InspectorRows">
           <Button Name="ControlsRow" Classes="InspectorRow"
-                  Command="{Binding $parent[pages:ControlsPage].((vm:ControlsViewModel)DataContext).OpenTargetCommand}"
+                  Command="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).OpenTargetCommand}"
                   CommandParameter="{Binding}">
             <Grid ColumnDefinitions="78,Auto,*,Auto">
               <TextBlock Classes="RowLabel" Text="Controls"/>

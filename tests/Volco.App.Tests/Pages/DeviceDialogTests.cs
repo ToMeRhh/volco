@@ -11,6 +11,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -26,7 +27,7 @@ public class DeviceDialogTests
 {
     private const string HeadsetName = "Headset Earphone (Arctis Nova 7)";
 
-    private sealed record Shown(ControlsPage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
+    private sealed record Shown(StagePage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
     {
         public ControlsViewModel Controls => Vm.Controls;
         public AppConfig Config => Rig.Config.Config;
@@ -64,7 +65,7 @@ public class DeviceDialogTests
         };
         configure?.Invoke(c);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Settle(window);

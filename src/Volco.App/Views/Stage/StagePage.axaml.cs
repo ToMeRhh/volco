@@ -10,17 +10,17 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.Core.Input;
 
-namespace Volco.App.Views.Pages;
+namespace Volco.App.Views.Stage;
 
 /// <summary>
 /// The drawing and the inspector. Bindings do the work; the code-behind selects a tile on a click,
 /// Enter or Space, moves the focus between tiles with the arrow keys (spec §4.5), closes the
-/// dialog on Escape or a click on the scrim (the device dialog over it first), runs the mode tabs (ControlsPage.ModeTabs.cs), drag
+/// dialog on Escape or a click on the scrim (the device dialog over it first), runs the mode tabs (StagePage.ModeTabs.cs), drag
 /// to swap (<see cref="TileSwapDrag"/>) and the tiles' "Swap with" menu.
 /// </summary>
-public partial class ControlsPage : UserControl
+public partial class StagePage : UserControl
 {
-    public ControlsPage()
+    public StagePage()
     {
         AvaloniaXamlLoader.Load(this);
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
@@ -177,7 +177,7 @@ public partial class ControlsPage : UserControl
             .FirstOrDefault(b => b.Name == "RowButton");
     }
 
-    public ControlsPage(ControlsViewModel viewModel) : this()
+    public StagePage(ControlsViewModel viewModel) : this()
     {
         DataContext = viewModel;
     }

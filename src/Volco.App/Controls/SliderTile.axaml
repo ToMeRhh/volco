@@ -5,7 +5,7 @@
              x:Class="Volco.App.Controls.SliderTile"
              x:DataType="vm:SliderItemViewModel"
              Focusable="True" ToolTip.Tip="{Binding Heading}">
-  <!-- The page fills "Swap with" when the menu opens (ControlsPage.OnTileContextRequested) -->
+  <!-- The page fills "Swap with" when the menu opens (StagePage.OnTileContextRequested) -->
   <UserControl.ContextMenu>
     <ContextMenu>
       <MenuItem Header="Swap with"/>

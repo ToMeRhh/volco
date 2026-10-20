@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.Controls;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Xunit;
 
 namespace Volco.App.Tests.Pages;
@@ -33,11 +34,11 @@ public class TabOrderTests
     }
 
     [AvaloniaFact]
-    public void ControlsPage_TabGoesTileByTile_ThenTheInspector()
+    public void StagePage_TabGoesTileByTile_ThenTheInspector()
     {
         using var rig = new TestRig();
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Dispatcher.UIThread.RunJobs();

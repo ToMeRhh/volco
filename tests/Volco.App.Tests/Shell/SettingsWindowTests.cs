@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Config;
 using Volco.Core.Runtime;
 using Volco.Core.Updates;
@@ -59,7 +60,7 @@ public class SettingsWindowTests
 
         var expected = new[]
         {
-            typeof(GeneralPage), typeof(ControlsPage), typeof(ControllerPage),
+            typeof(GeneralPage), typeof(StagePage), typeof(ControllerPage),
         };
         Assert.Equal(3, nav.ItemCount);
         for (var i = 0; i < expected.Length; i++)
@@ -79,7 +80,7 @@ public class SettingsWindowTests
         window.Show();
 
         window.ShowPage("controls");
-        Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.IsType<StagePage>(window.CurrentPage);
 
         window.ShowPage("general");
         Assert.IsType<GeneralPage>(window.CurrentPage);
@@ -242,7 +243,7 @@ public class SettingsWindowTests
         {
             nav.SelectedIndex = i;
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            if (host.Content is ControlsPage { DataContext: ControlsViewModel controls })
+            if (host.Content is StagePage { DataContext: ControlsViewModel controls })
             {
                 controls.Select(controls.Buttons.Items[0]);
                 controls.Buttons.Items[0].IsAdvancedOpen = true;
