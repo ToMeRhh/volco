@@ -149,6 +149,7 @@ public partial class StagePage : UserControl
             UpdateChooser();
             UpdateCompare();
             UpdateConnection();
+            UpdateSaveBar();
         }
         else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
         {
@@ -173,11 +174,22 @@ public partial class StagePage : UserControl
         UpdateChooser();
         UpdateCompare();
         UpdateConnection();
+        UpdateSaveBar();
+    }
+
+    /// <summary>The save bar (spec §6.5) shows on Hardware while the draft is unsaved.</summary>
+    private void UpdateSaveBar()
+    {
+        var bar = this.FindControl<Control>("SaveBarHost")!;
+        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        bar.DataContext = Hardware;
+        bar.IsVisible = hw is { ShowSaveBar: true };
     }
 
     private void OnHardwarePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(HardwareViewModel.ShowChooser)) UpdateChooser();
+        else if (e.PropertyName is nameof(HardwareViewModel.ShowSaveBar)) UpdateSaveBar();
         else if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
         else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
     }

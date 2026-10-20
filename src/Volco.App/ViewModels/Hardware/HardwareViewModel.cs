@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
 using Volco.Core.Runtime;
@@ -38,6 +40,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
         Card = new DeviceCardViewModel(controller, this);
+        SaveCommand = new RelayCommand(() => _controller.SaveCommand.Execute(null), () => _controller.CanSave && _controller.Problems.Count == 0);
         Chooser = new SetupChooserViewModel(controller, OnChooserPicked);
         Refresh();
     }
@@ -183,7 +186,61 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         }
         if (e.PropertyName is nameof(ControllerViewModel.Confirmation) or null or "") OnPropertyChanged(nameof(Confirmation));
         if (e.PropertyName == nameof(ControllerViewModel.Layout)) Refresh();
+        if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or nameof(ControllerViewModel.IsSaving)
+            or nameof(ControllerViewModel.IsSettingUp) or nameof(ControllerViewModel.CanSave) or null or "") UpdateSaveBar();
         UpdateChooser();
+    }
+
+    // ── The save bar (spec §6.5) ─────────────────────────────────────────────────────────────
+
+    /// <summary>The bar at the bottom of the drawing: shown while the draft is unsaved and no save runs.</summary>
+    public bool ShowSaveBar => _controller.IsDirty && !_controller.IsSaving;
+
+    /// <summary>"1 change not saved", "N changes not saved", or, for a new draft, that the setup isn't on the controller.</summary>
+    public string SaveBarText
+    {
+        get
+        {
+            if (_controller.IsSettingUp) return "This setup isn't on the controller yet";
+            var n = Math.Max(1, CountChanges());
+            return n == 1 ? "1 change not saved" : $"{n} changes not saved";
+        }
+    }
+
+    /// <summary>The note beside the count.</summary>
+    public string SaveBarNote => "Saving restarts the controller";
+
+    /// <summary>Discard: the draft goes back to Volco's copy.</summary>
+    public ICommand DiscardCommand => _controller.RevertCommand;
+
+    /// <summary>Save to controller; disabled while the draft has problems or can't be saved.</summary>
+    public IRelayCommand SaveCommand { get; }
+
+    /// <summary>Changed tiles, removed and added controls, changed buses and changed settings sections.</summary>
+    private int CountChanges()
+    {
+        var layout = _controller.Layout;
+        var baseline = _controller.BaselineConfig();
+        var draft = _controller.Draft;
+        int n = 0;
+        n += Sliders.Where((t, i) => Source(layout.Sliders, i) is not null && t.Wiring is { HasChange: true }).Count();
+        n += Buttons.Where((t, i) => Source(layout.Buttons, i) is not null && t.Wiring is { HasChange: true }).Count();
+        n += layout.Sliders.Count(s => s is null) + Math.Max(0, baseline.Sliders.Count - layout.Sliders.Count(s => s is not null));
+        n += layout.Buttons.Count(s => s is null) + Math.Max(0, baseline.Buttons.Count - layout.Buttons.Count(s => s is not null));
+        for (int bus = 0; bus <= 3; bus++)
+            if (!Equals(ControllerDraft.Bus(draft, bus), ControllerDraft.Bus(baseline, bus))) n++;
+        if (!Equals(draft.Screens, baseline.Screens)) n++;
+        if (!Equals(draft.Input, baseline.Input)) n++;
+        if (!Equals(draft.Udp, baseline.Udp)) n++;
+        return n;
+    }
+
+    private void UpdateSaveBar()
+    {
+        if (_disposed) return;
+        OnPropertyChanged(nameof(ShowSaveBar));
+        OnPropertyChanged(nameof(SaveBarText));
+        SaveCommand.NotifyCanExecuteChanged();
     }
 
     private void Refresh()
@@ -227,6 +284,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         foreach (var field in _pinFields.Values) UpdatePinField(field);
         UpdateInspected();
         UpdateChooser();
+        UpdateSaveBar();
     }
 
     // ── The inspector and the bus chips (spec §5.3, §6.1, §6.2, §6.4) ───────────────────────
