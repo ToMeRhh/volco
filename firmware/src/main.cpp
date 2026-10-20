@@ -6,6 +6,7 @@
 #include "debug_log.h"
 #include "indicators.h"
 #include "screens.h"
+#include "slider_ends_store.h"
 #include "transport.h"
 #include "volco_protocol.h"
 #include "volco_runtime.h"
@@ -25,6 +26,9 @@ static const volco::RuntimeConfig& rc = loaded.rc;
 static uint16_t lastSliderValues[volco::kMaxSliders];
 static float smoothedValues[volco::kMaxSliders] = {0};
 static unsigned long lastSliderReadTime = 0;
+// Each slider's learned travel ends: what is sent is the reading stretched between them.
+static volco::SliderEnds sliderEnds[volco::kMaxSliders];
+static unsigned long lastEndsSaveTime = 0;
 
 static bool buttonRawStates[volco::kMaxButtons];
 static bool buttonReportedStates[volco::kMaxButtons];
@@ -59,7 +63,7 @@ class HardwareSink : public volco::LinkSink {
   // Sent after every Hello (PR #68). The deadband then measures from the value just sent.
   uint16_t sliderValue(uint8_t i) override {
     lastSliderValues[i] = (uint16_t)smoothedValues[i];
-    return lastSliderValues[i];
+    return sliderEnds[i].map(lastSliderValues[i]);
   }
 };
 
@@ -95,6 +99,16 @@ void setup() {
     kinds[i] = rc.buttons[i].kind;  // Kind values are the wire values
   }
 
+  // Holding button 1 at boot forgets the learned slider ends.
+  if (rc.buttonCount > 0 && digitalRead(rc.buttons[0].pin) == LOW) {
+    slider_ends_clear();
+    DEBUG_LOG("[DBG] Slider ends: cleared (button 1 held at boot)");
+  }
+  slider_ends_load(rc, sliderEnds);
+  for (uint8_t i = 0; i < rc.sliderCount; i++)
+    DEBUG_LOG("[DBG] Slider " + String(i) + " ends: " +
+              (sliderEnds[i].learned() ? String(sliderEnds[i].lo()) + "-" + String(sliderEnds[i].hi()) : String("not learned")));
+
   // Seed from an average, not one noisy read: Hello reports these positions right away.
   analogReadResolution(12);
   for (uint8_t i = 0; i < rc.sliderCount; i++) {
@@ -102,6 +116,7 @@ void setup() {
     for (uint8_t r = 0; r < SLIDER_SEED_READS; r++) sum += analogRead(rc.sliderPins[i]);
     lastSliderValues[i] = sum / SLIDER_SEED_READS;
     smoothedValues[i] = lastSliderValues[i];
+    sliderEnds[i].learn(lastSliderValues[i]);
   }
 
   transport_begin_udp(rc.udp);
@@ -121,18 +136,36 @@ void setup() {
 void loop() {
   const uint32_t now = millis();
 
-  // 1. Sliders: EMA smoothing, then a deadband.
+  // 1. Sliders: EMA smoothing, learn the ends, then a deadband on the reading. What is sent is
+  //    the reading stretched between the learned ends.
   if (now - lastSliderReadTime >= rc.input.sliderIntervalMs) {
     lastSliderReadTime = now;
     for (uint8_t i = 0; i < rc.sliderCount; i++) {
       uint16_t raw = analogRead(rc.sliderPins[i]);
       smoothedValues[i] = raw * rc.input.filterWeight + smoothedValues[i] * (1.0f - rc.input.filterWeight);
       uint16_t filtered = (uint16_t)smoothedValues[i];
+      sliderEnds[i].learn(filtered);
       int16_t delta = (int16_t)filtered - (int16_t)lastSliderValues[i];
       if (abs(delta) > rc.input.sliderDeadband) {
         lastSliderValues[i] = filtered;
         screens_activity(now);
-        pcLink->sendSlider(i, filtered, now);
+        pcLink->sendSlider(i, sliderEnds[i].map(filtered), now);
+      }
+    }
+  }
+
+  // 1b. Store the learned ends when one moved, at most every SLIDER_ENDS_SAVE_MS (flash wear).
+  if (now - lastEndsSaveTime >= SLIDER_ENDS_SAVE_MS) {
+    bool dirty = false;
+    for (uint8_t i = 0; i < rc.sliderCount; i++) dirty |= sliderEnds[i].needsSave();
+    if (dirty) {
+      lastEndsSaveTime = now;
+      if (slider_ends_save(rc, sliderEnds)) {
+        for (uint8_t i = 0; i < rc.sliderCount; i++) {
+          sliderEnds[i].markSaved();
+          DEBUG_LOG("[DBG] Slider " + String(i) + " ends saved: " +
+                    (sliderEnds[i].learned() ? String(sliderEnds[i].lo()) + "-" + String(sliderEnds[i].hi()) : String("not learned")));
+        }
       }
     }
   }

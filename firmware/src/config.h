@@ -14,3 +14,4 @@
 #define WIFI_RETRY_MS 10000      // at most this often, re-join a Wi-Fi that failed or dropped
 
 #define SLIDER_SEED_READS 8      // reads averaged for each slider's starting value at boot
+#define SLIDER_ENDS_SAVE_MS 5000 // store learned slider ends at most this often (flash wear)

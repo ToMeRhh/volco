@@ -24,9 +24,11 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
 | `src/indicators.*` | LED rendering. |
 | `src/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
+| `src/slider_ends_store.*` | The sliders' learned travel ends in NVS (namespace `volco_ends`), apart from the controller config. |
 | `src/debug_log.h` | The `DEBUG_LOG` macro. |
 | `lib/volco_protocol/` | Frame parser and encoder, message decoding, Hello, Begin/Commit holding, keepalive and host timeout, the active-transport rule. |
 | `lib/volco_config/` | The controller config: decode, validation, chip table, CRC, chunked receiver, `RuntimeConfig`. |
+| `lib/volco_slider_ends/` | Learns each slider's travel ends and stretches its readings onto 0-4095, so a slider whose stops read e.g. 170 and 2550 still reaches 0 and 100 %. |
 | `lib/volco_bidi/` | Logical to visual reordering of UTF-8 text, for Hebrew. |
 | `lib/volco_screen_state/` | The state machine of each screen: current, previous and pending content, slide progress, dim, off, pixel shift, wake handling. |
 | `lib/volco_render/` | Volco's own 1-bit canvas and layout 1 renderer, with the generated fonts and icons. U8g2 is only the SSD1306 driver underneath. |
