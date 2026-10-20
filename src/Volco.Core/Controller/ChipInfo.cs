@@ -24,6 +24,9 @@ public sealed class ChipInfo
     public bool AdcCapable(uint pin) => Usable(pin) && (Has(_adc1, pin) || Has(_adc2, pin));
     public bool IsAdc2(uint pin) => Has(_adc2, pin);
 
+    /// <summary>Why a pin the chip has is off limits ("USB serial", "flash"), or null.</summary>
+    public string? ReservedReason(uint pin) => !Has(_reserved, pin) ? null : pin is 1 or 3 ? "USB serial" : "flash";
+
     private static bool Has(ulong mask, uint pin) => pin < 64 && ((mask >> (int)pin) & 1) != 0;
     private static ulong Bit(int p) => 1UL << p;
 
