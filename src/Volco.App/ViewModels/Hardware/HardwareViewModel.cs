@@ -35,6 +35,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controller.PropertyChanged += OnControllerPropertyChanged;
         _controls.Sliders.Items.CollectionChanged += OnItemsChanged;
         _controls.Buttons.Items.CollectionChanged += OnItemsChanged;
+        _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
         Refresh();
     }
@@ -49,6 +50,23 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// fields are disabled.</summary>
     public bool IsReadOnly => !_controller.CanEdit;
 
+    /// <summary>One chip per I2C bus that a screen uses, in bus order (spec §5.2).</summary>
+    public ObservableCollection<BusChipViewModel> BusChips { get; } = new();
+
+    /// <summary>A screen uses a bus: the chips' row is shown (its space is kept in both modes).</summary>
+    public bool HasBusChips => BusChips.Count > 0;
+
+    /// <summary>
+    /// What the inspector shows (spec §5.3, §6): the <see cref="SliderWiringViewModel"/> or
+    /// <see cref="ButtonWiringViewModel"/> of the tile selected (the selection is Controls', so it
+    /// carries over), or the selected bus's <see cref="BusWiringViewModel"/>; null when the selection
+    /// is not in the drawing.
+    /// </summary>
+    [ObservableProperty] private object? _inspected;
+
+    /// <summary>The question asked inline ("Remove Slider 3?"), or null.</summary>
+    public Confirmation? Confirmation => _controller.Confirmation;
+
     // ── Building the drawing ─────────────────────────────────────────────────────────────────
 
     private void OnDraftChanged(object? sender, EventArgs e) => Refresh();
@@ -61,7 +79,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         {
             OnPropertyChanged(nameof(IsReadOnly));
             foreach (var field in _pinFields.Values) field.IsEditable = _controller.CanEdit;
+            RefreshInspected();
         }
+        if (e.PropertyName is nameof(ControllerViewModel.Confirmation) or null or "") OnPropertyChanged(nameof(Confirmation));
         if (e.PropertyName == nameof(ControllerViewModel.Layout)) Refresh();
     }
 
@@ -102,7 +122,108 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         foreach (var item in _controls.Sliders.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
         foreach (var item in _controls.Buttons.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
 
+        SyncBusChips(draft);
         foreach (var field in _pinFields.Values) UpdatePinField(field);
+        UpdateInspected();
+    }
+
+    // ── The inspector and the bus chips (spec §5.3, §6.1, §6.2, §6.4) ───────────────────────
+
+    /// <summary>The bus the inspector shows; null when it shows the selected tile.</summary>
+    private int? _selectedBus;
+
+    /// <summary>Selects bus <paramref name="bus"/>'s chip: the tile selection is cleared.</summary>
+    public void SelectBus(int bus)
+    {
+        if (_disposed || BusChips.All(c => c.Bus != bus)) return;
+        _selectedBus = bus;
+        _controls.Selected = null;
+        UpdateInspected();
+    }
+
+    private void OnControlsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_disposed || e.PropertyName != nameof(ControlsViewModel.Selected)) return;
+        if (_controls.Selected is not null) _selectedBus = null;
+        UpdateInspected();
+    }
+
+    private void SyncBusChips(ControllerConfig draft)
+    {
+        var used = draft.Buttons.Where(b => b.IndicatorCase == Button.IndicatorOneofCase.Screen)
+                                .Select(b => (int)b.Screen.Bus).Distinct().Order().ToList();
+        if (!BusChips.Select(c => c.Bus).SequenceEqual(used))
+        {
+            var old = BusChips.ToDictionary(c => c.Bus);
+            BusChips.Clear();
+            foreach (var bus in used) BusChips.Add(old.TryGetValue(bus, out var chip) ? chip : new BusChipViewModel(bus, SelectBus));
+            OnPropertyChanged(nameof(HasBusChips));
+        }
+        foreach (var chip in BusChips)
+        {
+            var bus = ControllerDraft.Bus(draft, chip.Bus);
+            chip.Text = $"I2C bus {chip.Bus} · SDA {Part(bus?.HasSda == true, bus?.Sda ?? 0)} · SCL {Part(bus?.HasScl == true, bus?.Scl ?? 0)}";
+        }
+    }
+
+    /// <summary>Points <see cref="Inspected"/> at the selection, keeping its view model while it
+    /// is the same control at the same place, and marks the selected chip.</summary>
+    private void UpdateInspected()
+    {
+        if (_selectedBus is int b && BusChips.All(c => c.Bus != b)) _selectedBus = null;
+        foreach (var chip in BusChips) chip.IsSelected = chip.Bus == _selectedBus;
+
+        object? next = Inspected;
+        if (_selectedBus is int bus)
+        {
+            if (Inspected is not BusWiringViewModel { } shown || shown.Bus != bus)
+                next = new BusWiringViewModel(bus, _controller, PinField(new PinOwner(PinOwnerKind.BusSda, bus)),
+                                              PinField(new PinOwner(PinOwnerKind.BusScl, bus)));
+        }
+        else if (_controls.Selected is SliderItemViewModel slider && Sliders.IndexOf(slider) is >= 0 and var si)
+        {
+            if (Inspected is not SliderWiringViewModel { } shown || shown.Index != si || !ReferenceEquals(shown.Item, slider))
+                next = new SliderWiringViewModel(si, slider, PinField(new PinOwner(PinOwnerKind.Slider, si)), () => AskRemove(slider));
+        }
+        else if (_controls.Selected is ButtonItemViewModel button && Buttons.IndexOf(button) is >= 0 and var bi)
+        {
+            if (Inspected is not ButtonWiringViewModel { } shown || shown.Index != bi || !ReferenceEquals(shown.Item, button))
+                next = new ButtonWiringViewModel(bi, button, _controller, kind => PinField(new PinOwner(kind, bi)), () => AskRemove(button));
+        }
+        else next = null;
+
+        if (!ReferenceEquals(next, Inspected))
+        {
+            (Inspected as IDisposable)?.Dispose();
+            Inspected = next;
+        }
+        RefreshInspected();
+    }
+
+    private void RefreshInspected()
+    {
+        switch (Inspected)
+        {
+            case SliderWiringViewModel s: s.IsEditable = _controller.CanEdit; break;
+            case ButtonWiringViewModel b: b.Refresh(); break;
+            case BusWiringViewModel bus: bus.Refresh(); break;
+        }
+    }
+
+    /// <summary>"Remove Slider N?"; once removed, the tile now at its place (else the one before)
+    /// is selected.</summary>
+    private void AskRemove(ObservableObject item)
+    {
+        if (item is SliderItemViewModel slider && Sliders.IndexOf(slider) is >= 0 and var si)
+            _controller.AskRemoveSlider(si, () => SelectAfterRemove(Sliders, si));
+        else if (item is ButtonItemViewModel button && Buttons.IndexOf(button) is >= 0 and var bi)
+            _controller.AskRemoveButton(bi, () => SelectAfterRemove(Buttons, bi));
+    }
+
+    private void SelectAfterRemove<T>(IList<T> tiles, int index) where T : ObservableObject
+    {
+        if (tiles.Count > 0) _controls.Select(tiles[Math.Min(index, tiles.Count - 1)]);
+        else _controls.Selected = null;
     }
 
     // ── Pin fields (spec §6.3) ───────────────────────────────────────────────────────────────
@@ -241,6 +362,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controller.PropertyChanged -= OnControllerPropertyChanged;
         _controls.Sliders.Items.CollectionChanged -= OnItemsChanged;
         _controls.Buttons.Items.CollectionChanged -= OnItemsChanged;
+        _controls.PropertyChanged -= OnControlsPropertyChanged;
         _runtime.RawInput -= OnRawInput;
+        (Inspected as IDisposable)?.Dispose();
     }
 }

@@ -5,9 +5,12 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Collections;
+using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
+using Volco.App.ViewModels.Hardware;
 using Volco.Core.Input;
 
 namespace Volco.App.Views.Stage;
@@ -64,6 +67,17 @@ public partial class StagePage : UserControl
         set => SetValue(ModeProperty, value);
     }
 
+    public static readonly StyledProperty<HardwareViewModel?> HardwareProperty =
+        AvaloniaProperty.Register<StagePage, HardwareViewModel?>(nameof(Hardware));
+
+    /// <summary>The Hardware page's view model: on Hardware the stage draws its controls (the
+    /// draft's, spec §5.1) and its bus chips. Null draws the Controls items in both modes.</summary>
+    public HardwareViewModel? Hardware
+    {
+        get => GetValue(HardwareProperty);
+        set => SetValue(HardwareProperty, value);
+    }
+
     /// <summary>The side panel's content on Hardware; Controls shows the inspector.</summary>
     public Control? HardwareSidePanel
     {
@@ -75,6 +89,8 @@ public partial class StagePage : UserControl
     private TransitioningContentControl _titleHost = null!;
     private TransitioningContentControl _sidePanelHost = null!;
     private Control _inspector = null!;
+    private ItemsControl _sliderList = null!;
+    private ItemsControl _buttonList = null!;
     private readonly TextBlock _controlsTitle = new() { Name = "PageTitle", Classes = { "Title" }, Text = "Controls" };
     private readonly TextBlock _hardwareTitle = new() { Name = "PageTitle", Classes = { "Title" }, Text = "Hardware" };
 
@@ -84,6 +100,8 @@ public partial class StagePage : UserControl
         _titleHost = this.FindControl<TransitioningContentControl>("TitleHost")!;
         _sidePanelHost = this.FindControl<TransitioningContentControl>("SidePanelHost")!;
         _inspector = this.FindControl<ContentControl>("InspectorContent")!;
+        _sliderList = this.FindControl<ItemsControl>("SliderList")!;
+        _buttonList = this.FindControl<ItemsControl>("ButtonList")!;
         _titleHost.PageTransition = null;
         _sidePanelHost.PageTransition = null;
         _titleHost.Content = _controlsTitle;
@@ -94,6 +112,20 @@ public partial class StagePage : UserControl
         base.OnPropertyChanged(change);
         if (_case is null) return;   // still loading
         if (change.Property == ModeProperty) ApplyMode();
+        else if (change.Property == HardwareProperty)
+        {
+            if (change.OldValue is HardwareViewModel old)
+            {
+                old.Sliders.CollectionChanged -= OnDrawnChanged;
+                old.Buttons.CollectionChanged -= OnDrawnChanged;
+            }
+            if (change.NewValue is HardwareViewModel hw)
+            {
+                hw.Sliders.CollectionChanged += OnDrawnChanged;
+                hw.Buttons.CollectionChanged += OnDrawnChanged;
+            }
+            UpdateTileSources();
+        }
         else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
         {
             _sidePanelHost.PageTransition = StageTransitions.PageTransition();
@@ -113,6 +145,33 @@ public partial class StagePage : UserControl
         _titleHost.Content = hardware ? _hardwareTitle : _controlsTitle;
         _sidePanelHost.PageTransition = StageTransitions.PageTransition();
         _sidePanelHost.Content = hardware ? HardwareSidePanel : _inspector;
+        UpdateTileSources();
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_case is not null) UpdateTileSources();
+    }
+
+    private void OnDrawnChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateTileSources();
+
+    /// <summary>The tiles drawn: on Hardware the draft's controls (spec §5.1), else the Controls
+    /// items. While the draft's are the Controls items in order the stage keeps drawing those, so
+    /// switching modes rebuilds no tile.</summary>
+    private void UpdateTileSources()
+    {
+        var vm = Vm;
+        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        Show(_sliderList, vm is null ? null
+             : hw is not null && !hw.Sliders.SequenceEqual(vm.Sliders.Items) ? hw.Sliders : vm.Sliders.Items);
+        Show(_buttonList, vm is null ? null
+             : hw is not null && !hw.Buttons.SequenceEqual(vm.Buttons.Items) ? hw.Buttons : vm.Buttons.Items);
+
+        static void Show(ItemsControl list, IEnumerable? items)
+        {
+            if (!ReferenceEquals(list.ItemsSource, items)) list.ItemsSource = items;
+        }
     }
 
     /// <summary>Drag a tile's grip onto another tile of its kind to swap them (spec §2.9–10).</summary>

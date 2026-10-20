@@ -639,6 +639,24 @@
     <Setter Property="Opacity" Value="1"/>
     <Setter Property="IsHitTestVisible" Value="True"/>
   </Style>
+  <!-- The I2C bus chips under the buttons (hardware-page spec §5.2): pills, the accent outline
+       when selected, out of keyboard reach on Controls -->
+  <Style Selector="Border.Case:not(.hardware) ItemsControl.BusChips">
+    <Setter Property="IsEnabled" Value="False"/>
+  </Style>
+  <Style Selector="Button.BusChip">
+    <Setter Property="Margin" Value="0,0,8,0"/>
+    <Setter Property="Padding" Value="10,3"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style Selector="Button.BusChip.selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="1.5"/>
+  </Style>
   <Style Selector="StackPanel.ModeFrameContent">
     <!-- The tint's border (1.5) plus the frame's padding (8,0,8,8) -->
     <Setter Property="Margin" Value="9.5,1.5,9.5,9.5"/>

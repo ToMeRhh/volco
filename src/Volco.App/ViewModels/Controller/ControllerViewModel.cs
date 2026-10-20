@@ -428,18 +428,20 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnDraftEdited(structural: true);
     }
 
-    /// <summary>The old Controller page's Remove: "Remove Slider N?", then <see cref="RemoveSlider"/>.</summary>
-    internal void AskRemoveSlider(int index)
+    /// <summary>Remove (spec §6.5): "Remove Slider N?", then <see cref="RemoveSlider"/> and
+    /// <paramref name="removed"/>.</summary>
+    internal void AskRemoveSlider(int index, Action? removed = null)
     {
         if (!CanEdit || index < 0 || index >= _draft.Sliders.Count) return;
-        Ask($"Remove Slider {index + 1}?", "Remove", () => RemoveSlider(index));
+        Ask($"Remove Slider {index + 1}?", "Remove", () => { RemoveSlider(index); removed?.Invoke(); });
     }
 
-    /// <summary>The old Controller page's Remove: "Remove Button N?", then <see cref="RemoveButton"/>.</summary>
-    internal void AskRemoveButton(int index)
+    /// <summary>Remove (spec §6.5): "Remove Button N?", then <see cref="RemoveButton"/> and
+    /// <paramref name="removed"/>.</summary>
+    internal void AskRemoveButton(int index, Action? removed = null)
     {
         if (!CanEdit || index < 0 || index >= _draft.Buttons.Count) return;
-        Ask($"Remove Button {index + 1}?", "Remove", () => RemoveButton(index));
+        Ask($"Remove Button {index + 1}?", "Remove", () => { RemoveButton(index); removed?.Invoke(); });
     }
 
     // ── Errors and hints ─────────────────────────────────────────────────────────────────────

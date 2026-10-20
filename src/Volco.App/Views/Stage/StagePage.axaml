@@ -4,6 +4,8 @@
              xmlns:controls="using:Volco.App.Controls"
              xmlns:inspector="using:Volco.App.Views.Inspector"
              xmlns:dialogs="using:Volco.App.Views.Dialogs"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:stage="using:Volco.App.Views.Stage"
              x:Class="Volco.App.Views.Stage.StagePage"
              x:DataType="vm:ControlsViewModel">
   <!-- The stage (spec docs/design/controls-page.md, hardware-page.md §3.3): the title, a drawing
@@ -23,7 +25,7 @@
 
           <Border Name="Case" Classes="Case" Classes.dense="{Binding IsDense}">
             <StackPanel Spacing="14">
-              <ItemsControl Name="SliderList" ItemsSource="{Binding Sliders.Items}">
+              <ItemsControl Name="SliderList">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
                     <controls:FillWrapPanel Name="SliderGrid" Classes="SliderGrid"/>
@@ -117,7 +119,7 @@
                     </StackPanel>
                   </Grid>
 
-                  <ItemsControl Name="ButtonList" ItemsSource="{Binding Buttons.Items}" Grid.IsSharedSizeScope="True">
+                  <ItemsControl Name="ButtonList" Grid.IsSharedSizeScope="True">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
                         <controls:FillWrapPanel Name="ButtonGrid" Classes="ButtonGrid"/>
@@ -131,6 +133,24 @@
                   </ItemsControl>
                 </StackPanel>
               </Panel>
+
+              <!-- The I2C bus chips (spec §5.2), shown on Hardware; their row keeps its space on
+                   Controls whenever a screen uses a bus -->
+              <ItemsControl Name="BusChipList" Classes="BusChips WiringLayer"
+                            ItemsSource="{Binding $parent[stage:StagePage].Hardware.BusChips, FallbackValue={x:Null}}"
+                            IsVisible="{Binding $parent[stage:StagePage].Hardware.HasBusChips, FallbackValue=False}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="hw:BusChipViewModel">
+                    <Button Name="BusChip" Classes="BusChip" Classes.selected="{Binding IsSelected}"
+                            Content="{Binding Text}" Command="{Binding SelectCommand}"/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
             </StackPanel>
           </Border>
 

@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Hardware.ButtonWiringInspector"
+             x:DataType="hw:ButtonWiringViewModel">
+  <!-- A button's wiring (hardware-page spec §6.2): its main action, its pin, its light (the
+       choice reshapes only the rows under it), Remove -->
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
+      <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding Title}"/>
+      <TextBlock Name="SubtitleText" Classes="Secondary" TextWrapping="Wrap" Text="{Binding Subtitle}"/>
+    </StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Classes="InspectorBody">
+        <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
+
+        <StackPanel Name="LightRow" Classes="Field">
+          <TextBlock Classes="FieldLabel" Text="Light"/>
+          <Border Classes="SegmentTrack" IsEnabled="{Binding IsEditable}">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <RadioButton Name="LightNone" Classes="Segment" Content="None" IsChecked="{Binding IsNone, Mode=TwoWay}"/>
+              <RadioButton Name="LightLed" Classes="Segment" Content="LED" IsChecked="{Binding IsLed, Mode=TwoWay}"/>
+              <RadioButton Name="LightPair" Classes="Segment" Content="2 LEDs" IsChecked="{Binding IsPair, Mode=TwoWay}"/>
+              <RadioButton Name="LightScreen" Classes="Segment" Content="Screen" IsChecked="{Binding IsScreen, Mode=TwoWay}"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <Panel Name="LightPinRow" IsVisible="{Binding IsLed}">
+          <controls:PinField Name="LightPinField" DataContext="{Binding LightPin}"/>
+        </Panel>
+        <Panel Name="LightAPinRow" IsVisible="{Binding IsPair}">
+          <controls:PinField Name="LightAPinField" DataContext="{Binding LightAPin}"/>
+        </Panel>
+        <Panel Name="LightBPinRow" IsVisible="{Binding IsPair}">
+          <controls:PinField Name="LightBPinField" DataContext="{Binding LightBPin}"/>
+        </Panel>
+
+        <StackPanel Name="LitRow" Classes="Field" IsVisible="{Binding HasLeds}">
+          <TextBlock Classes="FieldLabel" Text="Lit when pin is"/>
+          <Border Classes="SegmentTrack" IsEnabled="{Binding IsEditable}">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <RadioButton Name="LitHigh" Classes="Segment" Content="High" IsChecked="{Binding LitWhenHigh, Mode=TwoWay}"/>
+              <RadioButton Name="LitLow" Classes="Segment" Content="Low" IsChecked="{Binding LitWhenLow, Mode=TwoWay}"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <StackPanel Name="BusRow" Classes="Field" IsVisible="{Binding IsScreen}">
+          <TextBlock Classes="FieldLabel" Text="Bus"/>
+          <ComboBox Name="BusBox" HorizontalAlignment="Stretch" ItemsSource="{x:Static hw:ButtonWiringViewModel.BusChoices}"
+                    SelectedIndex="{Binding BusIndex, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
+        </StackPanel>
+        <StackPanel Name="AddressRow" Classes="Field" IsVisible="{Binding IsScreen}">
+          <TextBlock Classes="FieldLabel" Text="Address"/>
+          <ComboBox Name="AddressBox" HorizontalAlignment="Stretch" ItemsSource="{x:Static hw:ButtonWiringViewModel.AddressChoices}"
+                    SelectedIndex="{Binding AddressIndex, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
+        </StackPanel>
+
+        <Button Name="RemoveButton" Classes="Danger" Content="{Binding RemoveText}"
+                Command="{Binding RemoveCommand}" IsEnabled="{Binding IsEditable}"/>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
