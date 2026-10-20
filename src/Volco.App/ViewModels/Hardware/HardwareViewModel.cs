@@ -57,7 +57,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     private void OnControllerPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(ControllerViewModel.CanEdit) or null or "") OnPropertyChanged(nameof(IsReadOnly));
+        if (e.PropertyName is nameof(ControllerViewModel.CanEdit) or null or "")
+        {
+            OnPropertyChanged(nameof(IsReadOnly));
+            foreach (var field in _pinFields.Values) field.IsEditable = _controller.CanEdit;
+        }
         if (e.PropertyName == nameof(ControllerViewModel.Layout)) Refresh();
     }
 
@@ -97,6 +101,74 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         // A Controls tile the draft doesn't draw still measures its wiring layer.
         foreach (var item in _controls.Sliders.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
         foreach (var item in _controls.Buttons.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
+
+        foreach (var field in _pinFields.Values) UpdatePinField(field);
+    }
+
+    // ── Pin fields (spec §6.3) ───────────────────────────────────────────────────────────────
+
+    private readonly Dictionary<PinOwner, PinFieldViewModel> _pinFields = new();
+
+    /// <summary>The last pick, with the pin its field had before: a pick that took another use's pin
+    /// is undone by giving that use the old pin (the swap).</summary>
+    private (PinOwner Owner, uint? Before)? _lastPick;
+
+    /// <summary>
+    /// The pin field of one use (a slider's, a button's, a light's, a bus's SDA or SCL), made once
+    /// per use and kept current after every draft change: its value, whether it can be edited, and
+    /// its problem with the swap fix (<see cref="DraftPins.ProblemFor"/>). The inspectors bind these.
+    /// </summary>
+    public PinFieldViewModel PinField(PinOwner owner)
+    {
+        if (_pinFields.TryGetValue(owner, out var field)) return field;
+        field = new PinFieldViewModel(DraftPins.LabelOf(owner.Kind), DraftPins.RoleOf(owner.Kind), owner,
+                                      () => _controller.Draft, () => DraftPins.Get(_controller.Draft, owner),
+                                      pin => SetPin(owner, pin), SwapPins);
+        _pinFields[owner] = field;
+        UpdatePinField(field);
+        return field;
+    }
+
+    private void UpdatePinField(PinFieldViewModel field)
+    {
+        field.IsEditable = _controller.CanEdit;
+        field.Refresh();
+        var (message, other) = DraftPins.ProblemFor(_controller.Draft, _controller.Problems, field.Owner);
+        field.SetProblem(message, other is not null && CanSwap(field.Owner, other) ? other : null);
+    }
+
+    private void SetPin(PinOwner owner, uint? pin)
+    {
+        if (!_controller.CanEdit) return;
+        var draft = _controller.Draft;
+        _lastPick = (owner, DraftPins.Get(draft, owner));
+        DraftPins.Set(draft, owner, pin);
+        _controller.OnDraftEdited();
+    }
+
+    /// <summary>The fix of a shared pin: <paramref name="a"/> and <paramref name="b"/> exchange
+    /// pins. When they hold the same one because one of them just took it, that one keeps it and
+    /// the other gets the pin it had before.</summary>
+    private void SwapPins(PinOwner a, PinOwner b)
+    {
+        if (!_controller.CanEdit) return;
+        var draft = _controller.Draft;
+        if (DraftPins.Get(draft, a) == DraftPins.Get(draft, b))
+        {
+            if (_lastPick is not { Before: { } before } pick || (pick.Owner != a && pick.Owner != b)) return;
+            DraftPins.Set(draft, pick.Owner == a ? b : a, before);
+        }
+        else DraftPins.Swap(draft, a, b);
+        _lastPick = null;
+        _controller.OnDraftEdited();
+    }
+
+    private bool CanSwap(PinOwner a, PinOwner b)
+    {
+        var draft = _controller.Draft;
+        if (DraftPins.Get(draft, a) != DraftPins.Get(draft, b)) return true;
+        return _lastPick is { Before: { } before } pick && (pick.Owner == a || pick.Owner == b)
+               && before != DraftPins.Get(draft, pick.Owner);
     }
 
     /// <summary>Makes <paramref name="target"/> the draft's controls: the saved item each source

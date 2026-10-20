@@ -68,33 +68,37 @@ public static class PinChoices
     private static Dictionary<uint, PinOwner> OwnersOf(ControllerConfig c)
     {
         var map = new Dictionary<uint, PinOwner>();
-        void Add(bool has, uint pin, PinOwner owner)
-        {
-            if (has) map.TryAdd(pin, owner);
-        }
+        foreach (var (owner, pin) in Uses(c)) map.TryAdd(pin, owner);
+        return map;
+    }
+
+    /// <summary>Every pin the draft sets, with its use, in the order the dropdown names owners:
+    /// sliders, then each button's pin and lights, then the I2C buses that exist. A pin set twice
+    /// is listed twice; the first use is the owner <see cref="For"/> reports.</summary>
+    public static IEnumerable<(PinOwner Owner, uint Pin)> Uses(ControllerConfig c)
+    {
         for (var i = 0; i < c.Sliders.Count; i++)
-            Add(c.Sliders[i].HasPin, c.Sliders[i].Pin, new PinOwner(PinOwnerKind.Slider, i));
+            if (c.Sliders[i].HasPin) yield return (new PinOwner(PinOwnerKind.Slider, i), c.Sliders[i].Pin);
         for (var i = 0; i < c.Buttons.Count; i++)
         {
             var b = c.Buttons[i];
-            Add(b.HasPin, b.Pin, new PinOwner(PinOwnerKind.Button, i));
+            if (b.HasPin) yield return (new PinOwner(PinOwnerKind.Button, i), b.Pin);
             switch (b.IndicatorCase)
             {
                 case Button.IndicatorOneofCase.Led:
-                    Add(b.Led.HasPin, b.Led.Pin, new PinOwner(PinOwnerKind.Light, i));
+                    if (b.Led.HasPin) yield return (new PinOwner(PinOwnerKind.Light, i), b.Led.Pin);
                     break;
                 case Button.IndicatorOneofCase.LedPair:
-                    Add(b.LedPair.HasPinA, b.LedPair.PinA, new PinOwner(PinOwnerKind.LightA, i));
-                    Add(b.LedPair.HasPinB, b.LedPair.PinB, new PinOwner(PinOwnerKind.LightB, i));
+                    if (b.LedPair.HasPinA) yield return (new PinOwner(PinOwnerKind.LightA, i), b.LedPair.PinA);
+                    if (b.LedPair.HasPinB) yield return (new PinOwner(PinOwnerKind.LightB, i), b.LedPair.PinB);
                     break;
             }
         }
         for (var bus = 0; bus < 4; bus++)
             if (ControllerDraft.Bus(c, bus) is { } i2c)
             {
-                Add(i2c.HasSda, i2c.Sda, new PinOwner(PinOwnerKind.BusSda, bus));
-                Add(i2c.HasScl, i2c.Scl, new PinOwner(PinOwnerKind.BusScl, bus));
+                if (i2c.HasSda) yield return (new PinOwner(PinOwnerKind.BusSda, bus), i2c.Sda);
+                if (i2c.HasScl) yield return (new PinOwner(PinOwnerKind.BusScl, bus), i2c.Scl);
             }
-        return map;
     }
 }

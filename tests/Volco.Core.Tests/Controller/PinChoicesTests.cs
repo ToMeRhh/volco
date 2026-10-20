@@ -97,4 +97,20 @@ public class PinChoicesTests
         Assert.Equal("Button 2 light A", At(d, PinRole.LightOutput, Slider6, 18).Note);
         Assert.Equal("I2C bus 0 SDA", At(d, PinRole.LightOutput, Slider6, 25).Note);
     }
+
+    [Fact]
+    public void UsesListsEverySetPinWithItsUse()
+    {
+        var d = new ControllerConfig();
+        d.Sliders.Add(new Slider { Pin = 33 });
+        d.Sliders.Add(new Slider { Pin = 33 });
+        d.Buttons.Add(new Button { Pin = 4, Led = new Led { Pin = 12 } });
+        d.I2C1 = new I2cBus { Sda = 27 };
+        Assert.Equal(new[]
+        {
+            (new PinOwner(PinOwnerKind.Slider, 0), 33u), (new PinOwner(PinOwnerKind.Slider, 1), 33u),
+            (new PinOwner(PinOwnerKind.Button, 0), 4u), (new PinOwner(PinOwnerKind.Light, 0), 12u),
+            (new PinOwner(PinOwnerKind.BusSda, 1), 27u),
+        }, PinChoices.Uses(d));
+    }
 }
