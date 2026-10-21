@@ -260,13 +260,18 @@ public sealed class CombinedInspectorTests : IDisposable
         Select(s, missing);
 
         var inspector = SliderInspector(s);
-        Assert.True(In<Border>(inspector, "MissingPanel").IsVisible);
-        Assert.True(In<Button>(inspector, "RemoveButton").IsEffectivelyVisible);
+        // No panel over the Controls section: the Hardware section says so, with Controls' Remove
+        // (the last one only).
+        Assert.DoesNotContain(inspector.GetVisualDescendants(), v => v is Control { Name: "MissingPanel" });
         var section = Section(inspector);
         Click(s, In<ToggleButton>(section, "HardwareHeader"));
         var text = In<TextBlock>(section, "NotOnControllerText");
         Assert.Equal("Not on this controller", text.Text);
         Assert.True(text.IsEffectivelyVisible);
+        var remove = In<Button>(section, "RemoveButton");
+        Assert.True(remove.IsEffectivelyVisible);
+        Assert.Single(inspector.GetVisualDescendants().OfType<Button>(), b => b.Name == "RemoveButton");
+        Assert.Same(missing.RemoveLastCommand, remove.Command);
         Assert.DoesNotContain(section.GetVisualDescendants().OfType<PinField>(), f => f.IsEffectivelyVisible);
         Assert.DoesNotContain(section.GetVisualDescendants().OfType<Button>(), b => b.Name == "HardwareRemoveButton" && b.IsEffectivelyVisible);
     }
@@ -345,5 +350,83 @@ public sealed class CombinedInspectorTests : IDisposable
         Select(s, s.Vm.Sliders.Items[0]);   // a tile brings its inspector back
         Assert.True(SliderInspector(s).IsEffectivelyVisible);
         Assert.Empty(s.Host.GetVisualDescendants().OfType<ControllerSettingsInspector>());
+    }
+
+    /// <summary>A new control's config is thrown away until the controller has it: a new slider
+    /// can't be named, nor a new button cleared.</summary>
+    [AvaloniaFact]
+    public void ANewControlCantBeNamedOrCleared()
+    {
+        using var s = Show();
+        Select(s, s.Vm.Sliders.Items[0]);
+        Assert.True(In<TextBox>(SliderInspector(s), "NameBox").IsEffectivelyEnabled);
+
+        s.Hardware.AddSliderCommand.Execute(null);
+        Settle(s.Window);
+        Select(s, s.Hardware.Sliders[5]);
+        Assert.False(In<TextBox>(SliderInspector(s), "NameBox").IsEffectivelyEnabled);
+
+        s.Hardware.AddButtonCommand.Execute(null);
+        Settle(s.Window);
+        var added = s.Hardware.Buttons[3];
+        Assert.True(added.IsNew);
+        Select(s, added);
+        Assert.False(added.CanClear);
+        Assert.False(In<Button>(ButtonInspector(s), "ClearButton").IsEffectivelyEnabled);
+    }
+
+    /// <summary>"Swap with" names the others as the page does (the draft's numbering), leaves out
+    /// those the drawing no longer shows, and a new control has nothing to swap with.</summary>
+    [AvaloniaFact]
+    public void SwapWithFollowsTheDraft()
+    {
+        using var s = Show();
+        s.Vm.Controller.RemoveSlider(1);   // unsaved: Slider 3 is now the draft's Slider 2
+        s.Hardware.AddSliderCommand.Execute(null);
+        Settle(s.Window);
+        Until(s.Window, () => s.Page.Tiles().OfType<SliderTile>().Count() == 5);
+
+        var first = s.Page.Tiles().OfType<SliderTile>().Single(t => ReferenceEquals(t.DataContext, s.Vm.Sliders.Items[0]));
+        var swapWith = OpenSwapWith(s, first);
+        Assert.True(swapWith.IsEnabled);
+        Assert.Equal(new[] { "Slider 2", "Slider 3", "Slider 4" },
+                     swapWith.ItemsSource!.Cast<MenuItem>().Select(e => (string)e.Header!));
+        first.ContextMenu!.Close();
+        Settle(s.Window);
+
+        var added = s.Page.Tiles().OfType<SliderTile>().Single(t => t.DataContext is SliderItemViewModel { IsNew: true });
+        swapWith = OpenSwapWith(s, added);
+        Assert.False(swapWith.IsEnabled);
+        Assert.Empty(swapWith.ItemsSource!.Cast<MenuItem>());
+        added.ContextMenu!.Close();
+    }
+
+    private static MenuItem OpenSwapWith(Shown s, Control tile)
+    {
+        tile.RaiseEvent(new ContextRequestedEventArgs());
+        Settle(s.Window);
+        return tile.ContextMenu!.Items.OfType<MenuItem>().First();
+    }
+
+    /// <summary>The inline question shows at the bottom of the side panel, under the inspector
+    /// whose Remove asked.</summary>
+    [AvaloniaFact]
+    public void TheRemoveQuestionIsAtTheBottomOfTheSidePanel()
+    {
+        using var s = Show();
+        s.Hardware.Sections.SliderHardwareOpen = true;
+        Select(s, s.Vm.Sliders.Items[2]);
+        var inspector = SliderInspector(s);
+        Click(s, In<Button>(Section(inspector), "HardwareRemoveButton"));
+
+        var panel = In<Border>(s.Page, "ConfirmPanel");
+        Assert.True(panel.IsEffectivelyVisible);
+        Assert.Equal("Remove Slider 3?", In<TextBlock>(panel, "ConfirmText").Text);
+        Assert.DoesNotContain(s.Host.GetVisualDescendants(), v => v is Control { Name: "ConfirmPanel" });
+        double Top(Visual v) => v.TranslatePoint(new Point(0, 0), s.Window)!.Value.Y;
+        Assert.True(Top(panel) >= Top(inspector) + inspector.Bounds.Height - 1);
+        var side = In<Border>(s.Page, "Inspector");
+        Assert.True(Top(panel) + panel.Bounds.Height <= Top(side) + side.Bounds.Height + 1);
+        Assert.True(Top(panel) + panel.Bounds.Height >= Top(side) + side.Bounds.Height - 40);
     }
 }

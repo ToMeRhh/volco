@@ -683,14 +683,22 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         IsTesting = false;
     }
 
-    /// <summary>Hardware was left or the window hidden: the test ends (spec §8), and a pending
-    /// question and the last firmware result go.</summary>
+    /// <summary>The Controller page was left or the window hidden: the test ends (spec §8), and a
+    /// pending question goes. The last firmware result stays: the card that shows it is on every
+    /// page (controller-page spec §5).</summary>
     public void OnPageLeft()
     {
         if (_testHandle is not null || IsTesting) StopTest();
         Confirmation = null;
-        ClearFirmwareResult();
         PageLeft?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The window was hidden: as <see cref="OnPageLeft"/>, and the last firmware result
+    /// ("Installed…", "Test your controller now", the install offer) goes too.</summary>
+    public void OnWindowHidden()
+    {
+        OnPageLeft();
+        ClearFirmwareResult();
     }
 
     /// <summary>Raised by <see cref="OnPageLeft"/>: Hardware was left or the window hidden.</summary>

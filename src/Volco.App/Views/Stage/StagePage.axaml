@@ -157,11 +157,11 @@
       </Grid>
 
       <!-- The side panel (controller-page spec §4.3); only its body scrolls. The controller's panel
-           (HardwareSidePanel: the preset chooser, inline questions and, when selected, Controller
-           settings; the device card is in the sidebar) sits over the selected tile's inspector,
-           whose sections are Controls or Actions, then Hardware. -->
+           (HardwareSidePanel: the preset chooser and, when selected, Controller settings; the
+           device card is in the sidebar) sits over the selected tile's inspector, whose sections
+           are Controls or Actions, then Hardware; the draft's inline questions are at the bottom. -->
       <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
-        <Grid Name="SidePanel" RowDefinitions="Auto,*">
+        <Grid Name="SidePanel" RowDefinitions="Auto,*,Auto">
           <ContentControl Name="SidePanelHost"/>
           <ContentControl Name="InspectorContent" Grid.Row="1" Content="{Binding Selected}">
             <ContentControl.DataTemplates>
@@ -173,6 +173,8 @@
               </DataTemplate>
             </ContentControl.DataTemplates>
           </ContentControl>
+          <!-- The draft's inline question, at the bottom near the Remove that asked -->
+          <hwviews:InlineConfirmation Name="ConfirmHost" Grid.Row="2" IsVisible="False"/>
         </Grid>
       </Border>
     </Grid>

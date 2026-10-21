@@ -249,14 +249,17 @@ public sealed class ControllerFirmwareTests : IDisposable
     }
 
     [Fact]
-    public void LeavingThePage_DropsTheResult_AndFirmwareUsesTheConfiguredPort()
+    public void HidingTheWindow_DropsTheResult_AndFirmwareUsesTheConfiguredPort()
     {
         var vm = Vm();
         _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         vm.CheckFirmwareCommand.Execute(null);
         Until(() => vm.FirmwareMessage is not null);
-        vm.OnPageLeft();
+        vm.OnPageLeft();   // the card is on every page: the result stays
+        Assert.NotNull(vm.FirmwareMessage);
+        vm.OnWindowHidden();
         Assert.Null(vm.FirmwareMessage);
+        Assert.False(vm.OfferInstall);
 
         _rig.Config.Config.Connection.Serial.ComPort = "COM8";
         _rig.Config.Save();

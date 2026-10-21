@@ -42,8 +42,9 @@ public sealed partial class ControllerViewModel
 
     private bool _wasSerial = true;
 
-    /// <summary>The last result ("Installed…", "Test your controller now") belongs to the moment it happened: it goes when the page is left, the controller goes away or
-    /// the connection changes.</summary>
+    /// <summary>The last result ("Installed…", "Test your controller now") belongs to the moment it
+    /// happened: it goes when the window is hidden, the controller goes away, the connection
+    /// changes or the next operation starts.</summary>
     internal void ClearFirmwareResult()
     {
         if (IsFirmwareRunning) return;

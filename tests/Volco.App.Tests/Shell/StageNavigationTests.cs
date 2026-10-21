@@ -285,7 +285,7 @@ public sealed class StageNavigationTests
     public void OnlyARemoveConfirmsInRed()
     {
         using var s = Show();
-        var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
+        var host = s.Stage.FindControl<Volco.App.Views.Hardware.InlineConfirmation>("ConfirmHost")!;   // the side panel's bottom
         s.Vm.Controller.AskRemoveSlider(0);
         Settle(s.Window);
         var confirm = In<Button>(host, "ConfirmButton");

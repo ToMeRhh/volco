@@ -69,8 +69,9 @@ The header is today's Controls header ("Slider N" with its name field; "Button N
 
 - The sidebar's bottom connection indicator becomes the device card: "Volco controller", the status line with its dot, the detail line (firmware status or the state's detail), at most one button, and ⋯ (spec hardware-page §4.1, §4.2, unchanged in content).
 - It sits above the version and links, on every page, so an update or a lost connection is visible from General too.
-- Narrow window (the 56 px icon sidebar): the card shows only its dot; the full card shows when the sidebar opens over the page on hover (my call).
-- **Actions that belong to the drawing switch to the Controller page first, then act:** Fix it, Test your controller now, ⋯ Load a preset…, ⋯ Start over…, and a not-set-up state's chooser. The detail line reads "Choose how to start." without "below" (my call). Confirmations they raise show on the Controller page, so the draft only changes there and the leave prompt still covers it.
+- Narrow window (the 56 px icon sidebar): the card shows only its dot; the full card shows when the sidebar opens over the page on hover (my call), and the sidebar stays open while the card's ⋯ menu is.
+- **Actions that belong to the drawing switch to the Controller page first, then act:** Fix it, Test your controller now, ⋯ Load a preset…, ⋯ Start over…, and a not-set-up state's chooser. The detail line reads "Choose how to start." without "below" (my call). Confirmations they raise show on the Controller page, so the draft only changes there and the leave prompt still covers it; a Controller page dialog open over the drawing closes.
+- The card's last firmware result ("Installed…", "Test your controller now", the install offer) stays when the Controller page is left, since the card is on every page; it goes when the window is hidden and with the next operation.
 - The status line opens the Connection dialog, which becomes a window-level overlay (it no longer belongs to one page). Compare and the Install confirmation also open over the window.
 - The tray keeps reading the same status; the nav dot moves to the Controller entry.
 

@@ -100,7 +100,12 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>The edited mode has an action, so Clear is offered.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanClear))]
     private bool _hasEditedActions;
+
+    /// <summary>Clear is enabled: the edited mode has an action, and the button is in Volco's
+    /// settings (a new one's config is thrown away until the controller has it).</summary>
+    public bool CanClear => HasEditedActions && !IsNew;
 
     /// <summary>The config has this button but the controller's last Hello doesn't (spec §4.1).</summary>
     [ObservableProperty]

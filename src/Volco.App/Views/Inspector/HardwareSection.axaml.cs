@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -27,6 +28,12 @@ public partial class HardwareSection : UserControl
 
     public static readonly StyledProperty<bool> IsMissingProperty =
         AvaloniaProperty.Register<HardwareSection, bool>(nameof(IsMissing));
+
+    public static readonly StyledProperty<bool> CanRemoveMissingProperty =
+        AvaloniaProperty.Register<HardwareSection, bool>(nameof(CanRemoveMissing));
+
+    public static readonly StyledProperty<ICommand?> RemoveMissingCommandProperty =
+        AvaloniaProperty.Register<HardwareSection, ICommand?>(nameof(RemoveMissingCommand));
 
     public HardwareSection()
     {
@@ -66,5 +73,20 @@ public partial class HardwareSection : UserControl
     {
         get => GetValue(IsMissingProperty);
         set => SetValue(IsMissingProperty, value);
+    }
+
+    /// <summary>The control the controller lacks is the last one: "Not on this controller" has
+    /// Controls' Remove (input number is position, so only the last can go).</summary>
+    public bool CanRemoveMissing
+    {
+        get => GetValue(CanRemoveMissingProperty);
+        set => SetValue(CanRemoveMissingProperty, value);
+    }
+
+    /// <summary>Controls' remove of the last control (Volco's settings only, with Undo).</summary>
+    public ICommand? RemoveMissingCommand
+    {
+        get => GetValue(RemoveMissingCommandProperty);
+        set => SetValue(RemoveMissingCommandProperty, value);
     }
 }

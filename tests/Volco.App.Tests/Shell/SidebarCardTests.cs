@@ -364,4 +364,79 @@ public sealed class SidebarCardTests : IDisposable
         Assert.Equal(draft, ControllerConfigCodec.Encode(s.Vm.Controller.Draft));
         Assert.True(s.Vm.Controller.IsDirty);
     }
+
+    /// <summary>The ⋯ menu is a popup of its own: with the mouse on it, off the sidebar, the
+    /// compact sidebar stays open ("pinned") so the card and ⋯ stay under the menu.</summary>
+    [AvaloniaFact]
+    public void CompactSidebarStaysOpenWhileTheMoreMenuIs()
+    {
+        using var s = Show(width: 900);
+        var sidebar = s.Window.FindControl<Grid>("SidebarHost")!;
+        var status = In<TextBlock>(s.Card, "StatusText");
+        var more = In<Button>(s.Card, "MoreButton");
+        s.Window.MouseMove(new Point(20, 300));
+        Settle(s.Window);
+        Assert.True(more.IsEffectivelyVisible);
+
+        more.Flyout!.ShowAt(more);
+        Settle(s.Window);
+        Assert.True(more.Flyout.IsOpen);
+        Assert.Contains("pinned", sidebar.Classes);
+
+        s.Window.MouseMove(new Point(600, 300));   // the mouse leaves the sidebar for the menu
+        Settle(s.Window);
+        Assert.DoesNotContain(":pointerover", sidebar.Classes);
+        Assert.Equal(168, sidebar.Bounds.Width);
+        Assert.True(status.IsEffectivelyVisible);
+        Assert.True(more.IsEffectivelyVisible);
+        Assert.False(In<Avalonia.Controls.Shapes.Ellipse>(s.Card, "CardDot").IsEffectivelyVisible);
+
+        more.Flyout.Hide();
+        Settle(s.Window);
+        Assert.DoesNotContain("pinned", sidebar.Classes);
+        Assert.Equal(56, sidebar.Bounds.Width);
+        Assert.False(status.IsEffectivelyVisible);
+    }
+
+    /// <summary>A card action that changes the drawing (Start over) closes the Controller page's
+    /// dialog over it, and the device dialog over that.</summary>
+    [AvaloniaFact]
+    public void ADrawingActionClosesThePagesDialog()
+    {
+        using var s = Show();
+        s.Window.ShowPage("controller");
+        Until(s.Window, () => s.Vm.Controller.InSync && s.Vm.Hardware.Card.StartOverCommand.CanExecute(null));
+        s.Vm.Controls.OpenTargetDialog(s.Vm.Sliders.Items[0]);
+        Settle(s.Window);
+        Assert.True(s.Vm.Controls.HasDialog);
+
+        s.Vm.Hardware.Card.StartOverCommand.Execute(null);
+        Settle(s.Window);
+
+        Assert.Equal("controller", s.NavTag);
+        Assert.False(s.Vm.Controls.HasDialog);
+        Assert.False(s.Vm.Controls.HasDeviceDialog);
+    }
+
+    /// <summary>Escape with a dropdown open in a card dialog closes only the dropdown; the next one
+    /// closes the dialog.</summary>
+    [AvaloniaFact]
+    public void EscapeClosesTheConnectionDialogsDropdownFirst()
+    {
+        using var s = Show();
+        Click(s, In<Button>(s.Card, "StatusButton"));
+        Assert.True(s.Vm.Hardware.IsConnectionDialogOpen);
+        var combo = In<ComboBox>(s.Window.FindControl<Border>("ConnectionOverlay")!, "PortCombo");
+        Assert.True(combo.IsEffectivelyVisible);
+        combo.Focus(NavigationMethod.Pointer);
+        combo.IsDropDownOpen = true;
+        Settle(s.Window);
+
+        Escape(s);
+        Assert.False(combo.IsDropDownOpen);
+        Assert.True(s.Vm.Hardware.IsConnectionDialogOpen);
+
+        Escape(s);
+        Assert.False(s.Vm.Hardware.IsConnectionDialogOpen);
+    }
 }

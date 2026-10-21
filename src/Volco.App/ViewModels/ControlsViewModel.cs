@@ -257,15 +257,16 @@ public sealed partial class ControlsViewModel : ObservableObject
     }
 
     /// <summary>The context menu's "Swap with" entries: the other controls of the item's kind that
-    /// the controller has.</summary>
+    /// the controller has, named as the Controller page names them (the draft's numbering while
+    /// the draft draws them).</summary>
     public IReadOnlyList<SwapChoice> SwapChoices(ObservableObject item)
     {
         if (item is SliderItemViewModel)
-            return Sliders.Items.Where(o => !ReferenceEquals(o, item) && !o.IsMissing)
-                .Select(o => new SwapChoice($"Slider {o.Index + 1}", o)).ToList();
+            return Sliders.Items.Where(o => !ReferenceEquals(o, item) && o.CanSwap)
+                .Select(o => new SwapChoice(o.DisplayHeading, o)).ToList();
         if (item is ButtonItemViewModel)
-            return Buttons.Items.Where(o => !ReferenceEquals(o, item) && !o.IsMissing)
-                .Select(o => new SwapChoice($"Button {o.Index + 1}", o)).ToList();
+            return Buttons.Items.Where(o => !ReferenceEquals(o, item) && o.CanSwap)
+                .Select(o => new SwapChoice(o.DisplayHeading, o)).ToList();
         return Array.Empty<SwapChoice>();
     }
 

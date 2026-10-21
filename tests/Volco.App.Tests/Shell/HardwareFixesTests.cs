@@ -263,10 +263,9 @@ public sealed class HardwareFixesTests : IDisposable
         s.Vm.Hardware.Sections.SliderHardwareOpen = true;
         s.Vm.Hardware.Sections.ButtonHardwareOpen = true;
         Click(s, s.Stage.Tiles().OfType<TTile>().ElementAt(index));
-        var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
         Press(In<Button>(s.Stage, "HardwareRemoveButton"));   // in the inspector's Hardware section
         Settle(s.Window);
-        Press(In<Button>(host, "ConfirmButton"));
+        Press(In<Button>(s.Stage, "ConfirmButton"));   // at the bottom of the side panel
         Settle(s.Window);
     }
 

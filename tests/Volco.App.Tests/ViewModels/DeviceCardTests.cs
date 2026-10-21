@@ -270,7 +270,10 @@ public sealed class DeviceCardTests : IDisposable
         Assert.False(settings.Controller.IsFirmwareRunning);
 
         settings.Controller.CancelInstallCommand.Execute(null);
-        settings.Controller.OnPageLeft();                          // the result goes, and the offer with it
+        settings.Controller.OnPageLeft();                          // the card is on every page: the offer stays
+        _ui.RunAll();
+        Assert.Equal(CardAction.Reinstall, card.State.Action);
+        settings.Controller.OnWindowHidden();                      // the result goes, and the offer with it
         _ui.RunAll();
         Assert.NotEqual(CardAction.Reinstall, card.State.Action);
     }

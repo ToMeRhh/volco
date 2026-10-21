@@ -104,7 +104,13 @@ public partial class SettingsWindow : Window
         // that belong to the drawing go to the Controller page first (arriving never asks to leave),
         // and its dialogs open over the whole window.
         _hardware = vm.Hardware;
-        _hardware.Card.RequestController += (_, _) => ShowPage("controller");
+        _hardware.Card.RequestController += (_, _) =>
+        {
+            ShowPage("controller");
+            // The drawing is what the action changes, so a Controller page dialog over it (and the
+            // device dialog over that) closes.
+            _vm.ControlsIfCreated?.CloseDialog();
+        };
         _hardware.PropertyChanged += OnHardwareChanged;
         _compareOverlay = this.FindControl<Border>("CompareOverlay")!;
         _compareHost = this.FindControl<ContentControl>("CompareHost")!;
@@ -123,6 +129,16 @@ public partial class SettingsWindow : Window
         UpdateCompare();
         UpdateConnection();
         UpdateLeavePrompt();
+
+        // The card's ⋯ menu is a popup of its own: the mouse on it is off the sidebar, which would
+        // close the compact sidebar (and the card with ⋯) under the menu. While it is open the
+        // sidebar stays open ("pinned").
+        var sidebar = this.FindControl<Grid>("SidebarHost")!;
+        if (this.FindControl<Volco.App.Views.Hardware.DeviceCard>("Card")!.FindControl<Button>("MoreButton")!.Flyout is { } more)
+        {
+            more.Opened += (_, _) => sidebar.Classes.Add("pinned");
+            more.Closed += (_, _) => sidebar.Classes.Remove("pinned");
+        }
     }
 
     /// <summary>Whether the focus can go back to <paramref name="element"/>: shown in this window
@@ -146,7 +162,11 @@ public partial class SettingsWindow : Window
         if (open is null) return;
         if (e.Key == Key.Escape)
         {
-            CloseCardOverlay(open);
+            // Escape first closes an open dropdown in the dialog (the Connection dialog's port);
+            // only the next one closes the dialog.
+            var dropDown = open.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.IsDropDownOpen);
+            if (dropDown is not null) dropDown.IsDropDownOpen = false;
+            else CloseCardOverlay(open);
             e.Handled = true;
         }
         else if (e.Source is not Visual source || !open.IsVisualAncestorOf(source)) e.Handled = true;
@@ -352,7 +372,7 @@ public partial class SettingsWindow : Window
         // Hiding ends a running test too, and doesn't ask about unsaved changes: the draft is kept
         // and the window reopens on the Controller page.
         _stage?.Hardware?.CloseLeavePrompt();
-        _vm.ControllerIfCreated?.OnPageLeft();
+        _vm.ControllerIfCreated?.OnWindowHidden();   // and the last firmware result goes
         _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controller page's dialog
         Hide();
     }

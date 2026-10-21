@@ -537,13 +537,14 @@ public class StagePageTests
         // Slider 4 is missing but not last: no Remove (input number is position).
         s.Controls.Select(s.Vm.Sliders.Items[3]);
         Settle(s.Window);
-        Assert.True(In<Border>(Inspector(s.Page), "MissingPanel").IsEffectivelyVisible);
-        Assert.False(In<Button>(Inspector(s.Page), "RemoveButton").IsEffectivelyVisible);
+        // The Hardware section says so (collapsed here: no draft), with Remove only for the last.
+        Assert.True(In<TextBlock>(Inspector(s.Page), "NotOnControllerText").IsVisible);
+        Assert.False(In<Button>(Inspector(s.Page), "RemoveButton").IsVisible);
 
         s.Controls.Select(s.Vm.Sliders.Items[4]);
         Settle(s.Window);
         var remove = In<Button>(Inspector(s.Page), "RemoveButton");
-        Assert.True(remove.IsEffectivelyVisible);
+        Assert.True(remove.IsVisible);
         remove.Command!.Execute(null);
         Settle(s.Window);
 

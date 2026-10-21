@@ -129,6 +129,7 @@ public partial class StagePage : UserControl
             UpdateTileSources();
             UpdateChooser();
             UpdateSaveBar();
+            UpdateConfirmation();
             UpdateTesting();
             UpdateSidePanel();
         }
@@ -167,6 +168,14 @@ public partial class StagePage : UserControl
         _case.Classes.Set("testing", testing);
         this.FindControl<Control>("TestBand")!.IsVisible = testing;
         UpdateSidePanel();
+    }
+
+    /// <summary>The draft's inline questions (controller-page spec §4.3) at the bottom of the side panel.</summary>
+    private void UpdateConfirmation()
+    {
+        var confirm = this.FindControl<Control>("ConfirmHost")!;
+        confirm.DataContext = Hardware;
+        confirm.IsVisible = Hardware is not null;
     }
 
     /// <summary>The save bar (hardware-page spec §6.5) shows while the draft is unsaved.</summary>
@@ -267,8 +276,12 @@ public partial class StagePage : UserControl
             return;
         }
         if (tile.DataContext is not ObservableObject item) return;
-        var missing = item is SliderItemViewModel { IsMissing: true } or ButtonItemViewModel { IsMissing: true };
-        var choices = missing ? Array.Empty<SwapChoice>() : vm.SwapChoices(item);
+        // A missing or new tile has no grip, so nothing to swap with; nor are the controls the
+        // drawing no longer shows (after an unsaved removal) offered.
+        var canSwap = item is SliderItemViewModel { CanSwap: true } or ButtonItemViewModel { CanSwap: true };
+        var drawn = ((item is SliderItemViewModel ? _sliderList : _buttonList).ItemsSource as IEnumerable)?.Cast<object>().ToList();
+        var choices = !canSwap ? (IReadOnlyList<SwapChoice>)Array.Empty<SwapChoice>()
+            : vm.SwapChoices(item).Where(c => drawn is null || drawn.Contains(c.Target)).ToList();
         swapWith.ItemsSource = choices.Select(choice =>
         {
             var entry = new MenuItem { Header = choice.Label };

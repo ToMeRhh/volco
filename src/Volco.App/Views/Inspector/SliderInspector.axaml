@@ -11,27 +11,13 @@
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
       <TextBlock Name="HeadingText" Classes="InspectorKind" Text="{Binding DisplayHeading}"/>
+      <!-- A new slider's config is thrown away until the controller has it: no name yet -->
       <TextBox Name="NameBox" Classes="NameField" Text="{Binding Name, Mode=TwoWay}"
-               PlaceholderText="{Binding TargetLabel}"/>
+               PlaceholderText="{Binding TargetLabel}" IsEnabled="{Binding !IsNew}"/>
     </StackPanel>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel Classes="InspectorBody">
-        <Border Name="MissingPanel" Classes="InspectorRows" IsVisible="{Binding IsMissing}">
-          <Grid ColumnDefinitions="*,Auto" Classes="InspectorRow">
-            <TextBlock Classes="Secondary" Text="Not on this controller" VerticalAlignment="Center"/>
-            <Button Name="RemoveButton" Grid.Column="1" Classes="Danger" Content="Remove"
-                    Command="{Binding RemoveLastCommand}">
-              <Button.IsVisible>
-                <MultiBinding Converter="{x:Static BoolConverters.And}">
-                  <Binding Path="IsMissing"/>
-                  <Binding Path="IsLast"/>
-                </MultiBinding>
-              </Button.IsVisible>
-            </Button>
-          </Grid>
-        </Border>
-
         <!-- Controls (open): what it controls and its response; a slider only the draft has is
              set up once the controller has it -->
         <StackPanel Name="ControlsSection" Classes="InspectorGroup">
@@ -143,12 +129,26 @@
 
         <!-- Hardware (collapsed): its pin and Remove, from the controller draft -->
         <inspector:HardwareSection Name="HardwareSection"
-                                   IsVisible="{Binding $parent[stage:StagePage].Hardware, Converter={x:Static ObjectConverters.IsNotNull}}"
                                    IsOpen="{Binding $parent[stage:StagePage].Hardware.Sections.SliderHardwareOpen, Mode=TwoWay, FallbackValue=False}"
                                    Wiring="{Binding $parent[stage:StagePage].Hardware.InspectedSlider, FallbackValue={x:Null}}"
                                    Summary="{Binding $parent[stage:StagePage].Hardware.InspectedSlider.Summary, FallbackValue=''}"
                                    HasProblem="{Binding $parent[stage:StagePage].Hardware.InspectedSlider.HasProblem, FallbackValue=False}"
-                                   IsMissing="{Binding IsMissing}"/>
+                                   IsMissing="{Binding IsMissing}"
+                                   RemoveMissingCommand="{Binding RemoveLastCommand}">
+          <inspector:HardwareSection.IsVisible>
+            <!-- A control the controller lacks says so even on a stage without the draft -->
+            <MultiBinding Converter="{x:Static BoolConverters.Or}">
+              <Binding Path="IsMissing"/>
+              <Binding Path="$parent[stage:StagePage].Hardware" Converter="{x:Static ObjectConverters.IsNotNull}"/>
+            </MultiBinding>
+          </inspector:HardwareSection.IsVisible>
+          <inspector:HardwareSection.CanRemoveMissing>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="IsMissing"/>
+              <Binding Path="IsLast"/>
+            </MultiBinding>
+          </inspector:HardwareSection.CanRemoveMissing>
+        </inspector:HardwareSection>
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

@@ -6,9 +6,10 @@
              x:Class="Volco.App.Views.Hardware.HardwareInspectorHost"
              x:DataType="hw:HardwareViewModel">
   <!-- The controller's part of the side panel (hardware-page spec §3.2): the device card's preset
-       chooser (the card itself is in the sidebar, controller-page spec §5), Controller settings (or
-       a bus) when selected, and an inline question ("Remove Slider 3?") at the bottom. A selected
-       tile's inspector, with its Hardware section, sits under it (StagePage, controller-page spec §4.3). -->
+       chooser (the card itself is in the sidebar, controller-page spec §5) and Controller settings
+       (or a bus) when selected. A selected tile's inspector, with its Hardware section, sits under
+       it, and an inline question ("Remove Slider 3?") at the bottom of the side panel
+       (InlineConfirmation, StagePage, controller-page spec §4.3). -->
   <DockPanel>
     <!-- The card's ⋯ Load a preset…: a small chooser; the draft's wiring is replaced (asked first when it has controls) -->
     <Border Name="PresetChooser" DockPanel.Dock="Top" Classes="InspectorRows" Margin="16,16,16,0" Padding="12"
@@ -26,23 +27,6 @@
         </ItemsControl>
         <Button Name="ClosePresetsButton" HorizontalAlignment="Right" Content="Cancel"
                 Command="{Binding ClosePresetChooserCommand}"/>
-      </StackPanel>
-    </Border>
-    <Border Name="ConfirmPanel" DockPanel.Dock="Bottom" Classes="InspectorRows" Margin="16,16,16,16"
-            Padding="12" IsVisible="{Binding Confirmation, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <StackPanel Spacing="10">
-        <TextBlock Name="ConfirmText" TextWrapping="Wrap" Text="{Binding Confirmation.Message, FallbackValue=''}"/>
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-          <Button Name="CancelConfirmButton" Content="Cancel"
-                  Command="{Binding Confirmation.CancelCommand, FallbackValue={x:Null}}"/>
-          <!-- Red only for a question that loses something (Remove); the Wi-Fi warning and Load a
-               preset use the primary style -->
-          <Button Name="ConfirmButton"
-                  Classes.Danger="{Binding Confirmation.IsDestructive, FallbackValue=False}"
-                  Classes.Primary="{Binding !Confirmation.IsDestructive, FallbackValue=False}"
-                  Content="{Binding Confirmation.ConfirmLabel, FallbackValue=''}"
-                  Command="{Binding Confirmation.ConfirmCommand, FallbackValue={x:Null}}"/>
-        </StackPanel>
       </StackPanel>
     </Border>
     <!-- Hidden while a hardware test runs (spec §8): editing is paused -->
