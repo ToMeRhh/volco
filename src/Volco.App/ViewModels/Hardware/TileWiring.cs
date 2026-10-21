@@ -27,11 +27,12 @@ public sealed partial class TileWiring : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowIndicatorText))]
     private string _indicatorText = "";
 
-    /// <summary>The pin pill shows: there is a pin text and no test runs.</summary>
-    public bool ShowPin => !IsTesting && PinText.Length > 0;
+    /// <summary>The pin pill is there: there is a pin text. During a test it is transparent (the
+    /// test state shows in its place), so the tile keeps its size.</summary>
+    public bool ShowPin => PinText.Length > 0;
 
-    /// <summary>The indicator's wiring shows: there is one and no test runs.</summary>
-    public bool ShowIndicatorText => !IsTesting && IndicatorText.Length > 0;
+    /// <summary>The indicator's wiring is there: there is one. During a test it is transparent too.</summary>
+    public bool ShowIndicatorText => IndicatorText.Length > 0;
 
     /// <summary>The draft changes this control (the dot, until saved).</summary>
     [ObservableProperty]
@@ -52,7 +53,7 @@ public sealed partial class TileWiring : ObservableObject
 
     /// <summary>A hardware test runs: the tile shows its test state instead of its pin.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowPin), nameof(ShowIndicatorText), nameof(IsTestLed), nameof(IsTestPair),
+    [NotifyPropertyChangedFor(nameof(IsTestLed), nameof(IsTestPair),
                               nameof(IsTestScreen), nameof(HasTestLight))]
     private bool _isTesting;
 

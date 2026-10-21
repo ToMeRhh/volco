@@ -97,7 +97,8 @@
             </StackPanel>
             <!-- The pin, or during a hardware test the test state (spec §8) in its place -->
             <Panel HorizontalAlignment="Center">
-              <Border Classes="PinPill" IsVisible="{Binding Wiring.ShowPin, FallbackValue=False}">
+              <Border Classes="PinPill" IsVisible="{Binding Wiring.ShowPin, FallbackValue=False}"
+                    Classes.testing="{Binding Wiring.IsTesting, FallbackValue=False}">
                 <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
               </Border>
               <TextBlock Name="WiringTest" Classes="TestValue" Text="{Binding Wiring.TestText}"

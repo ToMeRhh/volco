@@ -35,7 +35,6 @@ namespace Volco.App.Tests.Shell;
 public sealed class StageNavigationTests
 {
     private static readonly ControllerPreset Diy = ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId);
-    private static readonly byte[] DiyBlob = ControllerConfigCodec.Encode(ControllerPresets.ApplyTo(new ControllerConfig(), Diy));
     private static readonly IndicatorKind[] DiyKinds = { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair };
 
     private sealed record Shown(SettingsWindow Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
@@ -55,19 +54,25 @@ public sealed class StageNavigationTests
 
     /// <summary>The settings window on Hardware over the DIY setup (5 sliders; buttons LED, LED,
     /// pair), in sync with the controller so the draft can be edited.</summary>
-    private static Shown Show(double height = 720)
+    /// <param name="extraButtons">Buttons with no light after the DIY ones, so the drawing scrolls.</param>
+    private static Shown Show(double height = 720, int extraButtons = 0)
     {
+        var config = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        uint[] free = { 13, 15, 16, 17, 22, 23, 27, 2 };
+        for (int i = 0; i < extraButtons; i++) config.Buttons.Add(new Volco.Core.Controller.Proto.Button { Pin = free[i] });
+        var blob = ControllerConfigCodec.Encode(config);
+        var kinds = DiyKinds.Concat(Enumerable.Repeat(IndicatorKind.None, extraButtons)).ToArray();
         var rig = new TestRig();
         var c = rig.Config.Config;
         c.Sliders = Enumerable.Range(0, 5).Select(i => new SliderConfig { Index = i, Type = SliderMappingType.None }).ToList();
-        c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
-        c.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
+        c.Buttons = Enumerable.Range(0, kinds.Length).Select(i => new ButtonConfig { Index = i }).ToList();
+        c.ControllerConfigBlob = Convert.ToBase64String(blob);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = height };
         window.Show();
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
-                                                     ControllerConfigCodec.Crc32(DiyBlob), 5, DiyKinds));
+                                                     ControllerConfigCodec.Crc32(blob), 5, kinds));
         window.ShowPage("controller");
         Until(window, () => vm.Controller.CanEdit && vm.Hardware.CanStartTest);
         return new Shown(window, rig, vm);
@@ -105,7 +110,12 @@ public sealed class StageNavigationTests
         Settle(s.Window);
     }
 
-    private static void Press(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    /// <summary>A click: the button's Click handlers, then its command (as Button.OnClick does).</summary>
+    private static void Press(Button button)
+    {
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        if (button.Command is { } command && command.CanExecute(button.CommandParameter)) command.Execute(button.CommandParameter);
+    }
 
     /// <summary>Every tile's rectangle in the stage.</summary>
     private static List<Rect> TileRects(StagePage stage)
@@ -138,7 +148,7 @@ public sealed class StageNavigationTests
     [AvaloniaFact]
     public void SwitchingControlsAndHardwareKeepsTheStage()
     {
-        using var s = Show(height: 520);
+        using var s = Show(height: 520, extraButtons: 8);
         s.Window.ShowPage("controls");
         Settle(s.Window);
         var stage = s.Stage;

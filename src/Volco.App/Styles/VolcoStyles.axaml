@@ -705,6 +705,12 @@
     <Setter Property="FontSize" Value="10.5"/>
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
   </Style>
+  <!-- During a hardware test the pin and indicator wiring give way to the test state but keep
+       their measure, so no tile changes size (spec §8) -->
+  <Style Selector="Border.PinPill.testing, TextBlock.WiringIndicator.testing">
+    <Setter Property="Opacity" Value="0"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
   <Style Selector="Ellipse.ChangeDot">
     <Setter Property="Width" Value="6"/>
     <Setter Property="Height" Value="6"/>

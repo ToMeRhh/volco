@@ -350,7 +350,20 @@ public partial class StagePage : UserControl
         if (_case is not null) UpdateTileSources();
     }
 
-    private void OnDrawnChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateTileSources();
+    private bool _tileSourcesPending;
+
+    /// <summary>The draft's controls changed: the lists pick their source once the change is over
+    /// (an ItemsControl can't take a new source while its old one is still raising the change).</summary>
+    private void OnDrawnChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_tileSourcesPending) return;
+        _tileSourcesPending = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _tileSourcesPending = false;
+            UpdateTileSources();
+        });
+    }
 
     /// <summary>The tiles drawn: on Hardware the draft's controls (spec §5.1), else the Controls
     /// items. While the draft's are the Controls items in order the stage keeps drawing those, so

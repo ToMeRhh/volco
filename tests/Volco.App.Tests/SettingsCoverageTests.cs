@@ -281,7 +281,12 @@ public class SettingsCoverageTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    /// <summary>A click: the button's Click handlers, then its command (as Button.OnClick does).</summary>
+    private static void Click(Button button)
+    {
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        if (button.Command is { } command && command.CanExecute(button.CommandParameter)) command.Execute(button.CommandParameter);
+    }
 
     /// <summary>Selects the slider and opens its target dialog from the inspector's Controls row.</summary>
     private static TargetDialog OpenTarget(StagePage page, Window window, SettingsViewModel vm, int slider)

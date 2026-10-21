@@ -46,7 +46,8 @@
         <!-- On Hardware, the indicator's wiring in the same cell (spec §5.2) -->
         <TextBlock Name="WiringIndicator" Grid.ColumnSpan="3" Classes="WiringLayer WiringIndicator"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="{Binding Wiring.IndicatorText}"
-                   IsVisible="{Binding Wiring.ShowIndicatorText, FallbackValue=False}"/>
+                   IsVisible="{Binding Wiring.ShowIndicatorText, FallbackValue=False}"
+                   Classes.testing="{Binding Wiring.IsTesting, FallbackValue=False}"/>
 
         <!-- During a hardware test (spec §8): the light's test state, which a click switches, or
              the test screen -->
@@ -149,7 +150,8 @@
           </StackPanel>
           <!-- The pin, or during a hardware test the test state (spec §8) in its place -->
           <Panel HorizontalAlignment="Center">
-            <Border Classes="PinPill" IsVisible="{Binding Wiring.ShowPin, FallbackValue=False}">
+            <Border Classes="PinPill" IsVisible="{Binding Wiring.ShowPin, FallbackValue=False}"
+                    Classes.testing="{Binding Wiring.IsTesting, FallbackValue=False}">
               <TextBlock Name="WiringPin" Text="{Binding Wiring.PinText}"/>
             </Border>
             <TextBlock Name="WiringTest" Classes="TestValue" Text="{Binding Wiring.TestText}"
