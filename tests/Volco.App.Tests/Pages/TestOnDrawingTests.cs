@@ -120,12 +120,12 @@ public sealed class TestOnDrawingTests : IDisposable
     {
         using var s = Show();
         var caseBorder = In<Border>(s.Page, "Case");
-        Assert.False(caseBorder.Classes.Contains("testing"));
+        Assert.DoesNotContain("testing", caseBorder.Classes);
         Assert.False(In<Border>(s.Page, "TestBand").IsVisible);
 
         StartTest(s);
         Assert.True(s.Rig.Runtime.InTestMode);
-        Assert.True(caseBorder.Classes.Contains("testing"));
+        Assert.Contains("testing", caseBorder.Classes);
         Assert.True(In<Border>(s.Page, "TestBand").IsVisible);
         Assert.Equal("Testing: sliders and buttons don't change volume or run actions.",
                      In<TextBlock>(s.Page, "TestBandText").Text);
@@ -153,13 +153,13 @@ public sealed class TestOnDrawingTests : IDisposable
             s.Rig.Connection.RaiseMessage(new ButtonMessage(2, ButtonState.Released));
         }
         Until(s.Window, () => TestText(pair) == "B");
-        Assert.True(In<Ellipse>(pair, "TestLedB").Classes.Contains("on"));
-        Assert.False(In<Ellipse>(pair, "TestLedA").Classes.Contains("on"));
+        Assert.Contains("on", In<Ellipse>(pair, "TestLedB").Classes);
+        Assert.DoesNotContain("on", In<Ellipse>(pair, "TestLedA").Classes);
 
         s.Hardware.StopTestCommand.Execute(null);
         Until(s.Window, () => !s.Hardware.IsTesting);
         Assert.False(s.Rig.Runtime.InTestMode);
-        Assert.False(caseBorder.Classes.Contains("testing"));
+        Assert.DoesNotContain("testing", caseBorder.Classes);
         Assert.True(In<TextBlock>(slider, "WiringPin").IsEffectivelyVisible);
         Assert.False(In<TextBlock>(slider, "WiringTest").IsVisible);
     }
@@ -173,7 +173,7 @@ public sealed class TestOnDrawingTests : IDisposable
         var led = Tiles<ButtonTile>(s.Page)[0];
         Click(s, In<Button>(led, "TestLight"));
         Until(s.Window, () => TestText(led) == "On");
-        Assert.True(In<Ellipse>(led, "TestLed").Classes.Contains("on"));
+        Assert.Contains("on", In<Ellipse>(led, "TestLed").Classes);
         Until(s.Window, () => LastLed(s, 0)?.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(0, 1)) == true);
         Click(s, In<Button>(led, "TestLight"));
         Until(s.Window, () => TestText(led) == "Off");
@@ -199,7 +199,7 @@ public sealed class TestOnDrawingTests : IDisposable
 
         Assert.False(s.Rig.Runtime.InTestMode);
         Assert.False(s.Hardware.IsTesting);
-        Assert.False(In<Border>(s.Page, "Case").Classes.Contains("testing"));
+        Assert.DoesNotContain("testing", In<Border>(s.Page, "Case").Classes);
         Assert.False(In<Border>(s.Page, "TestBand").IsVisible);
     }
 
