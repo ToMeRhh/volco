@@ -12,7 +12,7 @@ The usual journey is: set the controller up once, then now and then change what 
 
 1. **One page, called Controller.** The sidebar has two entries: General and Controller. Controls and Hardware go.
 2. **Clicking a slider or button behaves as on Controls,** and its inspector combines both pages' properties: a Controls section (open) and a Hardware section (collapsed), and so on.
-3. **The device card moves into the sidebar.** Today's connection indicator at the bottom left of the sidebar grows into the card (connection status, firmware status), on every page.
+3. **Controller status in three levels** (revised 2026-10-21, §5): a quiet sidebar status line when all is fine, a banner on every page when the controller needs the user, and a modal progress dialog while firmware or a save runs.
 4. **+ Add and Test stay in the page's UI** for now.
 
 ## 3. Non-goals
@@ -39,20 +39,19 @@ The usual journey is: set the controller up once, then now and then change what 
 
 ### 4.3 Inspector
 
-The header is today's Controls header ("Slider N" with its name field; "Button N" with Clear). Below it, collapsible sections, one line per row:
+The header is today's Controls header ("Slider N" with its name field; "Button N" with Clear). Below it, **two fixed sections, both always shown** (user, 2026-10-21, revised): the Controls/Actions section takes the top two thirds of the side panel and the Hardware section the bottom third, each with a fixed header and its own scrolling; Hardware never gets less than about four rows (176 px of rows plus its header), the top section gives way first. One line per row.
 
 **Slider**
-1. **Controls** (open): Controls row (target), Response (curve, dead zone, smoothing, reverse; today's collapsed sub-section).
-2. **Hardware** (collapsed): Pin; Remove Slider N. Summary when collapsed: "GPIO 33".
+1. **Controls**: Controls row (target), Response (curve, dead zone, smoothing, reverse; today's collapsed sub-section).
+2. **Hardware**: Pin; Remove Slider N.
 
 **Button**
-1. **Actions** (open): the mode pill and the three gesture rows, Light or Screen row (follows the main action), Timing (collapsed sub-section).
-2. **Hardware** (collapsed): Button pin; Light (None / LED / 2 LEDs / Screen) and its rows; Remove Button N. Summary: "GPIO 5 · LED 12".
+1. **Actions**: the mode pill and the three gesture rows, Light or Screen row (follows the main action), Timing (collapsed sub-section).
+2. **Hardware**: Button pin; Light (None / LED / 2 LEDs / Screen) and its rows; Remove Button N.
 
 **Controller settings chip**: its redesign-branch inspector, plus, in Screens, one row per I2C bus in use ("I2C bus 0 · SDA 25 · SCL 26 · 400 kHz") that opens its SDA, SCL and Clock fields (the redesign branch's bus inspector). A screen button's Hardware section shows "Bus 0, address 3C" with a link to that row (user, 2026-10-21).
 
-- The open/closed state of each section is remembered for the app run, per kind (my call), so opening Hardware once keeps it open while rewiring several controls.
-- A Hardware section with a problem (`DraftProblems`) opens itself and shows the problem on its field; its summary shows the danger mark while closed.
+- A Hardware section with a problem (`DraftProblems`) shows the danger mark on its header and the problem on its field.
 - Read-only rules (spec hardware-page §5.4) apply to the Hardware section only; the Controls section is always editable, as today.
 - **A control that exists only in the unsaved draft** (added with + Add): its Controls section is replaced by "Save to controller to set it up" and a Save button (user, 2026-10-21: Volco configures a control only after the controller has it). The same holds for a button whose light type changed: until saved, its Light or Screen row says it will follow the new type after saving.
 - **A control Volco has and the controller lacks** (the dashed "Not on this controller" tile): its Hardware section says "Not on this controller" and has no pin rows; Remove there is Controls' remove (Volco's settings only, last one only), as today (my call). It appears only when the controller changed outside Volco (Reinstall erased its setup, a different controller, config_tool or another Volco), since removing in Volco deletes the settings; Volco keeps them so the original controller or a re-setup restores what each control did.
@@ -63,17 +62,20 @@ The header is today's Controls header ("Slider N" with its name field; "Button N
 - Controls settings save at once, as today.
 - Controller changes (Hardware sections, Add, Remove, Controller settings, the chooser) go into the controller draft. The save bar ("N changes not saved · Saving restarts the controller · Discard · Save to controller") appears under the drawing only while the draft is dirty.
 - Removing a control and saving shifts Volco's settings as the redesign branch does (spec §6.5).
+- **Volco's saved copy in the setup chooser is sent to the controller at once** (with the usual restart, in the progress dialog), since the controller has run it before; presets and Start empty open a draft (user, 2026-10-21).
 - Leaving the Controller page for General with a dirty draft asks first (the leave prompt), as Hardware did. Hiding the window doesn't.
 
-## 5. The device card in the sidebar
+## 5. Controller status: three levels (user, 2026-10-21, revised)
 
-- The sidebar's bottom connection indicator becomes the device card: "Volco controller", the status line with its dot, the detail line (firmware status or the state's detail), at most one button, and ⋯ (spec hardware-page §4.1, §4.2, unchanged in content).
-- It sits above the version and links, on every page, so an update or a lost connection is visible from General too.
-- Narrow window (the 56 px icon sidebar): the card shows only its dot; the full card shows when the sidebar opens over the page on hover (my call), and the sidebar stays open while the card's ⋯ menu is.
-- **Actions that belong to the drawing switch to the Controller page first, then act:** Fix it, Test your controller now, ⋯ Load a preset…, ⋯ Start over…, and a not-set-up state's chooser. The detail line reads "Choose how to start." without "below" (my call). Confirmations they raise show on the Controller page, so the draft only changes there and the leave prompt still covers it; a Controller page dialog open over the drawing closes.
-- The card's last firmware result ("Installed…", "Test your controller now", the install offer) stays when the Controller page is left, since the card is on every page; it goes when the window is hidden and with the next operation.
-- The status line opens the Connection dialog, which becomes a window-level overlay (it no longer belongs to one page). Compare and the Install confirmation also open over the window.
-- The tray keeps reading the same status; the nav dot moves to the Controller entry.
+The device card in the sidebar went: it was easy to miss and cut off. The status (spec hardware-page §4.1's states, same wording and buttons) shows at one of three levels, by how much it needs the user:
+
+- **All fine** (connected and in sync, firmware up to date or development; the expected waits): a quiet one-line status at the bottom of the sidebar, above the version: a dot and "Connected" (or "Connecting…"), fitting the sidebar without cutting off; the full line ("Connected over USB (COM3)", "Firmware up to date") is its tooltip. Narrow sidebar: the dot only. A click opens a small menu: Connection…, Reconnect, Disconnect, ― Check firmware, Reinstall firmware…, ― Load a preset…, Start over… (the old ⋯ menu). The tray reads the same status.
+- **Needs you** (no controller answers, port busy, searching for a long time, disconnected by the user, firmware update available, firmware too old, not set up, the setup can't be used, a different setup, couldn't read the setup, saved setup doesn't work with this firmware, a failed operation's result): a **banner across the top of the content area on every page** (General and Controller), full width, with the state's dot colour, its status and detail on one line, and its one button (Connect, Retry, Check firmware, Update, Fix it, Compare…, Choose how to start). It stays until the state clears. The sidebar status line shows the same colour, and the Controller nav entry keeps its dot.
+- **Running, don't interrupt** (install, update, check firmware; a save's sending and restart): a **modal progress dialog over the window**: the operation's name, its steps or a progress bar, "Don't unplug the controller.", and no way to close it while it writes (Escape and the scrim do nothing). At the end it shows the result and its next step ("Test your controller now", "Try again", "Close"); closing it leaves any remaining need to the banner.
+
+Actions that belong to the drawing (Fix it, Test your controller now, Load a preset…, Start over…, Choose how to start) switch to the Controller page first, then act, and close a Controller page dialog open over the drawing. The Connection, Compare, Reinstall and leave-prompt dialogs stay window-level.
+
+Firmware wording (user, 2026-10-21): when Check firmware finds no matching Volco firmware the message reads "This ESP32 doesn't have Volco's firmware yet." and the button is **Install firmware** (not Reinstall); "Reinstall firmware…" stays in the status menu for a board that has it.
 
 ## 6. What goes
 
@@ -82,4 +84,4 @@ The header is today's Controls header ("Slider N" with its name field; "Button N
 
 ## 7. Left to the builder
 
-Names, file layout, the section header look, the collapsed summaries' exact text beyond the examples, and how the card fits the sidebar's width.
+Names, file layout, the section header look, the banner's and progress dialog's look, and the sidebar status line's exact short words.
