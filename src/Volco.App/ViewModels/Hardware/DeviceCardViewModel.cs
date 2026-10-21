@@ -8,10 +8,12 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// The device card at the top of the Hardware side panel (hardware-page spec §4): "Volco controller",
-/// one status line with its dot, one detail line, at most one primary button (<see cref="DeviceCard"/>),
-/// and the ⋯ menu of the rare actions (§4.2). It reads the page's <see cref="ControllerViewModel"/>
-/// and the shared <see cref="ConnectionViewModel"/>, so it agrees with the sidebar and the tray. UI thread.
+/// The device card in the settings window's sidebar, on every page (controller-page spec §5;
+/// hardware-page spec §4): "Volco controller", one status line with its dot, one detail line, at
+/// most one primary button (<see cref="DeviceCard"/>), and the ⋯ menu of the rare actions (§4.2).
+/// It reads the page's <see cref="ControllerViewModel"/> and the shared <see cref="ConnectionViewModel"/>,
+/// so it agrees with the tray. The actions that belong to the drawing raise <see cref="RequestController"/>
+/// first. UI thread.
 /// </summary>
 public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
 {
@@ -36,13 +38,24 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
     public string Name => DeviceCard.Name;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(HasDetail), nameof(HasProgress))]
+    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(HasDetail), nameof(HasProgress), nameof(DetailOpensChooser))]
     private CardState _state;
+
+    /// <summary>Raised before an action that belongs to the drawing acts (Fix it, Test your
+    /// controller now, Load a preset…, Start over…, the not-set-up states' chooser): the window
+    /// shows the Controller page first (controller-page spec §5).</summary>
+    public event EventHandler? RequestController;
+
+    private void ToController() => RequestController?.Invoke(this, EventArgs.Empty);
 
     public string ActionLabel => DeviceCard.Label(State.Action);
     public bool HasAction => State.Action != CardAction.None;
     public bool HasDetail => State.Detail is not null;
     public bool HasProgress => State.Progress is not null;
+
+    /// <summary>The detail line points to the setup chooser ("Choose how to start."), which is on
+    /// the Controller page: a click on it goes there.</summary>
+    public bool DetailOpensChooser => State.Detail is DeviceCard.ChooseDetail or DeviceCard.UnusableDetail;
 
     /// <summary>The inputs of <see cref="DeviceCard.From"/>, read from the page now.</summary>
     internal CardInputs Inputs()
@@ -101,14 +114,21 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
             case CardAction.Retry: _controller.RetryCommand.Execute(null); break;
             case CardAction.CheckFirmware: _controller.CheckFirmwareCommand.Execute(null); break;
             case CardAction.Update: _controller.UpdateFirmwareCommand.Execute(null); break;
-            case CardAction.FixIt: _controller.FixItCommand.Execute(null); break;
+            case CardAction.FixIt: ToController(); _controller.FixItCommand.Execute(null); break;
             case CardAction.Compare: _hardware.OpenCompare(); break;
-            case CardAction.TestNow: _controller.TestNowCommand.Execute(null); break;
+            case CardAction.TestNow: ToController(); _controller.TestNowCommand.Execute(null); break;
             case CardAction.Reinstall: _controller.InstallFirmwareCommand.Execute(null); break;   // asks first
         }
     }
 
     /// <summary>The status line's ›: the Connection dialog, on the tab of the current connection.</summary>
+    /// <summary>The detail line of a not-set-up state: the Controller page, where the chooser is.</summary>
+    [RelayCommand]
+    private void OpenChooser()
+    {
+        if (DetailOpensChooser) ToController();
+    }
+
     [RelayCommand]
     private void OpenConnection() => _hardware.OpenConnection(wifi: Connection.ConnectionType == ConnectionType.Udp);
 
@@ -142,13 +162,15 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
     /// <summary>The presets "Load a preset…" offers.</summary>
     public IReadOnlyList<ControllerPreset> Presets { get; } = ControllerPresets.All.Where(p => p.IsAvailable).ToList();
 
-    /// <summary>The small preset chooser is open.</summary>
+    /// <summary>The small preset chooser is open (on the Controller page's side panel).</summary>
     [ObservableProperty] private bool _isPresetChooserOpen;
 
     [RelayCommand(CanExecute = nameof(CanLoadPreset))]
     private void LoadPreset()
     {
-        if (CanLoadPreset) IsPresetChooserOpen = true;
+        if (!CanLoadPreset) return;
+        ToController();
+        IsPresetChooserOpen = true;
     }
 
     /// <summary>Replaces the draft's wiring with <paramref name="preset"/>, asking first when the
@@ -168,7 +190,9 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanStartOver))]
     private void StartOver()
     {
-        if (CanStartOver) _hardware.StartOver();
+        if (!CanStartOver) return;
+        ToController();
+        _hardware.StartOver();
     }
 
     public void Dispose()

@@ -116,27 +116,21 @@ public sealed class HardwareInspectorTests : IDisposable
 
     private static string PinValue(Visual field) => In<TextBlock>(field, "ValueText").Text!;
 
-    /// <summary>Spec §3.2, §4: the device card tops the side panel, over the inspectors.</summary>
+    /// <summary>Controller-page spec §4.3, §5: the device card is in the sidebar, not the side
+    /// panel; the tile's inspector is under the controller's panel.</summary>
     [AvaloniaFact]
-    public void TheDeviceCardTopsTheSidePanel()
+    public void TheTileInspectorIsUnderTheControllersPanel()
     {
         using var s = Show();
         s.Vm.Controls.Select(s.Vm.Sliders.Items[0]);
         Settle(s.Window);
 
-        var card = In<Volco.App.Views.Hardware.DeviceCard>(s.Page, "Card");
-        Assert.Equal("Volco controller", In<TextBlock>(card, "CardName").Text);
-        Assert.StartsWith("Connected over USB", In<TextBlock>(card, "StatusText").Text);
-        Assert.Equal("Development firmware", In<TextBlock>(card, "DetailText").Text);
-        Assert.False(In<Button>(card, "ActionButton").IsVisible);
+        Assert.Empty(s.Page.GetVisualDescendants().OfType<Volco.App.Views.Hardware.DeviceCard>());
         // The tile's inspector, with its Hardware section, is under the controller's panel.
         var controls = In<TextBlock>(In<ContentControl>(s.Page, "InspectorContent"), "HeadingText");
         Assert.Equal("Slider 1", controls.Text);
         Assert.True(controls.TranslatePoint(new Point(0, 0), s.Page)!.Value.Y
                     >= s.Host.TranslatePoint(new Point(0, s.Host.Bounds.Height), s.Page)!.Value.Y);
-
-        Click(s, In<Button>(card, "StatusButton"));
-        Assert.True(s.Hardware.IsConnectionDialogOpen);
     }
 
     [AvaloniaFact]

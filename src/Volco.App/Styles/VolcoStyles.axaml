@@ -1032,14 +1032,11 @@
   <Style Selector=":is(Window).compact DockPanel.NavPane">
     <Setter Property="Width" Value="36"/>
   </Style>
-  <Style Selector=":is(Window).compact TextBlock.NavLabel, :is(Window).compact TextBlock.Brand, :is(Window).compact StackPanel.AboutFooter, :is(Window).compact TextBlock.FooterLabel">
+  <Style Selector=":is(Window).compact TextBlock.NavLabel, :is(Window).compact TextBlock.Brand, :is(Window).compact StackPanel.AboutFooter">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
   <Style Selector=":is(Window).compact ListBox.Nav ListBoxItem">
     <Setter Property="Padding" Value="9,9"/>
-  </Style>
-  <Style Selector=":is(Window).compact StackPanel.ConnectionFooter">
-    <Setter Property="Margin" Value="4,8"/>
   </Style>
   <!-- The sidebar lies over the page, and its room in the layout (SidebarSpacer) keeps the page
        beside it. In the compact layout, the mouse on the sidebar opens it to full width, over
@@ -1059,8 +1056,29 @@
   <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover DockPanel.NavPane">
     <Setter Property="Width" Value="148"/>
   </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.FooterLabel">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter">
     <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <!-- The device card in the sidebar (controller-page spec §5): only its status dot in the
+       compact layout, the whole card while the sidebar opens over the page. -->
+  <Style Selector="Ellipse.CardDot">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector=":is(Window).compact Ellipse.CardDot">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <Style Selector=":is(Window).compact Border.SidebarCard">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Ellipse.CardDot">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Border.SidebarCard">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <!-- A not-set-up state's detail line goes to the chooser -->
+  <Style Selector="TextBlock.Secondary.Link">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
   <!-- ── Settings window chrome ────────────────────────────────────────── -->

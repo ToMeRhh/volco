@@ -2,15 +2,33 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hw="using:Volco.App.ViewModels.Hardware"
              xmlns:views="using:Volco.App.Views.Hardware"
+             xmlns:ctl="using:Volco.Core.Controller"
              x:Class="Volco.App.Views.Hardware.HardwareInspectorHost"
              x:DataType="hw:HardwareViewModel">
-  <!-- The controller's part of the side panel (hardware-page spec §3.2): the device card (§4) at
-       the top, then Controller settings (or a bus) when selected, and an inline question
-       ("Remove Slider 3?") at the bottom. A selected tile's inspector, with its Hardware section,
-       sits under it (StagePage, controller-page spec §4.3). -->
+  <!-- The controller's part of the side panel (hardware-page spec §3.2): the device card's preset
+       chooser (the card itself is in the sidebar, controller-page spec §5), Controller settings (or
+       a bus) when selected, and an inline question ("Remove Slider 3?") at the bottom. A selected
+       tile's inspector, with its Hardware section, sits under it (StagePage, controller-page spec §4.3). -->
   <DockPanel>
-    <views:DeviceCard Name="Card" DockPanel.Dock="Top" DataContext="{Binding Card}"/>
-    <Border Name="ConfirmPanel" DockPanel.Dock="Bottom" Classes="InspectorRows" Margin="16,0,16,16"
+    <!-- The card's ⋯ Load a preset…: a small chooser; the draft's wiring is replaced (asked first when it has controls) -->
+    <Border Name="PresetChooser" DockPanel.Dock="Top" Classes="InspectorRows" Margin="16,16,16,0" Padding="12"
+            DataContext="{Binding Card}" x:DataType="hw:DeviceCardViewModel" IsVisible="{Binding IsPresetChooserOpen}">
+      <StackPanel Spacing="4">
+        <TextBlock Name="PresetChooserTitle" Classes="InspectorHeading" Text="Load a preset"/>
+        <ItemsControl Name="PresetList" ItemsSource="{Binding Presets}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="ctl:ControllerPreset">
+              <Button Name="PresetButton" Classes="InspectorRow" Content="{Binding DisplayName}"
+                      Command="{Binding $parent[ItemsControl].((hw:DeviceCardViewModel)DataContext).ChoosePresetCommand, FallbackValue={x:Null}}"
+                      CommandParameter="{Binding}"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Name="ClosePresetsButton" HorizontalAlignment="Right" Content="Cancel"
+                Command="{Binding ClosePresetChooserCommand}"/>
+      </StackPanel>
+    </Border>
+    <Border Name="ConfirmPanel" DockPanel.Dock="Bottom" Classes="InspectorRows" Margin="16,16,16,16"
             Padding="12" IsVisible="{Binding Confirmation, Converter={x:Static ObjectConverters.IsNotNull}}">
       <StackPanel Spacing="10">
         <TextBlock Name="ConfirmText" TextWrapping="Wrap" Text="{Binding Confirmation.Message, FallbackValue=''}"/>

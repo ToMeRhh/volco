@@ -35,11 +35,11 @@ public sealed class DeviceCardTests : IDisposable
     [InlineData(LinkState.Incompatible, BannerKind.Incompatible, BannerActions.Update, true, false,
                 "Firmware too old for this Volco", LinkTone.Warning, "Update it to use the controller again.", CardAction.Update)]
     [InlineData(LinkState.Connected, BannerKind.NotSetUp, BannerActions.SetUp, false, false,
-                "Not set up yet", LinkTone.Accent, "Choose how to start, below.", CardAction.None)]
+                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.None)]
     [InlineData(LinkState.Connected, BannerKind.NotSetUpHasMirror, BannerActions.ApplySaved, false, false,
-                "Not set up yet", LinkTone.Accent, "Choose how to start, below.", CardAction.None)]
+                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.None)]
     [InlineData(LinkState.Connected, BannerKind.Unusable, BannerActions.SetUpFromScratch, false, false,
-                "The controller's setup can't be used", LinkTone.Warning, "Start again from Volco's copy or from scratch, below.", CardAction.None)]
+                "The controller's setup can't be used", LinkTone.Warning, "Start again from Volco's copy or from scratch.", CardAction.None)]
     [InlineData(LinkState.Connected, BannerKind.BrokenWithFirmware, BannerActions.FixIt, false, false,
                 "Your setup doesn't work with this firmware", LinkTone.Warning, "Fix it in the drawing, then Save.", CardAction.FixIt)]
     [InlineData(LinkState.Connected, BannerKind.DifferentSetup, BannerActions.UseControllers, false, false,
@@ -273,6 +273,28 @@ public sealed class DeviceCardTests : IDisposable
         settings.Controller.OnPageLeft();                          // the result goes, and the offer with it
         _ui.RunAll();
         Assert.NotEqual(CardAction.Reinstall, card.State.Action);
+    }
+
+    [Fact]
+    public void DrawingActionsAskForTheControllerPageFirst()
+    {
+        var settings = InSync();
+        var card = settings.Hardware.Card;
+        var asked = new List<bool>();   // whether the chooser was already shown when the page was asked for
+        card.RequestController += (_, _) => asked.Add(settings.Hardware.ShowChooser);
+
+        card.StartOverCommand.Execute(null);
+        Assert.Equal(new[] { false }, asked);
+        Assert.True(settings.Hardware.ShowChooser);
+        settings.Hardware.CancelStartOver();
+
+        card.LoadPresetCommand.Execute(null);
+        Assert.Equal(2, asked.Count);
+        card.ClosePresetChooserCommand.Execute(null);
+
+        card.OpenConnectionCommand.Execute(null);   // the Connection dialog opens over any page
+        card.ReconnectCommand.Execute(null);
+        Assert.Equal(2, asked.Count);
     }
 
     [Fact]

@@ -45,7 +45,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>The version, GitHub link and notices at the bottom of the sidebar.</summary>
     public AboutViewModel About { get; } = new();
 
-    /// <summary>The link status and connection settings: the sidebar footer and the Controller
+    /// <summary>The link status and connection settings: the device card and the Controller
     /// page's Connection section share it.</summary>
     public ConnectionViewModel Connection =>
         _connectionViewModel ??= new ConnectionViewModel(_config, _runtime, _ui);

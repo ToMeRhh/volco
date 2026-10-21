@@ -157,9 +157,9 @@
       </Grid>
 
       <!-- The side panel (controller-page spec §4.3); only its body scrolls. The controller's panel
-           (HardwareSidePanel: the device card, inline questions and, when selected, Controller
-           settings) sits over the selected tile's inspector, whose sections are Controls or
-           Actions, then Hardware. -->
+           (HardwareSidePanel: the preset chooser, inline questions and, when selected, Controller
+           settings; the device card is in the sidebar) sits over the selected tile's inspector,
+           whose sections are Controls or Actions, then Hardware. -->
       <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
         <Grid Name="SidePanel" RowDefinitions="Auto,*">
           <ContentControl Name="SidePanelHost"/>
@@ -188,34 +188,6 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:TargetDialogViewModel}" x:DataType="vm:TargetDialogViewModel">
               <dialogs:TargetDialog/>
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
-      </Border>
-    </Border>
-
-    <!-- Compare (hardware-page spec §7.2): a modal card over the stage; Escape or a click outside closes it -->
-    <Border Name="CompareOverlay" Background="#66000000" IsVisible="False">
-      <Border Name="CompareCard" Classes="Panel DialogCard" KeyboardNavigation.TabNavigation="Cycle"
-              VerticalAlignment="Center" Focusable="True">
-        <ContentControl Name="CompareHost">
-          <ContentControl.DataTemplates>
-            <DataTemplate DataType="{x:Type hw:CompareViewModel}" x:DataType="hw:CompareViewModel">
-              <hwviews:CompareDialog/>
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
-      </Border>
-    </Border>
-
-    <!-- The Connection dialog (hardware-page spec §10): the same kind of modal card -->
-    <Border Name="ConnectionOverlay" Background="#66000000" IsVisible="False">
-      <Border Name="ConnectionCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
-              VerticalAlignment="Center" Focusable="True">
-        <ContentControl Name="ConnectionHost">
-          <ContentControl.DataTemplates>
-            <DataTemplate DataType="{x:Type hw:ConnectionDialogViewModel}" x:DataType="hw:ConnectionDialogViewModel">
-              <hwviews:ConnectionDialog/>
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>

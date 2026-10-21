@@ -304,7 +304,7 @@ public sealed class StageNavigationTests
     public void TheCardsDotFollowsTheLink()
     {
         using var s = Show();
-        var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
+        var host = In<Volco.App.Views.Hardware.DeviceCard>(s.Window, "Card");
         Assert.StartsWith("Connected over USB", In<TextBlock>(host, "StatusText").Text);
         Assert.Equal(ThemeColor("SuccessBrush"), ((ISolidColorBrush)In<Avalonia.Controls.Shapes.Ellipse>(host, "StatusDot").Fill!).Color);
 
@@ -463,7 +463,7 @@ public sealed class StageNavigationTests
         Assert.Null(s.Vm.Hardware.LeavePrompt);
         var failure = "The controller couldn't save the setup. Its previous setup is unchanged.";
         Assert.Equal(failure, s.Vm.Controller.Failure);
-        Assert.Equal(failure, In<TextBlock>((HardwareInspectorHost)s.Stage.HardwareSidePanel!, "DetailText").Text);
+        Assert.Equal(failure, In<TextBlock>(In<Volco.App.Views.Hardware.DeviceCard>(s.Window, "Card"), "DetailText").Text);
         Assert.True(s.Vm.Controller.IsDirty);
     }
 

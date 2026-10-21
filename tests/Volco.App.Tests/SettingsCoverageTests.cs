@@ -9,6 +9,7 @@ using Avalonia.VisualTree;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.ViewModels.Hardware;
+using Volco.App.Views;
 using Volco.App.Views.Dialogs;
 using Volco.App.Views.Hardware;
 using Volco.App.Views.Pages;
@@ -70,20 +71,21 @@ public class SettingsCoverageTests
         ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId)));
 
     /// <summary>The stage on Hardware over the DIY setup, in sync with the controller.</summary>
-    private static (StagePage Page, HardwareInspectorHost Host, Window Window) HardwareStage(TestRig rig, SettingsViewModel vm)
+    /// <remarks>The page is the whole settings window, since the Connection dialog opens over it.</remarks>
+    private static (Control Page, HardwareInspectorHost Host, Window Window) HardwareStage(TestRig rig, SettingsViewModel vm)
     {
         // The tiles' inspectors show their wiring (their Hardware sections) open.
         vm.Hardware.Sections.SliderHardwareOpen = true;
         vm.Hardware.Sections.ButtonHardwareOpen = true;
-        var host = new HardwareInspectorHost { DataContext = vm.Hardware };
-        var page = new StagePage(vm.Controls) { Hardware = vm.Hardware, HardwareSidePanel = host };
-        var window = new Window { Content = page, Width = 1100, Height = 900 };
+        var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 900, AllowClose = true };
         window.Show();
+        window.ShowPage("controller");
+        var host = (HardwareInspectorHost)((StagePage)window.CurrentPage!).HardwareSidePanel!;
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
             ControllerConfigCodec.Crc32(DiyBlob), 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
         Until(window, () => vm.Controller.CanEdit);
-        return (page, host, window);
+        return (window, host, window);
     }
 
     private static void Until(Window window, Func<bool> condition, int ms = 5000)

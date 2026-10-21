@@ -106,30 +106,4 @@ public sealed class SetupChooserPageTests : IDisposable
         Assert.True(drawing.IsEffectivelyEnabled);
         Assert.DoesNotContain(s.Page.GetVisualDescendants(), v => v is SetupChooser { IsEffectivelyVisible: true });
     }
-
-    [AvaloniaFact]
-    public void CompareIsAModalCard_EscapeAndAClickOutsideCloseIt()
-    {
-        using var s = Show(ControllerConfigState.Stored, 0x1234);
-        Assert.Equal(BannerKind.DifferentSetup, s.Vm.Controller.Banner.Kind);
-        var overlay = In<Border>(s.Page, "CompareOverlay");
-        Assert.False(overlay.IsVisible);
-
-        s.Vm.Hardware.OpenCompare();
-        Settle(s.Window);
-        Assert.True(overlay.IsVisible);
-        Assert.Equal("The controller has a different setup", In<TextBlock>(s.Page, "CompareTitle").Text);
-        s.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
-        Settle(s.Window);
-        Assert.False(s.Vm.Hardware.IsCompareOpen);
-        Assert.False(overlay.IsVisible);
-
-        s.Vm.Hardware.OpenCompare();
-        Settle(s.Window);
-        Assert.True(overlay.IsVisible);
-        s.Window.MouseDown(new Point(4, 4), MouseButton.Left);
-        s.Window.MouseUp(new Point(4, 4), MouseButton.Left);
-        Settle(s.Window);
-        Assert.False(s.Vm.Hardware.IsCompareOpen);
-    }
 }

@@ -47,9 +47,6 @@ public partial class StagePage : UserControl
             if (deviceOverlay.IsVisible) OnDeviceDialogOpened();
             else OnDeviceDialogClosed();
         };
-        var compareOverlay = this.FindControl<Border>("CompareOverlay")!;
-        compareOverlay.PointerPressed += OnCompareOverlayPressed;
-        this.FindControl<Border>("ConnectionOverlay")!.PointerPressed += OnConnectionOverlayPressed;
         this.FindControl<Border>("LeaveOverlay")!.PointerPressed += OnLeaveOverlayPressed;
         InitModeTabs();
         InitStage();
@@ -74,8 +71,8 @@ public partial class StagePage : UserControl
         set => SetValue(HardwareProperty, value);
     }
 
-    /// <summary>The controller's part of the side panel (the device card, then the selected tile's
-    /// wiring or Controller settings), over the selected tile's inspector.</summary>
+    /// <summary>The controller's part of the side panel (the preset chooser, Controller settings and
+    /// inline questions), over the selected tile's inspector.</summary>
     public Control? HardwareSidePanel
     {
         get => GetValue(HardwareSidePanelProperty);
@@ -85,10 +82,6 @@ public partial class StagePage : UserControl
     private Border _case = null!;
     private Control _drawing = null!;
     private TransitioningContentControl _chooserHost = null!;
-    private Border _compareOverlay = null!;
-    private ContentControl _compareHost = null!;
-    private Border _connectionOverlay = null!;
-    private ContentControl _connectionHost = null!;
     private SetupChooser? _chooser;
     private Border _leaveOverlay = null!;
     private ContentControl _leaveHost = null!;
@@ -106,10 +99,6 @@ public partial class StagePage : UserControl
         _drawing = this.FindControl<StackPanel>("Drawing")!;
         _chooserHost = this.FindControl<TransitioningContentControl>("ChooserHost")!;
         _chooserHost.PageTransition = null;
-        _compareOverlay = this.FindControl<Border>("CompareOverlay")!;
-        _compareHost = this.FindControl<ContentControl>("CompareHost")!;
-        _connectionOverlay = this.FindControl<Border>("ConnectionOverlay")!;
-        _connectionHost = this.FindControl<ContentControl>("ConnectionHost")!;
         _leaveOverlay = this.FindControl<Border>("LeaveOverlay")!;
         _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
         _titleActions = this.FindControl<TransitioningContentControl>("TitleActions")!;
@@ -144,8 +133,6 @@ public partial class StagePage : UserControl
             UpdateTitleActions();
             UpdateTileSources();
             UpdateChooser();
-            UpdateCompare();
-            UpdateConnection();
             UpdateSaveBar();
             UpdateTesting();
             UpdateLeavePrompt();
@@ -165,9 +152,9 @@ public partial class StagePage : UserControl
     }
 
     /// <summary>The side panel (controller-page spec §4.3): Controller settings (or a bus) takes the
-    /// height under the device card; else the card and any inline question are as tall as they
-    /// are, and the selected tile's inspector (its Controls or Actions section, then its Hardware
-    /// section) takes the rest. A hardware test hides the tile's inspector (hardware-page spec §8).</summary>
+    /// height; else the preset chooser and any inline question are as tall as they are, and the
+    /// selected tile's inspector (its Controls or Actions section, then its Hardware section) takes
+    /// the rest. A hardware test hides the tile's inspector (hardware-page spec §8).</summary>
     private void UpdateSidePanel()
     {
         var panelInspects = HardwareSidePanel is not null && Hardware?.InspectedPanel is not null;
@@ -231,8 +218,6 @@ public partial class StagePage : UserControl
         if (e.PropertyName is nameof(HardwareViewModel.ShowChooser)) UpdateChooser();
         else if (e.PropertyName is nameof(HardwareViewModel.ShowSaveBar)) UpdateSaveBar();
         else if (e.PropertyName is nameof(HardwareViewModel.IsTesting)) UpdateTesting();
-        else if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
-        else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
         else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
         else if (e.PropertyName is nameof(HardwareViewModel.Inspected)) UpdateSidePanel();
         if (e.PropertyName is nameof(HardwareViewModel.HasUnsavedChanges) or null or "") ScheduleTileSources();
@@ -258,65 +243,6 @@ public partial class StagePage : UserControl
         if (ReferenceEquals(_chooserHost.Content, content)) return;
         _chooserHost.PageTransition = StageTransitions.PageTransition();
         _chooserHost.Content = content;
-    }
-
-    /// <summary>Compare's card over the stage while it is open; the focus moves into it.</summary>
-    private void UpdateCompare()
-    {
-        var hw = Hardware;
-        var open = hw is { IsCompareOpen: true, Compare: not null };
-        _compareHost.Content = open ? hw!.Compare : null;
-        if (_compareOverlay.IsVisible == open) return;
-        _compareOverlay.IsVisible = open;
-        if (!open) return;
-        var card = this.FindControl<Border>("CompareCard")!;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
-            card.UpdateLayout();
-            // While the read runs nothing in it can take the focus: the card takes it, so Escape works.
-            var first = card.GetVisualDescendants().OfType<InputElement>()
-                .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
-            if (first is not null) first.Focus(NavigationMethod.Tab);
-            else card.Focus();
-        });
-    }
-
-    /// <summary>The Connection dialog's card over the stage while it is open; the focus moves into it.</summary>
-    private void UpdateConnection()
-    {
-        var hw = Hardware;
-        var open = hw is { IsConnectionDialogOpen: true, ConnectionDialog: not null };
-        _connectionHost.Content = open ? hw!.ConnectionDialog : null;
-        if (_connectionOverlay.IsVisible == open) return;
-        _connectionOverlay.IsVisible = open;
-        if (!open) return;
-        var card = this.FindControl<Border>("ConnectionCard")!;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
-            card.UpdateLayout();
-            var first = card.GetVisualDescendants().OfType<InputElement>()
-                .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
-            if (first is not null) first.Focus(NavigationMethod.Tab);
-            else card.Focus();
-        });
-    }
-
-    /// <summary>A click on the Connection dialog's scrim closes it.</summary>
-    private void OnConnectionOverlayPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!ReferenceEquals(e.Source, sender) || Hardware is not { IsConnectionDialogOpen: true } hw) return;
-        hw.CloseConnection();
-        e.Handled = true;
-    }
-
-    /// <summary>A click on Compare's scrim closes it.</summary>
-    private void OnCompareOverlayPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!ReferenceEquals(e.Source, sender) || Hardware is not { IsCompareOpen: true } hw) return;
-        hw.CloseCompare();
-        e.Handled = true;
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -537,26 +463,6 @@ public partial class StagePage : UserControl
             if (e.Key == Key.Escape)
             {
                 leaving.CloseLeavePrompt();
-                e.Handled = true;
-            }
-            return;
-        }
-        if (_connectionOverlay.IsVisible && Hardware is { } cx)
-        {
-            // The Connection dialog is modal too.
-            if (e.Key == Key.Escape)
-            {
-                cx.CloseConnection();
-                e.Handled = true;
-            }
-            return;
-        }
-        if (_compareOverlay.IsVisible && Hardware is { } hw)
-        {
-            // Compare is modal: Escape closes it, and no key reaches the tiles under it.
-            if (e.Key == Key.Escape)
-            {
-                hw.CloseCompare();
                 e.Handled = true;
             }
             return;

@@ -341,7 +341,6 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(settings.IsEffectivelyVisible);
         Assert.False(In<ContentControl>(s.Page, "InspectorContent").IsVisible);
         Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<SliderInspector>(), i => i.IsEffectivelyVisible);
-        Assert.True(In<Volco.App.Views.Hardware.DeviceCard>(s.Host, "Card").IsEffectivelyVisible);
 
         Select(s, s.Vm.Sliders.Items[0]);   // a tile brings its inspector back
         Assert.True(SliderInspector(s).IsEffectivelyVisible);

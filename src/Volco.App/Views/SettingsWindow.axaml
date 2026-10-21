@@ -3,6 +3,8 @@
         xmlns:views="using:Volco.App.Views"
         xmlns:vm="using:Volco.App.ViewModels"
         xmlns:conv="using:Volco.App.Converters"
+        xmlns:hw="using:Volco.App.ViewModels.Hardware"
+        xmlns:hwviews="using:Volco.App.Views.Hardware"
         x:Class="Volco.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Volco Settings"
@@ -53,14 +55,6 @@
       </Border>
 
       <DockPanel Grid.Row="1" Margin="10,4,10,12" Classes="NavPane">
-        <StackPanel Name="ConnectionFooter" DockPanel.Dock="Bottom" Orientation="Horizontal" Classes="ConnectionFooter"
-                    ToolTip.Tip="{Binding Connection.FooterText}"
-                    Spacing="8" Margin="12,8">
-          <Ellipse Name="FooterDot" Width="8" Height="8" VerticalAlignment="Center"
-                   Fill="{Binding Connection.StatusTone, Converter={StaticResource ToneToBrush}}"/>
-          <TextBlock Name="FooterText" Classes="Caption FooterLabel" VerticalAlignment="Center"
-                     Text="{Binding Connection.FooterText}"/>
-        </StackPanel>
         <StackPanel Name="AboutFooter" DockPanel.Dock="Bottom" Spacing="2" Margin="12,8,12,0" Classes="AboutFooter">
           <!-- Non-release builds carry their branch, commit and build time as the tooltip -->
           <TextBlock Name="VersionText" Classes="Caption" Text="{Binding About.VersionText}"
@@ -72,6 +66,8 @@
                              ToolTip.Tip="Third-party notices" Command="{Binding About.OpenNoticesCommand}"/>
           </StackPanel>
         </StackPanel>
+        <!-- The device card (controller-page spec §5), above the version and links on every page -->
+        <hwviews:DeviceCard Name="Card" DockPanel.Dock="Bottom" Margin="0,8,0,0" DataContext="{Binding Hardware.Card}"/>
         <ListBox Name="NavList" Classes="Nav">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="views:NavItem">
@@ -112,6 +108,53 @@
         </StackPanel>
       </Border>
     </Panel>
+
+    <!-- The device card's dialogs, over the whole window since the card is on every page
+         (controller-page spec §5): modal cards; Escape or a click on the scrim closes them, and
+         the focus moves in and back. Compare (hardware-page spec §7.2): -->
+    <Border Name="CompareOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="CompareCard" Classes="Panel DialogCard" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="CompareHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:CompareViewModel}" x:DataType="hw:CompareViewModel">
+              <hwviews:CompareDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
+    <!-- The Connection dialog (hardware-page spec §10) -->
+    <Border Name="ConnectionOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="ConnectionCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="ConnectionHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:ConnectionDialogViewModel}" x:DataType="hw:ConnectionDialogViewModel">
+              <hwviews:ConnectionDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
+    <!-- ⋯ Reinstall firmware…: today's Install confirmation, since it erases the setup -->
+    <Border Name="ReinstallOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
+            IsVisible="{Binding Hardware.Card.Controller.ConfirmInstallPending}">
+      <Border Name="ReinstallConfirm" Classes="Panel DialogCard Small" Padding="20" KeyboardNavigation.TabNavigation="Cycle"
+              Focusable="True">
+        <StackPanel Spacing="14">
+          <TextBlock TextWrapping="Wrap"
+                     Text="Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards."/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Name="CancelReinstallButton" Content="Cancel" Command="{Binding Hardware.Card.Controller.CancelInstallCommand}"/>
+            <Button Name="ConfirmReinstallButton" Classes="Danger" Content="Reinstall"
+                    Command="{Binding Hardware.Card.Controller.ConfirmInstallCommand}"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
 
     <!-- Third-party notices: a modal card over the whole window; Escape or a click outside closes it -->
     <Border Name="NoticesOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"

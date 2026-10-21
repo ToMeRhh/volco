@@ -36,6 +36,10 @@ public static class DeviceCard
 {
     public const string Name = "Volco controller";
 
+    /// <summary>The not-set-up states' detail lines: the setup chooser is on the Controller page.</summary>
+    public const string ChooseDetail = "Choose how to start.";
+    public const string UnusableDetail = "Start again from Volco's copy or from scratch.";
+
     public static CardState From(CardInputs i)
     {
         var state = Row(i);
@@ -88,10 +92,10 @@ public static class DeviceCard
         switch (banner.Kind)
         {
             case BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror:
-                return new("Not set up yet", LinkTone.Accent, "Choose how to start, below.", CardAction.None, null, true);
+                return new("Not set up yet", LinkTone.Accent, ChooseDetail, CardAction.None, null, true);
             case BannerKind.Unusable:
                 return new("The controller's setup can't be used", LinkTone.Warning,
-                           "Start again from Volco's copy or from scratch, below.", CardAction.None, null, true);
+                           UnusableDetail, CardAction.None, null, true);
             case BannerKind.BrokenWithFirmware:
                 return new("Your setup doesn't work with this firmware", LinkTone.Warning,
                            "Fix it in the drawing, then Save.", CardAction.FixIt, null, true);

@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.ViewModels;
+using Volco.App.Views;
 using Volco.App.Views.Stage;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -18,7 +19,8 @@ using Button = Avalonia.Controls.Button;
 
 namespace Volco.App.Tests.Pages;
 
-/// <summary>Hardware-page spec §10: the Connection dialog, a modal card over the stage.</summary>
+/// <summary>Hardware-page spec §10: the Connection dialog, a modal card over the settings window
+/// (controller-page spec §5).</summary>
 public sealed class ConnectionDialogTests : IDisposable
 {
     public ConnectionDialogTests() => StageTransitions.Enabled = false;
@@ -29,10 +31,11 @@ public sealed class ConnectionDialogTests : IDisposable
     private static readonly byte[] DiyBlob = ControllerConfigCodec.Encode(ControllerPresets.ApplyTo(new ControllerConfig(), Diy));
     private static readonly IndicatorKind[] DiyKinds = { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair };
 
-    private sealed record Shown(StagePage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
+    private sealed record Shown(SettingsWindow Page, SettingsWindow Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
     {
         public void Dispose()
         {
+            Window.AllowClose = true;
             Window.Close();
             Vm.Dispose();
             Rig.Dispose();
@@ -47,14 +50,14 @@ public sealed class ConnectionDialogTests : IDisposable
         c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
         c.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new StagePage(vm.Controls) { Hardware = vm.Hardware };
-        var window = new Window { Content = page, Width = 1100, Height = 720 };
+        var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 720 };
         window.Show();
+        window.ShowPage("controller");
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
                                                      ControllerConfigCodec.Crc32(DiyBlob), 5, DiyKinds));
         Until(window, () => vm.Controller.CanEdit);
-        return new Shown(page, window, rig, vm);
+        return new Shown(window, window, rig, vm);
     }
 
     private static void Settle(Window window)

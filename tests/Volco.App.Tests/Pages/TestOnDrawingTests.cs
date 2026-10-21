@@ -220,7 +220,6 @@ public sealed class TestOnDrawingTests : IDisposable
         Assert.False(controls.IsVisible);
         Assert.False(pin.IsEditable);
         Assert.False(s.Vm.Controller.CanEdit);
-        Assert.True(In<Volco.App.Views.Hardware.DeviceCard>(s.Host, "Card").IsVisible);
 
         s.Hardware.StopTestCommand.Execute(null);
         Until(s.Window, () => !s.Hardware.IsTesting);

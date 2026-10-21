@@ -7,7 +7,9 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Volco.App.ViewModels;
+using Volco.App.ViewModels.Hardware;
 using Volco.App.Views.Hardware;
 using Volco.App.Views.Pages;
 using Volco.App.Views.Stage;
@@ -51,6 +53,12 @@ public partial class SettingsWindow : Window
     private readonly Dictionary<string, Control> _pages = new();
     private IDisposable? _toastTimer;
     private readonly NavItem _controllerNav;
+    private readonly HardwareViewModel _hardware;
+    private readonly Border _compareOverlay;
+    private readonly ContentControl _compareHost;
+    private readonly Border _connectionOverlay;
+    private readonly ContentControl _connectionHost;
+    private readonly Border _reinstallOverlay;
 
     /// <summary>Set by the composition root at shutdown so Closing is not cancelled.</summary>
     internal bool AllowClose { get; set; }
@@ -89,13 +97,122 @@ public partial class SettingsWindow : Window
         };
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         this.FindControl<Border>("NoticesOverlay")!.PointerPressed += OnNoticesOverlayPressed;
+
+        // The device card is in the sidebar on every page (controller-page spec §5): the actions
+        // that belong to the drawing go to the Controller page first (arriving never asks to leave),
+        // and its dialogs open over the whole window.
+        _hardware = vm.Hardware;
+        _hardware.Card.RequestController += (_, _) => ShowPage("controller");
+        _hardware.PropertyChanged += OnHardwareChanged;
+        _compareOverlay = this.FindControl<Border>("CompareOverlay")!;
+        _compareHost = this.FindControl<ContentControl>("CompareHost")!;
+        _connectionOverlay = this.FindControl<Border>("ConnectionOverlay")!;
+        _connectionHost = this.FindControl<ContentControl>("ConnectionHost")!;
+        _reinstallOverlay = this.FindControl<Border>("ReinstallOverlay")!;
+        _compareOverlay.PointerPressed += OnScrimPressed;
+        _connectionOverlay.PointerPressed += OnScrimPressed;
+        _reinstallOverlay.PointerPressed += OnScrimPressed;
+        TrackFocus(_compareOverlay, this.FindControl<Border>("CompareCard")!);
+        TrackFocus(_connectionOverlay, this.FindControl<Border>("ConnectionCard")!);
+        TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!);
+        UpdateCompare();
+        UpdateConnection();
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape || !_vm.About.IsNoticesOpen) return;
-        _vm.About.CloseNoticesCommand.Execute(null);
+        if (_vm.About.IsNoticesOpen)
+        {
+            if (e.Key != Key.Escape) return;
+            _vm.About.CloseNoticesCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+        // The card's dialogs are modal: Escape closes the open one, and no key reaches the page under it.
+        var open = OpenCardOverlay();
+        if (open is null) return;
+        if (e.Key == Key.Escape)
+        {
+            CloseCardOverlay(open);
+            e.Handled = true;
+        }
+        else if (e.Source is not Visual source || !open.IsVisualAncestorOf(source)) e.Handled = true;
+    }
+
+    /// <summary>The device card's dialog that is open, if any.</summary>
+    private Border? OpenCardOverlay()
+        => _reinstallOverlay.IsVisible ? _reinstallOverlay
+         : _connectionOverlay.IsVisible ? _connectionOverlay
+         : _compareOverlay.IsVisible ? _compareOverlay
+         : null;
+
+    private void CloseCardOverlay(Border overlay)
+    {
+        if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Card.Controller.CancelInstallCommand.Execute(null);
+        else if (ReferenceEquals(overlay, _connectionOverlay)) _hardware.CloseConnection();
+        else _hardware.CloseCompare();
+    }
+
+    /// <summary>A click on a card dialog's scrim closes it.</summary>
+    private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, sender) || sender is not Border overlay) return;   // a click inside the card
+        CloseCardOverlay(overlay);
         e.Handled = true;
+    }
+
+    private void OnHardwareChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
+        else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
+    }
+
+    /// <summary>Compare's card over the window while it is open.</summary>
+    private void UpdateCompare()
+    {
+        var open = _hardware is { IsCompareOpen: true, Compare: not null };
+        _compareHost.Content = open ? _hardware.Compare : null;
+        _compareOverlay.IsVisible = open;
+    }
+
+    /// <summary>The Connection dialog's card over the window while it is open.</summary>
+    private void UpdateConnection()
+    {
+        var open = _hardware is { IsConnectionDialogOpen: true, ConnectionDialog: not null };
+        _connectionHost.Content = open ? _hardware.ConnectionDialog : null;
+        _connectionOverlay.IsVisible = open;
+    }
+
+    /// <summary>When <paramref name="overlay"/> opens, the focus moves to <paramref name="card"/>'s
+    /// first focusable control (else the card itself, so Escape works while nothing in it can take
+    /// the focus); when it closes, the focus goes back to where it was (the card's status line).</summary>
+    private void TrackFocus(Border overlay, Border card)
+    {
+        IInputElement? before = null;
+        overlay.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != IsVisibleProperty) return;
+            if (overlay.IsVisible)
+            {
+                before = FocusManager?.GetFocusedElement();
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
+                    card.UpdateLayout();
+                    var first = card.GetVisualDescendants().OfType<InputElement>()
+                        .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+                    if (first is not null) first.Focus(NavigationMethod.Tab);
+                    else card.Focus();
+                });
+            }
+            else
+            {
+                var back = before;
+                before = null;
+                if (back is InputElement { IsEffectivelyVisible: true } element && TopLevel.GetTopLevel(element) is not null)
+                    element.Focus(NavigationMethod.Tab);
+            }
+        };
     }
 
     private void OnNoticesOverlayPressed(object? sender, PointerPressedEventArgs e)
