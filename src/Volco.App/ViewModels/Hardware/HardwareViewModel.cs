@@ -159,8 +159,12 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     // ── Leaving with unsaved changes (spec §3.3) ─────────────────────────────────────────────
 
-    /// <summary>The draft isn't on the controller yet: leaving Hardware asks first.</summary>
+    /// <summary>The draft isn't on the controller yet.</summary>
     public bool IsDirty => _controller.IsDirty;
+
+    /// <summary>The draft holds the user's unsaved changes (<see cref="ControllerViewModel.HasUnsavedChanges"/>):
+    /// leaving the Controller page asks first, and the drawing shows the draft's controls.</summary>
+    public bool HasUnsavedChanges => _controller.HasUnsavedChanges;
 
     /// <summary>The open leave prompt, or null.</summary>
     [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
@@ -249,6 +253,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             or nameof(ControllerViewModel.IsSettingUp) or nameof(ControllerViewModel.CanSave)
             or nameof(ControllerViewModel.Notice) or null or "") UpdateSaveBar();
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or null or "") OnPropertyChanged(nameof(IsDirty));
+        if (e.PropertyName is nameof(ControllerViewModel.HasUnsavedChanges) or null or "") OnPropertyChanged(nameof(HasUnsavedChanges));
         UpdateChooser();
     }
 

@@ -185,6 +185,37 @@ public sealed class ControllerNavigationTests : IDisposable
         Assert.Same(stage, s.Window.CurrentPage);
     }
 
+    /// <summary>With no copy of the controller's setup the draft is the Blank placeholder: it holds
+    /// nothing the user changed, so leaving doesn't ask, and the drawing is Volco's controls.</summary>
+    [AvaloniaFact]
+    public void WithNoControllerCopy_TheDrawingIsVolcosControls_AndLeavingDoesntAsk()
+    {
+        using var rig = new TestRig();
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 720 };
+        window.Show();
+        try
+        {
+            window.ShowPage("controller");
+            Settle(window);
+            Assert.True(vm.Controller.IsPlaceholder);
+            Assert.False(vm.Hardware.HasUnsavedChanges);
+            var stage = Assert.IsType<StagePage>(window.CurrentPage);
+            Assert.True(vm.Sliders.Items.Count > 0);
+            Assert.Equal(vm.Sliders.Items.Count + vm.Buttons.Items.Count, stage.Tiles().Count);
+
+            window.ShowPage("general");
+            Settle(window);
+            Assert.Null(vm.Hardware.LeavePrompt);
+            Assert.IsType<GeneralPage>(window.CurrentPage);
+        }
+        finally
+        {
+            window.AllowClose = true;
+            window.Close();
+        }
+    }
+
     [AvaloniaFact]
     public void SidePanelAfterGeneralShowsTheInspector()
     {

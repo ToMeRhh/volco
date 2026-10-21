@@ -140,6 +140,17 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// a controller that doesn't hold the draft, it is always unsaved.</summary>
     public bool IsDirty => _fixIt || IsSettingUp || !_draft.ToByteArray().AsSpan().SequenceEqual(_baseline);
 
+    /// <summary>The draft is the Blank placeholder Volco starts from with no copy of the controller's
+    /// setup, and nobody has started a draft from it: it counts as dirty against the empty baseline
+    /// but holds nothing the user changed.</summary>
+    public bool IsPlaceholder => _baseline.Length == 0 && !_hasPermission && !_fixIt
+                                 && _draft.ToByteArray().AsSpan().SequenceEqual(new ControllerConfig { Preset = ControllerPresets.BlankId }.ToByteArray());
+
+    /// <summary>The draft holds changes the user made and hasn't saved (dirty, and not the
+    /// placeholder): leaving the Controller page asks first, and the drawing shows the draft's
+    /// controls (controller-page spec §4.1, §4.4).</summary>
+    public bool HasUnsavedChanges => IsDirty && !IsPlaceholder;
+
     public bool CanSave => CanEdit && IsDirty && !Busy;
 
     /// <summary>A new draft could be edited: the controller is ready and nothing (a save, a test,
@@ -236,6 +247,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (CanEdit) ShowLocalErrors();
         else ClearErrors();
         OnPropertyChanged(nameof(IsDirty));
+        OnPropertyChanged(nameof(HasUnsavedChanges));
         OnPropertyChanged(nameof(IsSettingUp));
         OnPropertyChanged(nameof(CanSave));
         OnPropertyChanged(nameof(ShowBehaviour));
@@ -700,8 +712,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         // draft from it, it follows the copy that arrives (the automatic read, Retry, Keep): it only
         // counts as dirty against the empty baseline, and kept, the Hardware page drew no controls
         // and the draft's layout (none) no longer matched the controller's setup.
-        var placeholder = _baseline.Length == 0 && !_hasPermission && !_fixIt
-                          && _draft.ToByteArray().AsSpan().SequenceEqual(new ControllerConfig { Preset = ControllerPresets.BlankId }.ToByteArray());
+        var placeholder = IsPlaceholder;
         _hasPermission = false;
         var decoded = DecodeMirror();
         var newBaseline = decoded?.ToByteArray() ?? Array.Empty<byte>();

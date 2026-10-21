@@ -235,6 +235,7 @@ public partial class StagePage : UserControl
         else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
         else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
         else if (e.PropertyName is nameof(HardwareViewModel.Inspected)) UpdateSidePanel();
+        if (e.PropertyName is nameof(HardwareViewModel.HasUnsavedChanges) or null or "") ScheduleTileSources();
     }
 
     /// <summary>The setup chooser takes the case's rectangle (hardware-page spec §3.3, §7.1): the
@@ -328,7 +329,9 @@ public partial class StagePage : UserControl
 
     /// <summary>The draft's controls changed: the lists pick their source once the change is over
     /// (an ItemsControl can't take a new source while its old one is still raising the change).</summary>
-    private void OnDrawnChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnDrawnChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScheduleTileSources();
+
+    private void ScheduleTileSources()
     {
         if (_tileSourcesPending) return;
         _tileSourcesPending = true;
@@ -339,12 +342,13 @@ public partial class StagePage : UserControl
         });
     }
 
-    /// <summary>The tiles drawn (controller-page spec §4.1): the draft's controls when the draft
-    /// has added or removed ones, else the Controls items.</summary>
+    /// <summary>The tiles drawn (controller-page spec §4.1): the draft's controls when the user's
+    /// unsaved draft has added or removed ones, else the Controls items (also while the draft is
+    /// the Blank placeholder of a controller Volco has no copy of).</summary>
     private void UpdateTileSources()
     {
         var vm = Vm;
-        var hw = Hardware;
+        var hw = Hardware is { HasUnsavedChanges: true } h ? h : null;
         Show(_sliderList, vm is null ? null
              : hw is not null && !hw.Sliders.SequenceEqual(vm.Sliders.Items) ? hw.Sliders : vm.Sliders.Items);
         Show(_buttonList, vm is null ? null

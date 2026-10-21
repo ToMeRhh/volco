@@ -156,7 +156,7 @@ public partial class SettingsWindow : Window
         if (_navList.SelectedItem is not NavItem item) return;
         // Leaving the Controller page with unsaved changes asks first (controller-page spec §4.4);
         // the selection stays on it until the prompt is answered.
-        if (left?.Tag == "controller" && !_leaveAllowed && _stage?.Hardware is { IsDirty: true } hardware)
+        if (left?.Tag == "controller" && !_leaveAllowed && _stage?.Hardware is { HasUnsavedChanges: true } hardware)
         {
             // The selection goes back once this change has finished (the list doesn't take a new
             // selection from inside its own change).
