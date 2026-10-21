@@ -97,7 +97,8 @@
 
     <!-- The page, with the undo message floating over its bottom edge -->
     <Panel Grid.Column="1" Grid.Row="1">
-      <ContentControl Name="PageHost"/>
+      <!-- Controls and Hardware share one stage (hardware-page spec §3.3); General crossfades in -->
+      <TransitioningContentControl Name="PageHost"/>
       <Border Name="Toast" IsVisible="{Binding Toast.IsOpen}"
               HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
               Background="{DynamicResource TextBrush}" CornerRadius="{StaticResource ControlCornerRadius}"

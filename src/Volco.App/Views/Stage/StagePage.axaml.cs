@@ -49,6 +49,7 @@ public partial class StagePage : UserControl
         var compareOverlay = this.FindControl<Border>("CompareOverlay")!;
         compareOverlay.PointerPressed += OnCompareOverlayPressed;
         this.FindControl<Border>("ConnectionOverlay")!.PointerPressed += OnConnectionOverlayPressed;
+        this.FindControl<Border>("LeaveOverlay")!.PointerPressed += OnLeaveOverlayPressed;
         InitModeTabs();
         InitStage();
         // Drag to swap is a Controls thing: on Hardware the grips are faded out and inactive.
@@ -97,6 +98,10 @@ public partial class StagePage : UserControl
     private Border _connectionOverlay = null!;
     private ContentControl _connectionHost = null!;
     private SetupChooser? _chooser;
+    private Border _leaveOverlay = null!;
+    private ContentControl _leaveHost = null!;
+    private TransitioningContentControl _titleActions = null!;
+    private HardwareTitleActions? _hardwareActions;
     private TransitioningContentControl _titleHost = null!;
     private TransitioningContentControl _sidePanelHost = null!;
     private Control _inspector = null!;
@@ -115,6 +120,10 @@ public partial class StagePage : UserControl
         _compareHost = this.FindControl<ContentControl>("CompareHost")!;
         _connectionOverlay = this.FindControl<Border>("ConnectionOverlay")!;
         _connectionHost = this.FindControl<ContentControl>("ConnectionHost")!;
+        _leaveOverlay = this.FindControl<Border>("LeaveOverlay")!;
+        _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
+        _titleActions = this.FindControl<TransitioningContentControl>("TitleActions")!;
+        _titleActions.PageTransition = null;
         _titleHost = this.FindControl<TransitioningContentControl>("TitleHost")!;
         _sidePanelHost = this.FindControl<TransitioningContentControl>("SidePanelHost")!;
         _inspector = this.FindControl<ContentControl>("InspectorContent")!;
@@ -145,12 +154,15 @@ public partial class StagePage : UserControl
                 hw.PropertyChanged += OnHardwarePropertyChanged;
             }
             _chooser = null;
+            _hardwareActions = change.NewValue is HardwareViewModel h ? new HardwareTitleActions { DataContext = h } : null;
+            UpdateTitleActions();
             UpdateTileSources();
             UpdateChooser();
             UpdateCompare();
             UpdateConnection();
             UpdateSaveBar();
             UpdateTesting();
+            UpdateLeavePrompt();
         }
         else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
         {
@@ -171,15 +183,57 @@ public partial class StagePage : UserControl
         _titleHost.Content = hardware ? _hardwareTitle : _controlsTitle;
         _sidePanelHost.PageTransition = StageTransitions.PageTransition();
         _sidePanelHost.Content = hardware ? HardwareSidePanel : _inspector;
+        _titleActions.PageTransition = StageTransitions.PageTransition();
+        UpdateTitleActions();
         UpdateTileSources();
         UpdateChooser();
         UpdateCompare();
         UpdateConnection();
         UpdateSaveBar();
         UpdateTesting();
+        UpdateLeavePrompt();
         // Leaving Hardware ends a running hardware test (spec §8).
         if (!hardware) Hardware?.OnModeLeft();
     }
+
+    /// <summary>Hardware's title-row buttons (spec §3.2): + Add, Controller settings and Test;
+    /// Controls has none.</summary>
+    private void UpdateTitleActions()
+    {
+        var content = Mode == StageMode.Hardware ? _hardwareActions : null;
+        if (!ReferenceEquals(_titleActions.Content, content)) _titleActions.Content = content;
+    }
+
+    /// <summary>The leave prompt's card over the stage while Hardware has one open; the focus moves into it.</summary>
+    private void UpdateLeavePrompt()
+    {
+        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        var prompt = hw?.LeavePrompt;
+        _leaveHost.Content = prompt;
+        var open = prompt is not null;
+        if (_leaveOverlay.IsVisible == open) return;
+        _leaveOverlay.IsVisible = open;
+        if (open) FocusInto(this.FindControl<Border>("LeaveCard")!);
+    }
+
+    /// <summary>A click on the leave prompt's scrim is Stay.</summary>
+    private void OnLeaveOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, sender) || Hardware is not { LeavePrompt: not null } hw) return;
+        hw.CloseLeavePrompt();
+        e.Handled = true;
+    }
+
+    /// <summary>Moves the focus to <paramref name="card"/>'s first focusable control, else the card.</summary>
+    private static void FocusInto(Border card) => Dispatcher.UIThread.Post(() =>
+    {
+        if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
+        card.UpdateLayout();
+        var first = card.GetVisualDescendants().OfType<InputElement>()
+            .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+        if (first is not null) first.Focus(NavigationMethod.Tab);
+        else card.Focus();
+    });
 
     /// <summary>While a hardware test runs on Hardware, the case has the accent outline ("testing")
     /// and the band shows under it (spec §8).</summary>
@@ -206,6 +260,7 @@ public partial class StagePage : UserControl
         else if (e.PropertyName is nameof(HardwareViewModel.IsTesting)) UpdateTesting();
         else if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
         else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
+        else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
     }
 
     /// <summary>On Hardware, the setup chooser takes the case's rectangle (spec §3.3, §7.1): the
@@ -486,6 +541,16 @@ public partial class StagePage : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (_leaveOverlay.IsVisible && Hardware is { } leaving)
+        {
+            // The leave prompt is modal: Escape is Stay.
+            if (e.Key == Key.Escape)
+            {
+                leaving.CloseLeavePrompt();
+                e.Handled = true;
+            }
+            return;
+        }
         if (_connectionOverlay.IsVisible && Hardware is { } cx)
         {
             // The Connection dialog is modal too.

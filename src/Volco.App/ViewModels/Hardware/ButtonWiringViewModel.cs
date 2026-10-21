@@ -83,7 +83,7 @@ public sealed partial class ButtonWiringViewModel : ObservableObject, IDisposabl
                 default: b.ClearIndicator(); break;
             }
             Refresh();
-            _controller.OnDraftEdited(structural: true);   // the bus chips depend on screens
+            _controller.OnDraftEdited();
         }
     }
 
@@ -127,7 +127,7 @@ public sealed partial class ButtonWiringViewModel : ObservableObject, IDisposabl
                 || value == BusIndex || !_controller.CanEdit) { OnPropertyChanged(); return; }
             b.Screen.Bus = (uint)value;
             OnPropertyChanged();
-            _controller.OnDraftEdited(structural: true);
+            _controller.OnDraftEdited();
         }
     }
 

@@ -60,7 +60,7 @@ public class SettingsWindowTests
 
         var expected = new[]
         {
-            typeof(GeneralPage), typeof(StagePage), typeof(ControllerPage),
+            typeof(GeneralPage), typeof(StagePage), typeof(StagePage),
         };
         Assert.Equal(3, nav.ItemCount);
         for (var i = 0; i < expected.Length; i++)

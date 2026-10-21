@@ -136,6 +136,39 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         ConnectionDialog = null;
     }
 
+    // ── Leaving with unsaved changes (spec §3.3) ─────────────────────────────────────────────
+
+    /// <summary>The draft isn't on the controller yet: leaving Hardware asks first.</summary>
+    public bool IsDirty => _controller.IsDirty;
+
+    /// <summary>The open leave prompt, or null.</summary>
+    [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
+
+    /// <summary>Asks before leaving Hardware with unsaved changes; <paramref name="proceed"/> goes
+    /// on once the draft was saved (and confirmed) or discarded.</summary>
+    public void AskToLeave(Action proceed)
+    {
+        if (_disposed) return;
+        LeavePrompt?.Dispose();
+        LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt);
+    }
+
+    /// <summary>Closes the leave prompt: the user stays on Hardware.</summary>
+    public void CloseLeavePrompt()
+    {
+        var prompt = LeavePrompt;
+        LeavePrompt = null;
+        prompt?.Dispose();
+    }
+
+    // ── Commands of the title row (spec §3.2) ────────────────────────────────────────────────
+
+    /// <summary>+ Add › Slider.</summary>
+    public IRelayCommand AddSliderCommand => _controller.AddSliderCommand;
+
+    /// <summary>+ Add › Button.</summary>
+    public IRelayCommand AddButtonCommand => _controller.AddButtonCommand;
+
     /// <summary>⋯ Start over…: the drawing returns to the setup chooser; the draft stays until a
     /// choice is made.</summary>
     public void StartOver()
@@ -191,6 +224,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (e.PropertyName is nameof(ControllerViewModel.CanStartTest) or null or "") OnPropertyChanged(nameof(CanStartTest));
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or nameof(ControllerViewModel.IsSaving)
             or nameof(ControllerViewModel.IsSettingUp) or nameof(ControllerViewModel.CanSave) or null or "") UpdateSaveBar();
+        if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or null or "") OnPropertyChanged(nameof(IsDirty));
         UpdateChooser();
     }
 
@@ -309,6 +343,16 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.Selected = null;
         UpdateInspected();
     }
+
+    private IRelayCommand? _selectControllerSettingsCommand;
+
+    /// <summary>The title row's "Controller settings" chip.</summary>
+    public IRelayCommand SelectControllerSettingsCommand => _selectControllerSettingsCommand ??= new RelayCommand(SelectControllerSettings);
+
+    /// <summary>The inspector shows the controller's settings: the chip is marked.</summary>
+    public bool IsSettingsSelected => Inspected is ControllerSettingsViewModel;
+
+    partial void OnInspectedChanged(object? value) => OnPropertyChanged(nameof(IsSettingsSelected));
 
     /// <summary>Selects bus <paramref name="bus"/>'s chip: the tile selection is cleared.</summary>
     public void SelectBus(int bus)
@@ -650,6 +694,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _runtime.RawInput -= OnRawInput;
         Card.Dispose();
         Compare?.Dispose();
+        LeavePrompt?.Dispose();
         (Inspected as IDisposable)?.Dispose();
     }
 }

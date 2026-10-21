@@ -23,7 +23,7 @@ public sealed class ConnectionDialogTests : IDisposable
 {
     public ConnectionDialogTests() => StageTransitions.Enabled = false;
 
-    public void Dispose() => StageTransitions.Enabled = true;
+    public void Dispose() => StageTransitions.Enabled = false;
 
     private static readonly ControllerPreset Diy = ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId);
     private static readonly byte[] DiyBlob = ControllerConfigCodec.Encode(ControllerPresets.ApplyTo(new ControllerConfig(), Diy));

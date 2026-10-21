@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
 
-/// <summary>Spec §8.6 and §12.4: the Controller page's firmware part.</summary>
+/// <summary>Spec §8.6 and §12.4: the firmware part of the Hardware page's controller logic.</summary>
 public sealed class ControllerFirmwareTests : IDisposable
 {
     private static readonly FirmwareCatalog Catalog = FirmwareCatalog.Load(MemoryFirmwareSource.Valid());
@@ -59,30 +59,27 @@ public sealed class ControllerFirmwareTests : IDisposable
         ControllerConfigState.None, 0, 5, new[] { IndicatorKind.Led });
 
     [Fact]
-    public void WithoutFirmware_OrNotSerial_TheButtonsAreDisabledWithAReason()
+    public void WithoutFirmware_OrNotSerial_FirmwareCantRun()
     {
         var vm = Vm(FirmwareCatalog.Empty);
         Assert.False(vm.CanUseFirmware);
-        Assert.Equal("This build of Volco has no firmware.", vm.FirmwareHint);
         vm.Dispose();
 
         vm = Vm();
         Assert.True(vm.CanUseFirmware);
-        Assert.Null(vm.FirmwareHint);
         _rig.Config.Config.Connection.Type = ConnectionType.WebSocket;   // not saved: no restart
         Assert.False(vm.CanUseFirmware);
-        Assert.Equal(FirmwareService.SerialOnlyMessage, vm.FirmwareHint);
     }
 
     [Fact]
-    public void Check_ShowsTheProbeMessage_AndOffersInstall()
+    public void Check_ShowsTheProbeMessage()
     {
         var vm = Vm();
         _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         vm.CheckFirmwareCommand.Execute(null);
         Until(() => vm.FirmwareMessage is not null);
         Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
-        Assert.True(vm.OfferInstall);
+        Assert.Equal(vm.FirmwareMessage, vm.Failure);   // a warning: the card shows it
         Assert.False(vm.IsFirmwareRunning);
         Assert.Equal("probe COM3", _flasher.Calls.Single());
     }
@@ -103,13 +100,12 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.Equal("Installed. The controller is running firmware 3f9c2a1b5d07.", vm.FirmwareMessage);
         Assert.False(vm.OfferTest);   // Install erased the setup: "Set up" comes before a test
         Assert.Equal("flash COM3 Install", _flasher.Calls.Single());
-        Assert.StartsWith("Firmware 3f9c2a1b5d07 (from Volco ", vm.FirmwareText);
         // The controller has no setup now: setting it up is the next step.
         Assert.True(vm.IsNotSetUp);
     }
 
     [Fact]
-    public void Install_AsksInADialog_AndCancelLeavesThePageAsItWas()
+    public void Install_AsksFirst_AndCancelLeavesThePageAsItWas()
     {
         var vm = Vm();
         _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
@@ -117,14 +113,12 @@ public sealed class ControllerFirmwareTests : IDisposable
         Until(() => vm.FirmwareMessage is not null);
 
         vm.InstallFirmwareCommand.Execute(null);
-        Assert.True(vm.HasDialog);
+        Assert.True(vm.ConfirmInstallPending);
         Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
-        Assert.True(vm.OfferInstall);
 
         vm.CancelInstallCommand.Execute(null);
-        Assert.False(vm.HasDialog);
+        Assert.False(vm.ConfirmInstallPending);
         Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
-        Assert.True(vm.OfferInstall);
         Assert.Equal("probe COM3", _flasher.Calls.Single());
     }
 
@@ -134,35 +128,35 @@ public sealed class ControllerFirmwareTests : IDisposable
         var vm = Vm();
         _rig.Connection!.SetStatus(TransportStatus.Open);   // HelloRequest sent, no Hello
         _ui.RunAll();
-        Assert.True(vm.IsWaiting);
-        Assert.False(vm.ShowEditor);
+        Assert.Equal(LinkState.Waiting, _rig.Runtime.LinkStatus.State);
+        Assert.False(vm.CanEdit);
         _time.Advance(TimeSpan.FromSeconds(5));
         _ui.RunAll();
         Assert.True(_rig.Runtime.ControllerSilent);
-        Assert.False(vm.IsWaiting);
-        Assert.Equal("Controller not responding", vm.StatusText);
-        Assert.StartsWith("The device on COM3 isn't answering as a Volco controller.", vm.BannerText);
-        Assert.True(vm.ShowCheckFirmware);
+        Assert.Equal("Controller not responding", vm.Connection.StatusText);
+        Assert.Equal(Volco.Core.Controller.BannerKind.NoAnswer, vm.Banner.Kind);
+        Assert.True(vm.Banner.Actions.HasFlag(Volco.Core.Controller.BannerActions.CheckFirmware));
+        Assert.True(vm.CanUseFirmware);
 
         // Another port, then an unplug and replug: the text follows, and the wait starts over.
         _rig.Config.Config.Connection.Serial.ComPort = "COM5";
         _rig.Config.Save();
         _rig.Connection!.SetStatus(TransportStatus.Closed);
         _ui.RunAll();
-        Assert.Null(vm.BannerText);
+        Assert.NotEqual(Volco.Core.Controller.BannerKind.NoAnswer, vm.Banner.Kind);
         _rig.Connection.SetStatus(TransportStatus.Open);
         _ui.RunAll();
         Assert.False(_rig.Runtime.ControllerSilent);
         _time.Advance(TimeSpan.FromSeconds(5));
         _ui.RunAll();
-        Assert.StartsWith("The device on COM5 isn't answering as a Volco controller.", vm.BannerText);
+        Assert.Equal(Volco.Core.Controller.BannerKind.NoAnswer, vm.Banner.Kind);
 
         _rig.Connection.RaiseMessage(Hello("dev"));
         _ui.RunAll();
         Assert.False(_rig.Runtime.ControllerSilent);
         Assert.NotEqual(Volco.Core.Controller.BannerKind.NoAnswer, vm.Banner.Kind);
-        Assert.Equal("Development firmware", vm.FirmwareText);
-        Assert.True(vm.ShowEditor);
+        Assert.True(vm.Banner.DevelopmentFirmware);
+        Assert.Equal(ControllerState.Ready, _rig.Runtime.ControllerState);
     }
 
     [Fact]
@@ -174,7 +168,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         _time.Advance(TimeSpan.FromSeconds(6));
         _ui.RunAll();
         Assert.False(_rig.Runtime.ControllerSilent);
-        Assert.Null(vm.BannerText);
+        Assert.NotEqual(Volco.Core.Controller.BannerKind.NoAnswer, vm.Banner.Kind);
     }
 
     [Fact]
@@ -184,10 +178,10 @@ public sealed class ControllerFirmwareTests : IDisposable
         _rig.Connection!.SetStatus(TransportStatus.Open);
         _rig.Connection.RaiseMessage(Hello("dev"));
         _ui.RunAll();
-        Assert.Equal("Development firmware", vm.FirmwareText);
+        Assert.Equal("ESP32", vm.ChipText);
         _rig.Connection.SetStatus(TransportStatus.Closed);
         _ui.RunAll();
-        Assert.Equal("", vm.FirmwareText);
+        Assert.Equal("", vm.ChipText);
         Assert.Null(_rig.Runtime.ControllerConfig.LastHello);
     }
 
@@ -198,10 +192,10 @@ public sealed class ControllerFirmwareTests : IDisposable
         _rig.Connection!.SetStatus(TransportStatus.Open);
         _rig.Connection.RaiseMessage(Hello("0000aaaa1111"));
         _ui.RunAll();
-        Assert.True(vm.ShowUpdateFirmware);
+        Assert.True(vm.FirmwareUpdateAvailable);
         _rig.Connection.RaiseMessage(Hello("3f9c2a1b5d07"));
         _ui.RunAll();
-        Assert.False(vm.ShowUpdateFirmware);
+        Assert.False(vm.FirmwareUpdateAvailable);
     }
 
     [Fact]
@@ -238,19 +232,18 @@ public sealed class ControllerFirmwareTests : IDisposable
     }
 
     [Fact]
-    public void ChangingToUdp_HidesTheButtons_AndDropsTheResult()
+    public void ChangingToUdp_DisablesFirmware_AndDropsTheResult()
     {
         var vm = Vm();
         _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         vm.CheckFirmwareCommand.Execute(null);
         Until(() => vm.FirmwareMessage is not null);
-        Assert.True(vm.IsSerial);
+        Assert.True(vm.CanUseFirmware);
 
         _rig.Config.Config.Connection.Type = ConnectionType.Udp;
         _rig.Config.RequestSave(connectionChanged: true);
         Until(() => vm.FirmwareMessage is null);
-        Assert.False(vm.IsSerial);
-        Assert.False(vm.OfferInstall);
+        Assert.False(vm.CanUseFirmware);
     }
 
     [Fact]

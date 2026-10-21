@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Volco.App.ViewModels;
+using Volco.App.Views.Hardware;
 using Volco.App.Views.Pages;
 using Volco.App.Views.Stage;
 using Volco.Core.Runtime;
@@ -45,7 +46,8 @@ public partial class SettingsWindow : Window
 
     private readonly SettingsViewModel _vm;
     private readonly ListBox _navList;
-    private readonly ContentControl _pageHost;
+    private readonly TransitioningContentControl _pageHost;
+    private StagePage? _stage;
     private readonly Dictionary<string, Control> _pages = new();
     private IDisposable? _toastTimer;
     private readonly NavItem _controllerNav;
@@ -59,13 +61,14 @@ public partial class SettingsWindow : Window
         AvaloniaXamlLoader.Load(this);
         DataContext = vm;
         _navList = this.FindControl<ListBox>("NavList")!;
-        _pageHost = this.FindControl<ContentControl>("PageHost")!;
+        _pageHost = this.FindControl<TransitioningContentControl>("PageHost")!;
+        _pageHost.PageTransition = null;
 
         _navList.ItemsSource = new[]
         {
             Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
-            Nav("Controls", "controls", "Icon.Sliders", () => new StagePage(vm.Controls)),
-            _controllerNav = Nav("Hardware", "controller", "Icon.Chip", () => new ControllerPage(vm.Controller)),
+            Nav("Controls", "controls", "Icon.Sliders", Stage),
+            _controllerNav = Nav("Hardware", "controller", "Icon.Chip", Stage),
         };
         _navList.SelectionChanged += OnNavSelectionChanged;
         _navList.SelectedIndex = 0;
@@ -122,6 +125,14 @@ public partial class SettingsWindow : Window
         return new NavItem(label, tag, icon, create);
     }
 
+    /// <summary>The one stage the Controls and Hardware entries both show (hardware-page spec §3.3):
+    /// selecting either sets its <see cref="StagePage.Mode"/>, so no tile is rebuilt.</summary>
+    private StagePage Stage() => _stage ??= new StagePage(_vm.Controls)
+    {
+        Hardware = _vm.Hardware,
+        HardwareSidePanel = new HardwareInspectorHost { DataContext = _vm.Hardware },
+    };
+
     /// <summary>Switches to the page with this tag ("general", "controls", "controller" (shown as
     /// Hardware)).</summary>
     public void ShowPage(string tag)
@@ -134,16 +145,51 @@ public partial class SettingsWindow : Window
     /// <summary>The page currently shown.</summary>
     internal Control? CurrentPage => _pageHost.Content as Control;
 
+    // Set while the selection goes back to Hardware for the leave prompt, and while the prompt's
+    // continuation leaves it.
+    private bool _revertingNav;
+    private bool _leaveAllowed;
+
     private void OnNavSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        // Leaving the Controller page ends a running hardware test (spec §8.5).
-        if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controller")) _vm.ControllerIfCreated?.OnPageLeft();
-        // Leaving the Controls page closes its dialog, which would otherwise hold off touch-to-select.
-        if (e.RemovedItems.OfType<NavItem>().Any(n => n.Tag == "controls")) _vm.ControlsIfCreated?.CloseDialog();
+        if (_revertingNav) return;
+        var left = e.RemovedItems.OfType<NavItem>().FirstOrDefault();
         if (_navList.SelectedItem is not NavItem item) return;
+        // Leaving Hardware with unsaved changes asks first (spec §3.3); the selection stays on
+        // Hardware until the prompt is answered.
+        if (left?.Tag == "controller" && !_leaveAllowed && _stage?.Hardware is { IsDirty: true } hardware)
+        {
+            // The selection goes back once this change has finished (the list doesn't take a new
+            // selection from inside its own change).
+            Dispatcher.UIThread.Post(() =>
+            {
+                _revertingNav = true;
+                try { _navList.SelectedItem = left; }
+                finally { _revertingNav = false; }
+            });
+            hardware.AskToLeave(() => Navigate(item));
+            return;
+        }
+        // Leaving Hardware ends a running hardware test (spec §8).
+        if (left?.Tag == "controller") _vm.ControllerIfCreated?.OnPageLeft();
+        // Leaving the Controls page closes its dialog, which would otherwise hold off touch-to-select.
+        if (left?.Tag == "controls") _vm.ControlsIfCreated?.CloseDialog();
         if (!_pages.TryGetValue(item.Tag, out var page))
             _pages[item.Tag] = page = item.CreatePage();
+        if (page is StagePage stage) stage.Mode = item.Tag == "controller" ? StageMode.Hardware : StageMode.Controls;
+        if (ReferenceEquals(_pageHost.Content, page)) return;
+        // General has no drawing, so going to or from it crossfades the whole content area; the
+        // first page shows at once.
+        _pageHost.PageTransition = _pageHost.Content is null ? null : StageTransitions.PageTransition();
         _pageHost.Content = page;
+    }
+
+    /// <summary>The leave prompt's continuation: the selection moves on without asking again.</summary>
+    private void Navigate(NavItem item)
+    {
+        _leaveAllowed = true;
+        try { _navList.SelectedItem = item; }
+        finally { _leaveAllowed = false; }
     }
 
     /// <summary>Restarts the timeout whenever a new message is shown.</summary>
@@ -163,7 +209,10 @@ public partial class SettingsWindow : Window
         // Hide instead of close so the tray's Open Settings can bring the same window back.
         if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
-        _vm.ControllerIfCreated?.OnPageLeft();   // hiding the window ends a running test too
+        // Hiding ends a running test too, and doesn't ask about unsaved changes: the draft is kept
+        // and the window reopens on Hardware.
+        _stage?.Hardware?.CloseLeavePrompt();
+        _vm.ControllerIfCreated?.OnPageLeft();
         _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controls page's dialog
         Hide();
     }

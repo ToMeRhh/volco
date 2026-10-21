@@ -22,7 +22,7 @@ public sealed class StageGeometryTests : IDisposable
 {
     public StageGeometryTests() => StageTransitions.Enabled = false;
 
-    public void Dispose() => StageTransitions.Enabled = true;
+    public void Dispose() => StageTransitions.Enabled = false;
 
     private sealed record Shown(StagePage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
     {

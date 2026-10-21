@@ -23,7 +23,7 @@
                (PageTitle, crossfaded) and the page's buttons -->
           <Grid Name="TitleRow" Classes="StageTitleRow" ColumnDefinitions="*,Auto">
             <TransitioningContentControl Name="TitleHost" VerticalAlignment="Center"/>
-            <ContentControl Name="TitleActions" Grid.Column="1" VerticalAlignment="Center"/>
+            <TransitioningContentControl Name="TitleActions" Grid.Column="1" VerticalAlignment="Center"/>
           </Grid>
 
           <Border Name="Case" Classes="Case" Classes.dense="{Binding IsDense}">
@@ -233,6 +233,21 @@
           <ContentControl.DataTemplates>
             <DataTemplate DataType="{x:Type hw:ConnectionDialogViewModel}" x:DataType="hw:ConnectionDialogViewModel">
               <hwviews:ConnectionDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
+    <!-- Leaving Hardware with unsaved changes (spec §3.3): a modal card over the stage; Escape or a
+         click outside is Stay -->
+    <Border Name="LeaveOverlay" Background="#66000000" IsVisible="False">
+      <Border Name="LeaveCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="LeaveHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:LeavePromptViewModel}" x:DataType="hw:LeavePromptViewModel">
+              <hwviews:LeavePrompt/>
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>

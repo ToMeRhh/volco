@@ -75,7 +75,7 @@ public sealed class SetupChooserTests : IDisposable
         Assert.False(Hardware.ShowChooser);
         Assert.False(AnyWrite());                                    // nothing is sent before Save
         Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(Controller.Draft));
-        Assert.Equal("This setup isn't on the controller yet.", Controller.FooterText);
+        Assert.Equal("This setup isn't on the controller yet", Hardware.SaveBarText);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class SetupChooserTests : IDisposable
         Assert.True(Controller.CanEdit);
         Assert.Equal(5, Controller.Draft.Sliders.Count);
         Assert.Equal(5, Hardware.Sliders.Count);
-        Assert.Equal("This setup isn't on the controller yet.", Controller.FooterText);
+        Assert.Equal("This setup isn't on the controller yet", Hardware.SaveBarText);
         Assert.False(AnyWrite());
 
         Controller.RevertCommand.Execute(null);                       // the draft goes: the chooser is back
@@ -137,6 +137,6 @@ public sealed class SetupChooserTests : IDisposable
         Chooser.Cards[^1].PickCommand.Execute(null);
         Assert.False(Hardware.ShowChooser);
         Assert.Empty(Controller.Draft.Sliders);
-        Assert.Equal("Unsaved changes", Controller.FooterText);
+        Assert.True(Hardware.ShowSaveBar);
     }
 }

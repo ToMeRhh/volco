@@ -4,10 +4,9 @@ using Volco.Core.Controller.Proto;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>The Controller page's onboarding: a controller with no setup stored on it (or one that
-/// can't be used) gets a new draft from Volco's saved copy, a preset or nothing (the Hardware page's
-/// setup chooser, spec docs/design/hardware-page.md §7.1); until it is saved, the editor says what
-/// is left to do. Nothing is sent before Save.</summary>
+/// <summary>Onboarding: a controller with no setup stored on it (or one that can't be used) gets a
+/// new draft from Volco's saved copy, a preset or nothing (the Hardware page's setup chooser, spec
+/// docs/design/hardware-page.md §7.1). Nothing is sent before Save.</summary>
 public sealed partial class ControllerViewModel
 {
     /// <summary>The controller has no setup stored (spec §8.3 "isn't set up" rows).</summary>
@@ -24,9 +23,6 @@ public sealed partial class ControllerViewModel
     /// <summary>The presets a setup can start from: the available ones, Blank left out (Start empty).</summary>
     public IReadOnlyList<ControllerPreset> SetupPresets { get; } =
         ControllerPresets.All.Where(p => p.IsAvailable && p.Id != ControllerPresets.BlankId).ToList();
-
-    public string SetupGuideText => "Setting up this controller: set each pin to match your wiring, then Save to controller. "
-                                    + "After that, try it with Test controller.";
 
     /// <summary>Volco's saved copy as a new draft, sent by Save like any other.</summary>
     [RelayCommand]
@@ -45,5 +41,5 @@ public sealed partial class ControllerViewModel
 
     /// <summary>A new, empty draft.</summary>
     [RelayCommand]
-    private void StartFromScratch() => SetUp();
+    private void StartFromScratch() => StartNewDraft(new ControllerConfig { Preset = ControllerPresets.BlankId }, fixIt: false);
 }

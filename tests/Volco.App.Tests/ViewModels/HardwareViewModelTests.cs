@@ -122,7 +122,7 @@ public sealed class HardwareViewModelTests : IDisposable
     public void ChangedTileHasADot()
     {
         SetUpInSync();
-        Controller.Sliders[1].Pin = 39;
+        Controller.SetSliderPin(1, 39);
         Assert.True(Hardware.Sliders[1].Wiring!.HasChange);
         Assert.All(Hardware.Sliders.Where((_, i) => i != 1), s => Assert.False(s.Wiring!.HasChange));
         Assert.All(Hardware.Buttons, b => Assert.False(b.Wiring!.HasChange));
@@ -132,7 +132,7 @@ public sealed class HardwareViewModelTests : IDisposable
     public void AProblemIsOnItsTile()
     {
         SetUpInSync();
-        Controller.Sliders[1].Pin = 33;   // Slider 1's pin
+        Controller.SetSliderPin(1, 33);   // Slider 1's pin
         Assert.True(Hardware.Sliders[0].Wiring!.HasProblem);
         Assert.True(Hardware.Sliders[1].Wiring!.HasProblem);
         Assert.False(Hardware.Sliders[2].Wiring!.HasProblem);
@@ -225,7 +225,7 @@ public sealed class HardwareViewModelTests : IDisposable
     {
         SetUpInSync();
         Controller.AddSliderCommand.Execute(null);
-        Controller.Sliders[5].Pin = 39;
+        Controller.SetSliderPin(5, 39);
         Assert.Equal(6, Hardware.Sliders.Count);
         Assert.Equal(5, Config.Sliders.Count);
         Assert.DoesNotContain(Hardware.Sliders[5], _settings!.Controls.Sliders.Items);

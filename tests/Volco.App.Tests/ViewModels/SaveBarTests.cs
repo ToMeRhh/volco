@@ -66,10 +66,10 @@ public sealed class SaveBarTests : IDisposable
     public void CountsChangedThings()
     {
         SetUpInSync();
-        Controller.Sliders[1].Pin = 39;
+        Controller.SetSliderPin(1, 39);
         Assert.True(Hardware.ShowSaveBar);
         Assert.Equal("1 change not saved", Hardware.SaveBarText);
-        Controller.Sliders[2].Pin = 36;
+        Controller.SetSliderPin(2, 36);
         Controller.Brightness = 100;
         Assert.Equal("3 changes not saved", Hardware.SaveBarText);
     }
@@ -100,9 +100,9 @@ public sealed class SaveBarTests : IDisposable
     public void SaveDisabledWithProblems()
     {
         SetUpInSync();
-        Controller.Sliders[1].Pin = 39;
+        Controller.SetSliderPin(1, 39);
         Assert.True(Hardware.SaveCommand.CanExecute(null));
-        Controller.Sliders[1].Pin = 33;   // Slider 1's pin
+        Controller.SetSliderPin(1, 33);   // Slider 1's pin
         Assert.False(Hardware.SaveCommand.CanExecute(null));
     }
 
@@ -111,7 +111,7 @@ public sealed class SaveBarTests : IDisposable
     {
         SetUpInSync();
         Controller.RemoveSlider(2);
-        Controller.Sliders[0].Pin = 39;
+        Controller.SetSliderPin(0, 39);
         Hardware.DiscardCommand.Execute(null);
         Assert.False(Hardware.ShowSaveBar);
         Assert.Equal(5, Hardware.Sliders.Count);

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Avalonia;
 using Volco.App;
+using Volco.App.Views.Stage;
 using Volco.Core.Diagnostics;
 using Volco.Windows.Firmware;
 using Volco.Windows.Media;
@@ -12,10 +13,16 @@ namespace Volco.Windows;
 internal static class Program
 {
     private const int ASFW_ANY = -1;
+    private const uint SPI_GETCLIENTAREAANIMATION = 0x1042;
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool AllowSetForegroundWindow(int dwProcessId);
+
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint uiAction, uint uiParam,
+                                                    [MarshalAs(UnmanagedType.Bool)] out bool pvParam, uint fWinIni);
 
     [STAThread]
     private static int Main(string[] args)
@@ -32,6 +39,10 @@ internal static class Program
         // A second start (a double-click) has the foreground; pass that right on, so the running
         // Volco it asks to show its window may come to the front instead of flashing in the taskbar.
         AllowSetForegroundWindow(ASFW_ANY);
+
+        // Settings › Accessibility › Visual effects › Animation effects: off, the settings window's
+        // crossfades swap at once (hardware-page spec §3.3).
+        if (SystemParametersInfo(SPI_GETCLIENTAREAANIMATION, 0, out var animate, 0)) StageTransitions.Enabled = animate;
 
         return VolcoAppHost.Run(args, UseWindowsBackends, () =>
         {

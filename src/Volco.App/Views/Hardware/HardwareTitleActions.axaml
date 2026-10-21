@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             x:Class="Volco.App.Views.Hardware.HardwareTitleActions"
+             x:DataType="hw:HardwareViewModel">
+  <!-- Hardware's title-row buttons (hardware-page spec §3.2): + Add (Slider, Button), the
+       Controller settings chip and Test; they sit in the title row so no tile moves -->
+  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+    <Button Name="AddButton" Classes="TitleAction" IsEnabled="{Binding !IsReadOnly}">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <PathIcon Data="{StaticResource Icon.Plus}" Width="10" Height="10"/>
+        <TextBlock Text="Add"/>
+      </StackPanel>
+      <Button.Flyout>
+        <MenuFlyout Placement="BottomEdgeAlignedRight">
+          <MenuItem Name="AddSliderMenuItem" Header="Slider" Command="{Binding AddSliderCommand}"/>
+          <MenuItem Name="AddButtonMenuItem" Header="Button" Command="{Binding AddButtonCommand}"/>
+        </MenuFlyout>
+      </Button.Flyout>
+    </Button>
+    <Button Name="ControllerSettingsChip" Classes="BusChip TitleAction" Classes.selected="{Binding IsSettingsSelected}"
+            Content="Controller settings" Command="{Binding SelectControllerSettingsCommand}"/>
+    <Button Name="TestButton" Classes="TitleAction" Content="Test" Command="{Binding StartTestCommand}"
+            IsVisible="{Binding !IsTesting}"/>
+    <Button Name="StopTestButton" Classes="Primary TitleAction" Content="Stop test" Command="{Binding StopTestCommand}"
+            IsVisible="{Binding IsTesting}"/>
+  </StackPanel>
+</UserControl>

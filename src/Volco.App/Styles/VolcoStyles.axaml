@@ -681,6 +681,12 @@
   <Style Selector="Grid.StageTitleRow">
     <Setter Property="Height" Value="32"/>
   </Style>
+  <!-- Hardware's title-row buttons fit the row's 32 px -->
+  <Style Selector="Grid.StageTitleRow Button.TitleAction">
+    <Setter Property="Padding" Value="10,4"/>
+    <Setter Property="Margin" Value="0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
   <Style Selector="StackPanel.WiringCaptions">
     <Setter Property="Spacing" Value="3"/>
   </Style>

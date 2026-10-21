@@ -4,12 +4,11 @@ using Volco.Core.Config;
 using Volco.Core.Controller;
 using Volco.Core.Firmware;
 using Volco.Core.Runtime;
-using Volco.Core.Updates;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>The Controller page's firmware part (spec §8.6): Install, Update, Check firmware, the
-/// inline firmware panel, and the hint shown when the serial port gets no Hello.</summary>
+/// <summary>The firmware part (spec §8.6; hardware-page spec §4): Reinstall (today's Install),
+/// Update and Check firmware, whose progress and result the device card shows.</summary>
 public sealed partial class ControllerViewModel
 {
     private FirmwareService? _firmware;
@@ -43,14 +42,12 @@ public sealed partial class ControllerViewModel
 
     private bool _wasSerial = true;
 
-    /// <summary>The panel's last result ("Installed…", "Test your controller now", the Install offer)
-    /// belongs to the moment it happened: it goes when the page is left, the controller goes away or
+    /// <summary>The last result ("Installed…", "Test your controller now") belongs to the moment it happened: it goes when the page is left, the controller goes away or
     /// the connection changes.</summary>
     internal void ClearFirmwareResult()
     {
         if (IsFirmwareRunning) return;
         FirmwareMessage = null;
-        OfferInstall = false;
         OfferTest = false;
         ConfirmInstallPending = false;
     }
@@ -65,50 +62,26 @@ public sealed partial class ControllerViewModel
 
     private bool IsSerialConnection => _config.Config.Connection.Type == ConnectionType.Serial;
 
-    /// <summary>The firmware buttons apply: the connection is USB (Serial).</summary>
-    public bool IsSerial => IsSerialConnection;
-
     /// <summary>Install/Update/Check can run now.</summary>
     public bool CanUseFirmware => _firmware is { IsAvailable: true, IsBusy: false } && IsSerialConnection
                                   && !_runtime.IsUserDisconnected && !IsTesting && _service.Operation == ConfigOperation.Idle;
 
-    /// <summary>Why the firmware buttons are disabled, or null.</summary>
-    public string? FirmwareHint => _firmware is not { IsAvailable: true }
-        ? "This build of Volco has no firmware."
-        : !IsSerialConnection ? FirmwareService.SerialOnlyMessage
-        : _runtime.IsUserDisconnected ? FirmwareService.DisconnectedMessage : null;
-
-    /// <summary>Update is offered: a newer bundled build, or firmware this app can't talk to.</summary>
-    public bool ShowUpdateFirmware => Banner.FirmwareUpdateAvailable || Banner.Actions.HasFlag(BannerActions.Update);
-
-    /// <summary>"Firmware 3f9c2a1b5d07 (from Volco 1.2.0)" when it is the bundled build.</summary>
-    private string FirmwareVersionText(string fw)
-        => _firmware?.Catalog.BundledVersion == fw ? $"Firmware {fw} (from Volco {BuildInfo.DisplayVersion})" : $"Firmware {fw}";
-
-    // ── The panel ──
-
-    /// <summary>Install, Update and Check use the port the Connection section picked.</summary>
+    /// <summary>Install, Update and Check use the port the Connection dialog picked.</summary>
     private string FirmwarePort => _config.Config.Connection.Serial.ComPort;
     [ObservableProperty] private bool _isFirmwareRunning;
-    [ObservableProperty] private string? _firmwareStage;
     [ObservableProperty] private double _firmwareProgress;
     [ObservableProperty] private string? _firmwareMessage;
-    [ObservableProperty] private bool _offerInstall;
+
+    /// <summary>The card offers "Test your controller now": after an Update or a first save.</summary>
     [ObservableProperty] private bool _offerTest;
-    [ObservableProperty] private bool _canCancelFirmware;
 
-    public bool HasFirmwareMessage => FirmwareMessage is not null;
-
-    /// <summary>The result's icon: Volco's firmware found or written is good, other firmware a
+    /// <summary>The result's tone: Volco's firmware found or written is good, other firmware a
     /// warning, a failure a danger.</summary>
     [ObservableProperty] private LinkTone _firmwareMessageTone;
-    partial void OnFirmwareMessageChanged(string? value) => OnPropertyChanged(nameof(HasFirmwareMessage));
 
-    /// <summary>Install wipes the controller's setup, so it asks first in a dialog (Volco keeps its
-    /// copy). Nothing on the page changes until it is confirmed: Cancel leaves the page as it was.</summary>
+    /// <summary>Install wipes the controller's setup, so it asks first on the card (Volco keeps its
+    /// copy). Nothing changes until it is confirmed: Cancel leaves the page as it was.</summary>
     [ObservableProperty] private bool _confirmInstallPending;
-
-    partial void OnConfirmInstallPendingChanged(bool value) => OnPropertyChanged(nameof(HasDialog));
 
     [RelayCommand]
     private void InstallFirmware()
@@ -134,9 +107,6 @@ public sealed partial class ControllerViewModel
     private void CheckFirmware() => _ = RunProbe();
 
     [RelayCommand]
-    private void CancelFirmware() => _firmwareCts?.Cancel();
-
-    [RelayCommand]
     private void TestNow()
     {
         OfferTest = false;
@@ -153,17 +123,7 @@ public sealed partial class ControllerViewModel
         {
             if (vm._disposed || !vm.IsFirmwareRunning || p.Stage < _latest) return;   // late or after the end
             _latest = p.Stage;
-            vm.FirmwareStage = p.Stage switch
-            {
-                FlashStage.Connecting => "Starting the board's bootloader…",
-                FlashStage.Erasing => "Clearing the old settings…",
-                FlashStage.Writing => "Writing the firmware…",
-                FlashStage.Verifying => "Checking what was written…",
-                _ => "Restarting the controller…",
-            };
             vm.FirmwareProgress = p.Stage == FlashStage.Writing ? p.Fraction : vm.FirmwareProgress;
-            // Spec §8.6: cancellation only before the first write.
-            vm.CanCancelFirmware = p.Stage == FlashStage.Connecting;
         });
     }
 
@@ -178,12 +138,9 @@ public sealed partial class ControllerViewModel
         if (!IsSaving) SetProgress(null);   // a save's result belongs to the operation before
         _firmwareCts = new CancellationTokenSource();
         IsFirmwareRunning = true;
-        CanCancelFirmware = true;
         FirmwareMessage = null;
-        OfferInstall = false;
         OfferTest = false;
         FirmwareProgress = 0;
-        FirmwareStage = "Starting the board's bootloader…";
         return true;
     }
 
@@ -191,8 +148,6 @@ public sealed partial class ControllerViewModel
     {
         IsFirmwareRunning = false;
         FirmwareActivity = LinkActivity.None;
-        CanCancelFirmware = false;
-        FirmwareStage = null;
         FirmwareMessageTone = tone;
         FirmwareMessage = message;
         RefreshAll();
@@ -211,7 +166,6 @@ public sealed partial class ControllerViewModel
                 ProbeKind.DifferentFirmware => LinkTone.Warning,
                 _ => LinkTone.Danger,
             });
-            OfferInstall = outcome.OfferInstall;
         });
     }
 
@@ -234,19 +188,9 @@ public sealed partial class ControllerViewModel
         if (!_disposed) RefreshAll();
     });
 
-    /// <summary>The NoAnswer banner's button: probe the configured port.</summary>
-    [RelayCommand]
-    private void CheckWhatsConnected()
-    {
-        CheckFirmware();
-    }
-
     private void RefreshFirmware()
     {
         OnPropertyChanged(nameof(CanUseFirmware));
-        OnPropertyChanged(nameof(IsSerial));
-        OnPropertyChanged(nameof(FirmwareHint));
-        OnPropertyChanged(nameof(ShowUpdateFirmware));
         InstallFirmwareCommand.NotifyCanExecuteChanged();
     }
 }
