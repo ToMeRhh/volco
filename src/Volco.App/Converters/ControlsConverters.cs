@@ -8,7 +8,7 @@ using Volco.Core.Input;
 
 namespace Volco.App.Converters;
 
-/// <summary>Icons on the Controls page, from the vector art in Styles/Icons.axaml.</summary>
+/// <summary>Icons on the Controller page, from the vector art in Styles/Icons.axaml.</summary>
 public static class IconConverters
 {
     /// <summary>A resource key ("Icon.Speaker") → its geometry.</summary>

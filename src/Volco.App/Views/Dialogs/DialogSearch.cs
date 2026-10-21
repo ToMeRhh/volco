@@ -6,7 +6,7 @@ using Volco.App.ViewModels.Search;
 
 namespace Volco.App.Views.Dialogs;
 
-/// <summary>The search box shared by the Controls page's dialogs: it has the focus on open, and in
+/// <summary>The search box shared by the Controller page's dialogs: it has the focus on open, and in
 /// it Down and Up move through the list and Enter picks (an <see cref="ISearchList"/> DataContext).</summary>
 internal static class DialogSearch
 {

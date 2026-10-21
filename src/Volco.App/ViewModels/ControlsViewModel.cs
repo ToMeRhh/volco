@@ -9,7 +9,7 @@ using Volco.Core.Input;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The Controls page (spec docs/design/controls-page.md): one drawing of the controller, its
+/// The Controller page (spec docs/design/controls-page.md): one drawing of the controller, its
 /// sliders and buttons, and an inspector for the selected one. It owns the Sliders and Buttons
 /// view models, which keep the lists and their edits, and adds the drawing's counts, the selection
 /// and the page's dialog. The controller's presses and slider moves only flash their tiles.

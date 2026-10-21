@@ -5,7 +5,7 @@ using Avalonia.Controls;
 namespace Volco.App.Controls;
 
 /// <summary>
-/// A mode's colour on the Controls page. Setting <c>ModeTint.Index</c> on a control puts two
+/// A mode's colour on the Controller page. Setting <c>ModeTint.Index</c> on a control puts two
 /// resources in it, <c>ModeFill</c> and <c>ModeEdge</c>: the theme's <c>ModeFill{n}Brush</c> and
 /// <c>ModeEdge{n}Brush</c> (n = index mod <see cref="Count"/>), kept current when the theme changes.
 /// The control, its template and its content use them as <c>{DynamicResource ModeFill}</c>.

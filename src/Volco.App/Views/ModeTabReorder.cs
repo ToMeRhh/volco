@@ -10,7 +10,7 @@ using Volco.App.ViewModels;
 namespace Volco.App.Views;
 
 /// <summary>
-/// Drag-to-reorder for the Controls page's mode tabs, only while the strip is in edit mode
+/// Drag-to-reorder for the Controller page's mode tabs, only while the strip is in edit mode
 /// (spec controls-page §9.4). A tab's position is the mode's: the first is the start-up mode, and
 /// colours follow positions.
 /// <list type="bullet">

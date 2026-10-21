@@ -6,7 +6,7 @@ namespace Volco.Core.Runtime;
 /// What the user is told about the controller (spec: 2026-10-06 link state). "Connected" means
 /// Volco and the controller talk the same protocol: a Hello with this app's version arrived. A
 /// port that is merely open, or a packet that merely arrived, is never "connected". Every UI
-/// surface (tray, sidebar footer, Connection and Controller pages) reads only this.
+/// surface (tray, sidebar card, Connection and Controller pages) reads only this.
 /// </summary>
 public enum LinkState
 {

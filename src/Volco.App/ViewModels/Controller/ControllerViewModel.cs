@@ -12,7 +12,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The Hardware page's controller logic (spec docs/design/hardware-page.md): the banner, a draft
+/// The Controller page's controller logic (spec docs/design/hardware-page.md): the banner, a draft
 /// of the controller's config with the editing model, presets, Save/Revert through
 /// <see cref="ControllerConfigService"/>, inline confirmations, the hardware test and firmware.
 /// The page's view models (<see cref="Hardware.HardwareViewModel"/> and the ones it makes) show
@@ -66,7 +66,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     // ── Status and banner ────────────────────────────────────────────────────────────────────
 
     /// <summary>The link status, Connect/Disconnect and how Volco talks to the controller (the
-    /// Connection dialog and the sidebar footer).</summary>
+    /// Connection dialog and the sidebar card).</summary>
     public ConnectionViewModel Connection { get; }
 
     /// <summary>The Connection dialog changed the type or port: the firmware state follows at
@@ -713,7 +713,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         // With no usable copy in Volco the draft is the Blank placeholder. While nobody has started a
         // draft from it, it follows the copy that arrives (the automatic read, Retry, Keep): it only
-        // counts as dirty against the empty baseline, and kept, the Hardware page drew no controls
+        // counts as dirty against the empty baseline, and kept, the Controller page drew no controls
         // and the draft's layout (none) no longer matched the controller's setup.
         var placeholder = IsPlaceholder;
         _hasPermission = false;

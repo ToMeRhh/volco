@@ -9,7 +9,7 @@ using Volco.Core.Programs;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// One slider of the Controls page. Its position in <see cref="SlidersViewModel.Items"/>
+/// One slider of the Controller page. Its position in <see cref="SlidersViewModel.Items"/>
 /// (= <see cref="Index"/>) is the hardware input number. Edits write straight through to the
 /// wrapped <see cref="SliderConfig"/> and request a save.
 /// </summary>
@@ -44,7 +44,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     /// the draft's number while the draft draws it (hardware-page spec §6.5), else <see cref="Heading"/>.</summary>
     public string DisplayHeading => DraftHeading ?? Heading;
 
-    /// <summary>The Controls page's selected tile.</summary>
+    /// <summary>The Controller page's selected tile.</summary>
     [ObservableProperty]
     private bool _isSelected;
 
@@ -196,7 +196,7 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     // ── View state ────────────────────────────────────────────────────────────
 
-    /// <summary>The tile's captions on Hardware; null until the Hardware page fills them.</summary>
+    /// <summary>The tile's captions on Hardware; null until the Controller page fills them.</summary>
     [ObservableProperty]
     private TileWiring? _wiring;
 

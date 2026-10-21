@@ -12,7 +12,7 @@
       <MenuItem Header="Swap with"/>
     </ContextMenu>
   </UserControl.ContextMenu>
-  <!-- One button on the Controls page's drawing (spec §4.3). Its four rows (indicator, cap, main
+  <!-- One button on the Controller page's drawing (spec §4.3). Its four rows (indicator, cap, main
        action, other actions) share their heights with every tile on the board, so caps and
        action lists line up whatever each button has. -->
   <!-- TileFlash adds "flash" when the controller reports the control -->

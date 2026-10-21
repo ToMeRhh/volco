@@ -105,7 +105,7 @@ public sealed partial class ActionSlotViewModel : ObservableObject, IDeviceLabel
     public bool NeedsWhileRunning => ActionCatalog.NeedsWhileRunning(Type);
     public bool CanTest => Type != ButtonActionType.None;
 
-    // ── The Controls page's inspector row ─────────────────────────────────────
+    // ── The Controller page's inspector row ─────────────────────────────────────
 
     /// <summary>The row's text: the action's short label, or "—" when the slot is empty.</summary>
     [ObservableProperty]

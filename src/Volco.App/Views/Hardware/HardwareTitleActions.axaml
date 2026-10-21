@@ -18,7 +18,7 @@
         </MenuFlyout>
       </Button.Flyout>
     </Button>
-    <Button Name="ControllerSettingsChip" Classes="BusChip TitleAction" Classes.selected="{Binding IsSettingsSelected}"
+    <Button Name="ControllerSettingsChip" Classes="Chip TitleAction" Classes.selected="{Binding IsSettingsSelected}"
             Content="Controller settings" Command="{Binding SelectControllerSettingsCommand}"/>
     <Button Name="TestButton" Classes="TitleAction" Content="Test" Command="{Binding StartTestCommand}"
             IsVisible="{Binding !IsTesting}"/>

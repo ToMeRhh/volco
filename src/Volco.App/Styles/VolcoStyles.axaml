@@ -263,7 +263,7 @@
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
-  <!-- ── Controls page: the drawing (spec §4) ────────────────────────────
+  <!-- ── Controller page: the drawing (spec §4) ────────────────────────────
        The case holds the slider grid and the buttons' frame. Each tile is a SliderTile or a
        ButtonTile: transparent until hovered, the accent outline when selected, dashed when the
        controller doesn't have it, and the activity flash when the controller reports it.
@@ -644,7 +644,7 @@
     <Setter Property="IsHitTestVisible" Value="True"/>
   </Style>
   <!-- The pill-shaped chip in the title row (Controller settings) -->
-  <Style Selector="Button.BusChip">
+  <Style Selector="Button.Chip">
     <Setter Property="Margin" Value="0,0,8,0"/>
     <Setter Property="Padding" Value="10,3"/>
     <Setter Property="FontSize" Value="12"/>
@@ -653,7 +653,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
   </Style>
-  <Style Selector="Button.BusChip.selected /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="Button.Chip.selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="BorderThickness" Value="1.5"/>
   </Style>
@@ -773,7 +773,7 @@
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
-  <!-- ── Controls page: the inspector (spec §5) ──────────────────────────
+  <!-- ── Controller page: the inspector (spec §5) ──────────────────────────
        A fixed column: a header, then one-line rows of 44 px, and the collapsed sections. -->
   <Style Selector="Border.Inspector">
     <Setter Property="Width" Value="380"/>
@@ -1139,7 +1139,7 @@
     <Setter Property="IsHitTestVisible" Value="False"/>
   </Style>
 
-  <!-- ── Controls page dialogs (spec §6) ───────────────────────────────── -->
+  <!-- ── Controller page dialogs (spec §6) ───────────────────────────────── -->
   <!-- Up to 640 × 560, smaller in a small window, centred over the page. -->
   <Style Selector="Border.DialogCard">
     <Setter Property="Padding" Value="0"/>

@@ -64,8 +64,6 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     /// <summary>What the status panel says next to the state, e.g. "COM3 · USB cable", "192.168.1.40 · Wi-Fi".</summary>
     public string TransportDetails => LinkText.Transport(_config.Config.Connection, Link.IsConnected ? _runtime.PeerAddress : null);
 
-    /// <summary>The navigation footer's text: "Connected · COM3", "Looking for your controller", …</summary>
-
     /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", while connected; "" otherwise.</summary>
     public string HardwareSummary => Link.IsConnected ? Summarize(_config.Config.Controller) : "";
     public bool HasHardwareSummary => HardwareSummary.Length > 0;

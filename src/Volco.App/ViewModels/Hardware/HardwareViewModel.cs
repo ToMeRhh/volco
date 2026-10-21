@@ -12,7 +12,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// The Hardware page's drawing (spec docs/design/hardware-page.md §5): the draft's controls in
+/// The Controller page's drawing (spec docs/design/hardware-page.md §5): the draft's controls in
 /// draft order, each the Controls item its <see cref="ControlLayout"/> source names (so a slider
 /// that moved down keeps its target) or a detached item for an added one, with its wiring captions
 /// (<see cref="TileWiring"/>) and the live raw input. Every Controls item has a wiring from the start,

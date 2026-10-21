@@ -11,7 +11,7 @@
       <MenuItem Header="Swap with"/>
     </ContextMenu>
   </UserControl.ContextMenu>
-  <!-- One slider on the Controls page's drawing (spec §4.2): the live level, a grip beside the
+  <!-- One slider on the Controller page's drawing (spec §4.2): the live level, a grip beside the
        track, and the name, else what it controls. -->
   <!-- TileFlash adds "flash" when the controller reports the control -->
   <Panel Name="TileRoot" Classes="TileRoot">

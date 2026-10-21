@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>A question the Hardware page asks inline, in its side panel (the app has no dialog
+/// <summary>A question the Controller page asks inline, in its side panel (the app has no dialog
 /// windows). Confirm runs the action; either button closes it.</summary>
 public sealed class Confirmation
 {

@@ -8,7 +8,7 @@ using Volco.Core.Config;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The sliders of the Controls page, in hardware-input order. Position is identity, so moving a
+/// The sliders of the Controller page, in hardware-input order. Position is identity, so moving a
 /// slider moves its configuration to another physical slider, and only the last can be removed.
 /// </summary>
 public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDisposable
@@ -54,7 +54,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
 
     private void Save() => _config.RequestSave();
 
-    /// <summary>A "Not set up" slider for a control the Hardware page's draft adds: not in
+    /// <summary>A "Not set up" slider for a control the Controller page's draft adds: not in
     /// <see cref="Items"/> and never saved (Volco's settings get it once the controller confirms).</summary>
     public SliderItemViewModel CreateDetached(int index)
         => new(new SliderConfig { Index = index, Type = SliderMappingType.None }, index, _devices, this, () => { }) { IsNew = true };

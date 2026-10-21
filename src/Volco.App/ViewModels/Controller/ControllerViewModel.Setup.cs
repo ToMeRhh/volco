@@ -5,7 +5,7 @@ using Volco.Core.Controller.Proto;
 namespace Volco.App.ViewModels;
 
 /// <summary>Onboarding: a controller with no setup stored on it (or one that can't be used) gets a
-/// new draft from Volco's saved copy, a preset or nothing (the Hardware page's setup chooser, spec
+/// new draft from Volco's saved copy, a preset or nothing (the Controller page's setup chooser, spec
 /// docs/design/hardware-page.md §7.1). Nothing is sent before Save.</summary>
 public sealed partial class ControllerViewModel
 {

@@ -15,7 +15,7 @@ namespace Volco.App.ViewModels;
 public sealed record GestureLine(PressType Gesture, string Label, string IconKey);
 
 /// <summary>
-/// One button of the Controls page. Its position (= <see cref="Index"/>) is the hardware input
+/// One button of the Controller page. Its position (= <see cref="Index"/>) is the hardware input
 /// number. Timing is shared by every mode; the action rows and the light and screen previews show
 /// the mode being edited (when it is live, exactly what the controller shows).
 /// </summary>
@@ -55,11 +55,11 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     /// the draft's number while the draft draws it (hardware-page spec §6.5), else <see cref="Heading"/>.</summary>
     public string DisplayHeading => DraftHeading ?? Heading;
 
-    /// <summary>The tile's captions on Hardware; null until the Hardware page fills them.</summary>
+    /// <summary>The tile's captions on Hardware; null until the Controller page fills them.</summary>
     [ObservableProperty]
     private TileWiring? _wiring;
 
-    /// <summary>The Controls page's selected tile.</summary>
+    /// <summary>The Controller page's selected tile.</summary>
     [ObservableProperty]
     private bool _isSelected;
 

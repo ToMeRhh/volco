@@ -9,7 +9,7 @@ namespace Volco.App.Controls;
 /// <summary>
 /// A tile's flash when the controller reports its control (spec §4.1): the "flash" class on the
 /// tile's root while the animation runs, then off again. It plays only on a report made while the
-/// tile is on screen. A tile that appears (the Controls page opened again) never flashes for a
+/// tile is on screen. A tile that appears (the Controller page opened again) never flashes for a
 /// report made earlier, which a bound class would replay, because the item stays active.
 /// </summary>
 internal sealed class TileFlash

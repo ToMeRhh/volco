@@ -11,7 +11,7 @@ namespace Volco.App.ViewModels;
 /// <summary>
 /// The General page: start at sign-in (where the platform has it), updates (release builds only)
 /// and troubleshooting (the log and config file locations). Device names and icons are edited from
-/// the Controls page's dialogs; the version and GitHub link are <see cref="AboutViewModel"/>.
+/// the Controller page's dialogs; the version and GitHub link are <see cref="AboutViewModel"/>.
 /// The update flow itself lives in <see cref="Controls.UpdatesPanel"/>.
 /// </summary>
 public partial class GeneralViewModel : ObservableObject

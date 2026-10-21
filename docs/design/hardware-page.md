@@ -1,5 +1,7 @@
 # Hardware page: the controller drawn with its wiring
 
+> On branch unified-controller-page this two-page design is superseded by `docs/design/controller-page.md`.
+
 Date: 2026-10-20. Status: design, from the approved pitch.
 
 The pitch, with its mocks, is the reference for anything this text leaves visual: <https://claude.ai/code/artifact/f4a92632-870d-42cb-a9b8-9a58f3b01c0c> (private to the owner). Mock numbers below are the pitch's. Related: `docs/design/controller-config.md` §8 (today's page, whose rules this keeps unless it says otherwise), `docs/design/controls-page.md` (the drawing and inspector this reuses), #108 (double slider smoothing).

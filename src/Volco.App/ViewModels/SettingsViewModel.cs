@@ -70,7 +70,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _buttonsViewModel ??= new ButtonsViewModel(_config, _audio, _runtime, _runtime.Execute, Toast,
                                                    ActionCapabilities.Of(_runtime));
 
-    /// <summary>The Controls page: the drawing and inspector over <see cref="Sliders"/> and
+    /// <summary>The Controller page: the drawing and inspector over <see cref="Sliders"/> and
     /// <see cref="Buttons"/>, whose dialogs edit device names through <see cref="Devices"/>. The
     /// <see cref="Hardware"/> view model is made with it, so every tile has its wiring from the start.</summary>
     public ControlsViewModel Controls
@@ -86,7 +86,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The Hardware page: the draft's controls over the Controls items, with their wiring.</summary>
+    /// <summary>The Controller page: the draft's controls over the Controls items, with their wiring.</summary>
     public HardwareViewModel Hardware
     {
         get
@@ -96,7 +96,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The Controls page's view model if the page was ever opened; null otherwise.</summary>
+    /// <summary>The Controller page's view model if the page was ever opened; null otherwise.</summary>
     public ControlsViewModel? ControlsIfCreated => _controlsViewModel;
 
     public GeneralViewModel General =>
