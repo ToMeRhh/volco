@@ -214,6 +214,16 @@ public sealed class StageNavigationTests
     }
 
     [AvaloniaFact]
+    public void TheHardwareEntrysDotFollowsTheVm()
+    {
+        using var s = Show();
+        var item = s.Window.FindControl<ListBox>("NavList")!.Items.Cast<NavItem>().Single(n => n.Tag == "controller");
+        Assert.False(item.ShowDot);
+        s.Vm.ControllerNavDot = true;
+        Assert.True(item.ShowDot);
+    }
+
+    [AvaloniaFact]
     public void LeavingHardwareForAnyPageOrHidingEndsTheTest()
     {
         using var s = Show();
