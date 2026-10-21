@@ -275,14 +275,16 @@ public sealed class SidebarCardTests : IDisposable
     {
         using var s = Show();
         var more = In<Button>(s.Card, "MoreButton");
-        var flyout = (MenuFlyout)more.Flyout!;
-        flyout.ShowAt(more);
+        // The menu item that asked has the focus, and is gone once the menu closes.
+        var about = s.Window.FindControl<StackPanel>("AboutFooter")!;
+        var item = new Button { Content = "Reinstall firmware…" };
+        about.Children.Add(item);
         Settle(s.Window);
-        var item = flyout.Items.OfType<MenuItem>().Single(i => i.Name == "ReinstallMenuItem");
         item.Focus();
         Assert.True(item.IsFocused);
         s.Vm.Controller.ConfirmInstallPending = true;   // what the item asks (the rig bundles no firmware)
-        flyout.Hide();
+        Settle(s.Window);
+        about.Children.Remove(item);
         Settle(s.Window);
         Assert.True(s.Window.FindControl<Border>("ReinstallOverlay")!.IsVisible);
 
@@ -302,7 +304,7 @@ public sealed class SidebarCardTests : IDisposable
 
         s.Window.MouseMove(new Point(20, 300));   // the mouse on the sidebar opens it over the page
         Settle(s.Window);
-        Assert.True(s.Window.FindControl<Grid>("SidebarHost")!.Classes.Contains(":pointerover"));
+        Assert.Contains(":pointerover", s.Window.FindControl<Grid>("SidebarHost")!.Classes);
         Assert.True(status.IsEffectivelyVisible);
         Assert.False(dot.IsEffectivelyVisible);
 
@@ -337,7 +339,8 @@ public sealed class SidebarCardTests : IDisposable
         {
             var point = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), s.Window)!.Value;
             var hit = s.Window.InputHitTest(point) as Visual;
-            Assert.True(ReferenceEquals(hit, overlay) || overlay.IsVisualAncestorOf(hit), $"{target.Name} is reachable");
+            Assert.True(ReferenceEquals(hit, overlay) || overlay.IsVisualAncestorOf(hit),
+                        $"{target.Name} is reachable at {point}: the hit is {hit?.GetType().Name} {(hit as Control)?.Name}");
         }
 
         // No key reaches them either, even with the focus forced onto them.
