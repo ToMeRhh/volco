@@ -54,7 +54,7 @@ public sealed class SetupChooserTests : IDisposable
         Assert.Equal(BannerKind.NotSetUpHasMirror, Controller.Banner.Kind);
         Assert.True(Hardware.ShowChooser);
         Assert.Equal("How do you want to start?", Chooser.Title);
-        Assert.Equal("Nothing is sent to the controller until you Save.", Chooser.Subtitle);
+        Assert.Equal("Presets and Start empty are sent only when you Save.", Chooser.Subtitle);
 
         var saved = Chooser.Cards[0];
         Assert.Equal("Volco's saved copy", saved.Title);
@@ -71,11 +71,45 @@ public sealed class SetupChooserTests : IDisposable
         Assert.True(empty.IsDashed);
         Assert.Null(empty.Picture);
 
+    }
+
+    private void WaitForWrite()
+    {
+        for (var i = 0; i < 200 && !AnyWrite(); i++) { _ui.RunAll(); Thread.Sleep(10); }
+    }
+
+    [Fact]
+    public void SavedCopyIsSentAtOnce()
+    {
+        Settings(DiyBlob);
+        Greet(ControllerConfigState.None, 0);
+        var saved = Chooser.Cards[0];
+        Assert.True(saved.IsEnabled);
+        Assert.Null(saved.ToolTip);
+
         saved.PickCommand.Execute(null);
-        Assert.False(Hardware.ShowChooser);
-        Assert.False(AnyWrite());                                    // nothing is sent before Save
-        Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(Controller.Draft));
-        Assert.Equal("This setup isn't on the controller yet", Hardware.SaveBarText);
+        WaitForWrite();
+        Assert.True(AnyWrite());                                     // the write burst carries the mirror
+        Assert.True(Controller.IsSaving);
+        Assert.False(Controller.HasNewDraft);                        // no draft
+        Assert.False(Hardware.ShowSaveBar);                          // no save bar
+    }
+
+    [Fact]
+    public void SavedCopyNeedsAConnectedController()
+    {
+        Settings(DiyBlob);                                           // no Hello yet
+        var saved = Chooser.Cards[0];
+        Assert.Equal("Volco's saved copy", saved.Title);
+        Assert.False(saved.IsEnabled);
+        Assert.Equal("Connect the controller first", saved.ToolTip);
+        Controller.SetupApplySavedCommand.Execute(null);
+        Assert.False(AnyWrite());
+        Assert.False(Controller.IsSaving);
+
+        Greet(ControllerConfigState.None, 0);
+        Chooser.Refresh();
+        Assert.True(Chooser.Cards[0].IsEnabled);
     }
 
     [Fact]

@@ -78,7 +78,7 @@ public sealed partial class ControllerViewModel
     [ObservableProperty] private bool _offerTest;
 
     /// <summary>The last Check firmware asks to reinstall ("doesn't have this version…"): the card's
-    /// button is Reinstall firmware…, until the result goes.</summary>
+    /// button is Install firmware, until the result goes.</summary>
     [ObservableProperty] private bool _offerInstall;
 
     /// <summary>The result's tone: Volco's firmware found or written is good, other firmware a

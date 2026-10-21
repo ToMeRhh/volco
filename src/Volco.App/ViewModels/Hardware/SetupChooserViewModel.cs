@@ -10,7 +10,7 @@ namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>One card of the setup chooser: a title, the counts or a sentence, a small picture of
 /// its controls (none for Start empty), and what picking it does.</summary>
-public sealed class ChooserCard
+public sealed partial class ChooserCard : ObservableObject
 {
     public ChooserCard(string title, string summary, string description, ControllerConfig? picture, bool isPrimary, Action pick)
     {
@@ -43,13 +43,19 @@ public sealed class ChooserCard
     public bool IsDashed => Picture is null;
 
     public ICommand PickCommand { get; }
+
+    /// <summary>False while picking the card can't work (the saved copy needs a ready controller).</summary>
+    [ObservableProperty] private bool _isEnabled = true;
+
+    /// <summary>Why the card is disabled; null while it is enabled.</summary>
+    [ObservableProperty] private string? _toolTip;
 }
 
 /// <summary>
 /// The setup chooser (hardware-page spec §7.1), in the drawing's place when the controller isn't
 /// set up, its setup can't be used, or the user chose Start over: Volco's saved copy (with a
-/// mirror), each available preset, then Start empty. Picking one starts a new draft; nothing is
-/// sent before Save. After Start over, Back (or Escape) returns to the drawing.
+/// mirror), each available preset, then Start empty. Volco's saved copy is sent to the controller at
+/// once (controller-page spec §4.4); a preset or Start empty starts a new draft, sent by Save. After Start over, Back (or Escape) returns to the drawing.
 /// </summary>
 public sealed partial class SetupChooserViewModel : ObservableObject
 {
@@ -75,7 +81,7 @@ public sealed partial class SetupChooserViewModel : ObservableObject
 
     public string Title => "How do you want to start?";
 
-    public string Subtitle => "Nothing is sent to the controller until you Save.";
+    public string Subtitle => "Presets and Start empty are sent only when you Save.";
 
     public ObservableCollection<ChooserCard> Cards { get; } = new();
 
@@ -84,13 +90,19 @@ public sealed partial class SetupChooserViewModel : ObservableObject
     {
         var mirror = _controller.DecodeMirror();
         var key = mirror?.ToByteArray() ?? Array.Empty<byte>();
+        if (_saved is not null) SetSavedAvailability();
         if (_shownFor is not null && _shownFor.AsSpan().SequenceEqual(key)) return;
         _shownFor = key;
 
         Cards.Clear();
+        _saved = null;
         if (mirror is not null)
-            Cards.Add(new ChooserCard("Volco's saved copy", ConfigDiff.Counts(mirror), "", mirror, true,
-                                      () => Pick(() => _controller.SetupApplySavedCommand.Execute(null))));
+        {
+            _saved = new ChooserCard("Volco's saved copy", ConfigDiff.Counts(mirror), "", mirror, true,
+                                     () => Pick(() => _controller.SetupApplySavedCommand.Execute(null)));
+            SetSavedAvailability();
+            Cards.Add(_saved);
+        }
         foreach (var preset in _controller.SetupPresets)
         {
             var hardware = ControllerPresets.ApplyTo(new ControllerConfig(), preset);
@@ -99,6 +111,16 @@ public sealed partial class SetupChooserViewModel : ObservableObject
         }
         Cards.Add(new ChooserCard("Start empty", "", "Add sliders and buttons yourself", null, false,
                                   () => Pick(() => _controller.StartFromScratchCommand.Execute(null))));
+    }
+
+    private ChooserCard? _saved;
+
+    /// <summary>The saved copy is sent at once, so it needs a controller that answers.</summary>
+    private void SetSavedAvailability()
+    {
+        var ok = _controller.CanStartNewDraft;
+        _saved!.IsEnabled = ok;
+        _saved.ToolTip = ok ? null : "Connect the controller first";
     }
 
     private void Pick(Action start)

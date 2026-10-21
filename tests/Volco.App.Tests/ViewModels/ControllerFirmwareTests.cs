@@ -78,7 +78,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         vm.CheckFirmwareCommand.Execute(null);
         Until(() => vm.FirmwareMessage is not null);
-        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
+        Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", vm.FirmwareMessage);
         Assert.Equal(vm.FirmwareMessage, vm.Failure);   // a warning: the card shows it
         Assert.True(vm.OfferInstall);                    // and its button is Reinstall firmware…
         Assert.False(vm.IsFirmwareRunning);
@@ -115,11 +115,11 @@ public sealed class ControllerFirmwareTests : IDisposable
 
         vm.InstallFirmwareCommand.Execute(null);
         Assert.True(vm.ConfirmInstallPending);
-        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
+        Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", vm.FirmwareMessage);
 
         vm.CancelInstallCommand.Execute(null);
         Assert.False(vm.ConfirmInstallPending);
-        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
+        Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", vm.FirmwareMessage);
         Assert.Equal("probe COM3", _flasher.Calls.Single());
     }
 

@@ -99,7 +99,7 @@ public sealed class FirmwareService
             {
                 ProbeKind.NoDevice => new(result, result.Message ?? $"No ESP32 found on {port}.", false),
                 ProbeKind.UnsupportedChip => new(result, new UnsupportedChipException(result.ChipName ?? "unknown chip").Message, false),
-                _ => new(result, "This ESP32 doesn't have this version of Volco's firmware.", true),
+                _ => new(result, "This ESP32 doesn't have Volco's firmware yet.", true),
             };
         }
         finally { Exit(); }

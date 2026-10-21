@@ -24,11 +24,12 @@ public sealed partial class ControllerViewModel
     public IReadOnlyList<ControllerPreset> SetupPresets { get; } =
         ControllerPresets.All.Where(p => p.IsAvailable && p.Id != ControllerPresets.BlankId).ToList();
 
-    /// <summary>Volco's saved copy as a new draft, sent by Save like any other.</summary>
+    /// <summary>Volco's saved copy goes to the controller at once (spec §4.4): the controller has run
+    /// it before, so no draft is made; the usual restart follows.</summary>
     [RelayCommand]
     private void SetupApplySaved()
     {
-        if (DecodeMirror() is { } mirror) StartNewDraft(mirror, fixIt: false);
+        if (CanStartNewDraft) ApplyMine();
     }
 
     /// <summary>A new draft of <paramref name="preset"/>'s wiring.</summary>

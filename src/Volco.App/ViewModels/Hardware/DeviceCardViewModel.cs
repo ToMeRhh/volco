@@ -99,7 +99,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
         CardAction.Retry => Connection.Link.State == LinkState.PortBusy || !_controller.Busy,
         CardAction.CheckFirmware or CardAction.Update => _controller.CanUseFirmware,
         CardAction.TestNow => _controller.CanStartTest,
-        CardAction.Reinstall => _controller.CanUseFirmware && !_controller.Busy,
+        CardAction.Install => _controller.CanUseFirmware && !_controller.Busy,
         _ => !_controller.Busy,
     };
 
@@ -117,7 +117,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
             case CardAction.FixIt: ToController(); _controller.FixItCommand.Execute(null); break;
             case CardAction.Compare: _hardware.OpenCompare(); break;
             case CardAction.TestNow: ToController(); _controller.TestNowCommand.Execute(null); break;
-            case CardAction.Reinstall: _controller.InstallFirmwareCommand.Execute(null); break;   // asks first
+            case CardAction.Install: _controller.InstallFirmwareCommand.Execute(null); break;   // asks first
         }
     }
 

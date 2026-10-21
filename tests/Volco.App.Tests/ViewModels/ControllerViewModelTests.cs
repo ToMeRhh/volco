@@ -159,16 +159,13 @@ public sealed class ControllerViewModelTests : IDisposable
     }
 
     [Fact]
-    public void SetupApplySaved_StartsADraftOfTheMirror_SentBySave()
+    public void SetupApplySaved_SendsTheMirrorAtOnce_NoDraft()
     {
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.None, 0));
         vm.SetupApplySavedCommand.Execute(null);
-        Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);   // nothing is sent before Save
-        Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(vm.Draft));
-        Assert.True(vm.IsSettingUp);
-        vm.SaveCommand.Execute(null);
         Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        Assert.False(vm.HasUnsavedChanges);
     }
 
     // ── Dirty ──────────────────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>The device card's one primary button (hardware-page spec §4.1).</summary>
-public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Reinstall }
+public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Install }
 
 /// <param name="Link">The runtime's link status, as the sidebar and the tray read it.</param>
 /// <param name="Banner">The §8.3 banner and the firmware notice.</param>
@@ -19,7 +19,7 @@ public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Com
 /// until the next action; null when there is none.</param>
 /// <param name="OfferTest">A firmware update or a first save just finished: the card offers a test.</param>
 /// <param name="OfferInstall">The last Check firmware found other firmware (or none it knows): the card
-/// offers Reinstall firmware…, which asks first, until the result goes.</param>
+/// offers Install firmware, which asks first, until the result goes.</param>
 public sealed record CardInputs(LinkStatus Link, ControllerBanner Banner, ConnectionType Transport, string? Port,
                                 string? FirmwareStage, double? FirmwareProgress, string? SavePhase, string? Failure,
                                 bool OfferTest, bool OfferInstall = false);
@@ -48,7 +48,7 @@ public static class DeviceCard
                            || i.Link.State == LinkState.Disconnected;
         if (i.Failure is { } failure && !keepsDetail) state = state with { Detail = failure };
         // Check firmware's "Reinstall it?" is answered by the card's button.
-        if (i.OfferInstall && !keepsDetail) state = state with { Action = CardAction.Reinstall };
+        if (i.OfferInstall && !keepsDetail) state = state with { Action = CardAction.Install };
         return state;
     }
 
@@ -140,7 +140,7 @@ public static class DeviceCard
         CardAction.FixIt => "Fix it",
         CardAction.Compare => "Compare…",
         CardAction.TestNow => "Test your controller now",
-        CardAction.Reinstall => "Reinstall firmware…",
+        CardAction.Install => "Install firmware",
         _ => "",
     };
 }

@@ -254,15 +254,15 @@ public sealed class DeviceCardTests : IDisposable
     }
 
     [Fact]
-    public void AProbeThatOffersInstall_MakesTheButtonReinstall_WhichAsksFirst()
+    public void AProbeThatOffersInstall_MakesTheButtonInstall_WhichAsksFirst()
     {
         var settings = InSync();
         var card = settings.Hardware.Card;
         _flasher!.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         card.CheckFirmwareCommand.Execute(null);
-        Until(() => card.State.Action == CardAction.Reinstall);
-        Assert.Equal("Reinstall firmware…", card.ActionLabel);
-        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", card.State.Detail);
+        Until(() => card.State.Action == CardAction.Install);
+        Assert.Equal("Install firmware", card.ActionLabel);
+        Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", card.State.Detail);
 
         Until(() => card.ActionCommand.CanExecute(null));
         card.ActionCommand.Execute(null);
@@ -272,10 +272,10 @@ public sealed class DeviceCardTests : IDisposable
         settings.Controller.CancelInstallCommand.Execute(null);
         settings.Controller.OnPageLeft();                          // the card is on every page: the offer stays
         _ui.RunAll();
-        Assert.Equal(CardAction.Reinstall, card.State.Action);
+        Assert.Equal(CardAction.Install, card.State.Action);
         settings.Controller.OnWindowHidden();                      // the result goes, and the offer with it
         _ui.RunAll();
-        Assert.NotEqual(CardAction.Reinstall, card.State.Action);
+        Assert.NotEqual(CardAction.Install, card.State.Action);
     }
 
     [Fact]

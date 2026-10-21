@@ -119,14 +119,14 @@ public sealed class FirmwareServiceTests : IDisposable
         Assert.Equal(2, Count);                               // and opened a new connection after
         Assert.Equal(1, Last.ConnectCount);
         Assert.Single(reports);
-        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", outcome.Message);
+        Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", outcome.Message);
         Assert.True(outcome.OfferInstall);
     }
 
     [Theory]
     [InlineData(ProbeKind.NoDevice, null, "No ESP32 found on COM3.", false)]
     [InlineData(ProbeKind.UnsupportedChip, "ESP32-S3", "This board is an ESP32-S3; this version of Volco only includes firmware for ESP32.", false)]
-    [InlineData(ProbeKind.DifferentFirmware, null, "This ESP32 doesn't have this version of Volco's firmware.", true)]
+    [InlineData(ProbeKind.DifferentFirmware, null, "This ESP32 doesn't have Volco's firmware yet.", true)]
     public async Task EveryProbeResult_HasItsMessage(ProbeKind kind, string? chip, string message, bool offer)
     {
         _flasher.ProbeResult = new ProbeResult(kind, chip);
