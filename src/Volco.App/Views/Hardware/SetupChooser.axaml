@@ -23,7 +23,7 @@
           <Button Name="ChooserCard" Classes="ChooserCard" Classes.primary="{Binding IsPrimary}"
                   Classes.dashed="{Binding IsDashed}"
                   Command="{Binding PickCommand}" IsEnabled="{Binding IsEnabled}"
-                  ToolTip.Tip="{Binding ToolTip}">
+                  ToolTip.Tip="{Binding ToolTip}" ToolTip.ShowOnDisabled="True">
             <Panel>
               <Rectangle Classes="ChooserDash" IsVisible="{Binding IsDashed}"/>
               <StackPanel Spacing="8" Margin="14,12">

@@ -62,6 +62,7 @@ public sealed partial class SetupChooserViewModel : ObservableObject
     private readonly ControllerViewModel _controller;
     private readonly Action _picked;
     private byte[]? _shownFor;
+    private ChooserCard? _saved;
 
     /// <param name="picked">A card was picked.</param>
     /// <param name="back">Back: the Start over is cancelled.</param>
@@ -112,8 +113,6 @@ public sealed partial class SetupChooserViewModel : ObservableObject
         Cards.Add(new ChooserCard("Start empty", "", "Add sliders and buttons yourself", null, false,
                                   () => Pick(() => _controller.StartFromScratchCommand.Execute(null))));
     }
-
-    private ChooserCard? _saved;
 
     /// <summary>The saved copy is sent at once, so it needs a controller that answers.</summary>
     private void SetSavedAvailability()

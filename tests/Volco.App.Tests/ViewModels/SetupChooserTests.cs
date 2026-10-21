@@ -70,7 +70,6 @@ public sealed class SetupChooserTests : IDisposable
         Assert.Equal("Add sliders and buttons yourself", empty.Description);
         Assert.True(empty.IsDashed);
         Assert.Null(empty.Picture);
-
     }
 
     private void WaitForWrite()
@@ -107,9 +106,9 @@ public sealed class SetupChooserTests : IDisposable
         Assert.False(AnyWrite());
         Assert.False(Controller.IsSaving);
 
-        Greet(ControllerConfigState.None, 0);
-        Chooser.Refresh();
+        Greet(ControllerConfigState.None, 0);                        // the Hello makes the link Ready: no manual Refresh
         Assert.True(Chooser.Cards[0].IsEnabled);
+        Assert.Null(Chooser.Cards[0].ToolTip);
     }
 
     [Fact]
@@ -123,6 +122,17 @@ public sealed class SetupChooserTests : IDisposable
         Assert.Equal("DIY reference", Chooser.Cards[0].Title);
         Assert.Equal("5 sliders, 3 buttons", Chooser.Cards[0].Summary);
         Assert.Equal("Start empty", Chooser.Cards[^1].Title);
+    }
+
+    [Fact]
+    public void PresetStillStartsADraft()
+    {
+        Settings(DiyBlob);
+        Greet(ControllerConfigState.None, 0);
+        Chooser.Cards.Single(c => c.Title == "DIY reference").PickCommand.Execute(null);
+        _ui.RunAll();
+        Assert.False(AnyWrite());
+        Assert.True(Controller.HasNewDraft);
     }
 
     [Fact]
