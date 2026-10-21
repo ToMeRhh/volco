@@ -27,7 +27,9 @@ The usual journey is: set the controller up once, then now and then change what 
 
 - The drawing is today's Controls drawing (the stage in its Controls decoration): slider tiles with their target and live level, button tiles with their light or screen preview and actions, the mode tabs on the buttons frame. No mode switch: there is one decoration.
 - Tiles don't show pins (my call: wiring is the rare case; it lives in the Hardware section).
-- I2C bus chips sit under the buttons inside the case only when a screen exists (my call), as on the redesign branch.
+- No I2C bus chips on the drawing (user, 2026-10-21): a bus's own settings live in Controller settings › Screens (§4.3).
+- **A control with a wiring problem** (`DraftProblems`) gets the danger outline and a warning mark on its tile, with the problem as the tooltip ("Slider 1 also uses GPIO 33."); both ends of a conflict are marked (user, 2026-10-21).
+- **A control added with + Add** draws as a new tile, dashed in the accent colour, labelled "New · Save to controller to set it up" (user, 2026-10-21: Volco configures a slider, button, LED or screen only once the controller has it).
 - The drawing is the draft's controls when the controller draft has added or removed ones (as Hardware mode draws them), else the Controls items: the same `HardwareViewModel` tile sources, kept.
 - The setup chooser (not set up, can't be used, Start over) and the hardware test still take over the case rectangle, as on the redesign branch (my call).
 
@@ -47,14 +49,14 @@ The header is today's Controls header ("Slider N" with its name field; "Button N
 1. **Actions** (open): the mode pill and the three gesture rows, Light or Screen row (follows the main action), Timing (collapsed sub-section).
 2. **Hardware** (collapsed): Button pin; Light (None / LED / 2 LEDs / Screen) and its rows; Remove Button N. Summary: "GPIO 5 · LED 12".
 
-**Bus chip** and **Controller settings chip**: their redesign-branch inspectors, unchanged.
+**Controller settings chip**: its redesign-branch inspector, plus, in Screens, one row per I2C bus in use ("I2C bus 0 · SDA 25 · SCL 26 · 400 kHz") that opens its SDA, SCL and Clock fields (the redesign branch's bus inspector). A screen button's Hardware section shows "Bus 0, address 3C" with a link to that row (user, 2026-10-21).
 
 - The open/closed state of each section is remembered for the app run, per kind (my call), so opening Hardware once keeps it open while rewiring several controls.
 - A Hardware section with a problem (`DraftProblems`) opens itself and shows the problem on its field; its summary shows the danger mark while closed.
 - Read-only rules (spec hardware-page §5.4) apply to the Hardware section only; the Controls section is always editable, as today.
-- **A control that exists only in the unsaved draft** (added with + Add): its Controls section is disabled with "Save to controller first" (my call: Volco's settings for it don't exist until the controller has it; settings typed into a throwaway would be lost on the confirmed save).
-- **A control Volco has and the controller lacks** (the dashed "Not on this controller" tile): its Hardware section says "Not on this controller" and has no pin rows; Remove there is Controls' remove (Volco's settings only, last one only), as today (my call).
-- **Which light a button shows:** the tile preview and the Actions section's Light or Screen row show what the controller has (the Hello), as today; the Hardware section shows the draft, and a changed light is marked there until saved (my call: the preview is what the controller shows). The bus chips follow the draft (they are the controller config being edited).
+- **A control that exists only in the unsaved draft** (added with + Add): its Controls section is replaced by "Save to controller to set it up" and a Save button (user, 2026-10-21: Volco configures a control only after the controller has it). The same holds for a button whose light type changed: until saved, its Light or Screen row says it will follow the new type after saving.
+- **A control Volco has and the controller lacks** (the dashed "Not on this controller" tile): its Hardware section says "Not on this controller" and has no pin rows; Remove there is Controls' remove (Volco's settings only, last one only), as today (my call). It appears only when the controller changed outside Volco (Reinstall erased its setup, a different controller, config_tool or another Volco), since removing in Volco deletes the settings; Volco keeps them so the original controller or a re-setup restores what each control did.
+- **Which light a button shows:** the tile preview and the Actions section's Light or Screen row show what the controller has (the Hello), as today; the Hardware section shows the draft, and a changed light is marked there until saved (my call: the preview is what the controller shows).
 
 ### 4.4 Saving
 
