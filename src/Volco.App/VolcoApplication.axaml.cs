@@ -24,16 +24,16 @@ public partial class VolcoApplication : Application
     /// Replaces WinUI's App.RequestExit/App.IsExiting (used by the Updates panel and SettingsWindow).
     public static bool IsExiting => _isExiting;
 
-    /// <summary>Holds <see cref="RequestExit"/> during a firmware write; set by <see cref="CompositionRoot.Start"/>.</summary>
+    /// <summary>Holds <see cref="RequestExit"/> during a firmware write or a config save; set by <see cref="CompositionRoot.Start"/>.</summary>
     internal static ExitGate? Gate { get; set; }
 
-    /// <summary>Exits now, or once a firmware write finishes (the tray's Exit and the updater's
+    /// <summary>Exits now, or once a firmware write or a config save finishes (the tray's Exit and the updater's
     /// restart both come here). OS logoff/shutdown is never deferred.</summary>
     public static void RequestExit()
     {
         if (Gate is { } g && g.ShouldDefer())
         {
-            AppLog.Info("Exit requested during a firmware write; exiting when it finishes");
+            AppLog.Info("Exit requested during a firmware write or a config save; exiting when it finishes");
             g.Defer(RequestExit);
             return;
         }

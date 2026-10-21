@@ -85,9 +85,21 @@ public sealed partial class ControllerViewModel
     /// <summary>The card offers "Test your controller now": after an Update or a first save.</summary>
     [ObservableProperty] private bool _offerTest;
 
-    /// <summary>The last Check firmware asks to reinstall ("doesn't have this version…"): the card's
-    /// button is Install firmware, until the result goes.</summary>
-    [ObservableProperty] private bool _offerInstall;
+    /// <summary>The last Check firmware found no Volco firmware ("doesn't have Volco's firmware
+    /// yet"): the status's button is Install firmware, until the result goes.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InstallQuestion), nameof(InstallConfirmLabel))]
+    private bool _offerInstall;
+
+    /// <summary>The install confirmation's question: on a board the last check found without Volco's
+    /// firmware, installing replaces what is on it; otherwise it is a reinstall, which erases the
+    /// stored setup.</summary>
+    public string InstallQuestion => OfferInstall
+        ? "Install Volco's firmware on this ESP32? Anything else on it is replaced."
+        : "Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.";
+
+    /// <summary>The install confirmation's button: Install, or Reinstall.</summary>
+    public string InstallConfirmLabel => OfferInstall ? "Install" : "Reinstall";
 
     /// <summary>The result's tone: Volco's firmware found or written is good, other firmware a
     /// warning, a failure a danger.</summary>

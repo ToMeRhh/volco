@@ -94,8 +94,8 @@ internal sealed class CompositionRoot : IDisposable
             return done.Task;
         });
         var firmware = _firmware;
-        VolcoApplication.Gate = new ExitGate(() => firmware.IsBusy);
-        firmware.BusyChanged += (_, _) => Dispatcher.UIThread.Post(() => VolcoApplication.Gate?.OnBusyChanged());
+        // Exit and the updater's restart wait for a firmware write and for a config save.
+        VolcoApplication.Gate = ExitGate.For(firmware, _runtime.ControllerConfig, a => Dispatcher.UIThread.Post(a));
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.

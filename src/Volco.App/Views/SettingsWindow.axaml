@@ -159,17 +159,19 @@
       </Border>
     </Border>
 
-    <!-- The status menu's Reinstall firmware…: today's Install confirmation, since it erases the setup -->
+    <!-- The install confirmation (the status menu's Reinstall firmware…, the banner's or the progress
+         dialog's Install firmware): it erases the setup, or replaces what a board without Volco's
+         firmware runs -->
     <Border Name="ReinstallOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
             IsVisible="{Binding Hardware.Status.Controller.ConfirmInstallPending}">
       <Border Name="ReinstallConfirm" Classes="Panel DialogCard Small" Padding="20" KeyboardNavigation.TabNavigation="Cycle"
               Focusable="True">
         <StackPanel Spacing="14">
-          <TextBlock TextWrapping="Wrap"
-                     Text="Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards."/>
+          <TextBlock Name="ReinstallQuestion" TextWrapping="Wrap"
+                     Text="{Binding Hardware.Status.Controller.InstallQuestion}"/>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Name="CancelReinstallButton" Content="Cancel" Command="{Binding Hardware.Status.Controller.CancelInstallCommand}"/>
-            <Button Name="ConfirmReinstallButton" Classes="Danger" Content="Reinstall"
+            <Button Name="ConfirmReinstallButton" Classes="Danger" Content="{Binding Hardware.Status.Controller.InstallConfirmLabel}"
                     Command="{Binding Hardware.Status.Controller.ConfirmInstallCommand}"/>
           </StackPanel>
         </StackPanel>

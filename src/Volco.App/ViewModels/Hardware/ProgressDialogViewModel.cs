@@ -7,12 +7,16 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels.Hardware;
 
+/// <summary>The progress dialog's next step once its operation ended.</summary>
+public enum ProgressNextStep { None, TestNow, TryAgain, InstallFirmware }
+
 /// <summary>
 /// The status's third level (controller-page spec §5, "Running, don't interrupt"): a modal dialog
 /// over the window while a firmware install, update or check, or a save to the controller, runs.
 /// It shows the operation's name, its step and progress and "Don't unplug the controller.", and
 /// can't be closed while it writes. At the end it shows the result and its next step (Test your
-/// controller now after an update or a first save, Try again after a failure) and stays until
+/// controller now after an update or a first save, Try again after a failure, Install firmware
+/// after a check that found none of Volco's) and stays until
 /// Close; a plain confirmed save shows "Saved." briefly and closes itself. Closing leaves what
 /// still needs the user to the banner. UI thread.
 /// </summary>
@@ -77,12 +81,23 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
 
     [ObservableProperty] private LinkTone _resultTone;
 
-    /// <summary>The next step's button: "Test your controller now", "Try again", or null for none.</summary>
+    /// <summary>The next step after the result: the test (after an update or a first save), the
+    /// same operation again (after a failure), or Install firmware (a check found no Volco firmware).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasNext))]
-    private string? _nextLabel;
+    [NotifyPropertyChangedFor(nameof(NextLabel), nameof(HasNext))]
+    private ProgressNextStep _nextStep;
 
-    public bool HasNext => NextLabel is not null;
+    /// <summary>The next step's button: "Test your controller now", "Try again", "Install firmware",
+    /// or null for none.</summary>
+    public string? NextLabel => NextStep switch
+    {
+        ProgressNextStep.TestNow => "Test your controller now",
+        ProgressNextStep.TryAgain => "Try again",
+        ProgressNextStep.InstallFirmware => "Install firmware",
+        _ => null,
+    };
+
+    public bool HasNext => NextStep != ProgressNextStep.None;
 
     private Action? _next;
     private Func<bool>? _canNext;
@@ -118,7 +133,7 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
             _operation = now;
             ResultText = null;
             ResultTone = LinkTone.Neutral;
-            SetNext(null, null, null);
+            SetNext(ProgressNextStep.None, null, null);
             IsRunning = true;
             IsOpen = true;
         }
@@ -144,9 +159,10 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
                 FlashStage.Restarting => "Restarting…",
                 _ => "Connecting to the board…",
             };
-            // A check has no measure; a write's bar fills while it writes and stays full after.
-            Progress = now == Operation.Check ? null
-                     : _controller.FirmwareStep >= FlashStage.Writing ? _controller.FirmwareProgress : 0;
+            // A check has no measure, nor a write before it writes (the bar runs without one); a
+            // write's bar fills while it writes and stays full after.
+            Progress = now != Operation.Check && _controller.FirmwareStep >= FlashStage.Writing
+                ? _controller.FirmwareProgress : null;
         }
     }
 
@@ -166,8 +182,10 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
             _ => LinkActivity.CheckingFirmware,
         };
         if (c.OfferTest) OfferTest();
+        else if (c.OfferInstall)   // a check found no Volco firmware: Install asks first, as from the banner
+            SetNext(ProgressNextStep.InstallFirmware, () => c.InstallFirmwareCommand.Execute(null), () => c.CanUseFirmware);
         else if (c.FirmwareMessageTone == LinkTone.Danger)
-            SetNext("Try again", () => c.RetryFirmware(activity), () => c.CanUseFirmware);
+            SetNext(ProgressNextStep.TryAgain, () => c.RetryFirmware(activity), () => c.CanUseFirmware);
     }
 
     private void OnSaveFinished(object? sender, SaveStatus status)
@@ -201,21 +219,21 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
         }
         ResultText = c.ProgressText;
         ResultTone = LinkTone.Danger;
-        if (c.LastSaveCanRetry) SetNext("Try again", c.RetrySave, () => c.CanRetrySave);
+        if (c.LastSaveCanRetry) SetNext(ProgressNextStep.TryAgain, c.RetrySave, () => c.CanRetrySave);
     }
 
     private void OfferTest()
-        => SetNext("Test your controller now", () =>
+        => SetNext(ProgressNextStep.TestNow, () =>
         {
             _toController();
             _controller.TestNowCommand.Execute(null);
         }, () => _controller.CanStartTest);
 
-    private void SetNext(string? label, Action? next, Func<bool>? canNext)
+    private void SetNext(ProgressNextStep step, Action? next, Func<bool>? canNext)
     {
         _next = next;
         _canNext = canNext;
-        NextLabel = label;
+        NextStep = step;
         NextCommand.NotifyCanExecuteChanged();
     }
 
@@ -239,14 +257,14 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
     public void Close()
     {
         if (IsRunning || !IsOpen) return;
-        if (NextLabel == "Test your controller now") _controller.DeclineTest();
+        if (NextStep == ProgressNextStep.TestNow) _controller.DeclineTest();
         Hide();
     }
 
     private void Hide()
     {
         _generation++;
-        SetNext(null, null, null);
+        SetNext(ProgressNextStep.None, null, null);
         ResultText = null;
         _operation = Operation.None;
         IsOpen = false;

@@ -158,6 +158,7 @@ public sealed class ProgressDialogTests : IDisposable
         Install(s);
 
         Until(s.Window, () => s.Progress is { IsOpen: true, IsRunning: true, Progress: 0.5 });
+        Assert.True(s.Progress.HasMeasure);   // writing: the bar shows how far
         Assert.True(s.Overlay.IsEffectivelyVisible);
         Assert.True(s.Overlay.ZIndex > s.Window.FindControl<Border>("LeaveOverlay")!.ZIndex);
         Assert.Equal("Installing firmware", In<TextBlock>(s.Overlay, "ProgressTitle").Text);
@@ -241,12 +242,64 @@ public sealed class ProgressDialogTests : IDisposable
         Until(s.Window, () => s.Flasher.Calls.Count == 2 && s.Progress.IsDone);
         Assert.Equal(new[] { "flash COM3 Install", "flash COM3 Install" }, s.Flasher.Calls);
         Assert.False(s.Vm.Controller.ConfirmInstallPending);
-        Assert.Equal("Try again", s.Progress.NextLabel);
+        Assert.Equal(ProgressNextStep.TryAgain, s.Progress.NextStep);
 
         Escape(s);   // it ended: Escape closes it
         Assert.False(s.Progress.IsOpen);
         Assert.True(s.Banner.IsVisible);
         Assert.EndsWith("Try again.", In<TextBlock>(s.Banner, "BannerText").Text);
+    }
+
+    /// <summary>A check that finds no Volco firmware offers Install firmware, through the install
+    /// confirmation, worded for a board that has none of Volco's firmware.</summary>
+    [AvaloniaFact]
+    public void ACheckWithoutVolcoFirmwareOffersInstall()
+    {
+        using var s = Show();
+        s.Flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        s.Vm.Controller.CheckFirmwareCommand.Execute(null);
+        Until(s.Window, () => s.Progress.IsOpen);
+        Assert.Equal("Checking firmware", s.Progress.Title);
+        Assert.False(s.Progress.HasMeasure);   // a check has no measure: the bar runs without one
+
+        Until(s.Window, () => s.Progress.IsDone);
+        Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", s.Progress.ResultText);
+        Assert.Equal(ProgressNextStep.InstallFirmware, s.Progress.NextStep);
+        var next = In<Button>(s.Overlay, "ProgressNextButton");
+        Until(s.Window, () => next.IsEffectivelyEnabled);
+        Assert.Equal("Install firmware", next.Content);
+
+        Click(s, next);   // the install confirmation asks first
+
+        Assert.False(s.Progress.IsOpen);
+        Assert.True(s.Vm.Controller.ConfirmInstallPending);
+        var confirm = s.Window.FindControl<Border>("ReinstallOverlay")!;
+        Assert.True(confirm.IsEffectivelyVisible);
+        Assert.Equal("Install Volco's firmware on this ESP32? Anything else on it is replaced.",
+                     In<TextBlock>(confirm, "ReinstallQuestion").Text);
+        Assert.Equal("Install", In<Button>(confirm, "ConfirmReinstallButton").Content);
+        Assert.Equal("probe COM3", s.Flasher.Calls.Single());
+
+        Click(s, In<Button>(confirm, "ConfirmReinstallButton"));
+
+        Until(s.Window, () => s.Flasher.Calls.Count == 2 && s.Progress.IsOpen);
+        Assert.Equal("flash COM3 Install", s.Flasher.Calls[1]);
+        Assert.Equal("Installing firmware", s.Progress.Title);
+    }
+
+    /// <summary>On a board running Volco's firmware the confirmation is a reinstall's: it erases the
+    /// stored setup.</summary>
+    [AvaloniaFact]
+    public void AReinstallAsksAboutTheSetup()
+    {
+        using var s = Show();
+        s.Vm.Controller.InstallFirmwareCommand.Execute(null);   // the status menu's Reinstall firmware…
+        Settle(s.Window);
+        var confirm = s.Window.FindControl<Border>("ReinstallOverlay")!;
+        Assert.True(confirm.IsEffectivelyVisible);
+        Assert.Equal("Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.",
+                     In<TextBlock>(confirm, "ReinstallQuestion").Text);
+        Assert.Equal("Reinstall", In<Button>(confirm, "ConfirmReinstallButton").Content);
     }
 
     [AvaloniaFact]

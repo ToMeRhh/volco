@@ -52,7 +52,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
     public string Name => DeviceCard.Name;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(HasProgress), nameof(ShortText), nameof(FullText))]
+    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(ShortText), nameof(FullText))]
     private CardState _state;
 
     [ObservableProperty]
@@ -80,7 +80,6 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
 
     public string ActionLabel => DeviceCard.Label(State.Action);
     public bool HasAction => State.Action != CardAction.None;
-    public bool HasProgress => State.Progress is not null;
 
     /// <summary>The inputs of <see cref="DeviceCard.From"/>, read from the page now.</summary>
     internal CardInputs Inputs()
