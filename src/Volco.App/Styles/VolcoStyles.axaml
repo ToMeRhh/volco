@@ -599,6 +599,10 @@
   <Style Selector="Border.Case.dense TextBlock.MainAction, Border.Case.dense Panel.SecondaryRow">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
+  <!-- A new button (controller-page spec §4.1): its "New · Save…" text in place of the actions -->
+  <Style Selector="Grid.new TextBlock.MainAction, Grid.new StackPanel.ActionIcons, Grid.new Panel.SecondaryRow">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
   <Style Selector="Border.GestureIcon">
     <Setter Property="Width" Value="18"/>
     <Setter Property="Height" Value="18"/>
@@ -701,7 +705,8 @@
   <Style Selector="Border.ProblemMark">
     <Setter Property="HorizontalAlignment" Value="Right"/>
     <Setter Property="VerticalAlignment" Value="Top"/>
-    <Setter Property="Margin" Value="0,5,5,0"/>
+    <Setter Property="Margin" Value="0,2,2,0"/>
+    <Setter Property="Padding" Value="3"/>
     <Setter Property="Background" Value="Transparent"/>
   </Style>
   <Style Selector="Border.ProblemMark PathIcon">
@@ -718,6 +723,10 @@
     <Setter Property="RadiusX" Value="11"/>
     <Setter Property="RadiusY" Value="11"/>
     <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <!-- Where a button's main action starts -->
+  <Style Selector="controls|ButtonTile TextBlock.TileNew">
+    <Setter Property="Margin" Value="0,6,0,0"/>
   </Style>
   <Style Selector="TextBlock.TileNew">
     <Setter Property="FontSize" Value="11"/>

@@ -157,20 +157,52 @@ public sealed class ControllerTilesTests : IDisposable
         Assert.Equal("New · Save to controller to set it up", text.Text);
         Assert.True(text.IsEffectivelyVisible);
         Assert.Equal(1, DrawnOpacity(text));
-        Assert.False(In<Grid>(added, "LabelRow").IsVisible);
+        Assert.Same(In<Grid>(added, "LabelRow"), text.GetVisualParent());   // in the label's row
+        Assert.False(In<TextBlock>(added, "Label").IsVisible);
         Assert.False(In<Border>(added, "Grip").IsVisible);
-        var outline = added.GetVisualDescendants().OfType<Rectangle>().Single(r => r.Classes.Contains("NewOutline"));
-        Assert.True(outline.IsVisible);
-        Assert.False(sliders[0].GetVisualDescendants().OfType<Rectangle>().Single(r => r.Classes.Contains("NewOutline")).IsVisible);
-        Assert.True(In<Grid>(sliders[0], "LabelRow").IsVisible);
+        AssertNewOutlineOnly(added);
+        Assert.False(Rect(sliders[0], "NewOutline").IsVisible);
+        Assert.True(In<TextBlock>(sliders[0], "Label").IsVisible);
 
         s.Hardware.AddButtonCommand.Execute(null);
         Settle(s.Window);
-        var button = Tiles<ButtonTile>(s.Page)[^1];
-        Assert.Equal("New · Save to controller to set it up", In<TextBlock>(button, "NewText").Text);
-        Assert.True(In<TextBlock>(button, "NewText").IsEffectivelyVisible);
-        Assert.False(In<Grid>(button, "ActionRows").IsVisible);
-        Assert.False(In<TextBlock>(Tiles<ButtonTile>(s.Page)[0], "NewText").IsVisible);
+        var buttons = Tiles<ButtonTile>(s.Page);
+        var button = buttons[^1];
+        var buttonText = In<TextBlock>(button, "NewText");
+        Assert.Equal("New · Save to controller to set it up", buttonText.Text);
+        Assert.True(buttonText.IsEffectivelyVisible);
+        var rows = In<Grid>(button, "ActionRows");
+        Assert.Same(rows, buttonText.GetVisualParent());   // in the shared-size rows
+        Assert.Equal(2, Grid.GetRowSpan(buttonText));
+        Assert.False(In<TextBlock>(button, "MainAction").IsEffectivelyVisible);
+        Assert.False(In<ItemsControl>(button, "SecondaryActions").IsEffectivelyVisible);
+        AssertNewOutlineOnly(button);
+        Assert.False(In<TextBlock>(buttons[0], "NewText").IsVisible);
+
+        // The new tile keeps the measure of the others in its row: the same height, the action
+        // rows at the same place.
+        double Top(Control c) => c.TranslatePoint(new Point(0, 0), s.Page)!.Value.Y;
+        var row = buttons.Where(b => Math.Abs(Top(b) - Top(button)) < 0.5).ToList();
+        Assert.True(row.Count > 1, "the new button shares its row");
+        Assert.All(row, b =>
+        {
+            Assert.Equal(button.Bounds.Height, b.Bounds.Height, 0.5);
+            Assert.Equal(Top(rows), Top(In<Grid>(b, "ActionRows")), 0.5);
+        });
+    }
+
+    private static Rectangle Rect(Control tile, string cls)
+        => tile.GetVisualDescendants().OfType<Rectangle>().Single(r => r.Classes.Contains(cls));
+
+    /// <summary>A new tile has a problem (its pin isn't chosen yet): the warning mark says so, but
+    /// the outline is the dashed accent one, not the danger one.</summary>
+    private static void AssertNewOutlineOnly(Control tile)
+    {
+        var mark = In<Border>(tile, "ProblemMark");
+        Assert.True(mark.IsVisible);
+        Assert.False(string.IsNullOrEmpty(ToolTip.GetTip(mark) as string));
+        Assert.False(Rect(tile, "ProblemOutline").IsVisible);
+        Assert.True(Rect(tile, "NewOutline").IsVisible);
     }
 
     /// <summary>Pins stay in the inspector: no tile draws a pin or an indicator's wiring, during a
