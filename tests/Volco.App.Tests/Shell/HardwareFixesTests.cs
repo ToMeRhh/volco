@@ -686,9 +686,9 @@ public sealed class HardwareFixesTests : IDisposable
         AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
         AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
 
-        // Controller settings fills the side panel under the card.
+        // Controller settings fills the side panel.
         Click(s, In<Button>(s.Stage, "ControllerSettingsChip"));
-        AssertDrawn(host.GetVisualDescendants().OfType<ControllerSettingsInspector>().Single());
+        AssertDrawn(((HardwareInspectorHost)s.Stage.HardwareSidePanel!).GetVisualDescendants().OfType<ControllerSettingsInspector>().Single());
 
         // With the crossfades left on for the hop to General too, the tile's inspector shows.
         s.Window.ShowPage("general");
