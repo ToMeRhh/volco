@@ -163,7 +163,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ClosePresetChooser() => IsPresetChooserOpen = false;
 
-    private bool CanStartOver => !_controller.Busy;
+    private bool CanStartOver => _controller.CanStartNewDraft;
 
     [RelayCommand(CanExecute = nameof(CanStartOver))]
     private void StartOver()

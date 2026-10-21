@@ -9,6 +9,7 @@ namespace Volco.App.ViewModels.Hardware;
 /// (waits for the controller's confirmation, with its progress here; a failure keeps the user on
 /// Hardware with the error on the card), Discard and continue, or Stay. Save is disabled while the
 /// draft has problems. Raised by the settings window for any page; hiding the window doesn't ask.
+/// A save already running (the save bar's) is adopted: the prompt waits for it as for its own.
 /// </summary>
 public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
 {
@@ -24,6 +25,7 @@ public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
         _controller = controller;
         _proceed = proceed;
         _close = close;
+        _isSaving = controller.IsSaving;
         SaveAndContinueCommand = new RelayCommand(SaveAndContinue, () => CanSaveAndContinue);
         DiscardAndContinueCommand = new RelayCommand(DiscardAndContinue, () => !IsSaving);
         StayCommand = new RelayCommand(Stay);

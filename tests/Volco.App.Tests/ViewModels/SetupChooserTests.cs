@@ -67,7 +67,7 @@ public sealed class SetupChooserTests : IDisposable
 
         var empty = Chooser.Cards[^1];
         Assert.Equal("Start empty", empty.Title);
-        Assert.Equal("Add sliders and buttons yourself, with Detect", empty.Description);
+        Assert.Equal("Add sliders and buttons yourself", empty.Description);
         Assert.True(empty.IsDashed);
         Assert.Null(empty.Picture);
 

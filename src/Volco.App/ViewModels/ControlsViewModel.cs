@@ -101,7 +101,7 @@ public sealed partial class ControlsViewModel : ObservableObject
 
     /// <summary>Moves the selection to the default when its control is no longer in the lists.
     /// A control that is only missing from the controller stays selected.</summary>
-    private void FixSelection()
+    internal void FixSelection()
     {
         var present = Selected switch
         {

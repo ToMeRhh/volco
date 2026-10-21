@@ -184,7 +184,6 @@ public sealed partial class ControllerViewModel
         _ui.Post(() =>
         {
             if (_disposed) return;
-            // After an Install the controller has no setup yet: the setup chooser comes next.
             EndFirmware(outcome.Message, outcome.Succeeded ? LinkTone.Good : LinkTone.Danger);
             OfferTest = outcome.Succeeded && mode == FlashMode.Update;
         });

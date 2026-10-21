@@ -584,6 +584,13 @@ public partial class StagePage : UserControl
             }
             return;
         }
+        if (e.Key == Key.Escape && Mode == StageMode.Hardware && Hardware is { IsStartingOver: true } over)
+        {
+            // Escape cancels Start over: the drawing comes back.
+            over.CancelStartOver();
+            e.Handled = true;
+            return;
+        }
         if (Vm is not { } vm) return;
         if (vm.HasDeviceDialog)
         {

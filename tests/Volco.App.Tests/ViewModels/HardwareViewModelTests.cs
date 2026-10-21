@@ -238,6 +238,113 @@ public sealed class HardwareViewModelTests : IDisposable
         Assert.Equal(_settings.Controls.Sliders.Items, Hardware.Sliders);
     }
 
+    // ── The selection Controls gets back (Controls has no detached tiles, bus or settings) ───
+
+    [Fact]
+    public void ADiscardedAddedSlider_DoesntStaySelected_ControlsSelectsSlider1()
+    {
+        SetUpInSync();
+        var controls = _settings!.Controls;
+        Controller.AddSliderCommand.Execute(null);
+        var added = Hardware.Sliders[5];
+        controls.Select(added);
+        Assert.IsType<SliderWiringViewModel>(Hardware.Inspected);
+
+        Controller.RevertCommand.Execute(null);
+        Assert.NotSame(added, controls.Selected);
+        Hardware.OnModeLeft();   // the stage switches to Controls
+        Assert.Same(controls.Sliders.Items[0], controls.Selected);
+    }
+
+    [Fact]
+    public void AStartOverPickDropsTheDetachedSelection()
+    {
+        SetUpInSync();
+        var controls = _settings!.Controls;
+        Controller.AddSliderCommand.Execute(null);
+        controls.Select(Hardware.Sliders[5]);
+        Hardware.StartOver();
+        Hardware.Chooser.Cards[^1].PickCommand.Execute(null);   // Start empty
+        Assert.Null(controls.Selected);
+        Hardware.OnModeLeft();
+        Assert.Same(controls.Sliders.Items[0], controls.Selected);
+    }
+
+    [Fact]
+    public void TheSettingsChipOrABusChip_ThenControls_SelectsTheDefault()
+    {
+        SetUpInSync();
+        var controls = _settings!.Controls;
+        controls.Select(controls.Sliders.Items[2]);
+        Hardware.SelectControllerSettings();
+        Assert.Null(controls.Selected);
+        Hardware.OnModeLeft();
+        Assert.Same(controls.Sliders.Items[0], controls.Selected);
+    }
+
+    // ── Start over (spec §7.1) ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void StartOverCanBeCancelled_AndHidesTheSaveBar()
+    {
+        SetUpInSync();
+        Controller.SetSliderPin(1, 39);
+        Assert.True(Hardware.ShowSaveBar);
+
+        Hardware.StartOver();
+        Assert.True(Hardware.ShowChooser);
+        Assert.True(Hardware.Chooser.CanGoBack);
+        Assert.False(Hardware.ShowSaveBar);   // the chooser is in the drawing's place
+
+        Hardware.Chooser.BackCommand.Execute(null);   // Back (Escape does the same)
+        Assert.False(Hardware.ShowChooser);
+        Assert.False(Hardware.Chooser.CanGoBack);
+        Assert.True(Hardware.ShowSaveBar);
+        Assert.Equal(39u, Controller.Draft.Sliders[1].Pin);   // the draft as it was
+    }
+
+    [Fact]
+    public void DiscardOrLeavingEndsAStartOver()
+    {
+        SetUpInSync();
+        Hardware.StartOver();
+        Controller.RevertCommand.Execute(null);
+        Assert.False(Hardware.ShowChooser);
+
+        Hardware.StartOver();
+        Controller.OnPageLeft();   // another page, or the window hidden
+        Assert.False(Hardware.ShowChooser);
+        Assert.False(Hardware.IsStartingOver);
+    }
+
+    [Fact]
+    public void StartOverNeedsAReadyController()
+    {
+        Settings(DiyBlob);   // offline: the mirror, read-only
+        Assert.False(Hardware.Card.StartOverCommand.CanExecute(null));
+        Hardware.StartOver();
+        Assert.False(Hardware.ShowChooser);
+
+        GreetInSync(DiyBlob);
+        Assert.True(Hardware.Card.StartOverCommand.CanExecute(null));
+    }
+
+    // ── The Connection dialog ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AClosedConnectionDialogStopsFollowingTheConnection()
+    {
+        SetUpInSync();
+        Hardware.OpenConnection(false);
+        var dialog = Hardware.ConnectionDialog!;
+        var raised = 0;
+        dialog.PropertyChanged += (_, _) => raised++;
+        Hardware.CloseConnection();
+
+        Controller.Connection.ConnectionTypeIndex = 1;
+        Assert.Equal(0, raised);
+    }
+
     // ── Raw input and read-only ──────────────────────────────────────────────────────────────
 
     [Fact]

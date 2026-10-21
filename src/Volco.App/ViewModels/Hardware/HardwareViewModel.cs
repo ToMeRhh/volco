@@ -36,13 +36,15 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _ui = ui;
         _controller.DraftChanged += OnDraftChanged;
         _controller.PropertyChanged += OnControllerPropertyChanged;
+        _controller.PageLeft += OnStartOverEnded;
+        _controller.Reverted += OnStartOverEnded;
         _controls.Sliders.Items.CollectionChanged += OnItemsChanged;
         _controls.Buttons.Items.CollectionChanged += OnItemsChanged;
         _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
         Card = new DeviceCardViewModel(controller, this);
         SaveCommand = new RelayCommand(() => _controller.SaveCommand.Execute(null), () => _controller.CanSave && _controller.Problems.Count == 0);
-        Chooser = new SetupChooserViewModel(controller, OnChooserPicked);
+        Chooser = new SetupChooserViewModel(controller, OnChooserPicked, CancelStartOver);
         Refresh();
     }
 
@@ -84,6 +86,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             if (_showChooser == value) return;
             _showChooser = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowSaveBar));
         }
     }
 
@@ -91,6 +94,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     {
         var needsSetup = _controller.Banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror or BannerKind.Unusable;
         ShowChooser = _startingOver || (needsSetup && !_controller.HasNewDraft);
+        Chooser.CanGoBack = _startingOver;
         if (ShowChooser) Chooser.Refresh();
     }
 
@@ -99,6 +103,20 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _startingOver = false;
         UpdateChooser();
     }
+
+    /// <summary>The user chose Start over and hasn't picked a card: Escape and the chooser's Back cancel it.</summary>
+    public bool IsStartingOver => _startingOver;
+
+    /// <summary>Escape or the chooser's Back: the drawing comes back with the draft as it was.</summary>
+    public void CancelStartOver()
+    {
+        if (_disposed || !_startingOver) return;
+        _startingOver = false;
+        UpdateChooser();
+    }
+
+    // Discard and leaving Hardware end a Start over that wasn't picked.
+    private void OnStartOverEnded(object? sender, EventArgs e) => CancelStartOver();
 
     /// <summary>The card's Compare…: the controller's setup beside Volco's (spec §7.2); opening it
     /// reads the controller's setup.</summary>
@@ -125,6 +143,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         ConnectionDialogOnWifi = wifi;
+        ConnectionDialog?.Dispose();
         ConnectionDialog = new ConnectionDialogViewModel(_controller, wifi, CloseConnection);
         IsConnectionDialogOpen = true;
     }
@@ -133,7 +152,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     public void CloseConnection()
     {
         IsConnectionDialogOpen = false;
+        var dialog = ConnectionDialog;
         ConnectionDialog = null;
+        dialog?.Dispose();
     }
 
     // ── Leaving with unsaved changes (spec §3.3) ─────────────────────────────────────────────
@@ -174,6 +195,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// choice is made.</summary>
     public void StartOver()
     {
+        if (_disposed || !_controller.CanStartNewDraft) return;
         _startingOver = true;
         UpdateChooser();
     }
@@ -232,8 +254,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     // ── The save bar (spec §6.5) ─────────────────────────────────────────────────────────────
 
-    /// <summary>The bar at the bottom of the drawing: shown while the draft is unsaved and no save runs.</summary>
-    public bool ShowSaveBar => _controller.IsDirty && !_controller.IsSaving;
+    /// <summary>The bar at the bottom of the drawing: shown while the draft is unsaved, no save runs
+    /// and the setup chooser isn't in the drawing's place.</summary>
+    public bool ShowSaveBar => _controller.IsDirty && !_controller.IsSaving && !ShowChooser;
 
     /// <summary>"1 change not saved", "N changes not saved"; for a new draft, that the setup isn't on the
     /// controller; and after the controller's setup changed under the draft, that Discard loads it.</summary>
@@ -321,6 +344,10 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         foreach (var item in _controls.Sliders.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
         foreach (var item in _controls.Buttons.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
 
+        // A detached tile the draft no longer draws (after Discard, Start over) can't stay selected:
+        // Controls has no such control.
+        if (_controls.Selected is { } selected && !Drawn(selected)) _controls.Selected = null;
+
         UpdateTestStates();
         SyncBusChips(draft);
         foreach (var field in _pinFields.Values) UpdatePinField(field);
@@ -328,6 +355,14 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         UpdateChooser();
         UpdateSaveBar();
     }
+
+    /// <summary><paramref name="item"/> is a tile of the drawing or a Controls item.</summary>
+    private bool Drawn(object item) => item switch
+    {
+        SliderItemViewModel s => Sliders.Contains(s) || _controls.Sliders.Items.Contains(s),
+        ButtonItemViewModel b => Buttons.Contains(b) || _controls.Buttons.Items.Contains(b),
+        _ => false,
+    };
 
     // ── The inspector and the bus chips (spec §5.3, §6.1, §6.2, §6.4) ───────────────────────
 
@@ -580,7 +615,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The title row's Stop test.</summary>
     public IRelayCommand StopTestCommand => _controller.StopTestCommand;
 
-    /// <summary>The band over the case while a test runs.</summary>
+    /// <summary>The band under the case while a test runs.</summary>
     public string TestBandText => "Testing: sliders and buttons don't change volume or run actions.";
 
     // Per hardware input: the last raw value of each slider; this test's presses and held state
@@ -589,10 +624,13 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private readonly Dictionary<int, int> _testPresses = new();
     private readonly HashSet<int> _testHeld = new();
 
-    /// <summary>The Hardware stage was left (the stage switched to Controls): a running test ends.</summary>
+    /// <summary>The Hardware stage was left (the stage switched to Controls): a running test ends,
+    /// and Controls gets a selection of its own when Hardware's (a bus, the settings chip) isn't one.</summary>
     public void OnModeLeft()
     {
-        if (!_disposed) _controller.OnPageLeft();
+        if (_disposed) return;
+        _controller.OnPageLeft();
+        _controls.FixSelection();
     }
 
     private void OnTestingChanged()
@@ -692,12 +730,15 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _disposed = true;
         _controller.DraftChanged -= OnDraftChanged;
         _controller.PropertyChanged -= OnControllerPropertyChanged;
+        _controller.PageLeft -= OnStartOverEnded;
+        _controller.Reverted -= OnStartOverEnded;
         _controls.Sliders.Items.CollectionChanged -= OnItemsChanged;
         _controls.Buttons.Items.CollectionChanged -= OnItemsChanged;
         _controls.PropertyChanged -= OnControlsPropertyChanged;
         _runtime.RawInput -= OnRawInput;
         Card.Dispose();
         Compare?.Dispose();
+        ConnectionDialog?.Dispose();
         LeavePrompt?.Dispose();
         (Inspected as IDisposable)?.Dispose();
     }

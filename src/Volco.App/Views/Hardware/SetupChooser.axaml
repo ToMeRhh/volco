@@ -4,8 +4,8 @@
              xmlns:views="using:Volco.App.Views.Hardware"
              x:Class="Volco.App.Views.Hardware.SetupChooser"
              x:DataType="hw:SetupChooserViewModel">
-  <!-- The setup chooser (hardware-page spec §7.1), in the case's place: the question, then up to
-       three cards, each with a small picture of its controls. Volco's saved copy is outlined, Start
+  <!-- The setup chooser (hardware-page spec §7.1), in the case's place: the question, then a card
+       for Volco's saved copy (with a mirror), each preset and Start empty, each with a small picture of its controls. Volco's saved copy is outlined, Start
        empty is dashed. -->
   <StackPanel Spacing="16" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center">
     <StackPanel Spacing="4" HorizontalAlignment="Center">
@@ -40,5 +40,8 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    <!-- After Start over: back to the drawing, the draft unchanged (Escape does the same). -->
+    <Button Name="ChooserBack" Classes="Ghost" HorizontalAlignment="Center" Content="Back"
+            Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}"/>
   </StackPanel>
 </UserControl>

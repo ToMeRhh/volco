@@ -52,7 +52,7 @@
       <TextBlock Name="ControllerWifiTitle" Classes="Subtitle" Text="The controller's Wi-Fi" Margin="0,6,0,0"/>
       <StackPanel DataContext="{Binding Controller}" x:DataType="vm:ControllerViewModel" Spacing="10">
         <Grid ColumnDefinitions="150,Auto">
-          <TextBlock Text="Use Wi-Fi" VerticalAlignment="Center"/>
+          <TextBlock Text="Wi-Fi on the controller" VerticalAlignment="Center"/>
           <ToggleSwitch Name="UdpToggle" Grid.Column="1" IsChecked="{Binding UdpEnabled, Mode=TwoWay}"/>
         </Grid>
         <StackPanel Spacing="10" IsVisible="{Binding UdpEnabled}">

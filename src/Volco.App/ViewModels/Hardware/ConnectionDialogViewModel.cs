@@ -8,9 +8,10 @@ namespace Volco.App.ViewModels.Hardware;
 /// transport at once. The transport and its ports are Volco's own settings (<see cref="Connection"/>);
 /// the controller's Wi-Fi fields edit the draft (<see cref="Controller"/>), which the save bar sends.
 /// </summary>
-public sealed partial class ConnectionDialogViewModel : ObservableObject
+public sealed partial class ConnectionDialogViewModel : ObservableObject, IDisposable
 {
     private readonly Action _close;
+    private bool _disposed;
 
     /// <param name="wifi">Open on the Wi-Fi tab, else on the current transport's.</param>
     public ConnectionDialogViewModel(ControllerViewModel controller, bool wifi, Action close)
@@ -18,10 +19,12 @@ public sealed partial class ConnectionDialogViewModel : ObservableObject
         Controller = controller;
         _close = close;
         _tab = wifi ? 1 : controller.Connection.ConnectionTypeIndex;
-        controller.Connection.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(ConnectionViewModel.ConnectionTypeIndex)) RaiseUse();
-        };
+        controller.Connection.PropertyChanged += OnConnectionChanged;
+    }
+
+    private void OnConnectionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (!_disposed && e.PropertyName is nameof(ConnectionViewModel.ConnectionTypeIndex)) RaiseUse();
     }
 
     /// <summary>The transport, COM port and ports Volco listens on.</summary>
@@ -62,4 +65,12 @@ public sealed partial class ConnectionDialogViewModel : ObservableObject
 
     /// <summary>Done: closes the dialog.</summary>
     public void Close() => _close();
+
+    /// <summary>The dialog closed: it stops following the connection settings.</summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Connection.PropertyChanged -= OnConnectionChanged;
+    }
 }

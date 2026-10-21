@@ -450,6 +450,47 @@ public sealed class StageNavigationTests
     }
 
     [AvaloniaFact]
+    public void LeavingWhileTheBarsSaveRuns_ThePromptWaitsForThatSave()
+    {
+        using var s = Show();
+        s.Vm.Controller.SetSliderPin(1, 39);
+        Settle(s.Window);
+        Press(In<Button>(In<SaveBar>(s.Stage, "SaveBarHost"), "SaveButton"));
+        Until(s.Window, () => AnyWrite(s));
+
+        s.Window.ShowPage("controls");
+        Settle(s.Window);
+        var prompt = s.Vm.Hardware.LeavePrompt;
+        Assert.NotNull(prompt);
+        Assert.True(prompt!.IsSaving);
+        Assert.Equal("Saving to the controller…", In<TextBlock>(s.Stage, "LeaveProgress").Text);
+        Assert.False(In<Button>(s.Stage, "DiscardAndContinueButton").IsEffectivelyEnabled);
+        Assert.False(In<Button>(s.Stage, "SaveAndContinueButton").IsEffectivelyEnabled);
+        Assert.Equal("controller", s.NavTag);
+
+        Answer(s, ConfigResultCode.Ok);
+        Until(s.Window, () => s.NavTag == "controls");
+        Assert.Equal(StageMode.Controls, s.Stage.Mode);
+        Assert.Null(s.Vm.Hardware.LeavePrompt);
+        Assert.Equal(39u, s.Vm.Controller.Draft.Sliders[1].Pin);   // the save landed, nothing reverted
+    }
+
+    [AvaloniaFact]
+    public void EscapeCancelsStartOver()
+    {
+        using var s = Show();
+        s.Vm.Hardware.StartOver();
+        Settle(s.Window);
+        var back = In<Button>(s.Stage, "ChooserBack");
+        Assert.True(back.IsVisible);
+        back.Focus();
+        s.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        Settle(s.Window);
+        Assert.False(s.Vm.Hardware.ShowChooser);
+        Assert.Equal(5, s.Vm.Controller.Draft.Sliders.Count);
+    }
+
+    [AvaloniaFact]
     public void SaveFailureStays()
     {
         using var s = Show();

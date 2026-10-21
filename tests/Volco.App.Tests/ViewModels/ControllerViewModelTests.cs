@@ -219,6 +219,27 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.Equal(35u, vm.Draft.Sliders[1].Pin);
     }
 
+    [Fact]
+    public void TheSetupChangedNotice_GoesWhenTheDraftIsCleanAgain()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.SetSliderPin(1, 34);   // dirty
+
+        var changed = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        changed.Sliders[0].Pin = 39;
+        var blob = ControllerConfigCodec.Encode(changed);
+        var save = _rig.Runtime.ControllerConfig.SaveAsync(blob, TestContext.Current.CancellationToken);
+        ConfirmLastWrite(blob);
+        Until(() => save.IsCompleted && vm.BaselineConfig().Sliders[0].Pin == 39);
+        Assert.NotNull(vm.Notice);
+
+        vm.SetSliderPin(0, 39);   // the draft now equals the controller's new setup
+        vm.SetSliderPin(1, 35);
+        Assert.False(vm.IsDirty);
+        Assert.Null(vm.Notice);
+    }
+
     // ── Presets ────────────────────────────────────────────────────────────────────────────
 
     [Fact]

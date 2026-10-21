@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Google.Protobuf;
 using Volco.Core.Controller;
@@ -48,20 +49,29 @@ public sealed class ChooserCard
 /// The setup chooser (hardware-page spec §7.1), in the drawing's place when the controller isn't
 /// set up, its setup can't be used, or the user chose Start over: Volco's saved copy (with a
 /// mirror), each available preset, then Start empty. Picking one starts a new draft; nothing is
-/// sent before Save.
+/// sent before Save. After Start over, Back (or Escape) returns to the drawing.
 /// </summary>
-public sealed class SetupChooserViewModel
+public sealed partial class SetupChooserViewModel : ObservableObject
 {
     private readonly ControllerViewModel _controller;
     private readonly Action _picked;
     private byte[]? _shownFor;
 
-    public SetupChooserViewModel(ControllerViewModel controller, Action picked)
+    /// <param name="picked">A card was picked.</param>
+    /// <param name="back">Back: the Start over is cancelled.</param>
+    public SetupChooserViewModel(ControllerViewModel controller, Action picked, Action back)
     {
         _controller = controller;
         _picked = picked;
+        BackCommand = new RelayCommand(back);
         Refresh();
     }
+
+    /// <summary>The chooser shows for Start over: Back is offered.</summary>
+    [ObservableProperty] private bool _canGoBack;
+
+    /// <summary>Back: the drawing comes back, the draft unchanged.</summary>
+    public ICommand BackCommand { get; }
 
     public string Title => "How do you want to start?";
 
@@ -87,7 +97,7 @@ public sealed class SetupChooserViewModel
             Cards.Add(new ChooserCard(preset.DisplayName, ConfigDiff.Counts(hardware), "", hardware, false,
                                       () => Pick(() => _controller.StartFromPresetCommand.Execute(preset))));
         }
-        Cards.Add(new ChooserCard("Start empty", "", "Add sliders and buttons yourself, with Detect", null, false,
+        Cards.Add(new ChooserCard("Start empty", "", "Add sliders and buttons yourself", null, false,
                                   () => Pick(() => _controller.StartFromScratchCommand.Execute(null))));
     }
 

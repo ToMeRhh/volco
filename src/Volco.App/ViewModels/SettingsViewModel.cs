@@ -161,7 +161,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private void OnControlsShifted(object? sender, EventArgs e)
     {
         if (_disposed) return;
-        _slidersViewModel?.Reload();
+        if (_slidersViewModel is { } sliders)
+        {
+            sliders.Reload();
+            // The levels follow the physical sliders, not the targets that moved.
+            sliders.SeedLiveLevels(_runtime.GetSliderLevel);
+        }
         _buttonsViewModel?.Reload();
     }
 

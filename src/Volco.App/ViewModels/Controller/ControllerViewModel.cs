@@ -142,6 +142,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     public bool CanSave => CanEdit && IsDirty && !Busy;
 
+    /// <summary>A new draft could be edited: the controller is ready and nothing (a save, a test,
+    /// a flash) runs. Start over is offered only then.</summary>
+    internal bool CanStartNewDraft => _runtime.ControllerState == ControllerState.Ready && !IsSaving && !IsTesting && !Busy;
+
     private bool _setupChanged;
 
     /// <summary>The controller's setup changed (Volco's copy moved) under an unsaved draft: the save
@@ -228,6 +232,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>Dirty and the problems.</summary>
     private void Recompute()
     {
+        if (!IsDirty) SetSetupChanged(false);   // nothing unsaved is left for the notice to warn about
         if (CanEdit) ShowLocalErrors();
         else ClearErrors();
         OnPropertyChanged(nameof(IsDirty));
@@ -513,7 +518,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _hasPermission = false;
         LoadDraftFromMirror();
         RefreshAll();
+        Reverted?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>Raised after Discard (<see cref="RevertCommand"/>) put Volco's saved copy back.</summary>
+    internal event EventHandler? Reverted;
 
     // ── Confirmations ────────────────────────────────────────────────────────────────────────
 
@@ -666,7 +675,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (_testHandle is not null || IsTesting) StopTest();
         Confirmation = null;
         ClearFirmwareResult();
+        PageLeft?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>Raised by <see cref="OnPageLeft"/>: Hardware was left or the window hidden.</summary>
+    internal event EventHandler? PageLeft;
 
     // ── Runtime and service events (any thread → posted) ─────────────────────────────────────
 
