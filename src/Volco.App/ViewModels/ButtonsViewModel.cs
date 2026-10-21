@@ -404,7 +404,7 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
     /// <summary>An empty button for a control the Hardware page's draft adds: not in
     /// <see cref="Items"/> and never saved (Volco's settings get it once the controller confirms).</summary>
     public ButtonItemViewModel CreateDetached(int index)
-        => new(new ButtonConfig { Index = index }, index, _devices, this);
+        => new(new ButtonConfig { Index = index }, index, _devices, this) { IsNew = true };
 
     /// <summary>Rebuilds <see cref="Items"/> from <c>config.json</c> after its list was rewritten
     /// (a confirmed save removed or added controls).</summary>

@@ -57,7 +57,7 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
     /// <summary>A "Not set up" slider for a control the Hardware page's draft adds: not in
     /// <see cref="Items"/> and never saved (Volco's settings get it once the controller confirms).</summary>
     public SliderItemViewModel CreateDetached(int index)
-        => new(new SliderConfig { Index = index, Type = SliderMappingType.None }, index, _devices, this, () => { });
+        => new(new SliderConfig { Index = index, Type = SliderMappingType.None }, index, _devices, this, () => { }) { IsNew = true };
 
     /// <summary>Rebuilds <see cref="Items"/> from <c>config.json</c> after its list was rewritten
     /// (a confirmed save removed or added controls). Live levels stay with their positions.</summary>

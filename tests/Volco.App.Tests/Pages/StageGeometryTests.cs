@@ -167,7 +167,6 @@ public sealed class StageGeometryTests : IDisposable
         }
         foreach (var tile in Tiles(s.Page).OfType<ButtonTile>())
         {
-            Assert.False(In<TextBlock>(tile, "WiringIndicator").IsVisible);
             // Row 0 is the LED's height alone: the cap (top margin 7) starts where the LED ends.
             var led = In<Avalonia.Controls.Shapes.Ellipse>(tile, "Led");
             var ledBottom = led.TranslatePoint(new Point(0, led.Bounds.Height), tile)!.Value.Y;

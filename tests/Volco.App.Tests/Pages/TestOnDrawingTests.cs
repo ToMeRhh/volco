@@ -131,7 +131,7 @@ public sealed class TestOnDrawingTests : IDisposable
 
         var slider = Tiles<SliderTile>(s.Page)[2];
         Assert.True(In<TextBlock>(slider, "WiringTest").IsVisible);
-        Assert.Equal(0, In<TextBlock>(slider, "WiringPin").FindAncestorOfType<Border>()!.Opacity);   // keeps its space
+        Assert.Equal(0, In<Grid>(slider, "LabelRow").Opacity);   // keeps its space
         s.Rig.Connection!.RaiseMessage(new SliderMessage(2, 2310));
         Until(s.Window, () => TestText(slider) == "2310");
 
@@ -159,7 +159,7 @@ public sealed class TestOnDrawingTests : IDisposable
         Until(s.Window, () => !s.Hardware.IsTesting);
         Assert.False(s.Rig.Runtime.InTestMode);
         Assert.DoesNotContain("testing", caseBorder.Classes);
-        Assert.Equal(1, In<TextBlock>(slider, "WiringPin").FindAncestorOfType<Border>()!.Opacity);
+        Assert.Equal(1, In<Grid>(slider, "LabelRow").Opacity);
         Assert.False(In<TextBlock>(slider, "WiringTest").IsVisible);
     }
 

@@ -639,13 +639,7 @@
     <Setter Property="Opacity" Value="1"/>
     <Setter Property="IsHitTestVisible" Value="True"/>
   </Style>
-  <!-- The I2C bus chips under the buttons (hardware-page spec §5.2): not drawn on the Controller
-       page (controller-page spec §4.1), so out of sight and out of reach even during a test -->
-  <Style Selector="Border.Case ItemsControl.BusChips">
-    <Setter Property="Opacity" Value="0"/>
-    <Setter Property="IsHitTestVisible" Value="False"/>
-    <Setter Property="IsEnabled" Value="False"/>
-  </Style>
+  <!-- The pill-shaped chip in the title row (Controller settings) -->
   <Style Selector="Button.BusChip">
     <Setter Property="Margin" Value="0,0,8,0"/>
     <Setter Property="Padding" Value="10,3"/>
@@ -695,31 +689,8 @@
   <Style Selector="controls|ButtonTile StackPanel.WiringCaptions">
     <Setter Property="Margin" Value="0,6,0,0"/>
   </Style>
-  <Style Selector="Border.PinPill">
-    <Setter Property="HorizontalAlignment" Value="Center"/>
-    <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="8"/>
-    <Setter Property="Padding" Value="6,0,6,1"/>
-  </Style>
-  <Style Selector="Border.PinPill TextBlock, TextBlock.WiringIndicator">
-    <Setter Property="FontSize" Value="10.5"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-  </Style>
-  <!-- During a hardware test the pin and indicator wiring give way to the test state but keep
-       their measure, so no tile changes size (spec §8) -->
-  <Style Selector="Border.PinPill.testing, TextBlock.WiringIndicator.testing">
-    <Setter Property="Opacity" Value="0"/>
-    <Setter Property="IsHitTestVisible" Value="False"/>
-  </Style>
-  <Style Selector="Ellipse.ChangeDot">
-    <Setter Property="Width" Value="6"/>
-    <Setter Property="Height" Value="6"/>
-    <Setter Property="VerticalAlignment" Value="Center"/>
-    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
-  </Style>
-  <!-- A problem with the draft's control: the danger outline (controller-page spec §4.1) -->
+  <!-- A problem with the draft's control: the danger outline and the warning mark at the top
+       right, whose tooltip is the problem (controller-page spec §4.1) -->
   <Style Selector="Rectangle.ProblemOutline">
     <Setter Property="Stroke" Value="{DynamicResource DangerBrush}"/>
     <Setter Property="StrokeThickness" Value="1.5"/>
@@ -727,10 +698,37 @@
     <Setter Property="RadiusY" Value="11"/>
     <Setter Property="IsHitTestVisible" Value="False"/>
   </Style>
+  <Style Selector="Border.ProblemMark">
+    <Setter Property="HorizontalAlignment" Value="Right"/>
+    <Setter Property="VerticalAlignment" Value="Top"/>
+    <Setter Property="Margin" Value="0,5,5,0"/>
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="Border.ProblemMark PathIcon">
+    <Setter Property="Width" Value="12"/>
+    <Setter Property="Height" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+  </Style>
+  <!-- A control the draft adds (controller-page spec §4.1): dashed in the accent colour until
+       the controller has it -->
+  <Style Selector="Rectangle.NewOutline">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="StrokeDashArray" Value="4,3"/>
+    <Setter Property="RadiusX" Value="11"/>
+    <Setter Property="RadiusY" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <Style Selector="TextBlock.TileNew">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="TextAlignment" Value="Center"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
 
   <!-- The hardware test on the drawing (hardware-page spec §8): the case's accent outline (the
        padding gives back the thicker border, so no tile moves), the band under it, a held
-       button's cap, the clickable test light and the test value in the pin's place -->
+       button's cap, the clickable test light and the test value in the label's place -->
   <Style Selector="Border.Case.testing">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="BorderThickness" Value="2"/>

@@ -6,10 +6,11 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// A tile's captions on Hardware (spec docs/design/hardware-page.md §5.2), shown instead of its
-/// actions: its name, its pin, its indicator's wiring, the draft-change dot, a problem and, on a
-/// slider, the live raw level. During the hardware test (spec §8) it also carries the test state:
-/// the raw value or the button's light, its presses and whether it is held.
+/// A tile's wiring state from the controller draft: its name, its pin, its indicator's wiring,
+/// whether the draft changes it, a problem and, on a slider, the live raw level. The Controller
+/// page's tiles draw only the problem (the danger outline and the warning mark, controller-page
+/// spec §4.1; pins stay in the inspector) and, during the hardware test (hardware-page spec §8),
+/// the test state: the raw value or the button's light, its presses and whether it is held.
 /// </summary>
 public sealed partial class TileWiring : ObservableObject
 {
@@ -17,28 +18,20 @@ public sealed partial class TileWiring : ObservableObject
     [ObservableProperty]
     private string _title = "";
 
-    /// <summary>The pin, as its pill reads ("GPIO 33").</summary>
+    /// <summary>The pin ("GPIO 33").</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowPin))]
     private string _pinText = "";
 
     /// <summary>A button's indicator wiring ("12", "18 · 19", "Bus 0 · 3C"); empty for none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowIndicatorText))]
     private string _indicatorText = "";
 
-    /// <summary>The pin pill is there: there is a pin text. During a test it is transparent (the
-    /// test state shows in its place), so the tile keeps its size.</summary>
-    public bool ShowPin => PinText.Length > 0;
-
-    /// <summary>The indicator's wiring is there: there is one. During a test it is transparent too.</summary>
-    public bool ShowIndicatorText => IndicatorText.Length > 0;
-
-    /// <summary>The draft changes this control (the dot, until saved).</summary>
+    /// <summary>The draft changes this control (counted by the save bar until saved).</summary>
     [ObservableProperty]
     private bool _hasChange;
 
-    /// <summary>The draft's problem with this control (the danger outline and its tooltip), or null.</summary>
+    /// <summary>The draft's problem with this control (the danger outline, and the warning mark
+    /// whose tooltip it is), or null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProblem))]
     private string? _problem;
@@ -51,7 +44,7 @@ public sealed partial class TileWiring : ObservableObject
 
     // ── The hardware test (spec §8) ──────────────────────────────────────────────────────────
 
-    /// <summary>A hardware test runs: the tile shows its test state instead of its pin.</summary>
+    /// <summary>A hardware test runs: the tile shows its test state instead of its label.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTestLed), nameof(IsTestPair),
                               nameof(IsTestScreen), nameof(HasTestLight))]

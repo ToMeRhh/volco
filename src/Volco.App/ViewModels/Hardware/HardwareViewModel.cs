@@ -333,7 +333,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             w.PinText = PinText(slider.HasPin, slider.Pin);
             w.IndicatorText = "";
             w.HasChange = !Equals(Saved(baseline.Sliders, Source(layout.Sliders, i)), slider);
-            w.Problem = ProblemOf(problems, i, f => f == ConfigField.SliderPin);
+            w.Problem = TileProblem(draft, problems, i, new[] { PinOwnerKind.Slider }, _ => false);
         }
         for (int i = 0; i < Buttons.Count; i++)
         {
@@ -343,8 +343,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             w.PinText = PinText(button.HasPin, button.Pin);
             w.IndicatorText = IndicatorText(button);
             w.HasChange = !Equals(Saved(baseline.Buttons, Source(layout.Buttons, i)), button);
-            w.Problem = ProblemOf(problems, i, f => f is ConfigField.ButtonPin or ConfigField.LedPin or ConfigField.PairPinA
-                                                   or ConfigField.PairPinB or ConfigField.ScreenBus or ConfigField.ScreenAddress);
+            w.Problem = TileProblem(draft, problems, i,
+                                    new[] { PinOwnerKind.Button, PinOwnerKind.Light, PinOwnerKind.LightA, PinOwnerKind.LightB },
+                                    f => f is ConfigField.ScreenBus or ConfigField.ScreenAddress);
         }
 
         // A Controls tile the draft doesn't draw still measures its wiring layer.
@@ -603,9 +604,17 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     private static string Part(bool has, uint pin) => has ? $"{pin}" : "–";
 
-    private static string? ProblemOf(IReadOnlyList<DraftProblem> problems, int item, Func<ConfigField, bool> field)
+    /// <summary>A tile's problem (its mark's tooltip and the danger outline, controller-page spec
+    /// §4.1), or null: each of its pin fields' problems as the field words it (a shared pin reads
+    /// "Slider 1 also uses GPIO 33.", so both ends of a conflict are marked), then its other
+    /// problems (<paramref name="other"/> fields), one per line.</summary>
+    private static string? TileProblem(ControllerConfig draft, IReadOnlyList<DraftProblem> problems, int item,
+                                       PinOwnerKind[] pins, Func<ConfigField, bool> other)
     {
-        var mine = problems.Where(p => p.Item == item && field(p.Field)).Select(p => p.Message).Distinct().ToList();
+        var mine = pins.Select(kind => DraftPins.ProblemFor(draft, problems, new PinOwner(kind, item)).Message)
+            .OfType<string>()
+            .Concat(problems.Where(p => p.Item == item && other(p.Field)).Select(p => p.Message))
+            .Distinct().ToList();
         return mine.Count == 0 ? null : string.Join("\n", mine);
     }
 

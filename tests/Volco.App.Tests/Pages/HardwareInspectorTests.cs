@@ -93,14 +93,6 @@ public sealed class HardwareInspectorTests : IDisposable
     private static List<T> Tiles<T>(Visual root) where T : Control
         => root.GetVisualDescendants().OfType<T>().ToList();
 
-    /// <summary>The opacity it is drawn with: its own times its ancestors'.</summary>
-    private static double DrawnOpacity(Visual visual)
-    {
-        var opacity = 1.0;
-        for (var v = visual; v is not null; v = v.GetVisualParent()) opacity *= v.Opacity;
-        return opacity;
-    }
-
     /// <summary>A left click at <paramref name="y"/> from the control's top (its middle when null).</summary>
     private static void Click(Shown s, Control control, double? y = null)
     {
@@ -214,28 +206,27 @@ public sealed class HardwareInspectorTests : IDisposable
     public void ABusSelectionShowsTheBus()
     {
         using var s = Show();
-        Assert.False(In<ItemsControl>(s.Page, "BusChipList").IsVisible);   // no screen yet
+        Assert.Empty(s.Hardware.BusChips);   // no screen yet
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
         Click(s, In<RadioButton>(s.Host, "LightScreen"));   // a screen on bus 0
 
-        var chip = Tiles<Button>(s.Page).Single(b => b.Name == "BusChip");
-        Assert.Equal("I2C bus 0 · SDA 25 · SCL 26", chip.Content);
-        Assert.Equal(0, DrawnOpacity(chip));
-        Assert.False(chip.IsEffectivelyEnabled);
-        chip.Command!.Execute(null);
+        Assert.DoesNotContain(Tiles<Button>(s.Page), b => b.Name == "BusChip");
+        var chip = Assert.Single(s.Hardware.BusChips);
+        Assert.Equal("I2C bus 0 · SDA 25 · SCL 26", chip.Text);
+        chip.SelectCommand.Execute(null);
         Settle(s.Window);
 
         Assert.Equal("I2C bus 0", Heading(s));
         Assert.Equal("GPIO 25", PinValue(In<PinField>(s.Host, "SdaField")));
         Assert.Equal("GPIO 26", PinValue(In<PinField>(s.Host, "SclField")));
         Assert.Equal(1, In<ComboBox>(s.Host, "ClockBox").SelectedIndex);   // 400 kHz
-        Assert.Contains("selected", chip.Classes);
+        Assert.True(chip.IsSelected);
         Assert.Null(s.Vm.Controls.Selected);
 
         Click(s, Tiles<SliderTile>(s.Page)[0], y: 6);
         Assert.Equal("Slider 1", Heading(s));
-        Assert.DoesNotContain("selected", chip.Classes);
+        Assert.False(chip.IsSelected);
     }
 
     [AvaloniaFact]

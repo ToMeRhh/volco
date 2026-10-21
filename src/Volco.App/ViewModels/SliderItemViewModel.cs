@@ -77,7 +77,15 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     /// <summary>The config has this slider but the controller's last Hello doesn't (spec §4.1).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSwap))]
     private bool _isMissing;
+
+    /// <summary>A control only the controller draft has (added with + Add, made by
+    /// <c>CreateDetached</c>): its tile says to save first (controller-page spec §4.1).</summary>
+    public bool IsNew { get; init; }
+
+    /// <summary>The tile's grip is there: the slider is in Volco's settings and on the controller.</summary>
+    public bool CanSwap => !IsMissing && !IsNew;
 
     // ── What it controls ──────────────────────────────────────────────────────
 

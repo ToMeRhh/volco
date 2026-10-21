@@ -138,25 +138,6 @@
                     </ItemsControl>
                   </StackPanel>
                 </Panel>
-
-                <!-- The I2C bus chips (hardware-page spec §5.2): not drawn on the Controller page
-                     (controller-page spec §4.1); their row keeps its space whenever a screen uses a bus
-                     until the bus settings move into Controller settings -->
-                <ItemsControl Name="BusChipList" Classes="BusChips WiringLayer"
-                              ItemsSource="{Binding $parent[stage:StagePage].Hardware.BusChips, FallbackValue={x:Null}}"
-                              IsVisible="{Binding $parent[stage:StagePage].Hardware.HasBusChips, FallbackValue=False}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <WrapPanel/>
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="hw:BusChipViewModel">
-                      <Button Name="BusChip" Classes="BusChip" Classes.selected="{Binding IsSelected}"
-                              Content="{Binding Text}" Command="{Binding SelectCommand}"/>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
               </StackPanel>
               <stage:StageContentHost Name="ChooserHost"/>
             </Grid>
