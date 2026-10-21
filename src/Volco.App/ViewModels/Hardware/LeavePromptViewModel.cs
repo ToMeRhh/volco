@@ -13,7 +13,7 @@ namespace Volco.App.ViewModels.Hardware;
 public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
 {
     private readonly ControllerViewModel _controller;
-    private readonly Action _proceed;
+    private Action _proceed;
     private readonly Action _close;
     private bool _disposed;
 
@@ -32,6 +32,10 @@ public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
     }
 
     public string Title => "Unsaved changes";
+
+    /// <summary>Another page was chosen while the prompt is open: the prompt (and a save it runs)
+    /// stays, and continuing goes to that page instead.</summary>
+    public void Retarget(Action proceed) => _proceed = proceed;
 
     /// <summary>Save and continue's save runs: the prompt waits for the controller's confirmation.</summary>
     [ObservableProperty]

@@ -80,6 +80,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         Until(() => vm.FirmwareMessage is not null);
         Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", vm.FirmwareMessage);
         Assert.Equal(vm.FirmwareMessage, vm.Failure);   // a warning: the card shows it
+        Assert.True(vm.OfferInstall);                    // and its button is Reinstall firmware…
         Assert.False(vm.IsFirmwareRunning);
         Assert.Equal("probe COM3", _flasher.Calls.Single());
     }
@@ -244,6 +245,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         _rig.Config.RequestSave(connectionChanged: true);
         Until(() => vm.FirmwareMessage is null);
         Assert.False(vm.CanUseFirmware);
+        Assert.False(vm.OfferInstall);
     }
 
     [Fact]

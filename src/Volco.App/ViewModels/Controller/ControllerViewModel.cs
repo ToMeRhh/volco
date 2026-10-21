@@ -142,6 +142,19 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     public bool CanSave => CanEdit && IsDirty && !Busy;
 
+    private bool _setupChanged;
+
+    /// <summary>The controller's setup changed (Volco's copy moved) under an unsaved draft: the save
+    /// bar says so, since Save would put the draft back over it. Null otherwise.</summary>
+    public string? Notice => _setupChanged ? "The controller's setup changed. Discard to load it." : null;
+
+    private void SetSetupChanged(bool value)
+    {
+        if (_setupChanged == value) return;
+        _setupChanged = value;
+        OnPropertyChanged(nameof(Notice));
+    }
+
     /// <summary>Replaces the draft's wiring with <paramref name="preset"/>, asking first when the
     /// draft has hardware (the device card's "Load a preset…").</summary>
     internal void LoadPreset(ControllerPreset preset)
@@ -182,6 +195,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The draft = the mirror's decode (Blank when there is none); the baseline follows.</summary>
     private void LoadDraftFromMirror()
     {
+        SetSetupChanged(false);
         var decoded = DecodeMirror();
         _baseline = decoded is null ? Array.Empty<byte>() : decoded.ToByteArray();
         _fixIt = false;
@@ -460,7 +474,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         var confirmed = r.Status == SaveStatus.Confirmed;
         SetProgress(text, confirmed ? LinkTone.Good : LinkTone.Danger);
         if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid) _remoteError = (r.Item, r.Field);
-        if (r.Status == SaveStatus.Confirmed) _fixIt = false;
+        if (r.Status == SaveStatus.Confirmed)
+        {
+            _fixIt = false;
+            SetSetupChanged(false);
+        }
         if (r.Status == SaveStatus.Confirmed && _savingSetup) OfferTest = true;   // the device card offers a test
         var layout = _savingLayout;
         var saved = _savingBlob;
@@ -674,8 +692,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (follow)
         {
             _fixIt = false;
+            SetSetupChanged(false);
             SetDraft(decoded ?? new ControllerConfig { Preset = ControllerPresets.BlankId }, keepFixIt: false);
         }
+        else SetSetupChanged(true);
         RefreshAll();
     });
 

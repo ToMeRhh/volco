@@ -60,7 +60,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
         return new CardInputs(Connection.Link, c.Banner, type, port,
                               running ? LinkText.Activity(c.FirmwareActivity) : null,
                               running && c.FirmwareActivity != LinkActivity.CheckingFirmware ? c.FirmwareProgress : null,
-                              c.SavePhaseText, c.Failure, c.OfferTest);
+                              c.SavePhaseText, c.Failure, c.OfferTest, c.OfferInstall);
     }
 
     private CardState Compute() => DeviceCard.From(Inputs());
@@ -86,6 +86,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
         CardAction.Retry => Connection.Link.State == LinkState.PortBusy || !_controller.Busy,
         CardAction.CheckFirmware or CardAction.Update => _controller.CanUseFirmware,
         CardAction.TestNow => _controller.CanStartTest,
+        CardAction.Reinstall => _controller.CanUseFirmware && !_controller.Busy,
         _ => !_controller.Busy,
     };
 
@@ -103,6 +104,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
             case CardAction.FixIt: _controller.FixItCommand.Execute(null); break;
             case CardAction.Compare: _hardware.OpenCompare(); break;
             case CardAction.TestNow: _controller.TestNowCommand.Execute(null); break;
+            case CardAction.Reinstall: _controller.InstallFirmwareCommand.Execute(null); break;   // asks first
         }
     }
 

@@ -49,6 +49,7 @@ public sealed partial class ControllerViewModel
         if (IsFirmwareRunning) return;
         FirmwareMessage = null;
         OfferTest = false;
+        OfferInstall = false;
         ConfirmInstallPending = false;
     }
 
@@ -74,6 +75,10 @@ public sealed partial class ControllerViewModel
 
     /// <summary>The card offers "Test your controller now": after an Update or a first save.</summary>
     [ObservableProperty] private bool _offerTest;
+
+    /// <summary>The last Check firmware asks to reinstall ("doesn't have this version…"): the card's
+    /// button is Reinstall firmware…, until the result goes.</summary>
+    [ObservableProperty] private bool _offerInstall;
 
     /// <summary>The result's tone: Volco's firmware found or written is good, other firmware a
     /// warning, a failure a danger.</summary>
@@ -140,6 +145,7 @@ public sealed partial class ControllerViewModel
         IsFirmwareRunning = true;
         FirmwareMessage = null;
         OfferTest = false;
+        OfferInstall = false;
         FirmwareProgress = 0;
         return true;
     }
@@ -166,6 +172,7 @@ public sealed partial class ControllerViewModel
                 ProbeKind.DifferentFirmware => LinkTone.Warning,
                 _ => LinkTone.Danger,
             });
+            OfferInstall = outcome.OfferInstall;
         });
     }
 

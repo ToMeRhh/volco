@@ -201,6 +201,7 @@ public sealed class ControllerViewModelTests : IDisposable
         ConfirmLastWrite(blob1);
         Until(() => save1.IsCompleted && vm.Draft.Sliders.Count == 5 && vm.Draft.Sliders[0].Pin == 39);
         Assert.False(vm.IsDirty);
+        Assert.Null(vm.Notice);
 
         vm.SetSliderPin(1, 34);   // dirty now
         changed.Sliders[0].Pin = 33;
@@ -210,8 +211,10 @@ public sealed class ControllerViewModelTests : IDisposable
         Until(() => save2.IsCompleted && vm.BaselineConfig().Sliders[0].Pin == 33);
         Assert.Equal(34u, vm.Draft.Sliders[1].Pin);   // the dirty draft stays
         Assert.True(vm.IsDirty);
+        Assert.Equal("The controller's setup changed. Discard to load it.", vm.Notice);
 
         vm.RevertCommand.Execute(null);
+        Assert.Null(vm.Notice);
         Assert.Equal(33u, vm.Draft.Sliders[0].Pin);
         Assert.Equal(35u, vm.Draft.Sliders[1].Pin);
     }

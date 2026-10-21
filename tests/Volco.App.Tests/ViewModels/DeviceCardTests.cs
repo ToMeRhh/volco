@@ -171,6 +171,7 @@ public sealed class DeviceCardTests : IDisposable
     private readonly TestRig _rig = new();
     private readonly RecordingDispatcher _ui = new();
     private SettingsViewModel? _settings;
+    private FakeFlasher? _flasher;
 
     public void Dispose()
     {
@@ -198,7 +199,8 @@ public sealed class DeviceCardTests : IDisposable
         c.Sliders = Enumerable.Range(0, 5).Select(i => new SliderConfig { Index = i }).ToList();
         c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
         c.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
-        var firmware = new FirmwareService(_rig.Runtime, new FakeFlasher(() => _rig.Runtime.IsSuspended), Catalog);
+        _flasher = new FakeFlasher(() => _rig.Runtime.IsSuspended);
+        var firmware = new FirmwareService(_rig.Runtime, _flasher, Catalog);
         _settings = new SettingsViewModel(_rig.Config, _rig.Engine, _rig.Runtime, _ui, firmware);
         _ = _settings.Controls;
         _rig.Connection!.SetStatus(TransportStatus.Open);
@@ -249,6 +251,28 @@ public sealed class DeviceCardTests : IDisposable
         Assert.False(card.LoadPresetCommand.CanExecute(null));
         Assert.False(card.StartOverCommand.CanExecute(null));
         Assert.True(card.ReconnectCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void AProbeThatOffersInstall_MakesTheButtonReinstall_WhichAsksFirst()
+    {
+        var settings = InSync();
+        var card = settings.Hardware.Card;
+        _flasher!.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        card.CheckFirmwareCommand.Execute(null);
+        Until(() => card.State.Action == CardAction.Reinstall);
+        Assert.Equal("Reinstall firmware…", card.ActionLabel);
+        Assert.Equal("This ESP32 doesn't have this version of Volco's firmware.", card.State.Detail);
+
+        Until(() => card.ActionCommand.CanExecute(null));
+        card.ActionCommand.Execute(null);
+        Assert.True(settings.Controller.ConfirmInstallPending);   // the ⋯ item's confirmation
+        Assert.False(settings.Controller.IsFirmwareRunning);
+
+        settings.Controller.CancelInstallCommand.Execute(null);
+        settings.Controller.OnPageLeft();                          // the result goes, and the offer with it
+        _ui.RunAll();
+        Assert.NotEqual(CardAction.Reinstall, card.State.Action);
     }
 
     [Fact]

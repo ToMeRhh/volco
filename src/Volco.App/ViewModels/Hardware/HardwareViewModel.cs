@@ -145,12 +145,13 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
 
     /// <summary>Asks before leaving Hardware with unsaved changes; <paramref name="proceed"/> goes
-    /// on once the draft was saved (and confirmed) or discarded.</summary>
+    /// on once the draft was saved (and confirmed) or discarded. While a prompt is open it stays
+    /// (a save it runs goes on) and only where it continues to changes.</summary>
     public void AskToLeave(Action proceed)
     {
         if (_disposed) return;
-        LeavePrompt?.Dispose();
-        LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt);
+        if (LeavePrompt is { } open) open.Retarget(proceed);
+        else LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt);
     }
 
     /// <summary>Closes the leave prompt: the user stays on Hardware.</summary>
@@ -223,7 +224,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (e.PropertyName is nameof(ControllerViewModel.IsTesting) or null or "") OnTestingChanged();
         if (e.PropertyName is nameof(ControllerViewModel.CanStartTest) or null or "") OnPropertyChanged(nameof(CanStartTest));
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or nameof(ControllerViewModel.IsSaving)
-            or nameof(ControllerViewModel.IsSettingUp) or nameof(ControllerViewModel.CanSave) or null or "") UpdateSaveBar();
+            or nameof(ControllerViewModel.IsSettingUp) or nameof(ControllerViewModel.CanSave)
+            or nameof(ControllerViewModel.Notice) or null or "") UpdateSaveBar();
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or null or "") OnPropertyChanged(nameof(IsDirty));
         UpdateChooser();
     }
@@ -233,11 +235,13 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The bar at the bottom of the drawing: shown while the draft is unsaved and no save runs.</summary>
     public bool ShowSaveBar => _controller.IsDirty && !_controller.IsSaving;
 
-    /// <summary>"1 change not saved", "N changes not saved", or, for a new draft, that the setup isn't on the controller.</summary>
+    /// <summary>"1 change not saved", "N changes not saved"; for a new draft, that the setup isn't on the
+    /// controller; and after the controller's setup changed under the draft, that Discard loads it.</summary>
     public string SaveBarText
     {
         get
         {
+            if (_controller.Notice is { } notice) return notice;
             if (_controller.IsSettingUp) return "This setup isn't on the controller yet";
             var n = Math.Max(1, CountChanges());
             return n == 1 ? "1 change not saved" : $"{n} changes not saved";

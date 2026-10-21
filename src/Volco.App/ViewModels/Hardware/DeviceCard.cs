@@ -5,7 +5,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>The device card's one primary button (hardware-page spec §4.1).</summary>
-public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow }
+public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Reinstall }
 
 /// <param name="Link">The runtime's link status, as the sidebar and the tray read it.</param>
 /// <param name="Banner">The §8.3 banner and the firmware notice.</param>
@@ -18,9 +18,11 @@ public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Com
 /// <param name="Failure">The last operation's error message (save, install, update or check), kept
 /// until the next action; null when there is none.</param>
 /// <param name="OfferTest">A firmware update or a first save just finished: the card offers a test.</param>
+/// <param name="OfferInstall">The last Check firmware found other firmware (or none it knows): the card
+/// offers Reinstall firmware…, which asks first, until the result goes.</param>
 public sealed record CardInputs(LinkStatus Link, ControllerBanner Banner, ConnectionType Transport, string? Port,
                                 string? FirmwareStage, double? FirmwareProgress, string? SavePhase, string? Failure,
-                                bool OfferTest);
+                                bool OfferTest, bool OfferInstall = false);
 
 /// <param name="Status">The status line, next to the coloured dot.</param>
 /// <param name="Detail">The one detail line; null for none.</param>
@@ -40,7 +42,10 @@ public static class DeviceCard
         // A running operation and the user's Disconnect keep their own detail line.
         bool keepsDetail = i.FirmwareStage is not null || i.SavePhase is not null || i.Banner.Kind == BannerKind.Saving
                            || i.Link.State == LinkState.Disconnected;
-        return i.Failure is { } failure && !keepsDetail ? state with { Detail = failure } : state;
+        if (i.Failure is { } failure && !keepsDetail) state = state with { Detail = failure };
+        // Check firmware's "Reinstall it?" is answered by the card's button.
+        if (i.OfferInstall && !keepsDetail) state = state with { Action = CardAction.Reinstall };
+        return state;
     }
 
     private static CardState Row(CardInputs i)
@@ -131,6 +136,7 @@ public static class DeviceCard
         CardAction.FixIt => "Fix it",
         CardAction.Compare => "Compare…",
         CardAction.TestNow => "Test your controller now",
+        CardAction.Reinstall => "Reinstall firmware…",
         _ => "",
     };
 }

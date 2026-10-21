@@ -419,6 +419,27 @@ public sealed class StageNavigationTests
     }
 
     [AvaloniaFact]
+    public void ANavClickWhileThePromptSavesKeepsThePromptAndItsSave()
+    {
+        using var s = Show();
+        LeaveDirty(s);
+        var prompt = s.Vm.Hardware.LeavePrompt;
+        Press(In<Button>(s.Stage, "SaveAndContinueButton"));
+        Until(s.Window, () => AnyWrite(s));
+
+        s.Window.ShowPage("general");   // another click while the save runs
+        Settle(s.Window);
+        Assert.Same(prompt, s.Vm.Hardware.LeavePrompt);
+        Assert.True(prompt!.IsSaving);
+        Assert.False(In<Button>(s.Stage, "DiscardAndContinueButton").IsEffectivelyEnabled);
+        Assert.Equal("controller", s.NavTag);
+
+        Answer(s, ConfigResultCode.Ok);
+        Until(s.Window, () => s.NavTag == "general");   // continues to the page chosen last
+        Assert.IsType<GeneralPage>(s.Window.CurrentPage);
+    }
+
+    [AvaloniaFact]
     public void SaveFailureStays()
     {
         using var s = Show();
