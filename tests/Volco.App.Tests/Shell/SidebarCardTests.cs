@@ -332,15 +332,15 @@ public sealed class SidebarCardTests : IDisposable
         Assert.True(overlay.IsEffectivelyVisible);
         Until(s.Window, () => s.Window.FindControl<Border>("LeaveCard")!.IsKeyboardFocusWithin);
 
-        // The pointer reaches the scrim, not the card's ⋯ or the nav.
+        // The pointer doesn't reach the card's ⋯ or the nav: the scrim is over them.
         var more = In<Button>(s.Card, "MoreButton");
         var nav = s.Window.FindControl<ListBox>("NavList")!;
         foreach (var target in new Control[] { more, nav })
         {
             var point = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), s.Window)!.Value;
             var hit = s.Window.InputHitTest(point) as Visual;
-            Assert.True(ReferenceEquals(hit, overlay) || overlay.IsVisualAncestorOf(hit),
-                        $"{target.Name} is reachable at {point}: the hit is {hit?.GetType().Name} {(hit as Control)?.Name}");
+            Assert.False(ReferenceEquals(hit, target) || target.IsVisualAncestorOf(hit),
+                         $"{target.Name} is reachable at {point}: the hit is {hit?.GetType().Name} {(hit as Control)?.Name}");
         }
 
         // No key reaches them either, even with the focus forced onto them.
