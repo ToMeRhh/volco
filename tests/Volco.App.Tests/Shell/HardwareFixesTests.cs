@@ -512,7 +512,7 @@ public sealed class HardwareFixesTests : IDisposable
         using var s = Open(c => c.Sliders = Named("abcde"), DiyConfig(), DiyThree());
         s.Vm.Hardware.StartOver();
         Settle(s.Window);
-        Pick(s, "Volco's saved copy");   // Volco's copy, as a new draft
+        Pick(s, Diy.DisplayName);   // the same wiring, as a new draft (Volco's saved copy is sent at once)
         UntilEditable(s);
         s.Vm.Controller.SetSliderPin(1, 39);
         Assert.True(s.Vm.Controller.IsDirty);
@@ -533,10 +533,10 @@ public sealed class HardwareFixesTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void E_ChooserSavedCopy_WithFewerSlidersInVolco()
+    public void E_ChooserPreset_WithFewerSlidersInVolco()
     {
         using var s = Open(c => c.Sliders = Named("abc"), DiyConfig(), controller: null);
-        Pick(s, "Volco's saved copy");
+        Pick(s, Diy.DisplayName);
         RemoveSaveAndCheck(s, 1, new[] { "a", "c", "", "" });
     }
 
