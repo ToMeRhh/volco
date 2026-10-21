@@ -256,7 +256,6 @@ public sealed class ControllerTilesTests : IDisposable
     public void NoBusChips()
     {
         using var s = Show();
-        s.Hardware.Sections.ButtonHardwareOpen = true;
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
         Click(s, In<RadioButton>(s.Page, "LightScreen"));   // a screen on bus 0

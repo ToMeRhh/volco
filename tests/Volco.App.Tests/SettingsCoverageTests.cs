@@ -74,9 +74,6 @@ public class SettingsCoverageTests
     /// <remarks>The page is the whole settings window, since the Connection dialog opens over it.</remarks>
     private static (Control Page, HardwareInspectorHost Host, Window Window) HardwareStage(TestRig rig, SettingsViewModel vm)
     {
-        // The tiles' inspectors show their wiring (their Hardware sections) open.
-        vm.Hardware.Sections.SliderHardwareOpen = true;
-        vm.Hardware.Sections.ButtonHardwareOpen = true;
         var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 900, AllowClose = true };
         window.Show();
         window.ShowPage("controller");

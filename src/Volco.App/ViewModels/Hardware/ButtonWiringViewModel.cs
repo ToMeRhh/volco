@@ -8,8 +8,8 @@ namespace Volco.App.ViewModels.Hardware;
 /// <summary>
 /// The Hardware section of a button's inspector (controller-page spec §4.3, hardware-page spec
 /// §6.2): its pin, its light (None / LED / 2 LEDs / Screen, which reshapes only the rows under it)
-/// and Remove, with the collapsed section's summary. Every edit goes into the draft of one button;
-/// the Hardware view model refreshes it after every draft change and drops it when the selection moves.
+/// and Remove, and the danger mark on the section's header. Every edit goes into the draft of one
+/// button; the Hardware view model refreshes it after every draft change and drops it when the selection moves.
 /// </summary>
 public sealed partial class ButtonWiringViewModel : ObservableObject
 {
@@ -37,9 +37,6 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
 
     /// <summary>"Button N".</summary>
     public string Title => $"Button {Index + 1}";
-
-    /// <summary>The collapsed section's summary: the pin and the light's wiring ("GPIO 5 · LED 12").</summary>
-    [ObservableProperty] private string _summary = "";
 
     /// <summary>The draft has a problem with this button: the section's danger mark.</summary>
     [ObservableProperty] private bool _hasProblem;

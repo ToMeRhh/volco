@@ -34,8 +34,6 @@ public sealed class StageGeometryTests : IDisposable
         }
     }
 
-    private static readonly string[] IndicatorTexts = { " · LED 12", " · LEDs 18, 19", " · Screen, bus 0, 3C", "" };
-
     /// <summary>The stage in a 1100 × 720 window, every tile with its wiring.</summary>
     private static Shown Show(int sliders, params IndicatorKind[] buttons) => Show(true, sliders, buttons);
 
@@ -69,11 +67,11 @@ public sealed class StageGeometryTests : IDisposable
         for (var i = 0; !wired && i < vm.Sliders.Items.Count; i++) vm.Sliders.Items[i].Wiring = null;
         for (var i = 0; !wired && i < vm.Buttons.Items.Count; i++) vm.Buttons.Items[i].Wiring = null;
         for (var i = 0; wired && i < vm.Sliders.Items.Count; i++)
-            vm.Sliders.Items[i].Wiring = new TileWiring { Title = $"Slider {i + 1}", Summary = $"GPIO {33 + i}", RawLevel = 0.3 };
+            vm.Sliders.Items[i].Wiring = new TileWiring { Title = $"Slider {i + 1}", RawLevel = 0.3 };
         for (var i = 0; wired && i < vm.Buttons.Items.Count; i++)
             vm.Buttons.Items[i].Wiring = new TileWiring
             {
-                Title = $"Button {i + 1}", Summary = $"GPIO {13 + i}" + IndicatorTexts[i % IndicatorTexts.Length],
+                Title = $"Button {i + 1}",
             };
         Settle(window);
         return new Shown(page, window, rig, vm);

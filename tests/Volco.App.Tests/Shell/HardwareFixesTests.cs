@@ -260,8 +260,6 @@ public sealed class HardwareFixesTests : IDisposable
     /// click, then Remove and the confirmation in the inspector.</summary>
     private static void RemoveWithTheInspector<TTile>(Shown s, int index) where TTile : Control
     {
-        s.Vm.Hardware.Sections.SliderHardwareOpen = true;
-        s.Vm.Hardware.Sections.ButtonHardwareOpen = true;
         Click(s, s.Stage.Tiles().OfType<TTile>().ElementAt(index));
         Press(In<Button>(s.Stage, "HardwareRemoveButton"));   // in the inspector's Hardware section
         Settle(s.Window);
@@ -660,7 +658,6 @@ public sealed class HardwareFixesTests : IDisposable
     {
         StageTransitions.Enabled = true;
         using var s = Show();
-        s.Vm.Hardware.Sections.SliderHardwareOpen = true;   // the wiring shows in the tile's inspector
         s.Vm.Controls.Select(s.Vm.Sliders.Items[2]);
         Pump(s.Window);
 

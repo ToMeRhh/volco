@@ -266,7 +266,6 @@ public sealed class StageNavigationTests
         using var s = Show();
         var bar = In<SaveBar>(s.Stage, "SaveBarHost");
         Assert.False(bar.IsVisible);
-        s.Vm.Hardware.Sections.SliderHardwareOpen = true;
         s.Vm.Controls.Select(s.Vm.Sliders.Items[0]);
         Settle(s.Window);
         var field = In<PinField>(s.Stage, "PinField");   // in the inspector's Hardware section

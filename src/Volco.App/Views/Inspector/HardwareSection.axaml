@@ -5,45 +5,43 @@
              xmlns:inspector="using:Volco.App.Views.Inspector"
              x:Class="Volco.App.Views.Inspector.HardwareSection"
              x:DataType="inspector:HardwareSection">
-  <!-- The inspector's Hardware section (controller-page spec §4.3): a header with its summary
-       ("GPIO 33") and the danger mark while the draft has a problem with the control, over the
-       control's wiring (its pins, its light, Remove). A control the controller lacks says so instead,
-       with Controls' Remove when it is the last one (controller-page spec §4.3). -->
-  <StackPanel Classes="InspectorGroup">
-    <ToggleButton Name="HardwareHeader" Classes="GroupHeader"
-                  IsChecked="{Binding $parent[inspector:HardwareSection].IsOpen, Mode=TwoWay}">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+  <!-- The inspector's Hardware section (controller-page spec §4.3): the bottom third of the
+       inspector, a fixed header with the danger mark while the draft has a problem with the
+       control, over the control's wiring (its pins, its light, Remove), which scrolls on its own.
+       A control the controller lacks says so instead, with Controls' Remove when it is the last one. -->
+  <DockPanel>
+    <Border Name="HardwareHeader" DockPanel.Dock="Top" Classes="GroupHeader Divided">
+      <Grid ColumnDefinitions="*,Auto">
         <TextBlock Classes="GroupLabel" Text="Hardware"/>
         <PathIcon Name="HardwareProblemMark" Grid.Column="1" Classes="GroupProblem" Data="{StaticResource Icon.Status.Warning}"
                   IsVisible="{Binding $parent[inspector:HardwareSection].HasProblem}"
                   ToolTip.Tip="This control's wiring has a problem"/>
-        <TextBlock Name="HardwareSummaryText" Grid.Column="2" Classes="Caption GroupSummary"
-                   Text="{Binding $parent[inspector:HardwareSection].Summary}"/>
-        <PathIcon Grid.Column="3" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
       </Grid>
-    </ToggleButton>
-    <Panel Name="HardwareBody" IsVisible="{Binding $parent[inspector:HardwareSection].IsOpen}">
-      <Border Name="NotOnControllerPanel" Classes="InspectorRows"
-              IsVisible="{Binding $parent[inspector:HardwareSection].IsMissing}">
-        <!-- Remove here is Controls' remove (Volco's settings only, the last one only) -->
-        <Grid ColumnDefinitions="*,Auto" Classes="InspectorRow">
-          <TextBlock Name="NotOnControllerText" Classes="Secondary" VerticalAlignment="Center" Text="Not on this controller"/>
-          <Button Name="RemoveButton" Grid.Column="1" Classes="Danger" Content="Remove"
-                  Command="{Binding $parent[inspector:HardwareSection].RemoveMissingCommand}"
-                  IsVisible="{Binding $parent[inspector:HardwareSection].CanRemoveMissing}"/>
-        </Grid>
-      </Border>
-      <!-- A control the controller lacks isn't in the draft, so it has no wiring -->
-      <ContentControl Name="WiringContent" Content="{Binding $parent[inspector:HardwareSection].Wiring}">
-        <ContentControl.DataTemplates>
-          <DataTemplate DataType="{x:Type hw:SliderWiringViewModel}" x:DataType="hw:SliderWiringViewModel">
-            <hwviews:SliderWiringInspector/>
-          </DataTemplate>
-          <DataTemplate DataType="{x:Type hw:ButtonWiringViewModel}" x:DataType="hw:ButtonWiringViewModel">
-            <hwviews:ButtonWiringInspector/>
-          </DataTemplate>
-        </ContentControl.DataTemplates>
-      </ContentControl>
-    </Panel>
-  </StackPanel>
+    </Border>
+    <ScrollViewer Name="HardwareScroll" VerticalScrollBarVisibility="Auto">
+      <Panel Name="HardwareBody" Classes="GroupBody">
+        <Border Name="NotOnControllerPanel" Classes="InspectorRows"
+                IsVisible="{Binding $parent[inspector:HardwareSection].IsMissing}">
+          <!-- Remove here is Controls' remove (Volco's settings only, the last one only) -->
+          <Grid ColumnDefinitions="*,Auto" Classes="InspectorRow">
+            <TextBlock Name="NotOnControllerText" Classes="Secondary" VerticalAlignment="Center" Text="Not on this controller"/>
+            <Button Name="RemoveButton" Grid.Column="1" Classes="Danger" Content="Remove"
+                    Command="{Binding $parent[inspector:HardwareSection].RemoveMissingCommand}"
+                    IsVisible="{Binding $parent[inspector:HardwareSection].CanRemoveMissing}"/>
+          </Grid>
+        </Border>
+        <!-- A control the controller lacks isn't in the draft, so it has no wiring -->
+        <ContentControl Name="WiringContent" Content="{Binding $parent[inspector:HardwareSection].Wiring}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:SliderWiringViewModel}" x:DataType="hw:SliderWiringViewModel">
+              <hwviews:SliderWiringInspector/>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type hw:ButtonWiringViewModel}" x:DataType="hw:ButtonWiringViewModel">
+              <hwviews:ButtonWiringInspector/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Panel>
+    </ScrollViewer>
+  </DockPanel>
 </UserControl>

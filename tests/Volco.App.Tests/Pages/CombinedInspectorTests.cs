@@ -23,10 +23,11 @@ using Button = Avalonia.Controls.Button;
 
 namespace Volco.App.Tests.Pages;
 
-/// <summary>Controller-page spec §4.3: one inspector per tile, its Controls (or Actions) section
-/// open and its Hardware section collapsed with a summary; the sections' state is remembered per
-/// kind, a problem opens Hardware, a control only the draft has asks to save first, a control the
-/// controller lacks says so, and Controller settings takes the side panel.</summary>
+/// <summary>Controller-page spec §4.3: one inspector per tile, two fixed sections always shown
+/// (Controls or Actions in the top two thirds, Hardware in the bottom third, never under about four
+/// rows), each with its own scrolling; a problem marks the Hardware header, a control only the
+/// draft has asks to save first, a control the controller lacks says so, and Controller settings
+/// takes the side panel.</summary>
 public sealed class CombinedInspectorTests : IDisposable
 {
     public CombinedInspectorTests() => StageTransitions.Enabled = false;
@@ -53,7 +54,7 @@ public sealed class CombinedInspectorTests : IDisposable
     /// <summary>The Controller page's stage over the DIY setup (5 sliders; buttons LED, LED, pair),
     /// in sync with the controller so the draft can be edited. Volco's settings have
     /// <paramref name="sliders"/> sliders: more than 5 draws the rest as not on this controller.</summary>
-    private static Shown Show(int sliders = 5)
+    private static Shown Show(int sliders = 5, double width = 1100, double height = 900)
     {
         var rig = new TestRig();
         var c = rig.Config.Config;
@@ -63,7 +64,7 @@ public sealed class CombinedInspectorTests : IDisposable
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var host = new HardwareInspectorHost { DataContext = vm.Hardware };
         var page = new StagePage(vm.Controls) { Hardware = vm.Hardware, HardwareSidePanel = host };
-        var window = new Window { Content = page, Width = 1100, Height = 900 };
+        var window = new Window { Content = page, Width = width, Height = height };
         window.Show();
 
         rig.Connection!.SetStatus(TransportStatus.Open);
@@ -123,83 +124,97 @@ public sealed class CombinedInspectorTests : IDisposable
     private static string PinValue(Visual field) => In<TextBlock>(field, "ValueText").Text!;
 
     [AvaloniaFact]
-    public void SliderShowsControlsOpenAndHardwareCollapsed()
+    public void BothSectionsAlwaysShow()
     {
         using var s = Show();
         Select(s, s.Vm.Sliders.Items[0]);
 
         var inspector = SliderInspector(s);
         Assert.Equal("Slider 1", In<TextBlock>(inspector, "HeadingText").Text);
-        Assert.True(In<ToggleButton>(inspector, "ControlsHeader").IsChecked);
+        Assert.True(In<Border>(inspector, "ControlsHeader").IsEffectivelyVisible);
+        Assert.True(In<Panel>(inspector, "ControlsBody").IsEffectivelyVisible);
         Assert.True(In<Button>(inspector, "ControlsRow").IsEffectivelyVisible);
         Assert.True(In<Border>(inspector, "ResponseSection").IsEffectivelyVisible);
-
         var section = Section(inspector);
-        var header = In<ToggleButton>(section, "HardwareHeader");
-        Assert.True(header.IsEffectivelyVisible);
-        Assert.False(header.IsChecked);
-        Assert.Equal($"GPIO {DiyConfig.Sliders[0].Pin}", In<TextBlock>(section, "HardwareSummaryText").Text);
-        Assert.False(In<PathIcon>(section, "HardwareProblemMark").IsVisible);
-        Assert.False(In<Panel>(section, "HardwareBody").IsVisible);
-        // The section sits under the Controls section.
-        Assert.True(header.TranslatePoint(new Point(0, 0), inspector)!.Value.Y
-                    > In<Border>(inspector, "ResponseSection").TranslatePoint(new Point(0, 0), inspector)!.Value.Y);
-    }
-
-    [AvaloniaFact]
-    public void AButtonsSummaryNamesItsPinAndLight()
-    {
-        using var s = Show();
-        Select(s, s.Vm.Buttons.Items[0]);
-        var b0 = DiyConfig.Buttons[0];
-        Assert.Equal($"GPIO {b0.Pin} · LED {b0.Led.Pin}", In<TextBlock>(Section(ButtonInspector(s)), "HardwareSummaryText").Text);
-
-        Select(s, s.Vm.Buttons.Items[2]);
-        var b2 = DiyConfig.Buttons[2];
-        Assert.Equal($"GPIO {b2.Pin} · LEDs {b2.LedPair.PinA}, {b2.LedPair.PinB}",
-                     In<TextBlock>(Section(ButtonInspector(s)), "HardwareSummaryText").Text);
-        Assert.True(In<ToggleButton>(ButtonInspector(s), "ActionsHeader").IsChecked);
-        Assert.True(In<ContentControl>(ButtonInspector(s), "ActionRow_Press").IsEffectivelyVisible);
-    }
-
-    [AvaloniaFact]
-    public void OpeningHardwareIsRememberedForTheNextSlider()
-    {
-        using var s = Show();
-        Select(s, s.Vm.Sliders.Items[0]);
-        Click(s, In<ToggleButton>(Section(SliderInspector(s)), "HardwareHeader"));
-        Assert.True(s.Hardware.Sections.SliderHardwareOpen);
-        var field = In<PinField>(Section(SliderInspector(s)), "PinField");
+        Assert.True(In<Border>(section, "HardwareHeader").IsEffectivelyVisible);
+        Assert.True(In<Panel>(section, "HardwareBody").IsEffectivelyVisible);
+        var field = In<PinField>(section, "PinField");
         Assert.True(field.IsEffectivelyVisible);
         Assert.Equal($"GPIO {DiyConfig.Sliders[0].Pin}", PinValue(field));
-        Assert.Equal("Remove Slider 1", In<Button>(Section(SliderInspector(s)), "HardwareRemoveButton").Content);
+        Assert.Equal("Remove Slider 1", In<Button>(section, "HardwareRemoveButton").Content);
+        // No toggles: neither section collapses (Response is a sub-section of Controls).
+        Assert.DoesNotContain(inspector.GetVisualDescendants().OfType<ToggleButton>(), t => t.Name is "ControlsHeader" or "HardwareHeader");
+        Assert.DoesNotContain(inspector.GetVisualDescendants(), v => v is Control { Name: "HardwareSummaryText" });
+        // Hardware sits under Controls.
+        var controls = In<DockPanel>(inspector, "ControlsSection");
+        double Top(Visual v) => v.TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
+        Assert.True(Top(section) >= Top(controls) + controls.Bounds.Height - 1);
 
-        Select(s, s.Vm.Sliders.Items[1]);
-        var section = Section(SliderInspector(s));
+        Select(s, s.Vm.Buttons.Items[2]);
+        var button = ButtonInspector(s);
+        Assert.True(In<Border>(button, "ActionsHeader").IsEffectivelyVisible);
+        Assert.True(In<Panel>(button, "ActionsBody").IsEffectivelyVisible);
+        Assert.True(In<ContentControl>(button, "ActionRow_Press").IsEffectivelyVisible);
+        section = Section(button);
         Assert.True(In<Panel>(section, "HardwareBody").IsEffectivelyVisible);
-        Assert.Equal($"GPIO {DiyConfig.Sliders[1].Pin}", PinValue(In<PinField>(section, "PinField")));
-
-        // Per kind: a button's Hardware section is still collapsed.
-        Select(s, s.Vm.Buttons.Items[0]);
-        Assert.False(In<Panel>(Section(ButtonInspector(s)), "HardwareBody").IsVisible);
+        Assert.Equal("Remove Button 3", In<Button>(section, "HardwareRemoveButton").Content);
+        Assert.DoesNotContain(button.GetVisualDescendants().OfType<ToggleButton>(), t => t.Name is "ActionsHeader" or "HardwareHeader");
     }
 
     [AvaloniaFact]
-    public void AProblemOpensTheHardwareSection()
+    public void HardwareTakesABottomThird()
+    {
+        using var s = Show(width: 1100, height: 720);
+        Select(s, s.Vm.Sliders.Items[0]);
+        var inspector = SliderInspector(s);
+        var third = In<Grid>(inspector, "Sections").Bounds.Height / 3;
+        Assert.InRange(Section(inspector).Bounds.Height, third - 8, third + 8);
+        Assert.InRange(In<DockPanel>(inspector, "ControlsSection").Bounds.Height, 2 * third - 8, 2 * third + 8);
+
+        Select(s, s.Vm.Buttons.Items[0]);
+        var button = ButtonInspector(s);
+        third = In<Grid>(button, "Sections").Bounds.Height / 3;
+        Assert.InRange(Section(button).Bounds.Height, third - 8, third + 8);
+    }
+
+    [AvaloniaFact]
+    public void HardwareKeepsItsMinimumWhenShort()
+    {
+        using var s = Show(width: 820, height: 520);
+        var item = s.Vm.Buttons.Items[0];
+        item.IsAdvancedOpen = true;   // Timing open: the Actions section is taller than its room
+        Select(s, item);
+        var inspector = ButtonInspector(s);
+        var third = In<Grid>(inspector, "Sections").Bounds.Height / 3;
+        Assert.True(third < HardwareSection.HeaderHeight + HardwareSection.MinRowsHeight, $"third {third}");
+        var rows = In<ScrollViewer>(Section(inspector), "HardwareScroll");
+        Assert.True(rows.Bounds.Height >= HardwareSection.MinRowsHeight - 0.5, $"rows {rows.Bounds.Height}");
+
+        // The top section gives way and scrolls on its own.
+        var top = In<ScrollViewer>(inspector, "ActionsScroll");
+        Assert.True(top.Extent.Height > top.Viewport.Height + 1, $"extent {top.Extent.Height}, viewport {top.Viewport.Height}");
+        Assert.True(In<Border>(inspector, "ActionsHeader").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void AProblemMarksTheHardwareHeader()
     {
         using var s = Show();
         Select(s, s.Vm.Sliders.Items[1]);
-        var section = Section(SliderInspector(s));
-        Assert.False(In<Panel>(section, "HardwareBody").IsVisible);
+        Assert.False(In<PathIcon>(Section(SliderInspector(s)), "HardwareProblemMark").IsVisible);
 
         s.Vm.Controller.SetSliderPin(1, DiyConfig.Sliders[0].Pin);   // Slider 1's pin
         Settle(s.Window);
 
-        section = Section(SliderInspector(s));
-        Assert.True(s.Hardware.Sections.SliderHardwareOpen);
+        var section = Section(SliderInspector(s));
+        var mark = In<PathIcon>(section, "HardwareProblemMark");
+        Assert.True(mark.IsEffectivelyVisible);
+        Assert.True(mark.TranslatePoint(new Point(0, 0), section)!.Value.Y
+                    < In<Border>(section, "HardwareHeader").Bounds.Height);   // on the header
         Assert.True(In<Panel>(section, "HardwareBody").IsEffectivelyVisible);
-        Assert.True(In<PathIcon>(section, "HardwareProblemMark").IsEffectivelyVisible);
-        Assert.False(s.Hardware.Sections.ButtonHardwareOpen);
+
+        Select(s, s.Vm.Buttons.Items[0]);   // a button without a problem: no mark
+        Assert.False(In<PathIcon>(Section(ButtonInspector(s)), "HardwareProblemMark").IsVisible);
     }
 
     [AvaloniaFact]
@@ -219,7 +234,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(save.IsEffectivelyVisible);
         Assert.Same(s.Hardware.SaveCommand, save.Command);
         Assert.False(In<Button>(inspector, "ControlsRow").IsEffectivelyVisible);
-        Assert.True(In<ToggleButton>(Section(inspector), "HardwareHeader").IsEffectivelyVisible);
+        Assert.True(In<Border>(Section(inspector), "HardwareHeader").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -264,7 +279,6 @@ public sealed class CombinedInspectorTests : IDisposable
         // (the last one only).
         Assert.DoesNotContain(inspector.GetVisualDescendants(), v => v is Control { Name: "MissingPanel" });
         var section = Section(inspector);
-        Click(s, In<ToggleButton>(section, "HardwareHeader"));
         var text = In<TextBlock>(section, "NotOnControllerText");
         Assert.Equal("Not on this controller", text.Text);
         Assert.True(text.IsEffectivelyVisible);
@@ -290,7 +304,6 @@ public sealed class CombinedInspectorTests : IDisposable
         inspector = ButtonInspector(s);
         Assert.True(In<Border>(inspector, "LightRow").IsEffectivelyVisible);
         Assert.Equal("Follows the new light after saving", In<TextBlock>(inspector, "LightText").Text);
-        Assert.EndsWith(" · Screen, bus 0, 3C", In<TextBlock>(Section(inspector), "HardwareSummaryText").Text);
 
         s.Hardware.InspectedButton!.IsLed = true;   // back to what the controller has
         Settle(s.Window);
@@ -303,7 +316,6 @@ public sealed class CombinedInspectorTests : IDisposable
     public void TheHeaderFollowsTheDraftsNumbering()
     {
         using var s = Show();
-        s.Hardware.Sections.SliderHardwareOpen = true;
         s.Vm.Controller.RemoveSlider(1);
         Settle(s.Window);
         var moved = s.Vm.Sliders.Items[2];   // was Slider 3, now the draft's Slider 2
@@ -414,7 +426,6 @@ public sealed class CombinedInspectorTests : IDisposable
     public void TheRemoveQuestionIsAtTheBottomOfTheSidePanel()
     {
         using var s = Show();
-        s.Hardware.Sections.SliderHardwareOpen = true;
         Select(s, s.Vm.Sliders.Items[2]);
         var inspector = SliderInspector(s);
         Click(s, In<Button>(Section(inspector), "HardwareRemoveButton"));

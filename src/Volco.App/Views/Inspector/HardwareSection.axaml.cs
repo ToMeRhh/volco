@@ -1,24 +1,25 @@
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Data;
 using Avalonia.Markup.Xaml;
 
 namespace Volco.App.Views.Inspector;
 
 /// <summary>
-/// The collapsible Hardware section under a tile's Controls inspector (controller-page spec §4.3).
-/// The inspector binds what it shows: whether it is open (remembered per kind by
-/// <see cref="Volco.App.ViewModels.Hardware.InspectorSections"/>), the summary, the danger mark,
-/// the control's wiring view model, and whether the controller lacks the control.
+/// The Hardware section under a tile's Controls (or Actions) section (controller-page spec §4.3):
+/// always shown, the bottom third of the inspector's sections grid, never less than its header
+/// and <see cref="MinRowsHeight"/> of rows (the Controls section gives way first). The inspector
+/// binds what it shows: the danger mark, the control's wiring view model, and whether the
+/// controller lacks the control. Hidden (a stage without the controller draft), its row takes
+/// no room.
 /// </summary>
 public partial class HardwareSection : UserControl
 {
-    public static readonly StyledProperty<bool> IsOpenProperty =
-        AvaloniaProperty.Register<HardwareSection, bool>(nameof(IsOpen), defaultBindingMode: BindingMode.TwoWay);
+    /// <summary>The fixed header's height.</summary>
+    public const double HeaderHeight = 36;
 
-    public static readonly StyledProperty<string?> SummaryProperty =
-        AvaloniaProperty.Register<HardwareSection, string?>(nameof(Summary));
+    /// <summary>The least room the rows get: about four rows.</summary>
+    public const double MinRowsHeight = 176;
 
     public static readonly StyledProperty<bool> HasProblemProperty =
         AvaloniaProperty.Register<HardwareSection, bool>(nameof(HasProblem));
@@ -40,18 +41,28 @@ public partial class HardwareSection : UserControl
         AvaloniaXamlLoader.Load(this);
     }
 
-    /// <summary>The section's body shows.</summary>
-    public bool IsOpen
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        get => GetValue(IsOpenProperty);
-        set => SetValue(IsOpenProperty, value);
+        base.OnAttachedToVisualTree(e);
+        SizeRow();
     }
 
-    /// <summary>The header's summary ("GPIO 33", "GPIO 5 · LED 12").</summary>
-    public string? Summary
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
-        get => GetValue(SummaryProperty);
-        set => SetValue(SummaryProperty, value);
+        base.OnPropertyChanged(change);
+        if (change.Property == IsVisibleProperty) SizeRow();
+    }
+
+    /// <summary>Gives the section's row of the inspector's grid its third and its minimum, or
+    /// nothing while the section is hidden.</summary>
+    private void SizeRow()
+    {
+        if (Parent is not Grid grid) return;
+        var row = Grid.GetRow(this);
+        if (row >= grid.RowDefinitions.Count) return;
+        var definition = grid.RowDefinitions[row];
+        definition.Height = IsVisible ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        definition.MinHeight = IsVisible ? HeaderHeight + MinRowsHeight : 0;
     }
 
     /// <summary>The draft has a problem with the control: the header's danger mark.</summary>

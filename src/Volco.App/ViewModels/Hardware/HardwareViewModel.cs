@@ -324,7 +324,6 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             var w = Sliders[i].Wiring ??= new TileWiring();
             var slider = draft.Sliders[i];
             w.Title = $"Slider {i + 1}";
-            w.Summary = PinText(slider.HasPin, slider.Pin);
             w.HasChange = !Equals(Saved(baseline.Sliders, Source(layout.Sliders, i)), slider);
             w.Problem = TileProblem(draft, problems, i, new[] { PinOwnerKind.Slider }, _ => false);
         }
@@ -333,7 +332,6 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             var w = Buttons[i].Wiring ??= new TileWiring();
             var button = draft.Buttons[i];
             w.Title = $"Button {i + 1}";
-            w.Summary = PinText(button.HasPin, button.Pin) + IndicatorText(button);
             w.HasChange = !Equals(Saved(baseline.Buttons, Source(layout.Buttons, i)), button);
             w.Problem = TileProblem(draft, problems, i,
                                     new[] { PinOwnerKind.Button, PinOwnerKind.Light, PinOwnerKind.LightA, PinOwnerKind.LightB },
@@ -423,13 +421,6 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// while a tile (or nothing) is selected.</summary>
     public object? InspectedPanel => Inspected as ControllerSettingsViewModel;
 
-    /// <summary>Which inspector sections are open, for the app run (controller-page spec §4.3).</summary>
-    public InspectorSections Sections { get; } = new();
-
-    // The inspected wiring and whether it had a problem at the last refresh: a problem it gains
-    // (or has when it is selected) opens its kind's Hardware section.
-    private (object? Wiring, bool Problem) _lastProblem;
-
     /// <summary>A button's bus link: Controller settings, with Screens and bus <paramref name="bus"/>'s
     /// row open.</summary>
     public void ShowBus(int bus)
@@ -481,26 +472,14 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         {
             case SliderWiringViewModel s:
                 s.IsEditable = _controller.CanEdit;
-                s.Summary = s.Item.Wiring?.Summary ?? "";
                 s.HasProblem = s.Item.Wiring?.HasProblem == true;
                 break;
             case ButtonWiringViewModel b:
                 b.Refresh();
-                b.Summary = b.Item.Wiring?.Summary ?? "";
                 b.HasProblem = b.Item.Wiring?.HasProblem == true;
                 break;
             case ControllerSettingsViewModel settings: settings.RefreshBuses(); break;
         }
-
-        // A Hardware section with a problem opens itself (spec §4.3), once per problem: closing it
-        // again keeps it closed until the problem goes and comes back, or another control is selected.
-        var problem = Inspected is SliderWiringViewModel { HasProblem: true } or ButtonWiringViewModel { HasProblem: true };
-        if (problem && !(ReferenceEquals(_lastProblem.Wiring, Inspected) && _lastProblem.Problem))
-        {
-            if (Inspected is SliderWiringViewModel) Sections.SliderHardwareOpen = true;
-            else Sections.ButtonHardwareOpen = true;
-        }
-        _lastProblem = (Inspected, problem);
     }
 
     /// <summary>"Remove Slider N?"; once removed, the tile now at its place (else the one before)
@@ -607,19 +586,6 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private static T? Saved<T>(IList<T> baseline, int? source) where T : class
         => source is int s && s < baseline.Count ? baseline[s] : null;
 
-    private static string PinText(bool has, uint pin) => has ? $"GPIO {pin}" : "Not set";
-
-    /// <summary>The light's part of a button's summary: " · LED 12", " · LEDs 18, 19" or
-    /// " · Screen, bus 0, 3C"; empty for no light.</summary>
-    private static string IndicatorText(Button button) => button.IndicatorCase switch
-    {
-        Button.IndicatorOneofCase.Led => button.Led.HasPin ? $" · LED {button.Led.Pin}" : " · LED not set",
-        Button.IndicatorOneofCase.LedPair => button.LedPair is { HasPinA: false, HasPinB: false } ? " · LEDs not set"
-            : $" · LEDs {Part(button.LedPair.HasPinA, button.LedPair.PinA)}, {Part(button.LedPair.HasPinB, button.LedPair.PinB)}",
-        Button.IndicatorOneofCase.Screen => $" · Screen, bus {button.Screen.Bus}, {button.Screen.Address:X2}",
-        _ => "",
-    };
-
     /// <summary>The kind of light the draft gives <paramref name="button"/>.</summary>
     private static IndicatorKind KindOf(Button button) => button.IndicatorCase switch
     {
@@ -628,8 +594,6 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         Button.IndicatorOneofCase.Screen => IndicatorKind.Screen,
         _ => IndicatorKind.None,
     };
-
-    private static string Part(bool has, uint pin) => has ? $"{pin}" : "–";
 
     /// <summary>A tile's problem (its mark's tooltip and the danger outline, controller-page spec
     /// §4.1), or null: each of its pin fields' problems as the field words it (a shared pin reads

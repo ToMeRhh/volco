@@ -56,8 +56,6 @@ public sealed class HardwareInspectorTests : IDisposable
         c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
         c.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        vm.Hardware.Sections.SliderHardwareOpen = true;
-        vm.Hardware.Sections.ButtonHardwareOpen = true;
         var host = new HardwareInspectorHost { DataContext = vm.Hardware };
         var page = new StagePage(vm.Controls) { Hardware = vm.Hardware, HardwareSidePanel = host };
         var window = new Window { Content = page, Width = 1100, Height = 720 };
@@ -141,7 +139,6 @@ public sealed class HardwareInspectorTests : IDisposable
 
         Assert.Equal("Slider 3", Heading(s));
         Assert.Equal("GPIO 32", PinValue(In<PinField>(s.Page, "PinField")));
-        Assert.Equal("GPIO 32", In<TextBlock>(Section(s), "HardwareSummaryText").Text);
         Assert.Contains(Section(s).GetVisualDescendants(), v => v is PinField { Name: "PinField" });
     }
 

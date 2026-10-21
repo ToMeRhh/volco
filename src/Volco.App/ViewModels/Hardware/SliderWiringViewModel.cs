@@ -5,8 +5,8 @@ namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
 /// The Hardware section of a slider's inspector (controller-page spec §4.3, hardware-page spec
-/// §6.1): its pin and Remove, with the collapsed section's summary. Made for one draft slider; the
-/// Hardware view model refreshes it after every draft change and drops it when the selection moves.
+/// §6.1): its pin and Remove, and the danger mark on the section's header. Made for one draft
+/// slider; the Hardware view model refreshes it after every draft change and drops it when the selection moves.
 /// </summary>
 public sealed partial class SliderWiringViewModel : ObservableObject
 {
@@ -37,9 +37,6 @@ public sealed partial class SliderWiringViewModel : ObservableObject
 
     /// <summary>The draft can be edited: Remove is enabled.</summary>
     [ObservableProperty] private bool _isEditable;
-
-    /// <summary>The collapsed section's summary: "GPIO 33", or "Not set".</summary>
-    [ObservableProperty] private string _summary = "";
 
     /// <summary>The draft has a problem with this slider: the section's danger mark.</summary>
     [ObservableProperty] private bool _hasProblem;

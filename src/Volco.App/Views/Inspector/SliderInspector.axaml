@@ -7,7 +7,7 @@
              x:Class="Volco.App.Views.Inspector.SliderInspector"
              x:DataType="vm:SliderItemViewModel">
   <!-- The selected slider (controller-page spec §4.3): its name, then the Controls section (what
-       it controls, its response) and the Hardware section (its pin, Remove). -->
+       it controls, its response) over the Hardware section (its pin, Remove). -->
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
       <TextBlock Name="HeadingText" Classes="InspectorKind" Text="{Binding DisplayHeading}"/>
@@ -16,20 +16,18 @@
                PlaceholderText="{Binding TargetLabel}" IsEnabled="{Binding !IsNew}"/>
     </StackPanel>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Classes="InspectorBody">
-        <!-- Controls (open): what it controls and its response; a slider only the draft has is
-             set up once the controller has it -->
-        <StackPanel Name="ControlsSection" Classes="InspectorGroup">
-          <ToggleButton Name="ControlsHeader" Classes="GroupHeader"
-                        IsChecked="{Binding $parent[stage:StagePage].Hardware.Sections.SliderControlsOpen, Mode=TwoWay, FallbackValue=True}">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Classes="GroupLabel" Text="Controls"/>
-              <PathIcon Grid.Column="1" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
-            </Grid>
-          </ToggleButton>
-          <Panel Name="ControlsBody"
-                 IsVisible="{Binding $parent[stage:StagePage].Hardware.Sections.SliderControlsOpen, FallbackValue=True}">
+    <!-- Two fixed sections (spec §4.3): Controls in the top two thirds, Hardware in the bottom
+         third (never less than about four rows; Controls gives way first), each with a fixed
+         header and its own scrolling -->
+    <Grid Name="Sections" RowDefinitions="2*,*">
+      <!-- Controls: what it controls and its response; a slider only the draft has is set up
+           once the controller has it -->
+      <DockPanel Name="ControlsSection">
+        <Border Name="ControlsHeader" DockPanel.Dock="Top" Classes="GroupHeader">
+          <TextBlock Classes="GroupLabel" Text="Controls"/>
+        </Border>
+        <ScrollViewer Name="ControlsScroll" VerticalScrollBarVisibility="Auto">
+          <Panel Name="ControlsBody" Classes="GroupBody">
             <Border Name="SaveFirstPanel" Classes="InspectorRows SaveFirst" IsVisible="{Binding IsNew}">
               <StackPanel Spacing="10">
                 <TextBlock Name="SaveFirstText" Classes="Secondary" TextWrapping="Wrap" Text="Save to controller to set it up"/>
@@ -125,31 +123,29 @@
               </Border>
             </StackPanel>
           </Panel>
-        </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
 
-        <!-- Hardware (collapsed): its pin and Remove, from the controller draft -->
-        <inspector:HardwareSection Name="HardwareSection"
-                                   IsOpen="{Binding $parent[stage:StagePage].Hardware.Sections.SliderHardwareOpen, Mode=TwoWay, FallbackValue=False}"
-                                   Wiring="{Binding $parent[stage:StagePage].Hardware.InspectedSlider, FallbackValue={x:Null}}"
-                                   Summary="{Binding $parent[stage:StagePage].Hardware.InspectedSlider.Summary, FallbackValue=''}"
-                                   HasProblem="{Binding $parent[stage:StagePage].Hardware.InspectedSlider.HasProblem, FallbackValue=False}"
-                                   IsMissing="{Binding IsMissing}"
-                                   RemoveMissingCommand="{Binding RemoveLastCommand}">
-          <inspector:HardwareSection.IsVisible>
-            <!-- A control the controller lacks says so even on a stage without the draft -->
-            <MultiBinding Converter="{x:Static BoolConverters.Or}">
-              <Binding Path="IsMissing"/>
-              <Binding Path="$parent[stage:StagePage].Hardware" Converter="{x:Static ObjectConverters.IsNotNull}"/>
-            </MultiBinding>
-          </inspector:HardwareSection.IsVisible>
-          <inspector:HardwareSection.CanRemoveMissing>
-            <MultiBinding Converter="{x:Static BoolConverters.And}">
-              <Binding Path="IsMissing"/>
-              <Binding Path="IsLast"/>
-            </MultiBinding>
-          </inspector:HardwareSection.CanRemoveMissing>
-        </inspector:HardwareSection>
-      </StackPanel>
-    </ScrollViewer>
+      <!-- Hardware: its pin and Remove, from the controller draft -->
+      <inspector:HardwareSection Name="HardwareSection" Grid.Row="1"
+                                 Wiring="{Binding $parent[stage:StagePage].Hardware.InspectedSlider, FallbackValue={x:Null}}"
+                                 HasProblem="{Binding $parent[stage:StagePage].Hardware.InspectedSlider.HasProblem, FallbackValue=False}"
+                                 IsMissing="{Binding IsMissing}"
+                                 RemoveMissingCommand="{Binding RemoveLastCommand}">
+        <inspector:HardwareSection.IsVisible>
+          <!-- A control the controller lacks says so even on a stage without the draft -->
+          <MultiBinding Converter="{x:Static BoolConverters.Or}">
+            <Binding Path="IsMissing"/>
+            <Binding Path="$parent[stage:StagePage].Hardware" Converter="{x:Static ObjectConverters.IsNotNull}"/>
+          </MultiBinding>
+        </inspector:HardwareSection.IsVisible>
+        <inspector:HardwareSection.CanRemoveMissing>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="IsMissing"/>
+            <Binding Path="IsLast"/>
+          </MultiBinding>
+        </inspector:HardwareSection.CanRemoveMissing>
+      </inspector:HardwareSection>
+    </Grid>
   </DockPanel>
 </UserControl>

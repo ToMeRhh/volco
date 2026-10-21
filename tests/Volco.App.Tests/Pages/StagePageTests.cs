@@ -570,7 +570,7 @@ public class StagePageTests
         // The inspector itself fills its column, so measure what it holds: the body's own height
         // and where the rows below the actions start.
         var inspector = Inspector(s.Page);
-        StackPanel Body() => inspector.GetVisualDescendants().OfType<StackPanel>().First(p => p.Classes.Contains("InspectorBody"));
+        StackPanel Body() => In<StackPanel>(inspector, "ActionsContent");
         double LightTop() => In<Border>(inspector, "LightRow").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
         double TimingTop() => In<Border>(inspector, "TimingSection").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
         var bodyBefore = Body().DesiredSize.Height;

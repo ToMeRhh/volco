@@ -107,14 +107,11 @@ public sealed class HardwareViewModelTests : IDisposable
     public void TilesFollowTheDraft()
     {
         SetUpInSync();
-        var diy = ControllerConfigCodec.Decode(DiyBlob);
         Assert.Equal(5, Hardware.Sliders.Count);
-        Assert.Equal($"GPIO {diy.Sliders[0].Pin}", Hardware.Sliders[0].Wiring!.Summary);
         Assert.Equal("Slider 1", Hardware.Sliders[0].Wiring!.Title);
         Assert.Same(_settings!.Controls.Sliders.Items[0], Hardware.Sliders[0]);
         Assert.Equal(3, Hardware.Buttons.Count);
-        Assert.Equal($"GPIO {diy.Buttons[0].Pin} · LED 12", Hardware.Buttons[0].Wiring!.Summary);
-        Assert.Equal($"GPIO {diy.Buttons[2].Pin} · LEDs 18, 19", Hardware.Buttons[2].Wiring!.Summary);
+        Assert.Equal("Button 3", Hardware.Buttons[2].Wiring!.Title);
         Assert.False(Hardware.IsReadOnly);
     }
 
