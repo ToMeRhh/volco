@@ -258,8 +258,10 @@ public sealed class HardwareInspectorTests : IDisposable
         Click(s, In<Button>(s.Page, "ConfirmButton"));
         Assert.Equal(4, Tiles<SliderTile>(s.Page).Count);
         Assert.Equal(4, s.Vm.Controller.Draft.Sliders.Count);
-        // The slider that was Slider 4 is now Slider 3, and selected.
-        Assert.Equal("Slider 3", Heading(s));
+        // The slider that was Slider 4 is now Slider 3 in the draft, and selected (Volco's settings
+        // renumber it once the controller has the draft).
+        Assert.Same(s.Vm.Sliders.Items[3], s.Vm.Controls.Selected);
+        Assert.Equal("Remove Slider 3", In<Button>(s.Page, "HardwareRemoveButton").Content);
         Assert.Equal("GPIO 36", PinValue(In<PinField>(s.Page, "PinField")));
 
         // Volco's settings keep five sliders until the save.

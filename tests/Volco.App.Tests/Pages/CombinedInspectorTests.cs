@@ -303,7 +303,7 @@ public sealed class CombinedInspectorTests : IDisposable
         var settings = s.Host.GetVisualDescendants().OfType<ControllerSettingsInspector>().Single();
         Assert.True(settings.IsEffectivelyVisible);
         Assert.False(In<ContentControl>(s.Page, "InspectorContent").IsVisible);
-        Assert.Empty(s.Page.GetVisualDescendants().OfType<SliderInspector>().Where(i => i.IsEffectivelyVisible));
+        Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<SliderInspector>(), i => i.IsEffectivelyVisible);
         Assert.True(In<Volco.App.Views.Hardware.DeviceCard>(s.Host, "Card").IsEffectivelyVisible);
 
         Select(s, s.Vm.Sliders.Items[0]);   // a tile brings its inspector back
