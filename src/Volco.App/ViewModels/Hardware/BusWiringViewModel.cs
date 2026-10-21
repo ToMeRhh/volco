@@ -5,30 +5,10 @@ using Volco.Core.Controller.Proto;
 
 namespace Volco.App.ViewModels.Hardware;
 
-/// <summary>One chip under the buttons for a bus that a screen uses (hardware-page spec §5.2):
-/// "I2C bus 0 · SDA 25 · SCL 26"; a click selects the bus.</summary>
-public sealed partial class BusChipViewModel : ObservableObject
-{
-    internal BusChipViewModel(int bus, Action<int> select)
-    {
-        Bus = bus;
-        SelectCommand = new RelayCommand(() => select(Bus));
-    }
-
-    /// <summary>The bus's hardware number (0-3).</summary>
-    public int Bus { get; }
-
-    [ObservableProperty] private string _text = "";
-
-    /// <summary>The inspector shows this bus: the accent outline.</summary>
-    [ObservableProperty] private bool _isSelected;
-
-    public IRelayCommand SelectCommand { get; }
-}
-
 /// <summary>
-/// The Hardware inspector of an I2C bus (hardware-page spec §6.4): its SDA and SCL pins and its
-/// clock (100 or 400 kHz). A clock set elsewhere to another value shows no choice and is kept.
+/// One I2C bus a screen uses, as a row of Controller settings › Screens (controller-page spec §4.3):
+/// the summary "I2C bus 0 · SDA 25 · SCL 26 · 400 kHz", opened to its SDA and SCL pins and its clock
+/// (100 or 400 kHz). A clock set elsewhere to another value shows no choice and is kept.
 /// </summary>
 public sealed partial class BusWiringViewModel : ObservableObject
 {
@@ -43,6 +23,8 @@ public sealed partial class BusWiringViewModel : ObservableObject
         _controller = controller;
         Sda = sda;
         Scl = scl;
+        ToggleCommand = new RelayCommand(() => IsOpen = !IsOpen);
+        Refresh();
     }
 
     /// <summary>The bus's hardware number (0-3).</summary>
@@ -50,6 +32,18 @@ public sealed partial class BusWiringViewModel : ObservableObject
 
     /// <summary>"I2C bus N".</summary>
     public string Title => $"I2C bus {Bus}";
+
+    /// <summary>"I2C bus 0 · SDA 25 · SCL 26 · 400 kHz".</summary>
+    [ObservableProperty] private string _summary = "";
+
+    /// <summary>The row shows its pins and clock.</summary>
+    [ObservableProperty] private bool _isOpen;
+
+    /// <summary>The draft has a problem with this bus: the row's danger mark, and it opens itself.</summary>
+    [ObservableProperty] private bool _hasProblem;
+
+    /// <summary>The row's header click.</summary>
+    public IRelayCommand ToggleCommand { get; }
 
     public PinFieldViewModel Sda { get; }
     public PinFieldViewModel Scl { get; }
@@ -81,5 +75,12 @@ public sealed partial class BusWiringViewModel : ObservableObject
     {
         IsEditable = _controller.CanEdit;
         OnPropertyChanged(nameof(ClockIndex));
+        var bus = Message;
+        var clock = (bus?.ClockHz ?? Fast) / 1000;
+        Summary = $"{Title} · SDA {Part(bus?.HasSda == true, bus?.Sda ?? 0)} · SCL {Part(bus?.HasScl == true, bus?.Scl ?? 0)} · {clock} kHz";
+        HasProblem = _controller.Problems.Any(p => p.Item == Bus
+            && p.Field is ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock);
     }
+
+    private static string Part(bool has, uint pin) => has ? $"{pin}" : "–";
 }

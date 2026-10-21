@@ -214,17 +214,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// fields are disabled.</summary>
     public bool IsReadOnly => !_controller.CanEdit;
 
-    /// <summary>One chip per I2C bus that a screen uses, in bus order (spec §5.2).</summary>
-    public ObservableCollection<BusChipViewModel> BusChips { get; } = new();
-
-    /// <summary>A screen uses a bus: the chips' row is shown (its space is kept in both modes).</summary>
-    public bool HasBusChips => BusChips.Count > 0;
-
     /// <summary>
     /// What the inspector shows (spec §5.3, §6): the <see cref="SliderWiringViewModel"/> or
     /// <see cref="ButtonWiringViewModel"/> of the tile selected (the selection is Controls', so it
-    /// carries over), or the selected bus's <see cref="BusWiringViewModel"/>; null when the selection
-    /// is not in the drawing.
+    /// carries over), or <see cref="ControllerSettingsViewModel"/>; null when the selection is not in
+    /// the drawing.
     /// </summary>
     [ObservableProperty] private object? _inspected;
 
@@ -372,7 +366,6 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (_controls.Selected is { } selected && !Drawn(selected)) _controls.Selected = null;
 
         UpdateTestStates();
-        SyncBusChips(draft);
         foreach (var field in _pinFields.Values) UpdatePinField(field);
         UpdateInspected();
         UpdateChooser();
@@ -387,22 +380,18 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _ => false,
     };
 
-    // ── The inspector and the bus chips (spec §5.3, §6.1, §6.2, §6.4) ───────────────────────
-
-    /// <summary>The bus the inspector shows; null when it shows the selected tile.</summary>
-    private int? _selectedBus;
+    // ── The inspector (spec §5.3, §6.1, §6.2, §6.6) ────────────────────────────────────────
 
     /// <summary>The inspector shows the controller's settings (spec §6.6).</summary>
     private bool _settingsSelected;
 
     /// <summary>The title row's "Controller settings" chip: the inspector shows the controller's
-    /// settings and the tile and bus selection is cleared. Not during a hardware test: the
+    /// settings and the tile selection is cleared. Not during a hardware test: the
     /// inspector is hidden then (spec §8), so the chip is disabled.</summary>
     public void SelectControllerSettings()
     {
         if (_disposed || IsTesting) return;
         _settingsSelected = true;
-        _selectedBus = null;
         _controls.Selected = null;
         UpdateInspected();
     }
@@ -430,9 +419,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The selected button's Hardware section, or null.</summary>
     public ButtonWiringViewModel? InspectedButton => Inspected as ButtonWiringViewModel;
 
-    /// <summary>What the side panel shows in place of a tile's inspector: Controller settings or a
-    /// bus; null while a tile (or nothing) is selected.</summary>
-    public object? InspectedPanel => Inspected is ControllerSettingsViewModel or BusWiringViewModel ? Inspected : null;
+    /// <summary>What the side panel shows in place of a tile's inspector: Controller settings; null
+    /// while a tile (or nothing) is selected.</summary>
+    public object? InspectedPanel => Inspected as ControllerSettingsViewModel;
 
     /// <summary>Which inspector sections are open, for the app run (controller-page spec §4.3).</summary>
     public InspectorSections Sections { get; } = new();
@@ -441,58 +430,30 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     // (or has when it is selected) opens its kind's Hardware section.
     private (object? Wiring, bool Problem) _lastProblem;
 
-    /// <summary>Selects bus <paramref name="bus"/>'s chip: the tile selection is cleared.</summary>
-    public void SelectBus(int bus)
+    /// <summary>A button's bus link: Controller settings, with Screens and bus <paramref name="bus"/>'s
+    /// row open.</summary>
+    public void ShowBus(int bus)
     {
-        if (_disposed || BusChips.All(c => c.Bus != bus)) return;
-        _selectedBus = bus;
-        _settingsSelected = false;
-        _controls.Selected = null;
-        UpdateInspected();
+        if (_disposed || IsTesting) return;
+        SelectControllerSettings();
+        (Inspected as ControllerSettingsViewModel)?.OpenBus(bus);
     }
 
     private void OnControlsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_disposed || e.PropertyName != nameof(ControlsViewModel.Selected)) return;
-        if (_controls.Selected is not null) { _selectedBus = null; _settingsSelected = false; }
+        if (_controls.Selected is not null) _settingsSelected = false;
         UpdateInspected();
     }
 
-    private void SyncBusChips(ControllerConfig draft)
-    {
-        var used = draft.Buttons.Where(b => b.IndicatorCase == Button.IndicatorOneofCase.Screen)
-                                .Select(b => (int)b.Screen.Bus).Distinct().Order().ToList();
-        if (!BusChips.Select(c => c.Bus).SequenceEqual(used))
-        {
-            var old = BusChips.ToDictionary(c => c.Bus);
-            BusChips.Clear();
-            foreach (var bus in used) BusChips.Add(old.TryGetValue(bus, out var chip) ? chip : new BusChipViewModel(bus, SelectBus));
-            OnPropertyChanged(nameof(HasBusChips));
-        }
-        foreach (var chip in BusChips)
-        {
-            var bus = ControllerDraft.Bus(draft, chip.Bus);
-            chip.Text = $"I2C bus {chip.Bus} · SDA {Part(bus?.HasSda == true, bus?.Sda ?? 0)} · SCL {Part(bus?.HasScl == true, bus?.Scl ?? 0)}";
-        }
-    }
-
     /// <summary>Points <see cref="Inspected"/> at the selection, keeping its view model while it
-    /// is the same control at the same place, and marks the selected chip.</summary>
+    /// is the same control at the same place.</summary>
     private void UpdateInspected()
     {
-        if (_selectedBus is int b && BusChips.All(c => c.Bus != b)) _selectedBus = null;
-        foreach (var chip in BusChips) chip.IsSelected = chip.Bus == _selectedBus;
-
         object? next = Inspected;
         if (_settingsSelected)
         {
-            if (Inspected is not ControllerSettingsViewModel) next = new ControllerSettingsViewModel(_controller, () => OpenConnection(true));
-        }
-        else if (_selectedBus is int bus)
-        {
-            if (Inspected is not BusWiringViewModel { } shown || shown.Bus != bus)
-                next = new BusWiringViewModel(bus, _controller, PinField(new PinOwner(PinOwnerKind.BusSda, bus)),
-                                              PinField(new PinOwner(PinOwnerKind.BusScl, bus)));
+            if (Inspected is not ControllerSettingsViewModel) next = new ControllerSettingsViewModel(_controller, () => OpenConnection(true), PinField);
         }
         else if (_controls.Selected is SliderItemViewModel slider && Sliders.IndexOf(slider) is >= 0 and var si)
         {
@@ -502,7 +463,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         else if (_controls.Selected is ButtonItemViewModel button && Buttons.IndexOf(button) is >= 0 and var bi)
         {
             if (Inspected is not ButtonWiringViewModel { } shown || shown.Index != bi || !ReferenceEquals(shown.Item, button))
-                next = new ButtonWiringViewModel(bi, button, _controller, kind => PinField(new PinOwner(kind, bi)), () => AskRemove(button));
+                next = new ButtonWiringViewModel(bi, button, _controller, kind => PinField(new PinOwner(kind, bi)), () => AskRemove(button), ShowBus);
         }
         else next = null;
 
@@ -528,7 +489,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
                 b.Summary = b.Item.Wiring?.Summary ?? "";
                 b.HasProblem = b.Item.Wiring?.HasProblem == true;
                 break;
-            case BusWiringViewModel bus: bus.Refresh(); break;
+            case ControllerSettingsViewModel settings: settings.RefreshBuses(); break;
         }
 
         // A Hardware section with a problem opens itself (spec §4.3), once per problem: closing it

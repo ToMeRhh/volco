@@ -210,33 +210,28 @@ public sealed class HardwareInspectorTests : IDisposable
                                              < remove.TranslatePoint(new Point(0, 0), section)!.Value.Y));
     }
 
-    /// <summary>The bus chips aren't drawn on the Controller page (controller-page spec §4.1); a
-    /// bus selected through its chip's model still shows its inspector, which fills the side panel.</summary>
+    /// <summary>A screen button's bus link opens the bus's row in Controller settings (controller-page
+    /// spec §4.3): its pins and clock are fields of the row.</summary>
     [AvaloniaFact]
-    public void ABusSelectionShowsTheBus()
+    public void TheBusLinkOpensTheBusRow()
     {
         using var s = Show();
-        Assert.Empty(s.Hardware.BusChips);   // no screen yet
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
         Click(s, In<RadioButton>(s.Page, "LightScreen"));   // a screen on bus 0
 
-        Assert.DoesNotContain(Tiles<Button>(s.Page), b => b.Name == "BusChip");
-        var chip = Assert.Single(s.Hardware.BusChips);
-        Assert.Equal("I2C bus 0 · SDA 25 · SCL 26", chip.Text);
-        chip.SelectCommand.Execute(null);
-        Settle(s.Window);
+        Assert.Equal("Bus 0, address 3C", In<TextBlock>(s.Page, "BusLinkText").Text);
+        Click(s, In<Button>(s.Page, "BusLink"));
 
-        Assert.Equal("I2C bus 0", Heading(s));
+        Assert.Equal("Controller", Heading(s));
+        Assert.Equal("I2C bus 0 · SDA 25 · SCL 26 · 400 kHz", In<TextBlock>(s.Page, "BusSummary").Text);
         Assert.Equal("GPIO 25", PinValue(In<PinField>(s.Page, "SdaField")));
         Assert.Equal("GPIO 26", PinValue(In<PinField>(s.Page, "SclField")));
         Assert.Equal(1, In<ComboBox>(s.Page, "ClockBox").SelectedIndex);   // 400 kHz
-        Assert.True(chip.IsSelected);
         Assert.Null(s.Vm.Controls.Selected);
 
         Click(s, Tiles<SliderTile>(s.Page)[0], y: 6);
         Assert.Equal("Slider 1", Heading(s));
-        Assert.False(chip.IsSelected);
     }
 
     [AvaloniaFact]

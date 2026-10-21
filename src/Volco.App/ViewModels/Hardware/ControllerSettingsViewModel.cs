@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.Core.Controller;
+using Volco.Core.Controller.Proto;
 
 namespace Volco.App.ViewModels.Hardware;
 
@@ -38,12 +40,16 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     private readonly ControllerViewModel _controller;
     private readonly Action _openWifi;
+    private readonly Func<PinOwner, PinFieldViewModel> _pin;
 
-    public ControllerSettingsViewModel(ControllerViewModel controller, Action openWifi)
+    /// <param name="pin">The pin field of a use (a bus's SDA or SCL), shared with the rest of the page.</param>
+    public ControllerSettingsViewModel(ControllerViewModel controller, Action openWifi, Func<PinOwner, PinFieldViewModel> pin)
     {
         _controller = controller;
         _openWifi = openWifi;
+        _pin = pin;
         _openSection = ShowScreens ? ScreensSection : InputSection;
+        RefreshBuses();
         OpenWifiCommand = new RelayCommand(_openWifi);
         _controller.PropertyChanged += OnControllerChanged;
     }
@@ -225,6 +231,45 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     private static string Short(uint s) => s == 3600 ? "1 hour" : Long(s);
 
+    // ── I2C buses (controller-page spec §4.3) ────────────────────────────────────────────────
+
+    private IReadOnlyList<BusWiringViewModel> _buses = [];
+    private readonly HashSet<int> _problemBuses = new();
+
+    /// <summary>One row per I2C bus a screen uses, in bus order, in the Screens section.</summary>
+    public IReadOnlyList<BusWiringViewModel> Buses => _buses;
+
+    /// <summary>Opens Screens and bus <paramref name="bus"/>'s row (the button's bus link).</summary>
+    public void OpenBus(int bus)
+    {
+        if (!ShowScreens) return;
+        OpenSection = ScreensSection;
+        if (_buses.FirstOrDefault(b => b.Bus == bus) is { } row) row.IsOpen = true;
+    }
+
+    /// <summary>Follows the draft: a row per bus a screen uses, each re-read; a bus that gains a
+    /// problem opens its row (once per problem) and the Screens section.</summary>
+    internal void RefreshBuses()
+    {
+        var used = _controller.Draft.Buttons.Where(b => b.IndicatorCase == Button.IndicatorOneofCase.Screen)
+                              .Select(b => (int)b.Screen.Bus).Where(b => b <= 3).Distinct().Order().ToList();
+        if (!_buses.Select(b => b.Bus).SequenceEqual(used))
+        {
+            var old = _buses.ToDictionary(b => b.Bus);
+            _buses = used.Select(bus => old.TryGetValue(bus, out var row) ? row
+                : new BusWiringViewModel(bus, _controller, _pin(new PinOwner(PinOwnerKind.BusSda, bus)),
+                                         _pin(new PinOwner(PinOwnerKind.BusScl, bus)))).ToList();
+            OnPropertyChanged(nameof(Buses));
+        }
+        foreach (var row in _buses)
+        {
+            row.Refresh();
+            if (!row.HasProblem) _problemBuses.Remove(row.Bus);
+            else if (_problemBuses.Add(row.Bus)) { row.IsOpen = true; OpenSection = ScreensSection; }
+        }
+        _problemBuses.IntersectWith(used);
+    }
+
     // ── Input feel ───────────────────────────────────────────────────────────────────────────
 
     /// <summary>"Low", "Normal", "High" or "Custom".</summary>
@@ -285,6 +330,7 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
     private void OnControllerChanged(object? sender, PropertyChangedEventArgs e)
     {
         // Any draft or state change can move a summary, a list's custom entry or the feel.
+        RefreshBuses();
         foreach (var name in Watched) OnPropertyChanged(name);
         if (!ShowScreens && OpenSection == ScreensSection) OpenSection = InputSection;
     }

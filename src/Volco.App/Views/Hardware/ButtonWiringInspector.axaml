@@ -44,6 +44,12 @@
           </Border>
         </Grid>
 
+        <Button Name="BusLink" Classes="InspectorRow" IsVisible="{Binding IsScreen}" Command="{Binding OpenBusCommand}">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBlock Name="BusLinkText" Classes="RowLabel" VerticalAlignment="Center" Text="{Binding BusLinkText}"/>
+            <PathIcon Grid.Column="1" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+          </Grid>
+        </Button>
         <Grid Name="BusRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding IsScreen}">
           <TextBlock Name="BusLabel" Classes="RowLabel" Text="Bus"/>
           <ComboBox Name="BusBox" Grid.Column="1" Classes="RowControl"

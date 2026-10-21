@@ -16,7 +16,7 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
     private readonly ControllerViewModel _controller;
 
     internal ButtonWiringViewModel(int index, ButtonItemViewModel item, ControllerViewModel controller,
-                                   Func<PinOwnerKind, PinFieldViewModel> pin, Action remove)
+                                   Func<PinOwnerKind, PinFieldViewModel> pin, Action remove, Action<int> showBus)
     {
         Index = index;
         Item = item;
@@ -26,6 +26,7 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
         LightAPin = pin(PinOwnerKind.LightA);
         LightBPin = pin(PinOwnerKind.LightB);
         RemoveCommand = new RelayCommand(remove);
+        OpenBusCommand = new RelayCommand(() => showBus(BusIndex));
     }
 
     /// <summary>The draft button (0-based).</summary>
@@ -56,6 +57,12 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
 
     /// <summary>The draft can be edited: the light's choices and Remove are enabled.</summary>
     [ObservableProperty] private bool _isEditable;
+
+    /// <summary>"Bus 0, address 3C": the link to the bus's row in Controller settings.</summary>
+    public string BusLinkText => $"Bus {BusIndex}, address {(AddressIndex == 1 ? "3D" : "3C")}";
+
+    /// <summary>Opens the bus's row in Controller settings › Screens.</summary>
+    public IRelayCommand OpenBusCommand { get; }
 
     public static IReadOnlyList<string> BusChoices { get; } = new[] { "0", "1", "2 (software)", "3 (software)" };
     public static IReadOnlyList<string> AddressChoices { get; } = new[] { "0x3C", "0x3D" };
@@ -156,7 +163,7 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
     {
         IsEditable = _controller.CanEdit;
         foreach (var name in new[] { nameof(LightIndex), nameof(IsNone), nameof(IsLed), nameof(IsPair), nameof(IsScreen),
-                                     nameof(HasLeds), nameof(LitWhenHigh), nameof(LitWhenLow), nameof(BusIndex), nameof(AddressIndex) })
+                                     nameof(HasLeds), nameof(LitWhenHigh), nameof(LitWhenLow), nameof(BusIndex), nameof(AddressIndex), nameof(BusLinkText) })
             OnPropertyChanged(name);
     }
 }

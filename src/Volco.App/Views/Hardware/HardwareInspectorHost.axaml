@@ -30,9 +30,6 @@
     <!-- Hidden while a hardware test runs (spec §8): editing is paused -->
     <ContentControl Name="InspectedContent" Content="{Binding InspectedPanel}" IsVisible="{Binding !IsTesting}">
       <ContentControl.DataTemplates>
-        <DataTemplate DataType="{x:Type hw:BusWiringViewModel}" x:DataType="hw:BusWiringViewModel">
-          <views:BusInspector/>
-        </DataTemplate>
         <DataTemplate DataType="{x:Type hw:ControllerSettingsViewModel}" x:DataType="hw:ControllerSettingsViewModel">
           <views:ControllerSettingsInspector/>
         </DataTemplate>

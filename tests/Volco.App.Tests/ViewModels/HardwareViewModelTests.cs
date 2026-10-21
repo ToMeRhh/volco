@@ -271,7 +271,7 @@ public sealed class HardwareViewModelTests : IDisposable
     }
 
     [Fact]
-    public void TheSettingsChipOrABusChip_ThenGeneral_SelectsTheDefault()
+    public void TheSettingsChip_ThenGeneral_SelectsTheDefault()
     {
         SetUpInSync();
         var controls = _settings!.Controls;

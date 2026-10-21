@@ -186,7 +186,7 @@ public class SettingsCoverageTests
         Named<ComboBox>(page, "AddressBox").SelectedIndex = 1;                 // buttons[1].screen.address
         Settle(window);
 
-        vm.Hardware.SelectBus(1);                                              // the bus chip
+        vm.Hardware.ShowBus(1);                                                // the button's bus link
         Settle(window);
         PickPin(window, Named<PinField>(host, "SdaField"), 17);                // i2c1.sda
         PickPin(window, Named<PinField>(host, "SclField"), 2);                 // i2c1.scl

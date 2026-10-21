@@ -52,7 +52,7 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
             Controller.Draft.Buttons[0].Screen = new Screen();
             Controller.OnDraftEdited();
         }
-        return _vm = new ControllerSettingsViewModel(Controller, () => { });
+        return _vm = new ControllerSettingsViewModel(Controller, () => { }, _settings!.Hardware.PinField);
     }
 
     [Fact]
