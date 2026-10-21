@@ -102,7 +102,7 @@ public sealed class HardwareFixesTests : IDisposable
 
     /// <summary>Runs the UI (and its animations, on the render timer) for <paramref name="ms"/>:
     /// long enough for a 150 ms crossfade to end.</summary>
-    private static void Pump(Window window, int ms = 400)
+    private static void Pump(Window window, int ms = 600)
     {
         var sw = Stopwatch.StartNew();
         do
@@ -134,19 +134,30 @@ public sealed class HardwareFixesTests : IDisposable
         if (button.Command is { } command && command.CanExecute(button.CommandParameter)) command.Execute(button.CommandParameter);
     }
 
-    /// <summary>The opacity <paramref name="visual"/> is drawn with: its own times every ancestor's.</summary>
+    /// <summary>The opacity <paramref name="visual"/> is drawn with inside the stage: its own times
+    /// every ancestor's up to the stage. (The window's own crossfade between General and the stage
+    /// is above it.)</summary>
     private static double DrawnOpacity(Visual visual)
     {
         var opacity = 1.0;
-        for (Visual? v = visual; v is not null; v = v.GetVisualParent()) opacity *= v.Opacity;
+        for (Visual? v = visual; v is not null; v = v.GetVisualParent())
+        {
+            opacity *= v.Opacity;
+            if (v is StagePage) break;
+        }
         return opacity;
     }
+
+    /// <summary>The ancestors of <paramref name="visual"/> (up to the window) drawn faded, for a failure's message.</summary>
+    private static string Faded(Visual visual)
+        => string.Join(" < ", visual.GetSelfAndVisualAncestors().Where(v => v.Opacity < 1)
+                                    .Select(v => $"{v.GetType().Name}{((v as Control)?.Name is { } n ? " " + n : "")} {v.Opacity:0.000}"));
 
     /// <summary><paramref name="control"/> is on screen: visible and fully opaque.</summary>
     private static void AssertDrawn(Control control)
     {
         Assert.True(control.IsEffectivelyVisible, $"{control.GetType().Name} is visible");
-        Assert.Equal(1.0, DrawnOpacity(control), 3);
+        Assert.True(Math.Abs(DrawnOpacity(control) - 1) < 0.001, $"{control.GetType().Name} is drawn faded: {Faded(control)}");
     }
 
     // ── 1. During a test only Test is active in the title row (spec §8) ──────────────────────
