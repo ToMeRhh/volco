@@ -139,6 +139,22 @@
       </Border>
     </Border>
 
+    <!-- Leaving the Controller page with unsaved changes (controller-page spec §4.4): over the
+         whole window, sidebar included, so neither the nav nor the card's actions change the draft
+         under it; Escape or a click outside is Stay -->
+    <Border Name="LeaveOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="LeaveCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="LeaveHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:LeavePromptViewModel}" x:DataType="hw:LeavePromptViewModel">
+              <hwviews:LeavePrompt/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
     <!-- ⋯ Reinstall firmware…: today's Install confirmation, since it erases the setup -->
     <Border Name="ReinstallOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
             IsVisible="{Binding Hardware.Card.Controller.ConfirmInstallPending}">

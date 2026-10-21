@@ -54,10 +54,6 @@ public static class LinkText
         _ => "WebSocket",
     };
 
-    /// <summary>The sidebar footer: "Connected · COM3", or the headline.</summary>
-    public static string Footer(LinkStatus link, ConnectionConfig c)
-        => link.IsConnected ? $"Connected · {TransportShort(c)}" : Headline(link, c);
-
     /// <summary>What a status that isn't Connected means, and what to do; "" when connected.</summary>
     public static string Explanation(LinkStatus link, ConnectionConfig c)
     {

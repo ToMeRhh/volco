@@ -180,7 +180,7 @@ public sealed class ControllerNavigationTests : IDisposable
         s.Window.ShowPage("general");
         Settle(s.Window);
         Assert.NotNull(s.Vm.Hardware.LeavePrompt);
-        Assert.True(In<Border>(stage, "LeaveOverlay").IsVisible);
+        Assert.True(In<Border>(s.Window, "LeaveOverlay").IsVisible);
         Assert.Equal("controller", s.NavTag);
         Assert.Same(stage, s.Window.CurrentPage);
     }

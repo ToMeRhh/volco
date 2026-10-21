@@ -121,7 +121,6 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The status line's ›: the Connection dialog, on the tab of the current connection.</summary>
     /// <summary>The detail line of a not-set-up state: the Controller page, where the chooser is.</summary>
     [RelayCommand]
     private void OpenChooser()
@@ -129,6 +128,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
         if (DetailOpensChooser) ToController();
     }
 
+    /// <summary>The status line's ›: the Connection dialog, on the tab of the current connection.</summary>
     [RelayCommand]
     private void OpenConnection() => _hardware.OpenConnection(wifi: Connection.ConnectionType == ConnectionType.Udp);
 

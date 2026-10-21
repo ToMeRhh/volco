@@ -59,6 +59,8 @@ public partial class SettingsWindow : Window
     private readonly Border _connectionOverlay;
     private readonly ContentControl _connectionHost;
     private readonly Border _reinstallOverlay;
+    private readonly Border _leaveOverlay;
+    private readonly ContentControl _leaveHost;
 
     /// <summary>Set by the composition root at shutdown so Closing is not cancelled.</summary>
     internal bool AllowClose { get; set; }
@@ -109,15 +111,25 @@ public partial class SettingsWindow : Window
         _connectionOverlay = this.FindControl<Border>("ConnectionOverlay")!;
         _connectionHost = this.FindControl<ContentControl>("ConnectionHost")!;
         _reinstallOverlay = this.FindControl<Border>("ReinstallOverlay")!;
-        _compareOverlay.PointerPressed += OnScrimPressed;
-        _connectionOverlay.PointerPressed += OnScrimPressed;
-        _reinstallOverlay.PointerPressed += OnScrimPressed;
+        _leaveOverlay = this.FindControl<Border>("LeaveOverlay")!;
+        _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
+        foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _reinstallOverlay, _leaveOverlay })
+            overlay.PointerPressed += OnScrimPressed;
         TrackFocus(_compareOverlay, this.FindControl<Border>("CompareCard")!);
         TrackFocus(_connectionOverlay, this.FindControl<Border>("ConnectionCard")!);
-        TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!);
+        // Reinstall is opened from the ⋯ menu, whose item is gone once it closes: the focus goes back to ⋯.
+        TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!, CardMoreButton);
+        TrackFocus(_leaveOverlay, this.FindControl<Border>("LeaveCard")!);
         UpdateCompare();
         UpdateConnection();
+        UpdateLeavePrompt();
     }
+
+    /// <summary>Whether the focus can go back to <paramref name="element"/>: shown in this window
+    /// (a closed menu's item is not).</summary>
+    private bool CanFocus(IInputElement? element)
+        => element is InputElement { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Focusable: true } e
+           && e.IsAttachedToVisualTree() && ReferenceEquals(TopLevel.GetTopLevel(e), this);
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
@@ -128,7 +140,8 @@ public partial class SettingsWindow : Window
             e.Handled = true;
             return;
         }
-        // The card's dialogs are modal: Escape closes the open one, and no key reaches the page under it.
+        // The card's dialogs and the leave prompt are modal: Escape closes the open one (the leave
+        // prompt's is Stay), and no key reaches the window under it.
         var open = OpenCardOverlay();
         if (open is null) return;
         if (e.Key == Key.Escape)
@@ -141,14 +154,16 @@ public partial class SettingsWindow : Window
 
     /// <summary>The device card's dialog that is open, if any.</summary>
     private Border? OpenCardOverlay()
-        => _reinstallOverlay.IsVisible ? _reinstallOverlay
+        => _leaveOverlay.IsVisible ? _leaveOverlay
+         : _reinstallOverlay.IsVisible ? _reinstallOverlay
          : _connectionOverlay.IsVisible ? _connectionOverlay
          : _compareOverlay.IsVisible ? _compareOverlay
          : null;
 
     private void CloseCardOverlay(Border overlay)
     {
-        if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Card.Controller.CancelInstallCommand.Execute(null);
+        if (ReferenceEquals(overlay, _leaveOverlay)) _hardware.CloseLeavePrompt();
+        else if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Card.Controller.CancelInstallCommand.Execute(null);
         else if (ReferenceEquals(overlay, _connectionOverlay)) _hardware.CloseConnection();
         else _hardware.CloseCompare();
     }
@@ -165,7 +180,21 @@ public partial class SettingsWindow : Window
     {
         if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
         else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
+        else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
     }
+
+    /// <summary>The leave prompt's card over the window while one is open.</summary>
+    private void UpdateLeavePrompt()
+    {
+        var prompt = _hardware.LeavePrompt;
+        _leaveHost.Content = prompt;
+        _leaveOverlay.IsVisible = prompt is not null;
+    }
+
+    /// <summary>The device card's ⋯ button.</summary>
+    private InputElement? CardMoreButton()
+        => this.FindControl<Volco.App.Views.Hardware.DeviceCard>("Card")?.GetVisualDescendants().OfType<Button>()
+               .FirstOrDefault(b => b.Name == "MoreButton");
 
     /// <summary>Compare's card over the window while it is open.</summary>
     private void UpdateCompare()
@@ -185,8 +214,9 @@ public partial class SettingsWindow : Window
 
     /// <summary>When <paramref name="overlay"/> opens, the focus moves to <paramref name="card"/>'s
     /// first focusable control (else the card itself, so Escape works while nothing in it can take
-    /// the focus); when it closes, the focus goes back to where it was (the card's status line).</summary>
-    private void TrackFocus(Border overlay, Border card)
+    /// the focus); when it closes, the focus goes back to where it was (the card's status line),
+    /// else to <paramref name="fallback"/>.</summary>
+    private void TrackFocus(Border overlay, Border card, Func<InputElement?>? fallback = null)
     {
         IInputElement? before = null;
         overlay.PropertyChanged += (_, e) =>
@@ -195,22 +225,13 @@ public partial class SettingsWindow : Window
             if (overlay.IsVisible)
             {
                 before = FocusManager?.GetFocusedElement();
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
-                    card.UpdateLayout();
-                    var first = card.GetVisualDescendants().OfType<InputElement>()
-                        .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
-                    if (first is not null) first.Focus(NavigationMethod.Tab);
-                    else card.Focus();
-                });
+                DialogFocus.MoveInto(card);
             }
             else
             {
-                var back = before;
+                var back = CanFocus(before) ? before : fallback?.Invoke();
                 before = null;
-                if (back is InputElement { IsEffectivelyVisible: true } element && TopLevel.GetTopLevel(element) is not null)
-                    element.Focus(NavigationMethod.Tab);
+                if (CanFocus(back)) ((InputElement)back!).Focus(NavigationMethod.Tab);
             }
         };
     }

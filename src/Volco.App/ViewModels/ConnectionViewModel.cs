@@ -65,7 +65,6 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     public string TransportDetails => LinkText.Transport(_config.Config.Connection, Link.IsConnected ? _runtime.PeerAddress : null);
 
     /// <summary>The navigation footer's text: "Connected · COM3", "Looking for your controller", …</summary>
-    public string FooterText => LinkText.Footer(Link, _config.Config.Connection);
 
     /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", while connected; "" otherwise.</summary>
     public string HardwareSummary => Link.IsConnected ? Summarize(_config.Config.Controller) : "";
@@ -112,7 +111,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     private void RefreshStatus()
     {
         foreach (var name in new[] { nameof(IsConnected), nameof(IsUserDisconnected), nameof(StatusText), nameof(StatusTone),
-                                     nameof(TransportDetails), nameof(FooterText), nameof(HardwareSummary),
+                                     nameof(TransportDetails), nameof(HardwareSummary),
                                      nameof(HasHardwareSummary), nameof(StatusExplanation), nameof(HasStatusExplanation) })
             OnPropertyChanged(name);
     }

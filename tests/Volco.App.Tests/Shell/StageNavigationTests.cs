@@ -335,19 +335,19 @@ public sealed class StageNavigationTests
 
         Assert.Equal("controller", s.NavTag);
         Assert.Same(s.Stage, s.Window.CurrentPage);
-        Assert.True(In<Border>(s.Stage, "LeaveOverlay").IsVisible);
-        Assert.Equal("Unsaved changes", In<TextBlock>(s.Stage, "LeaveTitle").Text);
+        Assert.True(In<Border>(s.Window, "LeaveOverlay").IsVisible);
+        Assert.Equal("Unsaved changes", In<TextBlock>(s.Window, "LeaveTitle").Text);
 
         // Stay (and Escape) keep the draft and the page.
-        Press(In<Button>(s.Stage, "StayButton"));
+        Press(In<Button>(s.Window, "StayButton"));
         Settle(s.Window);
-        Assert.False(In<Border>(s.Stage, "LeaveOverlay").IsVisible);
+        Assert.False(In<Border>(s.Window, "LeaveOverlay").IsVisible);
         Assert.Equal("controller", s.NavTag);
         Assert.True(s.Vm.Controller.IsDirty);
 
         s.Window.ShowPage("general");
         Settle(s.Window);
-        Assert.True(In<Border>(s.Stage, "LeaveOverlay").IsVisible);
+        Assert.True(In<Border>(s.Window, "LeaveOverlay").IsVisible);
         s.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
         Settle(s.Window);
         Assert.Null(s.Vm.Hardware.LeavePrompt);
@@ -360,7 +360,7 @@ public sealed class StageNavigationTests
     {
         using var s = Show();
         LeaveDirty(s, "general");
-        Press(In<Button>(s.Stage, "DiscardAndContinueButton"));
+        Press(In<Button>(s.Window, "DiscardAndContinueButton"));
         Settle(s.Window);
 
         Assert.IsType<GeneralPage>(s.Window.CurrentPage);
@@ -374,12 +374,12 @@ public sealed class StageNavigationTests
     {
         using var s = Show();
         LeaveDirty(s);
-        Press(In<Button>(s.Stage, "SaveAndContinueButton"));
+        Press(In<Button>(s.Window, "SaveAndContinueButton"));
         Until(s.Window, () => AnyWrite(s));
 
         Assert.Equal("controller", s.NavTag);   // no navigation before the controller confirms
-        Assert.True(In<TextBlock>(s.Stage, "LeaveProgress").IsVisible);
-        Assert.Equal("Saving to the controller…", In<TextBlock>(s.Stage, "LeaveProgress").Text);
+        Assert.True(In<TextBlock>(s.Window, "LeaveProgress").IsVisible);
+        Assert.Equal("Saving to the controller…", In<TextBlock>(s.Window, "LeaveProgress").Text);
 
         Answer(s, ConfigResultCode.Ok);
         Until(s.Window, () => s.NavTag == "general");
@@ -394,14 +394,14 @@ public sealed class StageNavigationTests
         using var s = Show();
         LeaveDirty(s);
         var prompt = s.Vm.Hardware.LeavePrompt;
-        Press(In<Button>(s.Stage, "SaveAndContinueButton"));
+        Press(In<Button>(s.Window, "SaveAndContinueButton"));
         Until(s.Window, () => AnyWrite(s));
 
         s.Window.ShowPage("general");   // another click while the save runs
         Settle(s.Window);
         Assert.Same(prompt, s.Vm.Hardware.LeavePrompt);
         Assert.True(prompt!.IsSaving);
-        Assert.False(In<Button>(s.Stage, "DiscardAndContinueButton").IsEffectivelyEnabled);
+        Assert.False(In<Button>(s.Window, "DiscardAndContinueButton").IsEffectivelyEnabled);
         Assert.Equal("controller", s.NavTag);
 
         Answer(s, ConfigResultCode.Ok);
@@ -423,9 +423,9 @@ public sealed class StageNavigationTests
         var prompt = s.Vm.Hardware.LeavePrompt;
         Assert.NotNull(prompt);
         Assert.True(prompt!.IsSaving);
-        Assert.Equal("Saving to the controller…", In<TextBlock>(s.Stage, "LeaveProgress").Text);
-        Assert.False(In<Button>(s.Stage, "DiscardAndContinueButton").IsEffectivelyEnabled);
-        Assert.False(In<Button>(s.Stage, "SaveAndContinueButton").IsEffectivelyEnabled);
+        Assert.Equal("Saving to the controller…", In<TextBlock>(s.Window, "LeaveProgress").Text);
+        Assert.False(In<Button>(s.Window, "DiscardAndContinueButton").IsEffectivelyEnabled);
+        Assert.False(In<Button>(s.Window, "SaveAndContinueButton").IsEffectivelyEnabled);
         Assert.Equal("controller", s.NavTag);
 
         Answer(s, ConfigResultCode.Ok);
@@ -455,7 +455,7 @@ public sealed class StageNavigationTests
     {
         using var s = Show();
         LeaveDirty(s);
-        Press(In<Button>(s.Stage, "SaveAndContinueButton"));
+        Press(In<Button>(s.Window, "SaveAndContinueButton"));
         Answer(s, ConfigResultCode.StorageFailed);
         Until(s.Window, () => !s.Vm.Controller.IsSaving);
 
@@ -474,9 +474,9 @@ public sealed class StageNavigationTests
         s.Vm.Controller.SetSliderPin(0, 39);
         LeaveDirty(s);   // Slider 2 on 39 too: a conflict
 
-        Assert.False(In<Button>(s.Stage, "SaveAndContinueButton").IsEffectivelyEnabled);
-        Assert.True(In<Button>(s.Stage, "DiscardAndContinueButton").IsEffectivelyEnabled);
-        Assert.True(In<Button>(s.Stage, "StayButton").IsEffectivelyEnabled);
+        Assert.False(In<Button>(s.Window, "SaveAndContinueButton").IsEffectivelyEnabled);
+        Assert.True(In<Button>(s.Window, "DiscardAndContinueButton").IsEffectivelyEnabled);
+        Assert.True(In<Button>(s.Window, "StayButton").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]

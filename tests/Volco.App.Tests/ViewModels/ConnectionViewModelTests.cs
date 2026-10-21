@@ -38,7 +38,6 @@ public sealed class ConnectionViewModelTests : IDisposable
         _rig.Connection.RaiseMessage(new HelloMessage(9, 5, new[] { IndicatorKind.Led }));
         _ui.RunAll();
         Assert.Equal("Firmware update needed", Connection.StatusText);
-        Assert.Equal("Firmware update needed", Connection.FooterText);
         Assert.StartsWith("The controller's firmware is from another version of Volco.", Connection.StatusExplanation);
         Assert.Equal(LinkTone.Warning, Connection.StatusTone);
         Assert.False(Connection.HasHardwareSummary);
@@ -56,7 +55,6 @@ public sealed class ConnectionViewModelTests : IDisposable
         _rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 2, new[] { IndicatorKind.Screen }));
         _ui.RunAll();
         Assert.Equal("Connected", Connection.StatusText);
-        Assert.Equal("Connected · Wi-Fi", Connection.FooterText);
         Assert.Equal("2 sliders · 1 button (1 screen)", Connection.HardwareSummary);
     }
 
@@ -96,7 +94,6 @@ public sealed class ConnectionViewModelTests : IDisposable
         _ui.RunAll();
         Assert.Equal(1, _rig.Connection.DisposeCount);
         Assert.Equal("Disconnected", Connection.StatusText);
-        Assert.Equal("Disconnected", Connection.FooterText);
         Assert.StartsWith("You disconnected Volco.", Connection.StatusExplanation);
         Assert.True(Connection.IsUserDisconnected);
 

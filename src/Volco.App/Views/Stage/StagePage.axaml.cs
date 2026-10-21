@@ -47,7 +47,6 @@ public partial class StagePage : UserControl
             if (deviceOverlay.IsVisible) OnDeviceDialogOpened();
             else OnDeviceDialogClosed();
         };
-        this.FindControl<Border>("LeaveOverlay")!.PointerPressed += OnLeaveOverlayPressed;
         InitModeTabs();
         InitStage();
         // No drag to swap during a hardware test: the grips give way to the test.
@@ -83,8 +82,6 @@ public partial class StagePage : UserControl
     private Control _drawing = null!;
     private TransitioningContentControl _chooserHost = null!;
     private SetupChooser? _chooser;
-    private Border _leaveOverlay = null!;
-    private ContentControl _leaveHost = null!;
     private TransitioningContentControl _titleActions = null!;
     private HardwareTitleActions? _hardwareActions;
     private ContentControl _sidePanelHost = null!;
@@ -99,8 +96,6 @@ public partial class StagePage : UserControl
         _drawing = this.FindControl<StackPanel>("Drawing")!;
         _chooserHost = this.FindControl<TransitioningContentControl>("ChooserHost")!;
         _chooserHost.PageTransition = null;
-        _leaveOverlay = this.FindControl<Border>("LeaveOverlay")!;
-        _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
         _titleActions = this.FindControl<TransitioningContentControl>("TitleActions")!;
         _titleActions.PageTransition = null;
         _sidePanelHost = this.FindControl<ContentControl>("SidePanelHost")!;
@@ -135,7 +130,6 @@ public partial class StagePage : UserControl
             UpdateChooser();
             UpdateSaveBar();
             UpdateTesting();
-            UpdateLeavePrompt();
             UpdateSidePanel();
         }
         else if (change.Property == HardwareSidePanelProperty)
@@ -163,36 +157,6 @@ public partial class StagePage : UserControl
         _inspector.IsVisible = !panelInspects && Hardware is not { IsTesting: true };
     }
 
-    /// <summary>The leave prompt's card over the stage while one is open; the focus moves into it.</summary>
-    private void UpdateLeavePrompt()
-    {
-        var prompt = Hardware?.LeavePrompt;
-        _leaveHost.Content = prompt;
-        var open = prompt is not null;
-        if (_leaveOverlay.IsVisible == open) return;
-        _leaveOverlay.IsVisible = open;
-        if (open) FocusInto(this.FindControl<Border>("LeaveCard")!);
-    }
-
-    /// <summary>A click on the leave prompt's scrim is Stay.</summary>
-    private void OnLeaveOverlayPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!ReferenceEquals(e.Source, sender) || Hardware is not { LeavePrompt: not null } hw) return;
-        hw.CloseLeavePrompt();
-        e.Handled = true;
-    }
-
-    /// <summary>Moves the focus to <paramref name="card"/>'s first focusable control, else the card.</summary>
-    private static void FocusInto(Border card) => Dispatcher.UIThread.Post(() =>
-    {
-        if (!card.IsEffectivelyVisible || card.IsKeyboardFocusWithin) return;
-        card.UpdateLayout();
-        var first = card.GetVisualDescendants().OfType<InputElement>()
-            .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
-        if (first is not null) first.Focus(NavigationMethod.Tab);
-        else card.Focus();
-    });
-
     /// <summary>While a hardware test runs, the case has the accent outline ("testing", which also
     /// shows the tiles' test layer), the band shows under it and the tile inspector is hidden:
     /// editing is paused (hardware-page spec §8).</summary>
@@ -218,7 +182,6 @@ public partial class StagePage : UserControl
         if (e.PropertyName is nameof(HardwareViewModel.ShowChooser)) UpdateChooser();
         else if (e.PropertyName is nameof(HardwareViewModel.ShowSaveBar)) UpdateSaveBar();
         else if (e.PropertyName is nameof(HardwareViewModel.IsTesting)) UpdateTesting();
-        else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
         else if (e.PropertyName is nameof(HardwareViewModel.Inspected)) UpdateSidePanel();
         if (e.PropertyName is nameof(HardwareViewModel.HasUnsavedChanges) or null or "") ScheduleTileSources();
     }
@@ -457,16 +420,6 @@ public partial class StagePage : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_leaveOverlay.IsVisible && Hardware is { } leaving)
-        {
-            // The leave prompt is modal: Escape is Stay.
-            if (e.Key == Key.Escape)
-            {
-                leaving.CloseLeavePrompt();
-                e.Handled = true;
-            }
-            return;
-        }
         if (e.Key == Key.Escape && Hardware is { IsStartingOver: true } over)
         {
             // Escape cancels Start over: the drawing comes back.

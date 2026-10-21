@@ -269,4 +269,94 @@ public sealed class SidebarCardTests : IDisposable
         Assert.False(s.Vm.Controller.ConfirmInstallPending);
         Assert.False(overlay.IsVisible);
     }
+
+    [AvaloniaFact]
+    public void ReinstallFromTheMenuGivesTheFocusBackToMore()
+    {
+        using var s = Show();
+        var more = In<Button>(s.Card, "MoreButton");
+        var flyout = (MenuFlyout)more.Flyout!;
+        flyout.ShowAt(more);
+        Settle(s.Window);
+        var item = flyout.Items.OfType<MenuItem>().Single(i => i.Name == "ReinstallMenuItem");
+        item.Focus();
+        Assert.True(item.IsFocused);
+        s.Vm.Controller.ConfirmInstallPending = true;   // what the item asks (the rig bundles no firmware)
+        flyout.Hide();
+        Settle(s.Window);
+        Assert.True(s.Window.FindControl<Border>("ReinstallOverlay")!.IsVisible);
+
+        Escape(s);
+
+        Assert.False(s.Vm.Controller.ConfirmInstallPending);
+        Assert.True(more.IsFocused);   // the menu item is gone: the focus goes back to ⋯
+    }
+
+    [AvaloniaFact]
+    public void CompactSidebarOnHoverShowsTheWholeCard()
+    {
+        using var s = Show(width: 900);
+        var dot = In<Avalonia.Controls.Shapes.Ellipse>(s.Card, "CardDot");
+        var status = In<TextBlock>(s.Card, "StatusText");
+        Assert.True(dot.IsEffectivelyVisible);
+
+        s.Window.MouseMove(new Point(20, 300));   // the mouse on the sidebar opens it over the page
+        Settle(s.Window);
+        Assert.True(s.Window.FindControl<Grid>("SidebarHost")!.Classes.Contains(":pointerover"));
+        Assert.True(status.IsEffectivelyVisible);
+        Assert.False(dot.IsEffectivelyVisible);
+
+        s.Window.MouseMove(new Point(600, 300));
+        Settle(s.Window);
+        Assert.True(dot.IsEffectivelyVisible);
+        Assert.False(status.IsEffectivelyVisible);
+    }
+
+    /// <summary>Controller-page spec §4.4: the leave prompt covers the whole window, so neither the
+    /// nav nor the card's actions change the draft under it.</summary>
+    [AvaloniaFact]
+    public void TheLeavePromptCoversTheSidebar()
+    {
+        using var s = Show();
+        s.Window.ShowPage("controller");
+        Until(s.Window, () => s.Vm.Controller.CanEdit);
+        s.Vm.Controller.SetSliderPin(1, 39);
+        Settle(s.Window);
+        var draft = ControllerConfigCodec.Encode(s.Vm.Controller.Draft);
+        s.Window.ShowPage("general");
+        Settle(s.Window);
+        Assert.NotNull(s.Vm.Hardware.LeavePrompt);
+        var overlay = s.Window.FindControl<Border>("LeaveOverlay")!;
+        Assert.True(overlay.IsEffectivelyVisible);
+        Until(s.Window, () => s.Window.FindControl<Border>("LeaveCard")!.IsKeyboardFocusWithin);
+
+        // The pointer reaches the scrim, not the card's ⋯ or the nav.
+        var more = In<Button>(s.Card, "MoreButton");
+        var nav = s.Window.FindControl<ListBox>("NavList")!;
+        foreach (var target in new Control[] { more, nav })
+        {
+            var point = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), s.Window)!.Value;
+            var hit = s.Window.InputHitTest(point) as Visual;
+            Assert.True(ReferenceEquals(hit, overlay) || overlay.IsVisualAncestorOf(hit), $"{target.Name} is reachable");
+        }
+
+        // No key reaches them either, even with the focus forced onto them.
+        more.Focus();
+        s.Window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+        Settle(s.Window);
+        Assert.False(more.Flyout!.IsOpen);
+        nav.Focus();
+        s.Window.KeyPress(Key.Up, RawInputModifiers.None, PhysicalKey.ArrowUp, null);
+        Settle(s.Window);
+        Assert.Equal("controller", s.NavTag);
+        Assert.NotNull(s.Vm.Hardware.LeavePrompt);
+
+        // A click where ⋯ is is Stay.
+        Click(s, more);
+        Assert.Null(s.Vm.Hardware.LeavePrompt);
+        Assert.False(more.Flyout!.IsOpen);
+        Assert.Equal("controller", s.NavTag);
+        Assert.Equal(draft, ControllerConfigCodec.Encode(s.Vm.Controller.Draft));
+        Assert.True(s.Vm.Controller.IsDirty);
+    }
 }

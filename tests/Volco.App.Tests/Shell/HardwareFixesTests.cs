@@ -349,7 +349,7 @@ public sealed class HardwareFixesTests : IDisposable
         var stage = s.Stage;
         s.Window.ShowPage("general");   // unsaved: the leave prompt asks
         Settle(s.Window);
-        Press(In<Button>(stage, "SaveAndContinueButton"));
+        Press(In<Button>(s.Window, "SaveAndContinueButton"));
         Answer(s, Reply.OkThenHello);
         Until(s.Window, () => s.Window.CurrentPage is GeneralPage);
         s.Window.ShowPage("controller");
