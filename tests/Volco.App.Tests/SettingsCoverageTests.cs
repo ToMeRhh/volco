@@ -72,6 +72,9 @@ public class SettingsCoverageTests
     /// <summary>The stage on Hardware over the DIY setup, in sync with the controller.</summary>
     private static (StagePage Page, HardwareInspectorHost Host, Window Window) HardwareStage(TestRig rig, SettingsViewModel vm)
     {
+        // The tiles' inspectors show their wiring (their Hardware sections) open.
+        vm.Hardware.Sections.SliderHardwareOpen = true;
+        vm.Hardware.Sections.ButtonHardwareOpen = true;
         var host = new HardwareInspectorHost { DataContext = vm.Hardware };
         var page = new StagePage(vm.Controls) { Hardware = vm.Hardware, HardwareSidePanel = host };
         var window = new Window { Content = page, Width = 1100, Height = 900 };
@@ -159,28 +162,28 @@ public class SettingsCoverageTests
 
         vm.Controls.Select(vm.Sliders.Items[0]);
         Settle(window);
-        PickPin(window, Named<PinField>(host, "PinField"), 39);                // sliders[0].pin
+        PickPin(window, Named<PinField>(page, "PinField"), 39);                // sliders[0].pin
 
         vm.Controls.Select(vm.Buttons.Items[0]);
         Settle(window);
-        PickPin(window, Named<PinField>(host, "PinField"), 15);                // buttons[0].pin
-        PickPin(window, Named<PinField>(host, "LightPinField"), 22);           // buttons[0].led.pin
-        Named<RadioButton>(host, "LitHigh").IsChecked = true;                  // buttons[0].led.active_low
+        PickPin(window, Named<PinField>(page, "PinField"), 15);                // buttons[0].pin
+        PickPin(window, Named<PinField>(page, "LightPinField"), 22);           // buttons[0].led.pin
+        Named<RadioButton>(page, "LitHigh").IsChecked = true;                  // buttons[0].led.active_low
         Settle(window);
 
         vm.Controls.Select(vm.Buttons.Items[2]);
         Settle(window);
-        PickPin(window, Named<PinField>(host, "LightAPinField"), 23);          // buttons[2].led_pair.pin_a
-        PickPin(window, Named<PinField>(host, "LightBPinField"), 16);          // buttons[2].led_pair.pin_b
-        Named<RadioButton>(host, "LitLow").IsChecked = true;                   // buttons[2].led_pair.active_low
+        PickPin(window, Named<PinField>(page, "LightAPinField"), 23);          // buttons[2].led_pair.pin_a
+        PickPin(window, Named<PinField>(page, "LightBPinField"), 16);          // buttons[2].led_pair.pin_b
+        Named<RadioButton>(page, "LitLow").IsChecked = true;                   // buttons[2].led_pair.active_low
         Settle(window);
 
         vm.Controls.Select(vm.Buttons.Items[1]);
         Settle(window);
-        Named<RadioButton>(host, "LightScreen").IsChecked = true;              // buttons[1].screen
+        Named<RadioButton>(page, "LightScreen").IsChecked = true;              // buttons[1].screen
         Settle(window);
-        Named<ComboBox>(host, "BusBox").SelectedIndex = 1;                     // buttons[1].screen.bus
-        Named<ComboBox>(host, "AddressBox").SelectedIndex = 1;                 // buttons[1].screen.address
+        Named<ComboBox>(page, "BusBox").SelectedIndex = 1;                     // buttons[1].screen.bus
+        Named<ComboBox>(page, "AddressBox").SelectedIndex = 1;                 // buttons[1].screen.address
         Settle(window);
 
         vm.Hardware.SelectBus(1);                                              // the bus chip

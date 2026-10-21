@@ -330,8 +330,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             var w = Sliders[i].Wiring ??= new TileWiring();
             var slider = draft.Sliders[i];
             w.Title = $"Slider {i + 1}";
-            w.PinText = PinText(slider.HasPin, slider.Pin);
-            w.IndicatorText = "";
+            w.Summary = PinText(slider.HasPin, slider.Pin);
             w.HasChange = !Equals(Saved(baseline.Sliders, Source(layout.Sliders, i)), slider);
             w.Problem = TileProblem(draft, problems, i, new[] { PinOwnerKind.Slider }, _ => false);
         }
@@ -340,13 +339,18 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             var w = Buttons[i].Wiring ??= new TileWiring();
             var button = draft.Buttons[i];
             w.Title = $"Button {i + 1}";
-            w.PinText = PinText(button.HasPin, button.Pin);
-            w.IndicatorText = IndicatorText(button);
+            w.Summary = PinText(button.HasPin, button.Pin) + IndicatorText(button);
             w.HasChange = !Equals(Saved(baseline.Buttons, Source(layout.Buttons, i)), button);
             w.Problem = TileProblem(draft, problems, i,
                                     new[] { PinOwnerKind.Button, PinOwnerKind.Light, PinOwnerKind.LightA, PinOwnerKind.LightB },
                                     f => f is ConfigField.ScreenBus or ConfigField.ScreenAddress);
         }
+
+        // A button whose light the draft changes follows the new one only after the save
+        // (controller-page spec §4.3): until then the controller still has the Hello's.
+        foreach (var item in _controls.Buttons.Items) item.IsLightChanged = false;
+        for (int i = 0; i < Buttons.Count; i++)
+            Buttons[i].IsLightChanged = !Buttons[i].IsNew && Buttons[i].Indicator is { } hello && hello != KindOf(draft.Buttons[i]);
 
         // A Controls tile the draft doesn't draw still measures its wiring layer.
         foreach (var item in _controls.Sliders.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
@@ -401,7 +405,30 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The inspector shows the controller's settings: the chip is marked.</summary>
     public bool IsSettingsSelected => Inspected is ControllerSettingsViewModel;
 
-    partial void OnInspectedChanged(object? value) => OnPropertyChanged(nameof(IsSettingsSelected));
+    partial void OnInspectedChanged(object? value)
+    {
+        OnPropertyChanged(nameof(IsSettingsSelected));
+        OnPropertyChanged(nameof(InspectedSlider));
+        OnPropertyChanged(nameof(InspectedButton));
+        OnPropertyChanged(nameof(InspectedPanel));
+    }
+
+    /// <summary>The selected slider's Hardware section (the body of its inspector's section), or null.</summary>
+    public SliderWiringViewModel? InspectedSlider => Inspected as SliderWiringViewModel;
+
+    /// <summary>The selected button's Hardware section, or null.</summary>
+    public ButtonWiringViewModel? InspectedButton => Inspected as ButtonWiringViewModel;
+
+    /// <summary>What the side panel shows in place of a tile's inspector: Controller settings or a
+    /// bus; null while a tile (or nothing) is selected.</summary>
+    public object? InspectedPanel => Inspected is ControllerSettingsViewModel or BusWiringViewModel ? Inspected : null;
+
+    /// <summary>Which inspector sections are open, for the app run (controller-page spec §4.3).</summary>
+    public InspectorSections Sections { get; } = new();
+
+    // The inspected wiring and whether it had a problem at the last refresh: a problem it gains
+    // (or has when it is selected) opens its kind's Hardware section.
+    private (object? Wiring, bool Problem) _lastProblem;
 
     /// <summary>Selects bus <paramref name="bus"/>'s chip: the tile selection is cleared.</summary>
     public void SelectBus(int bus)
@@ -480,10 +507,28 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     {
         switch (Inspected)
         {
-            case SliderWiringViewModel s: s.IsEditable = _controller.CanEdit; break;
-            case ButtonWiringViewModel b: b.Refresh(); break;
+            case SliderWiringViewModel s:
+                s.IsEditable = _controller.CanEdit;
+                s.Summary = s.Item.Wiring?.Summary ?? "";
+                s.HasProblem = s.Item.Wiring?.HasProblem == true;
+                break;
+            case ButtonWiringViewModel b:
+                b.Refresh();
+                b.Summary = b.Item.Wiring?.Summary ?? "";
+                b.HasProblem = b.Item.Wiring?.HasProblem == true;
+                break;
             case BusWiringViewModel bus: bus.Refresh(); break;
         }
+
+        // A Hardware section with a problem opens itself (spec §4.3), once per problem: closing it
+        // again keeps it closed until the problem goes and comes back, or another control is selected.
+        var problem = Inspected is SliderWiringViewModel { HasProblem: true } or ButtonWiringViewModel { HasProblem: true };
+        if (problem && !(ReferenceEquals(_lastProblem.Wiring, Inspected) && _lastProblem.Problem))
+        {
+            if (Inspected is SliderWiringViewModel) Sections.SliderHardwareOpen = true;
+            else Sections.ButtonHardwareOpen = true;
+        }
+        _lastProblem = (Inspected, problem);
     }
 
     /// <summary>"Remove Slider N?"; once removed, the tile now at its place (else the one before)
@@ -592,14 +637,24 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     private static string PinText(bool has, uint pin) => has ? $"GPIO {pin}" : "Not set";
 
-    /// <summary>"12", "18 · 19" or "Bus 0 · 3C"; empty for no indicator.</summary>
+    /// <summary>The light's part of a button's summary: " · LED 12", " · LEDs 18, 19" or
+    /// " · Screen, bus 0, 3C"; empty for no light.</summary>
     private static string IndicatorText(Button button) => button.IndicatorCase switch
     {
-        Button.IndicatorOneofCase.Led => button.Led.HasPin ? $"{button.Led.Pin}" : "Not set",
-        Button.IndicatorOneofCase.LedPair => button.LedPair is { HasPinA: false, HasPinB: false } ? "Not set"
-            : $"{Part(button.LedPair.HasPinA, button.LedPair.PinA)} · {Part(button.LedPair.HasPinB, button.LedPair.PinB)}",
-        Button.IndicatorOneofCase.Screen => $"Bus {button.Screen.Bus} · {button.Screen.Address:X2}",
+        Button.IndicatorOneofCase.Led => button.Led.HasPin ? $" · LED {button.Led.Pin}" : " · LED not set",
+        Button.IndicatorOneofCase.LedPair => button.LedPair is { HasPinA: false, HasPinB: false } ? " · LEDs not set"
+            : $" · LEDs {Part(button.LedPair.HasPinA, button.LedPair.PinA)}, {Part(button.LedPair.HasPinB, button.LedPair.PinB)}",
+        Button.IndicatorOneofCase.Screen => $" · Screen, bus {button.Screen.Bus}, {button.Screen.Address:X2}",
         _ => "",
+    };
+
+    /// <summary>The kind of light the draft gives <paramref name="button"/>.</summary>
+    private static IndicatorKind KindOf(Button button) => button.IndicatorCase switch
+    {
+        Button.IndicatorOneofCase.Led => IndicatorKind.Led,
+        Button.IndicatorOneofCase.LedPair => IndicatorKind.LedPair,
+        Button.IndicatorOneofCase.Screen => IndicatorKind.Screen,
+        _ => IndicatorKind.None,
     };
 
     private static string Part(bool has, uint pin) => has ? $"{pin}" : "–";

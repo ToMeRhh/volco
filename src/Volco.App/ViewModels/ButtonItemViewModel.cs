@@ -126,13 +126,23 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         _ => "No light",
     };
 
-    /// <summary>The inspector's Light or Screen row; a button without a light has none.</summary>
-    public bool HasLightRow => Indicator is IndicatorKind.Led or IndicatorKind.LedPair or IndicatorKind.Screen;
+    /// <summary>The inspector's Light or Screen row; a button without a light has none, unless the
+    /// controller draft gives it one.</summary>
+    public bool HasLightRow => Indicator is IndicatorKind.Led or IndicatorKind.LedPair or IndicatorKind.Screen || IsLightChanged;
 
     public string LightRowLabel => IsScreen ? "Screen" : "Light";
 
-    /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited mode.</summary>
-    public string LightRowText => MainGesture is { } gesture ? $"Follows {GestureName(gesture)}" : "Off";
+    /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited
+    /// mode; "Follows the new light after saving" while the draft changes its light.</summary>
+    public string LightRowText => IsLightChanged ? "Follows the new light after saving"
+        : MainGesture is { } gesture ? $"Follows {GestureName(gesture)}" : "Off";
+
+    /// <summary>The controller draft gives this button another kind of light than the controller
+    /// has (its Hello): until it is saved, the light row says so (controller-page spec §4.3). Set by
+    /// the Hardware view model.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLightRow), nameof(LightRowText))]
+    private bool _isLightChanged;
 
     public static string GestureName(PressType gesture) => gesture switch
     {

@@ -21,8 +21,9 @@ using Button = Avalonia.Controls.Button;
 
 namespace Volco.App.Tests.Pages;
 
-/// <summary>Hardware-page spec §5.2, §5.3, §6.1, §6.2, §6.4 and §6.5: the wiring inspector of the
-/// selected tile or bus in the Controller page's side panel, under the device card.</summary>
+/// <summary>Hardware-page spec §5.2, §5.3, §6.1, §6.2, §6.4 and §6.5: the wiring of the selected
+/// tile (its inspector's Hardware section, opened here) or bus in the Controller page's side panel,
+/// under the device card.</summary>
 public sealed class HardwareInspectorTests : IDisposable
 {
     public HardwareInspectorTests() => StageTransitions.Enabled = false;
@@ -55,6 +56,8 @@ public sealed class HardwareInspectorTests : IDisposable
         c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
         c.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        vm.Hardware.Sections.SliderHardwareOpen = true;
+        vm.Hardware.Sections.ButtonHardwareOpen = true;
         var host = new HardwareInspectorHost { DataContext = vm.Hardware };
         var page = new StagePage(vm.Controls) { Hardware = vm.Hardware, HardwareSidePanel = host };
         var window = new Window { Content = page, Width = 1100, Height = 720 };
@@ -104,7 +107,12 @@ public sealed class HardwareInspectorTests : IDisposable
         Settle(s.Window);
     }
 
-    private static string Heading(Shown s) => In<TextBlock>(s.Host, "HeadingText").Text!;
+    /// <summary>The heading of what the side panel shows: the tile's inspector or the bus's.</summary>
+    private static string Heading(Shown s)
+        => s.Page.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "HeadingText" && t.IsEffectivelyVisible).Text!;
+
+    private static Volco.App.Views.Inspector.HardwareSection Section(Shown s)
+        => s.Page.GetVisualDescendants().OfType<Volco.App.Views.Inspector.HardwareSection>().Single();
 
     private static string PinValue(Visual field) => In<TextBlock>(field, "ValueText").Text!;
 
@@ -116,14 +124,12 @@ public sealed class HardwareInspectorTests : IDisposable
         s.Vm.Controls.Select(s.Vm.Sliders.Items[0]);
         Settle(s.Window);
 
-        var card = In<Volco.App.Views.Hardware.DeviceCard>(s.Host, "Card");
+        var card = In<Volco.App.Views.Hardware.DeviceCard>(s.Page, "Card");
         Assert.Equal("Volco controller", In<TextBlock>(card, "CardName").Text);
         Assert.StartsWith("Connected over USB", In<TextBlock>(card, "StatusText").Text);
         Assert.Equal("Development firmware", In<TextBlock>(card, "DetailText").Text);
         Assert.False(In<Button>(card, "ActionButton").IsVisible);
-        var cardBottom = card.TranslatePoint(new Point(0, card.Bounds.Height), s.Host)!.Value.Y;
-        Assert.True(In<TextBlock>(s.Host, "HeadingText").TranslatePoint(new Point(0, 0), s.Host)!.Value.Y >= cardBottom);
-        // The tile's Controls inspector is under the controller's panel.
+        // The tile's inspector, with its Hardware section, is under the controller's panel.
         var controls = In<TextBlock>(In<ContentControl>(s.Page, "InspectorContent"), "HeadingText");
         Assert.Equal("Slider 1", controls.Text);
         Assert.True(controls.TranslatePoint(new Point(0, 0), s.Page)!.Value.Y
@@ -140,8 +146,9 @@ public sealed class HardwareInspectorTests : IDisposable
         Click(s, Tiles<SliderTile>(s.Page)[2], y: 6);
 
         Assert.Equal("Slider 3", Heading(s));
-        Assert.Equal("GPIO 32", PinValue(In<PinField>(s.Host, "PinField")));
-        Assert.StartsWith("Controls: ", In<TextBlock>(s.Host, "SubtitleText").Text);
+        Assert.Equal("GPIO 32", PinValue(In<PinField>(s.Page, "PinField")));
+        Assert.Equal("GPIO 32", In<TextBlock>(Section(s), "HardwareSummaryText").Text);
+        Assert.Contains(Section(s).GetVisualDescendants(), v => v is PinField { Name: "PinField" });
     }
 
     [AvaloniaFact]
@@ -150,21 +157,21 @@ public sealed class HardwareInspectorTests : IDisposable
         using var s = Show();
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
-        var pin = In<PinField>(s.Host, "PinField");
-        var y = pin.TranslatePoint(new Point(0, 0), s.Host)!.Value.Y;
-        Assert.True(In<Panel>(s.Host, "LightPinRow").IsVisible);
-        Assert.Equal("GPIO 12", PinValue(In<PinField>(s.Host, "LightPinField")));
-        Assert.True(In<RadioButton>(s.Host, "LightLed").IsChecked);
+        var pin = In<PinField>(s.Page, "PinField");
+        var y = pin.TranslatePoint(new Point(0, 0), s.Page)!.Value.Y;
+        Assert.True(In<Panel>(s.Page, "LightPinRow").IsVisible);
+        Assert.Equal("GPIO 12", PinValue(In<PinField>(s.Page, "LightPinField")));
+        Assert.True(In<RadioButton>(s.Page, "LightLed").IsChecked);
 
-        Click(s, In<RadioButton>(s.Host, "LightScreen"));
+        Click(s, In<RadioButton>(s.Page, "LightScreen"));
         Assert.Equal(3, Assert.IsType<ButtonWiringViewModel>(s.Hardware.Inspected).LightIndex);
 
-        Assert.Same(pin, In<PinField>(s.Host, "PinField"));
-        Assert.Equal(y, pin.TranslatePoint(new Point(0, 0), s.Host)!.Value.Y, 0.5);
-        Assert.True(In<Grid>(s.Host, "BusRow").IsVisible);
-        Assert.True(In<Grid>(s.Host, "AddressRow").IsVisible);
-        Assert.False(In<Panel>(s.Host, "LightPinRow").IsVisible);
-        Assert.False(In<Grid>(s.Host, "LitRow").IsVisible);
+        Assert.Same(pin, In<PinField>(s.Page, "PinField"));
+        Assert.Equal(y, pin.TranslatePoint(new Point(0, 0), s.Page)!.Value.Y, 0.5);
+        Assert.True(In<Grid>(s.Page, "BusRow").IsVisible);
+        Assert.True(In<Grid>(s.Page, "AddressRow").IsVisible);
+        Assert.False(In<Panel>(s.Page, "LightPinRow").IsVisible);
+        Assert.False(In<Grid>(s.Page, "LitRow").IsVisible);
         Assert.Equal(Volco.Core.Controller.Proto.Button.IndicatorOneofCase.Screen, s.Vm.Controller.Draft.Buttons[0].IndicatorCase);
     }
 
@@ -180,9 +187,10 @@ public sealed class HardwareInspectorTests : IDisposable
         using var s = Show();
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
-        Click(s, In<RadioButton>(s.Host, light));
+        Click(s, In<RadioButton>(s.Page, light));
 
-        var shown = s.Host.GetVisualDescendants().OfType<Grid>()
+        var section = Section(s);
+        var shown = section.GetVisualDescendants().OfType<Grid>()
             .Where(g => g.Classes.Contains("InspectorRow") && g.IsEffectivelyVisible).ToList();
         Assert.Equal(rows, shown.Count);
         foreach (var row in shown)
@@ -190,14 +198,16 @@ public sealed class HardwareInspectorTests : IDisposable
             Assert.Equal(44, row.Bounds.Height, 1.0);
             var label = row.Children.OfType<TextBlock>().Single(t => t.Classes.Contains("RowLabel"));
             var control = row.Children.Single(c => Grid.GetColumn(c) == 1);
-            var labelBox = new Rect(label.TranslatePoint(new Point(0, 0), s.Host)!.Value, label.Bounds.Size);
-            var controlBox = new Rect(control.TranslatePoint(new Point(0, 0), s.Host)!.Value, control.Bounds.Size);
+            var labelBox = new Rect(label.TranslatePoint(new Point(0, 0), section)!.Value, label.Bounds.Size);
+            var controlBox = new Rect(control.TranslatePoint(new Point(0, 0), section)!.Value, control.Bounds.Size);
             Assert.Equal(labelBox.Center.Y, controlBox.Center.Y, 2.0);
             Assert.True(labelBox.Right <= controlBox.Left, $"{label.Text}: the label is left of its control");
         }
-        // Remove stays at the bottom, outside the scrolling rows.
-        var remove = In<Button>(s.Host, "RemoveButton");
-        Assert.Null(remove.FindAncestorOfType<ScrollViewer>());
+        // Remove is the section's last row (controller-page spec §4.3), under the wiring rows.
+        var remove = In<Button>(section, "HardwareRemoveButton");
+        Assert.Equal("Remove Button 1", remove.Content);
+        Assert.All(shown, row => Assert.True(row.TranslatePoint(new Point(0, 0), section)!.Value.Y
+                                             < remove.TranslatePoint(new Point(0, 0), section)!.Value.Y));
     }
 
     /// <summary>The bus chips aren't drawn on the Controller page (controller-page spec §4.1); a
@@ -209,7 +219,7 @@ public sealed class HardwareInspectorTests : IDisposable
         Assert.Empty(s.Hardware.BusChips);   // no screen yet
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
-        Click(s, In<RadioButton>(s.Host, "LightScreen"));   // a screen on bus 0
+        Click(s, In<RadioButton>(s.Page, "LightScreen"));   // a screen on bus 0
 
         Assert.DoesNotContain(Tiles<Button>(s.Page), b => b.Name == "BusChip");
         var chip = Assert.Single(s.Hardware.BusChips);
@@ -218,9 +228,9 @@ public sealed class HardwareInspectorTests : IDisposable
         Settle(s.Window);
 
         Assert.Equal("I2C bus 0", Heading(s));
-        Assert.Equal("GPIO 25", PinValue(In<PinField>(s.Host, "SdaField")));
-        Assert.Equal("GPIO 26", PinValue(In<PinField>(s.Host, "SclField")));
-        Assert.Equal(1, In<ComboBox>(s.Host, "ClockBox").SelectedIndex);   // 400 kHz
+        Assert.Equal("GPIO 25", PinValue(In<PinField>(s.Page, "SdaField")));
+        Assert.Equal("GPIO 26", PinValue(In<PinField>(s.Page, "SclField")));
+        Assert.Equal(1, In<ComboBox>(s.Page, "ClockBox").SelectedIndex);   // 400 kHz
         Assert.True(chip.IsSelected);
         Assert.Null(s.Vm.Controls.Selected);
 
@@ -234,23 +244,23 @@ public sealed class HardwareInspectorTests : IDisposable
     {
         using var s = Show();
         Click(s, Tiles<SliderTile>(s.Page)[2], y: 6);
-        Assert.Equal("Remove Slider 3", In<Button>(s.Host, "RemoveButton").Content);
+        Assert.Equal("Remove Slider 3", In<Button>(s.Page, "HardwareRemoveButton").Content);
 
-        Click(s, In<Button>(s.Host, "RemoveButton"));
-        Assert.Equal("Remove Slider 3?", In<TextBlock>(s.Host, "ConfirmText").Text);
-        Assert.True(In<Border>(s.Host, "ConfirmPanel").IsVisible);
-        Click(s, In<Button>(s.Host, "CancelConfirmButton"));
-        Assert.False(In<Border>(s.Host, "ConfirmPanel").IsVisible);
+        Click(s, In<Button>(s.Page, "HardwareRemoveButton"));
+        Assert.Equal("Remove Slider 3?", In<TextBlock>(s.Page, "ConfirmText").Text);
+        Assert.True(In<Border>(s.Page, "ConfirmPanel").IsVisible);
+        Click(s, In<Button>(s.Page, "CancelConfirmButton"));
+        Assert.False(In<Border>(s.Page, "ConfirmPanel").IsVisible);
         Assert.Equal(5, Tiles<SliderTile>(s.Page).Count);
 
-        Click(s, In<Button>(s.Host, "RemoveButton"));
-        Assert.Equal("Remove", In<Button>(s.Host, "ConfirmButton").Content);
-        Click(s, In<Button>(s.Host, "ConfirmButton"));
+        Click(s, In<Button>(s.Page, "HardwareRemoveButton"));
+        Assert.Equal("Remove", In<Button>(s.Page, "ConfirmButton").Content);
+        Click(s, In<Button>(s.Page, "ConfirmButton"));
         Assert.Equal(4, Tiles<SliderTile>(s.Page).Count);
         Assert.Equal(4, s.Vm.Controller.Draft.Sliders.Count);
         // The slider that was Slider 4 is now Slider 3, and selected.
         Assert.Equal("Slider 3", Heading(s));
-        Assert.Equal("GPIO 36", PinValue(In<PinField>(s.Host, "PinField")));
+        Assert.Equal("GPIO 36", PinValue(In<PinField>(s.Page, "PinField")));
 
         // Volco's settings keep five sliders until the save.
         Assert.Equal(5, s.Vm.Sliders.Items.Count);

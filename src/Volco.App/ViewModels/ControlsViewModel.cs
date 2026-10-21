@@ -100,7 +100,9 @@ public sealed partial class ControlsViewModel : ObservableObject
            : null;
 
     /// <summary>Moves the selection to the default when its control is no longer in the lists.
-    /// A control that is only missing from the controller stays selected.</summary>
+    /// A control that is only missing from the controller stays selected, and a control only the
+    /// controller draft had (added with + Add) gives the selection to the item Volco's settings now
+    /// have at its place, once a confirmed save added it.</summary>
     internal void FixSelection()
     {
         var present = Selected switch
@@ -109,7 +111,13 @@ public sealed partial class ControlsViewModel : ObservableObject
             ButtonItemViewModel b => Buttons.Items.Contains(b),
             _ => false,
         };
-        if (!present) Selected = DefaultSelection();
+        if (present) return;
+        Selected = Selected switch
+        {
+            SliderItemViewModel { IsNew: true } s when s.Index < Sliders.Items.Count => Sliders.Items[s.Index],
+            ButtonItemViewModel { IsNew: true } b when b.Index < Buttons.Items.Count => Buttons.Items[b.Index],
+            _ => DefaultSelection(),
+        };
     }
 
     // ── Dialog ────────────────────────────────────────────────────────────────

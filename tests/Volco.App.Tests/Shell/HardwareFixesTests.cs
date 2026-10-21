@@ -260,9 +260,11 @@ public sealed class HardwareFixesTests : IDisposable
     /// click, then Remove and the confirmation in the inspector.</summary>
     private static void RemoveWithTheInspector<TTile>(Shown s, int index) where TTile : Control
     {
+        s.Vm.Hardware.Sections.SliderHardwareOpen = true;
+        s.Vm.Hardware.Sections.ButtonHardwareOpen = true;
         Click(s, s.Stage.Tiles().OfType<TTile>().ElementAt(index));
         var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
-        Press(In<Button>(host, "RemoveButton"));
+        Press(In<Button>(s.Stage, "HardwareRemoveButton"));   // in the inspector's Hardware section
         Settle(s.Window);
         Press(In<Button>(host, "ConfirmButton"));
         Settle(s.Window);
@@ -659,6 +661,7 @@ public sealed class HardwareFixesTests : IDisposable
     {
         StageTransitions.Enabled = true;
         using var s = Show();
+        s.Vm.Hardware.Sections.SliderHardwareOpen = true;   // the wiring shows in the tile's inspector
         s.Vm.Controls.Select(s.Vm.Sliders.Items[2]);
         Pump(s.Window);
 
@@ -669,7 +672,7 @@ public sealed class HardwareFixesTests : IDisposable
         var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
         AssertDrawn(In<Volco.App.Views.Hardware.DeviceCard>(host, "Card"));
         Assert.Equal(2, Assert.IsType<SliderWiringViewModel>(s.Vm.Hardware.Inspected).Index);
-        AssertDrawn(host.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
+        AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
         Assert.Equal("Controller", In<TextBlock>(s.Stage, "PageTitle").Text);
         AssertDrawn(In<TextBlock>(s.Stage, "PageTitle"));
         AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
@@ -681,7 +684,7 @@ public sealed class HardwareFixesTests : IDisposable
 
         ViaGeneral(s, "controller");   // again
         AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single());
-        AssertDrawn(host.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
+        AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
         AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
 
         // Controller settings fills the side panel under the card.

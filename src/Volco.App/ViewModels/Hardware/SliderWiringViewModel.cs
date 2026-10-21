@@ -1,38 +1,31 @@
-using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// The Hardware inspector of a slider (hardware-page spec §6.1): "Slider N", what it controls
-/// (from Controls, read-only here), its pin and Remove. Made for one draft slider; the Hardware
-/// view model refreshes it after every draft change and disposes it when the selection moves.
+/// The Hardware section of a slider's inspector (controller-page spec §4.3, hardware-page spec
+/// §6.1): its pin and Remove, with the collapsed section's summary. Made for one draft slider; the
+/// Hardware view model refreshes it after every draft change and drops it when the selection moves.
 /// </summary>
-public sealed partial class SliderWiringViewModel : ObservableObject, IDisposable
+public sealed partial class SliderWiringViewModel : ObservableObject
 {
-    private readonly SliderItemViewModel _item;
-
     internal SliderWiringViewModel(int index, SliderItemViewModel item, PinFieldViewModel pin, Action remove)
     {
         Index = index;
-        _item = item;
+        Item = item;
         Pin = pin;
         RemoveCommand = new RelayCommand(remove);
-        _item.PropertyChanged += OnItemPropertyChanged;
     }
 
     /// <summary>The draft slider (0-based).</summary>
     public int Index { get; }
 
     /// <summary>The Controls item it draws.</summary>
-    public SliderItemViewModel Item => _item;
+    public SliderItemViewModel Item { get; }
 
     /// <summary>"Slider N".</summary>
     public string Title => $"Slider {Index + 1}";
-
-    /// <summary>"Controls: Speakers".</summary>
-    public string Subtitle => $"Controls: {_item.TargetLabel}";
 
     public PinFieldViewModel Pin { get; }
 
@@ -45,10 +38,9 @@ public sealed partial class SliderWiringViewModel : ObservableObject, IDisposabl
     /// <summary>The draft can be edited: Remove is enabled.</summary>
     [ObservableProperty] private bool _isEditable;
 
-    private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(SliderItemViewModel.TargetLabel) or null or "") OnPropertyChanged(nameof(Subtitle));
-    }
+    /// <summary>The collapsed section's summary: "GPIO 33", or "Not set".</summary>
+    [ObservableProperty] private string _summary = "";
 
-    public void Dispose() => _item.PropertyChanged -= OnItemPropertyChanged;
+    /// <summary>The draft has a problem with this slider: the section's danger mark.</summary>
+    [ObservableProperty] private bool _hasProblem;
 }

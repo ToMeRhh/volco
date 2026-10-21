@@ -6,7 +6,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// A tile's wiring state from the controller draft: its name, its pin, its indicator's wiring,
+/// A tile's wiring state from the controller draft: its name, its wiring's summary,
 /// whether the draft changes it, a problem and, on a slider, the live raw level. The Controller
 /// page's tiles draw only the problem (the danger outline and the warning mark, controller-page
 /// spec §4.1; pins stay in the inspector) and, during the hardware test (hardware-page spec §8),
@@ -18,13 +18,10 @@ public sealed partial class TileWiring : ObservableObject
     [ObservableProperty]
     private string _title = "";
 
-    /// <summary>The pin ("GPIO 33").</summary>
+    /// <summary>The pin and, on a button, its light's wiring, as the inspector's collapsed Hardware
+    /// section reads them ("GPIO 33", "GPIO 5 · LED 12", "GPIO 5 · Screen, bus 0, 3C").</summary>
     [ObservableProperty]
-    private string _pinText = "";
-
-    /// <summary>A button's indicator wiring ("12", "18 · 19", "Bus 0 · 3C"); empty for none.</summary>
-    [ObservableProperty]
-    private string _indicatorText = "";
+    private string _summary = "";
 
     /// <summary>The draft changes this control (counted by the save bar until saved).</summary>
     [ObservableProperty]

@@ -157,10 +157,19 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>A confirmed save removed or added controls and rewrote <c>config.json</c>'s lists
-    /// (UI thread): the sliders and buttons are rebuilt from them.</summary>
+    /// (UI thread): the sliders and buttons are rebuilt from them, and the selected control stays
+    /// selected at its place in the saved draft (a control added with + Add is now set up, so its
+    /// inspector shows its Controls section, controller-page spec §4.3).</summary>
     private void OnControlsShifted(object? sender, EventArgs e)
     {
         if (_disposed) return;
+        var hardware = _hardwareViewModel;
+        var selected = _controlsViewModel?.Selected switch
+        {
+            SliderItemViewModel s when hardware is not null => (Slider: true, Index: hardware.Sliders.IndexOf(s)),
+            ButtonItemViewModel b when hardware is not null => (Slider: false, Index: hardware.Buttons.IndexOf(b)),
+            _ => (Slider: false, Index: -1),
+        };
         if (_slidersViewModel is { } sliders)
         {
             sliders.Reload();
@@ -168,6 +177,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             sliders.SeedLiveLevels(_runtime.GetSliderLevel);
         }
         _buttonsViewModel?.Reload();
+        if (_controlsViewModel is not { } controls || selected.Index < 0) return;
+        if (selected.Slider && selected.Index < controls.Sliders.Items.Count) controls.Select(controls.Sliders.Items[selected.Index]);
+        else if (!selected.Slider && selected.Index < controls.Buttons.Items.Count) controls.Select(controls.Buttons.Items[selected.Index]);
     }
 
     // ── Runtime / engine event handlers (any thread) ──────────────────────────

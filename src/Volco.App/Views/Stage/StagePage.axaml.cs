@@ -164,16 +164,16 @@ public partial class StagePage : UserControl
         if (!ReferenceEquals(_titleActions.Content, _hardwareActions)) _titleActions.Content = _hardwareActions;
     }
 
-    /// <summary>The side panel's rows (an interim layout until the combined inspector,
-    /// controller-page spec §4.3): while the controller's panel inspects something that isn't a
-    /// tile (Controller settings, a bus) it takes the height; else it is as tall as its card and the
-    /// tile's wiring, and the selected tile's inspector under it takes the rest.</summary>
+    /// <summary>The side panel (controller-page spec §4.3): Controller settings (or a bus) takes the
+    /// height under the device card; else the card and any inline question are as tall as they
+    /// are, and the selected tile's inspector (its Controls or Actions section, then its Hardware
+    /// section) takes the rest. A hardware test hides the tile's inspector (hardware-page spec §8).</summary>
     private void UpdateSidePanel()
     {
-        var panelInspects = HardwareSidePanel is not null
-                            && Hardware?.Inspected is not null and not (SliderWiringViewModel or ButtonWiringViewModel);
+        var panelInspects = HardwareSidePanel is not null && Hardware?.InspectedPanel is not null;
         _sidePanel.RowDefinitions[0].Height = panelInspects ? GridLength.Star : GridLength.Auto;
         _sidePanel.RowDefinitions[1].Height = panelInspects ? GridLength.Auto : GridLength.Star;
+        _inspector.IsVisible = !panelInspects && Hardware is not { IsTesting: true };
     }
 
     /// <summary>The leave prompt's card over the stage while one is open; the focus moves into it.</summary>
@@ -215,7 +215,7 @@ public partial class StagePage : UserControl
         StageTransitions.Prepare(_case);
         _case.Classes.Set("testing", testing);
         this.FindControl<Control>("TestBand")!.IsVisible = testing;
-        _inspector.IsVisible = !testing;
+        UpdateSidePanel();
     }
 
     /// <summary>The save bar (hardware-page spec §6.5) shows while the draft is unsaved.</summary>

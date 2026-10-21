@@ -156,9 +156,10 @@
       <hwviews:SaveBar Name="SaveBarHost" Grid.Row="1" IsVisible="False"/>
       </Grid>
 
-      <!-- The side panel; only its body scrolls. The controller's panel (HardwareSidePanel: the
-           device card and, for Controller settings, its inspector) sits over the selected tile's
-           inspector. -->
+      <!-- The side panel (controller-page spec §4.3); only its body scrolls. The controller's panel
+           (HardwareSidePanel: the device card, inline questions and, when selected, Controller
+           settings) sits over the selected tile's inspector, whose sections are Controls or
+           Actions, then Hardware. -->
       <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
         <Grid Name="SidePanel" RowDefinitions="Auto,*">
           <ContentControl Name="SidePanelHost"/>

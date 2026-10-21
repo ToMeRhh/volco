@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:hwviews="using:Volco.App.Views.Hardware"
+             xmlns:inspector="using:Volco.App.Views.Inspector"
+             x:Class="Volco.App.Views.Inspector.HardwareSection"
+             x:DataType="inspector:HardwareSection">
+  <!-- The inspector's Hardware section (controller-page spec §4.3): a header with its summary
+       ("GPIO 33") and the danger mark while the draft has a problem with the control, over the
+       control's wiring (its pins, its light, Remove). A control the controller lacks says so instead. -->
+  <StackPanel Classes="InspectorGroup">
+    <ToggleButton Name="HardwareHeader" Classes="GroupHeader"
+                  IsChecked="{Binding $parent[inspector:HardwareSection].IsOpen, Mode=TwoWay}">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+        <TextBlock Classes="GroupLabel" Text="Hardware"/>
+        <PathIcon Name="HardwareProblemMark" Grid.Column="1" Classes="GroupProblem" Data="{StaticResource Icon.Status.Warning}"
+                  IsVisible="{Binding $parent[inspector:HardwareSection].HasProblem}"
+                  ToolTip.Tip="This control's wiring has a problem"/>
+        <TextBlock Name="HardwareSummaryText" Grid.Column="2" Classes="Caption GroupSummary"
+                   Text="{Binding $parent[inspector:HardwareSection].Summary}"/>
+        <PathIcon Grid.Column="3" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
+      </Grid>
+    </ToggleButton>
+    <Panel Name="HardwareBody" IsVisible="{Binding $parent[inspector:HardwareSection].IsOpen}">
+      <Border Name="NotOnControllerPanel" Classes="InspectorRows"
+              IsVisible="{Binding $parent[inspector:HardwareSection].IsMissing}">
+        <Grid Classes="InspectorRow">
+          <TextBlock Name="NotOnControllerText" Classes="Secondary" VerticalAlignment="Center" Text="Not on this controller"/>
+        </Grid>
+      </Border>
+      <!-- A control the controller lacks isn't in the draft, so it has no wiring -->
+      <ContentControl Name="WiringContent" Content="{Binding $parent[inspector:HardwareSection].Wiring}">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="{x:Type hw:SliderWiringViewModel}" x:DataType="hw:SliderWiringViewModel">
+            <hwviews:SliderWiringInspector/>
+          </DataTemplate>
+          <DataTemplate DataType="{x:Type hw:ButtonWiringViewModel}" x:DataType="hw:ButtonWiringViewModel">
+            <hwviews:ButtonWiringInspector/>
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Panel>
+  </StackPanel>
+</UserControl>

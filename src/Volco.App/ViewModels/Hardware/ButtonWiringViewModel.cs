@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Controller;
@@ -7,41 +6,42 @@ using Volco.Core.Controller.Proto;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// The Hardware inspector of a button (hardware-page spec §6.2): "Button N" with its main action
-/// (from Controls), its pin, its light (None / LED / 2 LEDs / Screen, which reshapes only the rows
-/// under it) and Remove. Every edit goes into the draft of one button; the Hardware view model
-/// refreshes it after every draft change and disposes it when the selection moves.
+/// The Hardware section of a button's inspector (controller-page spec §4.3, hardware-page spec
+/// §6.2): its pin, its light (None / LED / 2 LEDs / Screen, which reshapes only the rows under it)
+/// and Remove, with the collapsed section's summary. Every edit goes into the draft of one button;
+/// the Hardware view model refreshes it after every draft change and drops it when the selection moves.
 /// </summary>
-public sealed partial class ButtonWiringViewModel : ObservableObject, IDisposable
+public sealed partial class ButtonWiringViewModel : ObservableObject
 {
-    private readonly ButtonItemViewModel _item;
     private readonly ControllerViewModel _controller;
 
     internal ButtonWiringViewModel(int index, ButtonItemViewModel item, ControllerViewModel controller,
                                    Func<PinOwnerKind, PinFieldViewModel> pin, Action remove)
     {
         Index = index;
-        _item = item;
+        Item = item;
         _controller = controller;
         Pin = pin(PinOwnerKind.Button);
         LightPin = pin(PinOwnerKind.Light);
         LightAPin = pin(PinOwnerKind.LightA);
         LightBPin = pin(PinOwnerKind.LightB);
         RemoveCommand = new RelayCommand(remove);
-        _item.PropertyChanged += OnItemPropertyChanged;
     }
 
     /// <summary>The draft button (0-based).</summary>
     public int Index { get; }
 
     /// <summary>The Controls item it draws.</summary>
-    public ButtonItemViewModel Item => _item;
+    public ButtonItemViewModel Item { get; }
 
     /// <summary>"Button N".</summary>
     public string Title => $"Button {Index + 1}";
 
-    /// <summary>Its main action, as its tile reads on Controls ("Toggles Speakers / Headphones").</summary>
-    public string Subtitle => _item.MainLabel;
+    /// <summary>The collapsed section's summary: the pin and the light's wiring ("GPIO 5 · LED 12").</summary>
+    [ObservableProperty] private string _summary = "";
+
+    /// <summary>The draft has a problem with this button: the section's danger mark.</summary>
+    [ObservableProperty] private bool _hasProblem;
 
     public PinFieldViewModel Pin { get; }
     public PinFieldViewModel LightPin { get; }
@@ -159,11 +159,4 @@ public sealed partial class ButtonWiringViewModel : ObservableObject, IDisposabl
                                      nameof(HasLeds), nameof(LitWhenHigh), nameof(LitWhenLow), nameof(BusIndex), nameof(AddressIndex) })
             OnPropertyChanged(name);
     }
-
-    private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(ButtonItemViewModel.MainLabel) or null or "") OnPropertyChanged(nameof(Subtitle));
-    }
-
-    public void Dispose() => _item.PropertyChanged -= OnItemPropertyChanged;
 }

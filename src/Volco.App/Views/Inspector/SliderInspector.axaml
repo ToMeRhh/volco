@@ -3,9 +3,11 @@
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:conv="using:Volco.App.Converters"
              xmlns:stage="using:Volco.App.Views.Stage"
+             xmlns:inspector="using:Volco.App.Views.Inspector"
              x:Class="Volco.App.Views.Inspector.SliderInspector"
              x:DataType="vm:SliderItemViewModel">
-  <!-- The selected slider (spec §5.1): its name, what it controls, and its response. -->
+  <!-- The selected slider (controller-page spec §4.3): its name, then the Controls section (what
+       it controls, its response) and the Hardware section (its pin, Remove). -->
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
       <TextBlock Name="HeadingText" Classes="InspectorKind" Text="{Binding Heading}"/>
@@ -30,91 +32,123 @@
           </Grid>
         </Border>
 
-        <Border Classes="InspectorRows">
-          <Button Name="ControlsRow" Classes="InspectorRow"
-                  Command="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).OpenTargetCommand}"
-                  CommandParameter="{Binding}">
-            <Grid ColumnDefinitions="78,Auto,*,Auto">
-              <TextBlock Classes="RowLabel" Text="Controls"/>
-              <Border Grid.Column="1" Classes="RowIcon">
-                <Panel>
-                  <PathIcon Data="{Binding TargetIconKey, Converter={x:Static conv:IconConverters.Resource}}"
-                            IsVisible="{Binding !HasAppIcon}"/>
-                  <Image Name="TargetAppIcon" Width="16" Height="16" Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
-                </Panel>
-              </Border>
-              <TextBlock Name="TargetText" Grid.Column="2" Classes="RowValue" Classes.none="{Binding IsNotSetUp}"
-                         Text="{Binding TargetLabel}"/>
-              <PathIcon Grid.Column="3" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+        <!-- Controls (open): what it controls and its response; a slider only the draft has is
+             set up once the controller has it -->
+        <StackPanel Name="ControlsSection" Classes="InspectorGroup">
+          <ToggleButton Name="ControlsHeader" Classes="GroupHeader"
+                        IsChecked="{Binding $parent[stage:StagePage].Hardware.Sections.SliderControlsOpen, Mode=TwoWay, FallbackValue=True}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="GroupLabel" Text="Controls"/>
+              <PathIcon Grid.Column="1" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
             </Grid>
-          </Button>
-        </Border>
+          </ToggleButton>
+          <Panel Name="ControlsBody"
+                 IsVisible="{Binding $parent[stage:StagePage].Hardware.Sections.SliderControlsOpen, FallbackValue=True}">
+            <Border Name="SaveFirstPanel" Classes="InspectorRows SaveFirst" IsVisible="{Binding IsNew}">
+              <StackPanel Spacing="10">
+                <TextBlock Name="SaveFirstText" Classes="Secondary" TextWrapping="Wrap" Text="Save to controller to set it up"/>
+                <Button Name="SaveFirstButton" Classes="Primary" HorizontalAlignment="Left" Content="Save to controller"
+                        Command="{Binding $parent[stage:StagePage].Hardware.SaveCommand, FallbackValue={x:Null}}"/>
+              </StackPanel>
+            </Border>
+            <StackPanel Name="ControlsContent" Classes="InspectorGroupBody" IsVisible="{Binding !IsNew}">
+              <Border Classes="InspectorRows">
+                <Button Name="ControlsRow" Classes="InspectorRow"
+                        Command="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).OpenTargetCommand}"
+                        CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="78,Auto,*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Controls"/>
+                    <Border Grid.Column="1" Classes="RowIcon">
+                      <Panel>
+                        <PathIcon Data="{Binding TargetIconKey, Converter={x:Static conv:IconConverters.Resource}}"
+                                  IsVisible="{Binding !HasAppIcon}"/>
+                        <Image Name="TargetAppIcon" Width="16" Height="16" Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
+                      </Panel>
+                    </Border>
+                    <TextBlock Name="TargetText" Grid.Column="2" Classes="RowValue" Classes.none="{Binding IsNotSetUp}"
+                               Text="{Binding TargetLabel}"/>
+                    <PathIcon Grid.Column="3" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+                  </Grid>
+                </Button>
+              </Border>
 
-        <!-- Response: today's per-slider settings, collapsed -->
-        <Border Name="ResponseSection" Classes="InspectorSection">
-          <StackPanel>
-            <ToggleButton Name="ResponseToggle" Classes="SectionHeader" IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
-              <Grid ColumnDefinitions="*,Auto,Auto">
-                <TextBlock Text="Response" FontWeight="Medium"/>
-                <TextBlock Name="ResponseSummaryText" Grid.Column="1" Classes="Caption" Margin="0,0,8,0"
-                           VerticalAlignment="Center" Text="{Binding ResponseSummary}"/>
-                <PathIcon Grid.Column="2" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
-              </Grid>
-            </ToggleButton>
-            <StackPanel Name="ResponseBody" Classes="SectionBody" IsVisible="{Binding IsAdvancedOpen}">
-              <ListBox Name="CurveList" Classes="Curves" SelectedIndex="{Binding CurveIndex, Mode=TwoWay}">
-                <ListBox.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <UniformGrid Columns="4"/>
-                  </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                <ListBoxItem ToolTip.Tip="Linear">
-                  <StackPanel Spacing="3">
-                    <Path Classes="CurveGraph" Data="M1,19 L19,1"/>
-                    <TextBlock Text="Linear"/>
+              <!-- Response: today's per-slider settings, collapsed -->
+              <Border Name="ResponseSection" Classes="InspectorSection">
+                <StackPanel>
+                  <ToggleButton Name="ResponseToggle" Classes="SectionHeader" IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                      <TextBlock Text="Response" FontWeight="Medium"/>
+                      <TextBlock Name="ResponseSummaryText" Grid.Column="1" Classes="Caption" Margin="0,0,8,0"
+                                 VerticalAlignment="Center" Text="{Binding ResponseSummary}"/>
+                      <PathIcon Grid.Column="2" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
+                    </Grid>
+                  </ToggleButton>
+                  <StackPanel Name="ResponseBody" Classes="SectionBody" IsVisible="{Binding IsAdvancedOpen}">
+                    <ListBox Name="CurveList" Classes="Curves" SelectedIndex="{Binding CurveIndex, Mode=TwoWay}">
+                      <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <UniformGrid Columns="4"/>
+                        </ItemsPanelTemplate>
+                      </ListBox.ItemsPanel>
+                      <ListBoxItem ToolTip.Tip="Linear">
+                        <StackPanel Spacing="3">
+                          <Path Classes="CurveGraph" Data="M1,19 L19,1"/>
+                          <TextBlock Text="Linear"/>
+                        </StackPanel>
+                      </ListBoxItem>
+                      <ListBoxItem ToolTip.Tip="Logarithmic">
+                        <StackPanel Spacing="3">
+                          <Path Classes="CurveGraph" Data="M1,19 C1,8 8,1 19,1"/>
+                          <TextBlock Text="Log"/>
+                        </StackPanel>
+                      </ListBoxItem>
+                      <ListBoxItem ToolTip.Tip="Exponential">
+                        <StackPanel Spacing="3">
+                          <Path Classes="CurveGraph" Data="M1,19 C12,19 19,12 19,1"/>
+                          <TextBlock Text="Exp"/>
+                        </StackPanel>
+                      </ListBoxItem>
+                      <ListBoxItem ToolTip.Tip="S-curve">
+                        <StackPanel Spacing="3">
+                          <Path Classes="CurveGraph" Data="M1,19 C10,19 10,1 19,1"/>
+                          <TextBlock Text="S-curve"/>
+                        </StackPanel>
+                      </ListBoxItem>
+                    </ListBox>
+                    <Grid ColumnDefinitions="90,*,44">
+                      <TextBlock Text="Dead zone" Classes="Secondary" VerticalAlignment="Center"/>
+                      <Slider Name="DeadZoneSlider" Grid.Column="1" Minimum="0" Maximum="0.45"
+                              Value="{Binding DeadZonePercent, Mode=TwoWay}"/>
+                      <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
+                                 Text="{Binding DeadZonePercent, StringFormat={}{0:P0}}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="90,*,44">
+                      <TextBlock Text="Smoothing" Classes="Secondary" VerticalAlignment="Center"/>
+                      <Slider Name="SmoothingSlider" Grid.Column="1" Minimum="0" Maximum="0.95"
+                              Value="{Binding SmoothingFactor, Mode=TwoWay}"/>
+                      <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
+                                 Text="{Binding SmoothingFactor, StringFormat={}{0:P0}}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="Reverse" Classes="Secondary" VerticalAlignment="Center"/>
+                      <ToggleSwitch Name="InvertSwitch" Grid.Column="1" OnContent="" OffContent=""
+                                    IsChecked="{Binding Invert, Mode=TwoWay}"/>
+                    </Grid>
                   </StackPanel>
-                </ListBoxItem>
-                <ListBoxItem ToolTip.Tip="Logarithmic">
-                  <StackPanel Spacing="3">
-                    <Path Classes="CurveGraph" Data="M1,19 C1,8 8,1 19,1"/>
-                    <TextBlock Text="Log"/>
-                  </StackPanel>
-                </ListBoxItem>
-                <ListBoxItem ToolTip.Tip="Exponential">
-                  <StackPanel Spacing="3">
-                    <Path Classes="CurveGraph" Data="M1,19 C12,19 19,12 19,1"/>
-                    <TextBlock Text="Exp"/>
-                  </StackPanel>
-                </ListBoxItem>
-                <ListBoxItem ToolTip.Tip="S-curve">
-                  <StackPanel Spacing="3">
-                    <Path Classes="CurveGraph" Data="M1,19 C10,19 10,1 19,1"/>
-                    <TextBlock Text="S-curve"/>
-                  </StackPanel>
-                </ListBoxItem>
-              </ListBox>
-              <Grid ColumnDefinitions="90,*,44">
-                <TextBlock Text="Dead zone" Classes="Secondary" VerticalAlignment="Center"/>
-                <Slider Name="DeadZoneSlider" Grid.Column="1" Minimum="0" Maximum="0.45"
-                        Value="{Binding DeadZonePercent, Mode=TwoWay}"/>
-                <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
-                           Text="{Binding DeadZonePercent, StringFormat={}{0:P0}}"/>
-              </Grid>
-              <Grid ColumnDefinitions="90,*,44">
-                <TextBlock Text="Smoothing" Classes="Secondary" VerticalAlignment="Center"/>
-                <Slider Name="SmoothingSlider" Grid.Column="1" Minimum="0" Maximum="0.95"
-                        Value="{Binding SmoothingFactor, Mode=TwoWay}"/>
-                <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
-                           Text="{Binding SmoothingFactor, StringFormat={}{0:P0}}"/>
-              </Grid>
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="Reverse" Classes="Secondary" VerticalAlignment="Center"/>
-                <ToggleSwitch Name="InvertSwitch" Grid.Column="1" OnContent="" OffContent=""
-                              IsChecked="{Binding Invert, Mode=TwoWay}"/>
-              </Grid>
+                </StackPanel>
+              </Border>
             </StackPanel>
-          </StackPanel>
-        </Border>
+          </Panel>
+        </StackPanel>
+
+        <!-- Hardware (collapsed): its pin and Remove, from the controller draft -->
+        <inspector:HardwareSection Name="HardwareSection"
+                                   IsVisible="{Binding $parent[stage:StagePage].Hardware, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   IsOpen="{Binding $parent[stage:StagePage].Hardware.Sections.SliderHardwareOpen, Mode=TwoWay, FallbackValue=False}"
+                                   Wiring="{Binding $parent[stage:StagePage].Hardware.InspectedSlider, FallbackValue={x:Null}}"
+                                   Summary="{Binding $parent[stage:StagePage].Hardware.InspectedSlider.Summary, FallbackValue=''}"
+                                   HasProblem="{Binding $parent[stage:StagePage].Hardware.InspectedSlider.HasProblem, FallbackValue=False}"
+                                   IsMissing="{Binding IsMissing}"/>
       </StackPanel>
     </ScrollViewer>
   </DockPanel>
