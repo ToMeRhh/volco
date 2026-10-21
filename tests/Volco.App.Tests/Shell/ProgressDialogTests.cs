@@ -62,8 +62,9 @@ public sealed class ProgressDialogTests : IDisposable
     }
 
     /// <summary>The settings window on General over Volco's DIY copy on COM3, with Volco's firmware
-    /// bundled, greeted by a controller running <paramref name="firmwareId"/> that holds the copy.</summary>
-    private static Shown Show(string firmwareId = "dev")
+    /// bundled, greeted by a controller running <paramref name="firmwareId"/> that holds the copy.
+    /// Without <paramref name="greet"/> the port opens and nothing answers.</summary>
+    private static Shown Show(string firmwareId = "dev", bool greet = true)
     {
         var rig = new TestRig(options: TestRig.NoGrace with { Firmware = Catalog, SilentAfter = TimeSpan.FromSeconds(5) });
         var c = rig.Config.Config;
@@ -77,8 +78,8 @@ public sealed class ProgressDialogTests : IDisposable
         var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 720 };
         window.Show();
         rig.Connection!.SetStatus(TransportStatus.Open);
-        rig.Connection.RaiseMessage(Hello(firmwareId, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob)));
-        Until(window, () => vm.Controller.InSync && vm.Controller.CanUseFirmware);
+        if (greet) rig.Connection.RaiseMessage(Hello(firmwareId, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob)));
+        Until(window, () => (!greet || vm.Controller.InSync) && vm.Controller.CanUseFirmware);
         return new Shown(window, rig, vm, flasher);
     }
 
@@ -250,12 +251,13 @@ public sealed class ProgressDialogTests : IDisposable
         Assert.EndsWith("Try again.", In<TextBlock>(s.Banner, "BannerText").Text);
     }
 
-    /// <summary>A check that finds no Volco firmware offers Install firmware, through the install
-    /// confirmation, worded for a board that has none of Volco's firmware.</summary>
+    /// <summary>A check on a board that never answered as Volco, which finds no Volco firmware,
+    /// offers Install firmware, through the install confirmation, worded for a board that has none of
+    /// Volco's firmware (not a warning: nothing of Volco's is erased).</summary>
     [AvaloniaFact]
     public void ACheckWithoutVolcoFirmwareOffersInstall()
     {
-        using var s = Show();
+        using var s = Show(greet: false);
         s.Flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         s.Vm.Controller.CheckFirmwareCommand.Execute(null);
         Until(s.Window, () => s.Progress.IsOpen);
@@ -278,6 +280,8 @@ public sealed class ProgressDialogTests : IDisposable
         Assert.Equal("Install Volco's firmware on this ESP32? Anything else on it is replaced.",
                      In<TextBlock>(confirm, "ReinstallQuestion").Text);
         Assert.Equal("Install", In<Button>(confirm, "ConfirmReinstallButton").Content);
+        Assert.Contains("Primary", In<Button>(confirm, "ConfirmReinstallButton").Classes);
+        Assert.DoesNotContain("Danger", In<Button>(confirm, "ConfirmReinstallButton").Classes);
         Assert.Equal("probe COM3", s.Flasher.Calls.Single());
 
         Click(s, In<Button>(confirm, "ConfirmReinstallButton"));
@@ -285,6 +289,33 @@ public sealed class ProgressDialogTests : IDisposable
         Until(s.Window, () => s.Flasher.Calls.Count == 2 && s.Progress.IsOpen);
         Assert.Equal("flash COM3 Install", s.Flasher.Calls[1]);
         Assert.Equal("Installing firmware", s.Progress.Title);
+    }
+
+    /// <summary>A board that answered as Volco this run and then probes as another build runs a
+    /// different build of Volco's firmware: the next step is a reinstall, which warns that it erases
+    /// the stored setup.</summary>
+    [AvaloniaFact]
+    public void ACheckFindingAnotherVolcoBuildOffersAReinstall()
+    {
+        using var s = Show();
+        s.Flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        s.Vm.Controller.CheckFirmwareCommand.Execute(null);
+
+        Until(s.Window, () => s.Progress.IsDone);
+        Assert.Equal("This ESP32 runs a different build of Volco's firmware.", s.Progress.ResultText);
+        Assert.Equal(ProgressNextStep.ReinstallFirmware, s.Progress.NextStep);
+        var next = In<Button>(s.Overlay, "ProgressNextButton");
+        Until(s.Window, () => next.IsEffectivelyEnabled);
+        Assert.Equal("Reinstall firmware…", next.Content);
+
+        Click(s, next);
+
+        var confirm = s.Window.FindControl<Border>("ReinstallOverlay")!;
+        Assert.True(confirm.IsEffectivelyVisible);
+        Assert.Equal("Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.",
+                     In<TextBlock>(confirm, "ReinstallQuestion").Text);
+        Assert.Equal("Reinstall", In<Button>(confirm, "ConfirmReinstallButton").Content);
+        Assert.Contains("Danger", In<Button>(confirm, "ConfirmReinstallButton").Classes);
     }
 
     /// <summary>On a board running Volco's firmware the confirmation is a reinstall's: it erases the
@@ -300,6 +331,7 @@ public sealed class ProgressDialogTests : IDisposable
         Assert.Equal("Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.",
                      In<TextBlock>(confirm, "ReinstallQuestion").Text);
         Assert.Equal("Reinstall", In<Button>(confirm, "ConfirmReinstallButton").Content);
+        Assert.Contains("Danger", In<Button>(confirm, "ConfirmReinstallButton").Classes);
     }
 
     [AvaloniaFact]
@@ -338,10 +370,15 @@ public sealed class ProgressDialogTests : IDisposable
         Until(s.Window, () => !s.Overlay.IsVisible);   // it closes by itself
         Assert.False(s.Vm.Controller.IsDirty);
         Assert.False(s.Banner.IsVisible);
+        // The save bar's Save went with the save bar: the focus goes back to the Controller page,
+        // not to the sidebar's status line.
+        Until(s.Window, () => s.Window.FocusManager?.GetFocusedElement() is Visual v
+                              && v.GetVisualAncestors().Contains(s.Window.CurrentPage!));
+        Assert.IsType<StagePage>(s.Window.CurrentPage);
     }
 
-    /// <summary>An install erases the setup: the dialog says it's done, and once closed the banner
-    /// asks how to start.</summary>
+    /// <summary>An install erases the setup: the dialog says it's done, offers to choose how to
+    /// start, and once closed the banner asks how to start.</summary>
     [AvaloniaFact]
     public void CloseLeavesTheBannerForWhatRemains()
     {
@@ -352,7 +389,7 @@ public sealed class ProgressDialogTests : IDisposable
 
         Until(s.Window, () => s.Progress.IsDone);
         Assert.Equal($"Installed. The controller is running firmware {Catalog.BundledVersion}.", s.Progress.ResultText);
-        Assert.Null(s.Progress.NextLabel);
+        Assert.Equal("Choose how to start", s.Progress.NextLabel);
         Until(s.Window, () => s.Vm.Controller.Banner.Kind == BannerKind.NotSetUpHasMirror);
         Assert.False(s.Banner.IsVisible);   // under the dialog
 
@@ -362,6 +399,30 @@ public sealed class ProgressDialogTests : IDisposable
         Assert.True(s.Banner.IsVisible);
         Assert.Equal("Not set up yet · Volco has a saved copy for it.", In<TextBlock>(s.Banner, "BannerText").Text);
         Assert.Equal("Choose how to start", In<Button>(s.Banner, "BannerAction").Content);
+    }
+
+    /// <summary>After an install the controller isn't set up: the dialog's next step opens the
+    /// setup chooser on the Controller page.</summary>
+    [AvaloniaFact]
+    public void AnInstallOffersChooseHowToStart()
+    {
+        using var s = Show();
+        var before = s.Rig.Connection!;
+        Install(s);
+        Reboot(s, before, ControllerConfigState.None, 0);
+
+        Until(s.Window, () => s.Progress.IsDone);
+        Assert.Equal(ProgressNextStep.ChooseHowToStart, s.Progress.NextStep);
+        var next = In<Button>(s.Overlay, "ProgressNextButton");
+        Until(s.Window, () => next.IsEffectivelyVisible && next.IsEffectivelyEnabled);
+        Assert.Equal("Choose how to start", next.Content);
+        Assert.Equal("general", s.NavTag);
+
+        Click(s, next);
+
+        Assert.False(s.Progress.IsOpen);
+        Assert.Equal("controller", s.NavTag);
+        Until(s.Window, () => s.Vm.Hardware.ShowChooser);
     }
 
     [AvaloniaFact]

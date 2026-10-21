@@ -62,7 +62,7 @@ The header is today's Controls header ("Slider N" with its name field; "Button N
 - Controls settings save at once, as today.
 - Controller changes (Hardware sections, Add, Remove, Controller settings, the chooser) go into the controller draft. The save bar ("N changes not saved · Saving restarts the controller · Discard · Save to controller") appears under the drawing only while the draft is dirty.
 - Removing a control and saving shifts Volco's settings as the redesign branch does (spec §6.5).
-- **Volco's saved copy in the setup chooser is sent to the controller at once** (with the usual restart, in the progress dialog), since the controller has run it before; presets and Start empty open a draft (user, 2026-10-21).
+- **Volco's saved copy in the setup chooser is sent to the controller at once** (with the usual restart, in the progress dialog), since the controller has run it before; presets and Start empty open a draft (user, 2026-10-21). Picking it discards the draft first (which ends a Start over); a controller that already holds the copy gets nothing, so it doesn't restart for nothing. The card is disabled while it can't be sent: "Connect the controller first" without a ready controller, "Wait for the current operation to finish" while a save, a test or a firmware operation runs.
 - Leaving the Controller page for General with a dirty draft asks first (the leave prompt), as Hardware did. Hiding the window doesn't.
 
 ## 5. Controller status: three levels (user, 2026-10-21, revised)
@@ -75,7 +75,15 @@ The device card in the sidebar went: it was easy to miss and cut off. The status
 
 Actions that belong to the drawing (Fix it, Test your controller now, Load a preset…, Start over…, Choose how to start) switch to the Controller page first, then act, and close a Controller page dialog open over the drawing. The Connection, Compare, Reinstall and leave-prompt dialogs stay window-level.
 
-Firmware wording (user, 2026-10-21): when Check firmware finds no matching Volco firmware the message reads "This ESP32 doesn't have Volco's firmware yet." and the button is **Install firmware** (not Reinstall); "Reinstall firmware…" stays in the status menu for a board that has it.
+Firmware wording (user, 2026-10-21; refined in the round-2 review): Check firmware has three outcomes that offer an install, and only one of them is a fresh install:
+
+- **No Volco firmware**: the board finds no matching build and no controller has said Hello this run (it never answered as Volco). "This ESP32 doesn't have Volco's firmware yet.", the button is **Install firmware**, and the confirmation asks "Install Volco's firmware on this ESP32? Anything else on it is replaced." with an **Install** button in the primary (not danger) style.
+- **A different build of Volco's firmware**: no matching build, but a controller said Hello this run. "This ESP32 runs a different build of Volco's firmware.", the button is **Reinstall firmware…**, and the confirmation is the reinstall's ("Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.", **Reinstall**, danger style).
+- **Volco's firmware that didn't answer** after the check's reset: "Volco's firmware is installed but didn't answer. Reinstall it?", with the same reinstall button and confirmation.
+
+The rule: the fresh-install wording only when the board has never sent a Volco Hello this run; anything else is a reinstall, which erases the stored setup. "Reinstall firmware…" stays in the status menu for a board that has Volco's firmware. After a successful install (the controller is then not set up), the progress dialog's next step is **Choose how to start**, which opens the setup chooser on the Controller page.
+
+The sidebar status line, when the status needs the user, says why in a word or two ("Not connected", "Port busy", "Update available", "Not set up", "Firmware too old", "Different setup", "Disconnected", else "Needs attention"); the full line is its tooltip. While an operation runs it shows the running step.
 
 ## 6. What goes
 

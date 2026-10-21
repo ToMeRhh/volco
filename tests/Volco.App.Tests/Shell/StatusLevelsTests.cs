@@ -177,7 +177,7 @@ public sealed class StatusLevelsTests : IDisposable
         Assert.Equal("No controller answers on COM3 · It may not have Volco's firmware yet.", s.BannerText);
         Assert.Equal(s.BannerText, ToolTip.GetTip(In<TextBlock>(s.Banner, "BannerText")));
         ActionShows(s, "Check firmware");
-        Assert.Equal("No controller answers on COM3", s.LineText);
+        Assert.Equal("Not connected", s.LineText);   // a word or two; the tooltip has the rest
         // The banner is across the top of the content area, above the page.
         var page = s.Window.FindControl<TransitioningContentControl>("PageHost")!;
         Assert.True(s.Banner.TranslatePoint(new Point(0, s.Banner.Bounds.Height), s.Window)!.Value.Y

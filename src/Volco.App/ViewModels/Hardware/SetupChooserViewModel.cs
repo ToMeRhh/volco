@@ -119,7 +119,9 @@ public sealed partial class SetupChooserViewModel : ObservableObject
     {
         var ok = _controller.CanStartNewDraft;
         _saved!.IsEnabled = ok;
-        _saved.ToolTip = ok ? null : "Connect the controller first";
+        _saved.ToolTip = ok ? null
+            : _controller.IsControllerReady ? "Wait for the current operation to finish"
+            : "Connect the controller first";
     }
 
     private void Pick(Action start)

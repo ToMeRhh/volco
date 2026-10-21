@@ -132,7 +132,9 @@ public partial class SettingsWindow : Window
         TrackFocus(_connectionOverlay, this.FindControl<Border>("ConnectionCard")!, StatusLineButton);
         TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!, StatusLineButton);
         TrackFocus(_leaveOverlay, this.FindControl<Border>("LeaveCard")!);
-        TrackFocus(_progressOverlay, _progressCard, StatusLineButton);
+        // The progress dialog's opener may be gone (the save bar's Save): the focus goes back to
+        // the Controller page when it shows, else to the status line.
+        TrackFocus(_progressOverlay, _progressCard, ControllerPageFocus);
         // At the end the focus moves to the next step (else Close), which can take it now.
         _hardware.Status.Progress.PropertyChanged += (_, e) =>
         {
@@ -239,6 +241,23 @@ public partial class SettingsWindow : Window
 
     /// <summary>The sidebar's status line, which opens the status menu.</summary>
     private Button? StatusLineButton() => this.FindControl<SidebarStatus>("StatusLine")?.LineButton;
+
+    /// <summary>On the Controller page, its first focusable control: the side panel's (the
+    /// inspector), else the drawing's; elsewhere, or when nothing there can take it, the status line.</summary>
+    private InputElement? ControllerPageFocus()
+    {
+        if (_stage is not null && ReferenceEquals(CurrentPage, _stage))
+        {
+            var roots = new Control?[] { _stage.HardwareSidePanel, _stage };
+            foreach (var root in roots)
+            {
+                var first = root?.GetVisualDescendants().OfType<InputElement>()
+                    .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+                if (CanFocus(first)) return first;
+            }
+        }
+        return StatusLineButton();
+    }
 
     /// <summary>Compare's card over the window while it is open.</summary>
     private void UpdateCompare()

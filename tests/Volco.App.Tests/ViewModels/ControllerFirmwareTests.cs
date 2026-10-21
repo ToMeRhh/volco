@@ -81,8 +81,48 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", vm.FirmwareMessage);
         Assert.Equal(vm.FirmwareMessage, vm.Failure);   // a warning: the card shows it
         Assert.True(vm.OfferInstall);                    // and its button is Install firmware
+        Assert.True(vm.OfferFreshInstall);               // nothing answered as Volco: a first install
+        Assert.Equal("Install", vm.InstallConfirmLabel);
+        Assert.Equal("Install Volco's firmware on this ESP32? Anything else on it is replaced.", vm.InstallQuestion);
         Assert.False(vm.IsFirmwareRunning);
         Assert.Equal("probe COM3", _flasher.Calls.Single());
+    }
+
+    /// <summary>The three probe outcomes that offer an install: only a board that never answered as
+    /// Volco this run gets the fresh-install wording; another build and a silent Volco firmware get
+    /// the reinstall's, which erases the stored setup.</summary>
+    [Fact]
+    public void Check_AfterAVolcoHello_IsADifferentBuild_AndAReinstall()
+    {
+        var vm = Vm();
+        _rig.Connection!.SetStatus(TransportStatus.Open);
+        _rig.Connection.RaiseMessage(Hello("0000aaaa1111"));
+        _ui.RunAll();
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.Equal("This ESP32 runs a different build of Volco's firmware.", vm.FirmwareMessage);
+        Assert.True(vm.OfferInstall);
+        Assert.False(vm.OfferFreshInstall);
+        Assert.Equal("Reinstall", vm.InstallConfirmLabel);
+        Assert.StartsWith("Reinstalling erases the setup", vm.InstallQuestion);
+    }
+
+    [Fact]
+    public void Check_FindingSilentVolcoFirmware_IsAReinstall()
+    {
+        var vm = Vm();
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.VolcoMatches);
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => _flasher.Calls.Count == 1 && !_rig.Runtime.IsSuspended);
+        Thread.Sleep(50);
+        _time.Advance(FirmwareService.HelloWait);
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.Equal("Volco's firmware is installed but didn't answer. Reinstall it?", vm.FirmwareMessage);
+        Assert.True(vm.OfferInstall);
+        Assert.False(vm.OfferFreshInstall);
+        Assert.Equal("Reinstall", vm.InstallConfirmLabel);
+        Assert.StartsWith("Reinstalling erases the setup", vm.InstallQuestion);
     }
 
     [Fact]

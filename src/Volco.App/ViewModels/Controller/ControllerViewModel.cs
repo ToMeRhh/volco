@@ -158,7 +158,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     /// <summary>A new draft could be edited: the controller is ready and nothing (a save, a test,
     /// a flash) runs. Start over is offered only then.</summary>
-    internal bool CanStartNewDraft => _runtime.ControllerState == ControllerState.Ready && !IsSaving && !IsTesting && !Busy;
+    internal bool CanStartNewDraft => IsControllerReady && !IsSaving && !IsTesting && !Busy;
+
+    /// <summary>The controller answers and its session is ready (whatever runs on it).</summary>
+    internal bool IsControllerReady => _runtime.ControllerState == ControllerState.Ready;
 
     private bool _setupChanged;
 

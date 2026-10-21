@@ -171,7 +171,9 @@
                      Text="{Binding Hardware.Status.Controller.InstallQuestion}"/>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Name="CancelReinstallButton" Content="Cancel" Command="{Binding Hardware.Status.Controller.CancelInstallCommand}"/>
-            <Button Name="ConfirmReinstallButton" Classes="Danger" Content="{Binding Hardware.Status.Controller.InstallConfirmLabel}"
+            <Button Name="ConfirmReinstallButton" Classes.Danger="{Binding !Hardware.Status.Controller.OfferFreshInstall}"
+                    Classes.Primary="{Binding Hardware.Status.Controller.OfferFreshInstall}"
+                    Content="{Binding Hardware.Status.Controller.InstallConfirmLabel}"
                     Command="{Binding Hardware.Status.Controller.ConfirmInstallCommand}"/>
           </StackPanel>
         </StackPanel>

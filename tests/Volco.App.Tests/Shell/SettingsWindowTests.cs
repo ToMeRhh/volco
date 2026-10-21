@@ -93,7 +93,7 @@ public class SettingsWindowTests
         window.Show();
         var line = window.FindControl<Volco.App.Views.Hardware.SidebarStatus>("StatusLine")!;
 
-        Assert.Equal("Looking for your controller",
+        Assert.Equal("Not connected",
                      line.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "StatusText").Text);
     }
 

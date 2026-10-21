@@ -6,7 +6,10 @@ using Volco.Core.Runtime;
 namespace Volco.Core.Firmware;
 
 /// <param name="OfferInstall">The page offers Install next to the message.</param>
-public sealed record ProbeOutcome(ProbeResult? Result, string Message, bool OfferInstall);
+/// <param name="OfferFreshInstall">The offer is a first install: the board has never answered as a
+/// Volco controller this run, so nothing of Volco's is on it to erase. Otherwise it is a reinstall,
+/// which erases the setup stored on the controller.</param>
+public sealed record ProbeOutcome(ProbeResult? Result, string Message, bool OfferInstall, bool OfferFreshInstall = false);
 
 public sealed record FlashOutcome(bool Succeeded, string Message);
 
@@ -20,6 +23,9 @@ public sealed class FirmwareService
     public static readonly TimeSpan HelloWait = TimeSpan.FromSeconds(10);
     public const string SerialOnlyMessage = "Plug the controller in with USB and choose \"USB cable\" under Connection.";
     public const string DisconnectedMessage = "Volco is disconnected. Press Connect first.";
+    public const string NoVolcoFirmwareMessage = "This ESP32 doesn't have Volco's firmware yet.";
+    public const string DifferentBuildMessage = "This ESP32 runs a different build of Volco's firmware.";
+    public const string SilentMessage = "Volco's firmware is installed but didn't answer. Reinstall it?";
 
     private readonly VolcoRuntime _runtime;
     private readonly IFirmwareFlasher? _flasher;
@@ -27,6 +33,7 @@ public sealed class FirmwareService
     private readonly TimeProvider _time;
     private readonly Func<Action, Task> _configThread;
     private int _busy;
+    private int _seenHello;
 
     /// <param name="configThread">Runs a config edit on the thread that owns the config (the UI
     /// thread in the app); by default the edit runs inline.</param>
@@ -38,7 +45,13 @@ public sealed class FirmwareService
         _catalog = catalog;
         _time = time ?? TimeProvider.System;
         _configThread = configThread ?? (a => { a(); return Task.CompletedTask; });
+        if (_runtime.ControllerConfig.LastHello is not null) _seenHello = 1;
+        _runtime.HelloReceived += (_, _) => Volatile.Write(ref _seenHello, 1);
     }
+
+    /// <summary>A controller has said Hello this run: a board the probe finds without the bundled
+    /// build runs another build of Volco's firmware, not none.</summary>
+    public bool SeenVolcoHello => Volatile.Read(ref _seenHello) != 0;
 
     /// <summary>This build can flash: it has a flasher and bundled firmware.</summary>
     public bool IsAvailable => _flasher is not null && _catalog.HasFirmware;
@@ -91,7 +104,7 @@ public sealed class FirmwareService
                 }
                 catch (OperationCanceledException)
                 {
-                    return new(result, "Volco's firmware is installed but didn't answer. Reinstall it?", true);
+                    return new(result, SilentMessage, true);
                 }
                 finally { _runtime.HelloReceived -= OnHello; }
             }
@@ -99,7 +112,10 @@ public sealed class FirmwareService
             {
                 ProbeKind.NoDevice => new(result, result.Message ?? $"No ESP32 found on {port}.", false),
                 ProbeKind.UnsupportedChip => new(result, new UnsupportedChipException(result.ChipName ?? "unknown chip").Message, false),
-                _ => new(result, "This ESP32 doesn't have Volco's firmware yet.", true),
+                // Another build of Volco's (a Hello came this run) loses its stored setup to a
+                // reinstall; a board that never answered as Volco has nothing of Volco's on it.
+                _ when SeenVolcoHello => new(result, DifferentBuildMessage, true),
+                _ => new(result, NoVolcoFirmwareMessage, true, OfferFreshInstall: true),
             };
         }
         finally { Exit(); }

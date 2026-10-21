@@ -8,7 +8,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>The progress dialog's next step once its operation ended.</summary>
-public enum ProgressNextStep { None, TestNow, TryAgain, InstallFirmware }
+public enum ProgressNextStep { None, TestNow, TryAgain, InstallFirmware, ReinstallFirmware, ChooseHowToStart }
 
 /// <summary>
 /// The status's third level (controller-page spec §5, "Running, don't interrupt"): a modal dialog
@@ -88,12 +88,14 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
     private ProgressNextStep _nextStep;
 
     /// <summary>The next step's button: "Test your controller now", "Try again", "Install firmware",
-    /// or null for none.</summary>
+    /// "Reinstall firmware…", "Choose how to start", or null for none.</summary>
     public string? NextLabel => NextStep switch
     {
         ProgressNextStep.TestNow => "Test your controller now",
         ProgressNextStep.TryAgain => "Try again",
         ProgressNextStep.InstallFirmware => "Install firmware",
+        ProgressNextStep.ReinstallFirmware => "Reinstall firmware…",
+        ProgressNextStep.ChooseHowToStart => "Choose how to start",
         _ => null,
     };
 
@@ -182,8 +184,12 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
             _ => LinkActivity.CheckingFirmware,
         };
         if (c.OfferTest) OfferTest();
-        else if (c.OfferInstall)   // a check found no Volco firmware: Install asks first, as from the banner
-            SetNext(ProgressNextStep.InstallFirmware, () => c.InstallFirmwareCommand.Execute(null), () => c.CanUseFirmware);
+        else if (c.OfferInstall)   // a check offers an install: it asks first, as from the banner
+            SetNext(c.OfferFreshInstall ? ProgressNextStep.InstallFirmware : ProgressNextStep.ReinstallFirmware,
+                    () => c.InstallFirmwareCommand.Execute(null), () => c.CanUseFirmware);
+        else if (operation == Operation.Install && c.FirmwareMessageTone == LinkTone.Good && c.IsNotSetUp)
+            // The install left the controller without a setup: the chooser, on the Controller page.
+            SetNext(ProgressNextStep.ChooseHowToStart, _toController, null);
         else if (c.FirmwareMessageTone == LinkTone.Danger)
             SetNext(ProgressNextStep.TryAgain, () => c.RetryFirmware(activity), () => c.CanUseFirmware);
     }

@@ -121,6 +121,22 @@ public sealed class FirmwareServiceTests : IDisposable
         Assert.Single(reports);
         Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", outcome.Message);
         Assert.True(outcome.OfferInstall);
+        Assert.True(outcome.OfferFreshInstall);   // nothing of Volco's answered this run: a first install
+    }
+
+    /// <summary>A board that answered as a Volco controller this run, then probes as another build,
+    /// runs a different build of Volco's firmware: its install is a reinstall.</summary>
+    [Fact]
+    public async Task DifferentFirmware_AfterAVolcoHello_IsADifferentBuild()
+    {
+        Last.SetStatus(TransportStatus.Open);
+        Last.RaiseMessage(Hello("0000aaaa1111"));
+        await Until(() => _service.SeenVolcoHello);
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        var outcome = await _service.ProbeAsync("COM3", NoProgress);
+        Assert.Equal("This ESP32 runs a different build of Volco's firmware.", outcome.Message);
+        Assert.True(outcome.OfferInstall);
+        Assert.False(outcome.OfferFreshInstall);
     }
 
     [Theory]
@@ -146,6 +162,7 @@ public sealed class FirmwareServiceTests : IDisposable
         var outcome = await probe;
         Assert.Equal("This controller runs Volco's firmware 3f9c2a1b5d07.", outcome.Message);
         Assert.False(outcome.OfferInstall);
+        Assert.False(outcome.OfferFreshInstall);
     }
 
     [Fact]
@@ -159,6 +176,7 @@ public sealed class FirmwareServiceTests : IDisposable
         var outcome = await probe;
         Assert.Equal("Volco's firmware is installed but didn't answer. Reinstall it?", outcome.Message);
         Assert.True(outcome.OfferInstall);
+        Assert.False(outcome.OfferFreshInstall);   // a reinstall: it erases the stored setup
     }
 
     [Fact]

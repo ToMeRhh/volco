@@ -32,6 +32,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         var inputs = Inputs();
         _state = DeviceCard.From(inputs);
         _level = DeviceCard.LevelOf(inputs, _state);
+        _shortText = DeviceCard.ShortStatus(inputs, _state, _level);
         Progress = new ProgressDialogViewModel(controller, ToController);
         Progress.PropertyChanged += OnProgressChanged;
     }
@@ -52,17 +53,17 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
     public string Name => DeviceCard.Name;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(ShortText), nameof(FullText))]
+    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(FullText))]
     private CardState _state;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShortText), nameof(ShowsBanner))]
+    [NotifyPropertyChangedFor(nameof(ShowsBanner))]
     private StatusLevel _level;
 
-    /// <summary>The sidebar line's words: "Connected" or "Connecting…" when all is fine, else the
-    /// state's status line.</summary>
-    public string ShortText => Level != StatusLevel.Fine ? State.Status
-                             : State.Tone == LinkTone.Good ? "Connected" : "Connecting…";
+    /// <summary>The sidebar line's words (<see cref="DeviceCard.ShortStatus"/>): "Connected" or
+    /// "Connecting…" when all is fine, a word or two for what needs the user, the step while an
+    /// operation runs. <see cref="FullText"/> is its tooltip.</summary>
+    [ObservableProperty] private string _shortText;
 
     /// <summary>The status and its detail on one line: the banner's text and the sidebar line's tooltip.</summary>
     public string FullText => State.Detail is { } detail ? $"{State.Status} · {detail}" : State.Status;
@@ -97,7 +98,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         return new CardInputs(Connection.Link, c.Banner, type, port,
                               running ? LinkText.Activity(c.FirmwareActivity) : null,
                               running && c.FirmwareActivity != LinkActivity.CheckingFirmware ? c.FirmwareProgress : null,
-                              c.SavePhaseText, c.Failure, c.OfferTest, c.OfferInstall);
+                              c.SavePhaseText, c.Failure, c.OfferTest, c.OfferInstall, c.OfferFreshInstall);
     }
 
     private void OnSourceChanged(object? sender, PropertyChangedEventArgs e)
@@ -106,6 +107,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         var inputs = Inputs();
         State = DeviceCard.From(inputs);
         Level = DeviceCard.LevelOf(inputs, State);
+        ShortText = DeviceCard.ShortStatus(inputs, State, Level);
         ActionCommand.NotifyCanExecuteChanged();
         CheckFirmwareCommand.NotifyCanExecuteChanged();
         ReinstallFirmwareCommand.NotifyCanExecuteChanged();
@@ -123,7 +125,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         CardAction.Retry => Connection.Link.State == LinkState.PortBusy || !_controller.Busy,
         CardAction.CheckFirmware or CardAction.Update => _controller.CanUseFirmware,
         CardAction.TestNow => _controller.CanStartTest,
-        CardAction.Install => _controller.CanUseFirmware && !_controller.Busy,
+        CardAction.Install or CardAction.Reinstall => _controller.CanUseFirmware && !_controller.Busy,
         CardAction.ChooseHowToStart => true,
         _ => !_controller.Busy,
     };
@@ -142,7 +144,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
             case CardAction.FixIt: ToController(); _controller.FixItCommand.Execute(null); break;
             case CardAction.Compare: _hardware.OpenCompare(); break;
             case CardAction.TestNow: ToController(); _controller.TestNowCommand.Execute(null); break;
-            case CardAction.Install: _controller.InstallFirmwareCommand.Execute(null); break;   // asks first
+            case CardAction.Install or CardAction.Reinstall: _controller.InstallFirmwareCommand.Execute(null); break;   // asks first
             case CardAction.ChooseHowToStart: ToController(); break;   // the chooser is on the Controller page
         }
     }

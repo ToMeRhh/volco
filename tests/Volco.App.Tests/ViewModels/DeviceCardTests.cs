@@ -195,6 +195,9 @@ public sealed class DeviceCardTests : IDisposable
         Assert.Equal(StatusLevel.NeedsYou, Level(Inputs(LinkState.Connected) with { Failure = "The controller didn't answer." }));
         // An offered next step too.
         Assert.Equal(StatusLevel.NeedsYou, Level(Inputs(LinkState.Connected) with { OfferInstall = true }));
+        Assert.Equal(CardAction.Reinstall, DeviceCard.From(Inputs(LinkState.Connected) with { OfferInstall = true }).Action);
+        Assert.Equal(CardAction.Install,
+                     DeviceCard.From(Inputs(LinkState.Connected) with { OfferInstall = true, OfferFreshInstall = true }).Action);
         Assert.Equal(StatusLevel.NeedsYou, Level(Inputs(LinkState.Connected) with { OfferTest = true }));
     }
 
@@ -202,6 +205,42 @@ public sealed class DeviceCardTests : IDisposable
     public void IncompatibleOverWifiCantUpdate()
         => Assert.Equal(CardAction.None,
                         DeviceCard.From(Inputs(LinkState.Incompatible, BannerKind.Incompatible, type: ConnectionType.Udp)).Action);
+
+    /// <summary>Controller-page spec §5: the sidebar line says in a word or two why the status
+    /// needs the user (the whole line is its tooltip); all fine is "Connected" or "Connecting…".</summary>
+    [Theory]
+    [InlineData(LinkState.Connected, BannerKind.None, false, "Connected")]
+    [InlineData(LinkState.Disconnected, BannerKind.None, false, "Disconnected")]
+    [InlineData(LinkState.PortBusy, BannerKind.None, false, "Port busy")]
+    [InlineData(LinkState.NoAnswer, BannerKind.NoAnswer, false, "Not connected")]
+    [InlineData(LinkState.Searching, BannerKind.None, false, "Not connected")]
+    [InlineData(LinkState.Incompatible, BannerKind.Incompatible, true, "Firmware too old")]
+    [InlineData(LinkState.Connected, BannerKind.NotSetUpHasMirror, false, "Not set up")]
+    [InlineData(LinkState.Connected, BannerKind.DifferentSetup, false, "Different setup")]
+    [InlineData(LinkState.Connected, BannerKind.ReadFailed, false, "Needs attention")]
+    [InlineData(LinkState.Connected, BannerKind.None, true, "Update available")]
+    public void TheSidebarLineIsShort(LinkState link, BannerKind kind, bool notice, string text)
+    {
+        var inputs = Inputs(link, kind, notice: notice);
+        var state = DeviceCard.From(inputs);
+        Assert.Equal(text, DeviceCard.ShortStatus(inputs, state, DeviceCard.LevelOf(inputs, state)));
+    }
+
+    [Fact]
+    public void TheSidebarLineForAFailureOrAnOffer_IsNeedsAttention_AndConnectingIsFine()
+    {
+        static string Short(CardInputs i)
+        {
+            var state = DeviceCard.From(i);
+            return DeviceCard.ShortStatus(i, state, DeviceCard.LevelOf(i, state));
+        }
+
+        Assert.Equal("Needs attention", Short(Inputs(LinkState.Connected) with { Failure = "Install failed." }));
+        Assert.Equal("Needs attention", Short(Inputs(LinkState.Connected) with { OfferInstall = true }));
+        Assert.Equal("Connecting…", Short(Inputs(LinkState.Waiting) with { Link = new LinkStatus(LinkState.Waiting, LinkActivity.Restarting) }));
+        Assert.Equal("Updating firmware… 40%",
+                     Short(Inputs(LinkState.Waiting) with { FirmwareStage = "Updating firmware…", FirmwareProgress = 0.4 }));
+    }
 
     // ── The view model and its ⋯ menu ──────────────────────────────────────────────────────
 
@@ -302,6 +341,8 @@ public sealed class DeviceCardTests : IDisposable
         Assert.True(card.ReconnectCommand.CanExecute(null));
     }
 
+    /// <summary>A controller that answered as Volco this run, then probes as another build, runs a
+    /// different build of Volco's firmware: the button is a reinstall, which asks first.</summary>
     [Fact]
     public void AProbeThatOffersInstall_MakesTheButtonInstall_WhichAsksFirst()
     {
@@ -309,9 +350,11 @@ public sealed class DeviceCardTests : IDisposable
         var card = settings.Hardware.Status;
         _flasher!.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         card.CheckFirmwareCommand.Execute(null);
-        Until(() => card.State.Action == CardAction.Install);
-        Assert.Equal("Install firmware", card.ActionLabel);
-        Assert.Equal("This ESP32 doesn't have Volco's firmware yet.", card.State.Detail);
+        Until(() => card.State.Action == CardAction.Reinstall);
+        Assert.Equal("Reinstall firmware…", card.ActionLabel);
+        Assert.Equal("This ESP32 runs a different build of Volco's firmware.", card.State.Detail);
+        Assert.False(settings.Controller.OfferFreshInstall);
+        Assert.Equal("Reinstall", settings.Controller.InstallConfirmLabel);
 
         Until(() => card.ActionCommand.CanExecute(null));
         card.ActionCommand.Execute(null);
@@ -321,10 +364,10 @@ public sealed class DeviceCardTests : IDisposable
         settings.Controller.CancelInstallCommand.Execute(null);
         settings.Controller.OnPageLeft();                          // the card is on every page: the offer stays
         _ui.RunAll();
-        Assert.Equal(CardAction.Install, card.State.Action);
+        Assert.Equal(CardAction.Reinstall, card.State.Action);
         settings.Controller.OnWindowHidden();                      // the result goes, and the offer with it
         _ui.RunAll();
-        Assert.NotEqual(CardAction.Install, card.State.Action);
+        Assert.NotEqual(CardAction.Reinstall, card.State.Action);
     }
 
     [Fact]

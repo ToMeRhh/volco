@@ -5,7 +5,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>The status's one primary button (hardware-page spec §4.1; controller-page spec §5).</summary>
-public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Install, ChooseHowToStart }
+public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Install, Reinstall, ChooseHowToStart }
 
 /// <param name="Link">The runtime's link status, as the sidebar and the tray read it.</param>
 /// <param name="Banner">The §8.3 banner and the firmware notice.</param>
@@ -19,10 +19,12 @@ public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Com
 /// until the next action; null when there is none.</param>
 /// <param name="OfferTest">A firmware update or a first save just finished: the card offers a test.</param>
 /// <param name="OfferInstall">The last Check firmware found other firmware (or none it knows): the card
-/// offers Install firmware, which asks first, until the result goes.</param>
+/// offers an install, which asks first, until the result goes.</param>
+/// <param name="OfferFreshInstall">That install is a first one (the board never answered as Volco):
+/// Install firmware; otherwise Reinstall firmware….</param>
 public sealed record CardInputs(LinkStatus Link, ControllerBanner Banner, ConnectionType Transport, string? Port,
                                 string? FirmwareStage, double? FirmwareProgress, string? SavePhase, string? Failure,
-                                bool OfferTest, bool OfferInstall = false);
+                                bool OfferTest, bool OfferInstall = false, bool OfferFreshInstall = false);
 
 /// <param name="Status">The status line, next to the coloured dot.</param>
 /// <param name="Detail">The one detail line; null for none.</param>
@@ -49,7 +51,8 @@ public static class DeviceCard
                            || i.Link.State == LinkState.Disconnected;
         if (i.Failure is { } failure && !keepsDetail) state = state with { Detail = failure };
         // Check firmware's "Reinstall it?" is answered by the card's button.
-        if (i.OfferInstall && !keepsDetail) state = state with { Action = CardAction.Install };
+        if (i.OfferInstall && !keepsDetail)
+            state = state with { Action = i.OfferFreshInstall ? CardAction.Install : CardAction.Reinstall };
         return state;
     }
 
@@ -141,6 +144,34 @@ public static class DeviceCard
         };
     }
 
+    /// <summary>
+    /// The sidebar status line's words for <paramref name="state"/> at <paramref name="level"/>
+    /// (controller-page spec §5): "Connected" or "Connecting…" when all is fine; the running step
+    /// while an operation runs; when the status needs the user, a word or two for why (the banner
+    /// and the line's tooltip say the rest).
+    /// </summary>
+    public static string ShortStatus(CardInputs inputs, CardState state, StatusLevel level)
+    {
+        if (level == StatusLevel.Fine) return state.Tone == LinkTone.Good ? "Connected" : "Connecting…";
+        if (level == StatusLevel.Running) return state.Status;
+        switch (inputs.Link.State)
+        {
+            case LinkState.Disconnected: return "Disconnected";
+            case LinkState.PortBusy: return "Port busy";
+            case LinkState.NoAnswer or LinkState.Searching: return "Not connected";
+            case LinkState.Incompatible: return "Firmware too old";
+        }
+        switch (inputs.Banner.Kind)
+        {
+            case BannerKind.NoAnswer: return "Not connected";
+            case BannerKind.Incompatible: return "Firmware too old";
+            case BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror: return "Not set up";
+            case BannerKind.DifferentSetup: return "Different setup";
+        }
+        if (inputs.Failure is null && state.Action == CardAction.Update) return "Update available";
+        return "Needs attention";
+    }
+
     /// <summary>Check firmware only where Volco can check it (USB).</summary>
     private static CardState NoAnswer(CardInputs i)
         => new(i.Transport == ConnectionType.Serial ? $"No controller answers on {i.Port ?? "the USB port"}"
@@ -164,6 +195,7 @@ public static class DeviceCard
         CardAction.Compare => "Compare…",
         CardAction.TestNow => "Test your controller now",
         CardAction.Install => "Install firmware",
+        CardAction.Reinstall => "Reinstall firmware…",
         CardAction.ChooseHowToStart => "Choose how to start",
         _ => "",
     };

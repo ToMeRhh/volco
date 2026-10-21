@@ -167,6 +167,55 @@ public sealed class SetupChooserTests : IDisposable
         Assert.True(Controller.CanEdit);
     }
 
+    /// <summary>Start over on a controller that holds Volco's copy, over an unsaved draft: picking
+    /// the saved copy drops the edits and sends nothing (the controller already runs it).</summary>
+    [Fact]
+    public void StartOver_SavedCopy_OnAControllerInSync_DropsTheDraftAndWritesNothing()
+    {
+        Settings(DiyBlob);
+        Greet(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+        Assert.True(Controller.InSync);
+        Controller.SetSliderPin(1, 39);
+        _ui.RunAll();
+        Assert.True(Controller.IsDirty);
+
+        Hardware.StartOver();
+        Assert.True(Hardware.ShowChooser);
+        var saved = Chooser.Cards[0];
+        Assert.Equal("Volco's saved copy", saved.Title);
+        Assert.True(saved.IsEnabled);
+        saved.PickCommand.Execute(null);
+        _ui.RunAll();
+        Thread.Sleep(50);
+        _ui.RunAll();
+
+        Assert.False(AnyWrite());                 // no restart for nothing
+        Assert.False(Controller.IsSaving);
+        Assert.False(Controller.IsDirty);         // the edits went
+        Assert.False(Hardware.ShowChooser);
+        Assert.False(Hardware.IsStartingOver);
+        Assert.False(Hardware.ShowSaveBar);
+    }
+
+    /// <summary>A connected controller that is busy (here a hardware test) disables the saved copy
+    /// with "wait", not "connect".</summary>
+    [Fact]
+    public void SavedCopyWhileBusy_SaysToWait()
+    {
+        Settings(DiyBlob);
+        Greet(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+        Hardware.StartOver();
+        Assert.Null(Chooser.Cards[0].ToolTip);
+
+        Controller.StartTestCommand.Execute(null);
+        _ui.RunAll();
+        Assert.True(Controller.IsTesting);
+        Chooser.Refresh();
+
+        Assert.False(Chooser.Cards[0].IsEnabled);
+        Assert.Equal("Wait for the current operation to finish", Chooser.Cards[0].ToolTip);
+    }
+
     [Fact]
     public void StartOverShowsTheChooserUntilAPick()
     {

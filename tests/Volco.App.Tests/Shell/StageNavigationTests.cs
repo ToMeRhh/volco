@@ -317,7 +317,7 @@ public sealed class StageNavigationTests
         Assert.Equal("Connect", connect.Content);
         var old = s.Conn;
         Press(connect);
-        Until(s.Window, () => In<TextBlock>(line, "StatusText").Text == "Looking for your controller");
+        Until(s.Window, () => In<TextBlock>(line, "StatusText").Text == "Not connected");
         Assert.NotSame(old, s.Rig.Connection);
     }
 

@@ -51,6 +51,7 @@ public sealed partial class ControllerViewModel
         FirmwareMessage = null;
         OfferTest = false;
         OfferInstall = false;
+        OfferFreshInstall = false;
         ConfirmInstallPending = false;
     }
 
@@ -85,21 +86,26 @@ public sealed partial class ControllerViewModel
     /// <summary>The card offers "Test your controller now": after an Update or a first save.</summary>
     [ObservableProperty] private bool _offerTest;
 
-    /// <summary>The last Check firmware found no Volco firmware ("doesn't have Volco's firmware
-    /// yet"): the status's button is Install firmware, until the result goes.</summary>
+    /// <summary>The last Check firmware offers an install (no Volco firmware, a different build, or
+    /// Volco's firmware that didn't answer): the status's button installs, until the result goes.</summary>
+    [ObservableProperty] private bool _offerInstall;
+
+    /// <summary>The offered install is a first one: the board never answered as a Volco controller
+    /// this run ("doesn't have Volco's firmware yet"). The status's button is Install firmware and
+    /// the confirmation isn't a warning; otherwise it is Reinstall firmware…, which erases the
+    /// stored setup.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(InstallQuestion), nameof(InstallConfirmLabel))]
-    private bool _offerInstall;
+    private bool _offerFreshInstall;
 
-    /// <summary>The install confirmation's question: on a board the last check found without Volco's
-    /// firmware, installing replaces what is on it; otherwise it is a reinstall, which erases the
-    /// stored setup.</summary>
-    public string InstallQuestion => OfferInstall
+    /// <summary>The install confirmation's question: on a board without Volco's firmware, installing
+    /// replaces what is on it; otherwise it is a reinstall, which erases the stored setup.</summary>
+    public string InstallQuestion => OfferFreshInstall
         ? "Install Volco's firmware on this ESP32? Anything else on it is replaced."
         : "Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.";
 
     /// <summary>The install confirmation's button: Install, or Reinstall.</summary>
-    public string InstallConfirmLabel => OfferInstall ? "Install" : "Reinstall";
+    public string InstallConfirmLabel => OfferFreshInstall ? "Install" : "Reinstall";
 
     /// <summary>The result's tone: Volco's firmware found or written is good, other firmware a
     /// warning, a failure a danger.</summary>
@@ -183,6 +189,7 @@ public sealed partial class ControllerViewModel
         FirmwareMessage = null;
         OfferTest = false;
         OfferInstall = false;
+        OfferFreshInstall = false;
         FirmwareProgress = 0;
         FirmwareStep = null;
         return true;
@@ -212,6 +219,7 @@ public sealed partial class ControllerViewModel
                 _ => LinkTone.Danger,
             });
             OfferInstall = outcome.OfferInstall;
+            OfferFreshInstall = outcome.OfferInstall && outcome.OfferFreshInstall;
             FirmwareFinished?.Invoke(this, EventArgs.Empty);
         });
     }

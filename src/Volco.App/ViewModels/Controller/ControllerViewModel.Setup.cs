@@ -25,11 +25,14 @@ public sealed partial class ControllerViewModel
         ControllerPresets.All.Where(p => p.IsAvailable && p.Id != ControllerPresets.BlankId).ToList();
 
     /// <summary>Volco's saved copy goes to the controller at once (spec §4.4): the controller has run
-    /// it before, so no draft is made; the usual restart follows.</summary>
+    /// it before, so no draft is made; the usual restart follows. The draft goes back to the copy
+    /// (which ends a Start over), and a controller that already holds it gets nothing.</summary>
     [RelayCommand]
     private void SetupApplySaved()
     {
-        if (CanStartNewDraft) ApplyMine();
+        if (!CanStartNewDraft) return;
+        Revert();
+        if (!InSync) ApplyMine();
     }
 
     /// <summary>A new draft of <paramref name="preset"/>'s wiring.</summary>
