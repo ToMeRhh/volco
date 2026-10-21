@@ -696,11 +696,17 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private void OnMirrorChanged(object? sender, EventArgs e) => _ui.Post(() =>
     {
         if (_disposed) return;
+        // With no usable copy in Volco the draft is the Blank placeholder. While nobody has started a
+        // draft from it, it follows the copy that arrives (the automatic read, Retry, Keep): it only
+        // counts as dirty against the empty baseline, and kept, the Hardware page drew no controls
+        // and the draft's layout (none) no longer matched the controller's setup.
+        var placeholder = _baseline.Length == 0 && !_hasPermission && !_fixIt
+                          && _draft.ToByteArray().AsSpan().SequenceEqual(new ControllerConfig { Preset = ControllerPresets.BlankId }.ToByteArray());
         _hasPermission = false;
         var decoded = DecodeMirror();
         var newBaseline = decoded?.ToByteArray() ?? Array.Empty<byte>();
         // A clean draft follows the new copy; a dirty one stays, and the save bar counts against it.
-        var follow = !IsDirty || _draft.ToByteArray().AsSpan().SequenceEqual(newBaseline);
+        var follow = placeholder || !IsDirty || _draft.ToByteArray().AsSpan().SequenceEqual(newBaseline);
         _baseline = newBaseline;
         if (follow)
         {
