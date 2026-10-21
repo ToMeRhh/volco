@@ -120,10 +120,9 @@ public sealed class StageGeometryTests : IDisposable
     {
         using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
         var tiles = Tiles(s.Page);
-        var pin = tiles[0].GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "GPIO 33");
-        var indicator = tiles[6].GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "18 · 19");
-        Assert.Equal(0, DrawnOpacity(pin));
-        Assert.Equal(0, DrawnOpacity(indicator));
+        // No pin or indicator wiring is drawn at all (controller-page spec §4.1: it is in the inspector)
+        Assert.DoesNotContain(tiles[0].GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "GPIO 33");
+        Assert.DoesNotContain(tiles[6].GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "18 · 19");
         Assert.Equal(1, DrawnOpacity(In<TextBlock>(tiles[5], "MainAction")));
         Assert.Equal(1, DrawnOpacity(In<Panel>(tiles[6], "Indicator")));
         Assert.True(DrawnOpacity(In<Border>(tiles[0], "Grip")) > 0);   // the grip's own style is subtle
