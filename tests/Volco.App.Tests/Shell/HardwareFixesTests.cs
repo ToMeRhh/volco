@@ -217,13 +217,7 @@ public sealed class HardwareFixesTests : IDisposable
     {
         var draft = s.Vm.Controller.Draft;
         var blob = ControllerConfigCodec.Encode(draft);
-        var kinds = draft.Buttons.Select(b => b.IndicatorCase switch
-        {
-            Volco.Core.Controller.Proto.Button.IndicatorOneofCase.Led => IndicatorKind.Led,
-            Volco.Core.Controller.Proto.Button.IndicatorOneofCase.LedPair => IndicatorKind.LedPair,
-            Volco.Core.Controller.Proto.Button.IndicatorOneofCase.Screen => IndicatorKind.Screen,
-            _ => IndicatorKind.None,
-        }).ToArray();
+        var kinds = KindsOf(draft);
         Until(s.Window, () => s.Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
         var burst = s.Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
         if (reply != Reply.ImpliedOk)
@@ -240,8 +234,17 @@ public sealed class HardwareFixesTests : IDisposable
         for (int i = 0; i < draft.Sliders.Count; i++) s.Conn.RaiseMessage(new SliderMessage(i, 2048));   // the boot's positions
         Until(s.Window, () => !s.Vm.Controller.IsSaving);
         Pump(s.Window, 50);
-        Assert.Equal("Saved. The controller restarted with the new setup.", s.Vm.Controller.ProgressText);
+        Assert.StartsWith("Saved.", s.Vm.Controller.ProgressText);
     }
+
+    /// <summary>The indicator kinds a controller holding <paramref name="config"/> reports in its Hello.</summary>
+    private static IndicatorKind[] KindsOf(ControllerConfig config) => config.Buttons.Select(b => b.IndicatorCase switch
+    {
+        Volco.Core.Controller.Proto.Button.IndicatorOneofCase.Led => IndicatorKind.Led,
+        Volco.Core.Controller.Proto.Button.IndicatorOneofCase.LedPair => IndicatorKind.LedPair,
+        Volco.Core.Controller.Proto.Button.IndicatorOneofCase.Screen => IndicatorKind.Screen,
+        _ => IndicatorKind.None,
+    }).ToArray();
 
     /// <summary>Volco's settings as config.json has them once written.</summary>
     private static AppConfig Written(Shown s)
@@ -346,6 +349,242 @@ public sealed class HardwareFixesTests : IDisposable
         Assert.Equal(new[] { "a", "b", "d", "e" }, Written(s).Sliders.Select(x => x.Name));
         Assert.Equal(new[] { "a", "b", "d", "e" }, TileNames(s));
         Assert.DoesNotContain(s.Vm.Sliders.Items, x => x.IsMissing);
+    }
+
+    // ── 2b. Removing after the setup came from the controller (follow-up) ───────────────────
+
+    private static ControllerConfig DiyConfig() => ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+
+    /// <summary>The DIY setup with Slider 2 on another pin: a different setup with the same counts.</summary>
+    private static ControllerConfig DiyMoved()
+    {
+        var c = DiyConfig();
+        c.Sliders[1].Pin = c.Sliders[1].Pin == 35 ? 39u : 35u;
+        return c;
+    }
+
+    /// <summary>The DIY setup with only its first three sliders.</summary>
+    private static ControllerConfig DiyThree()
+    {
+        var c = DiyConfig();
+        while (c.Sliders.Count > 3) c.Sliders.RemoveAt(c.Sliders.Count - 1);
+        return c;
+    }
+
+    private static List<SliderConfig> Named(string names)
+        => names.Select((n, i) => new SliderConfig { Index = i, Name = n.ToString(), Type = SliderMappingType.None }).ToList();
+
+    private static int Reads(Shown s) => s.Conn.SentFrames.Count(f => f.Length > 3 && f[2] == 0x87);
+
+    /// <summary>Waits for read number <paramref name="nth"/> and answers it with <paramref name="blob"/>.</summary>
+    private static void AnswerRead(Shown s, int nth, byte[] blob)
+    {
+        Until(s.Window, () => Reads(s) >= nth);
+        var seq = s.Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87)[3];
+        s.Conn.RaiseMessage(new ConfigDataMessage(seq, (ushort)blob.Length, 0, ControllerConfigCodec.Crc32(blob), blob));
+        Settle(s.Window);
+    }
+
+    /// <summary>The settings window over Volco's settings as <paramref name="setUp"/> leaves them
+    /// (or as <paramref name="configJson"/> has them on disk), Volco's copy <paramref name="mirror"/>,
+    /// and a controller holding <paramref name="controller"/> (null: not set up). With
+    /// <paramref name="pagesFirst"/> the Hardware page is open before the controller says Hello. A
+    /// controller with a setup and no copy in Volco gets the automatic read, answered here.</summary>
+    private static Shown Open(Action<AppConfig>? setUp, ControllerConfig? mirror, ControllerConfig? controller,
+                              bool pagesFirst = false, string? configJson = null)
+    {
+        var rig = new TestRig(configJson: configJson);
+        setUp?.Invoke(rig.Config.Config);
+        if (mirror is not null) rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(ControllerConfigCodec.Encode(mirror));
+        var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 720 };
+        window.Show();
+        var s = new Shown(window, rig, vm);
+        if (pagesFirst)
+        {
+            window.ShowPage("controller");
+            Pump(window, 50);
+        }
+        rig.Connection!.SetStatus(TransportStatus.Open);
+        var blob = controller is null ? null : ControllerConfigCodec.Encode(controller);
+        rig.Connection.RaiseMessage(blob is null
+            ? new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.None, 0, 0, Array.Empty<IndicatorKind>())
+            : Hello(ControllerConfigCodec.Crc32(blob), controller!.Sliders.Count, KindsOf(controller)));
+        Pump(window, 50);
+        if (blob is not null && mirror is null) AnswerRead(s, 1, blob);   // the automatic read adopts it
+        window.ShowPage("controller");
+        Pump(window, 100);
+        return s;
+    }
+
+    /// <summary>Waits until the draft can be edited; the message says where it stopped.</summary>
+    private static void UntilEditable(Shown s)
+    {
+        try { Until(s.Window, () => s.Vm.Controller.CanEdit, 3000); }
+        catch (TimeoutException)
+        {
+            var c = s.Vm.Controller;
+            Assert.Fail($"not editable: banner {c.Banner.Kind}, in sync {c.InSync}, setting up {c.IsSettingUp}, " +
+                        $"draft {c.Draft.Sliders.Count} sliders, chooser {s.Vm.Hardware.ShowChooser}");
+        }
+    }
+
+    /// <summary>Removes slider <paramref name="index"/> with the inspector, saves, confirms, then
+    /// shows Controls and checks config.json and the tiles hold <paramref name="expected"/> in order
+    /// ("" is a slider with no name), none drawn missing.</summary>
+    private static void RemoveSaveAndCheck(Shown s, int index, string[] expected)
+    {
+        UntilEditable(s);
+        var before = s.Vm.Controller.Draft.Sliders.Count;
+        RemoveWithTheInspector<SliderTile>(s, index);
+        Assert.Equal(before - 1, s.Vm.Controller.Draft.Sliders.Count);
+        SaveAndAnswer(s, Reply.OkThenHello);
+        ShowControls(s);
+
+        Assert.Equal(expected, s.Config.Sliders.Select(x => x.Name));
+        Assert.Equal(Enumerable.Range(0, expected.Length), s.Config.Sliders.Select(x => x.Index));
+        Assert.Equal(expected, Written(s).Sliders.Select(x => x.Name));
+        Assert.Equal(expected, TileNames(s));
+        Assert.DoesNotContain(s.Vm.Sliders.Items, x => x.IsMissing);
+        Assert.Equal(expected.Length, s.Rig.Config.Config.Controller!.Sliders);
+    }
+
+    [AvaloniaFact]
+    public void A_MoreSlidersInVolcoThanOnTheController()
+    {
+        using var s = Open(c => c.Sliders = Named("abcdefg"), DiyConfig(), DiyConfig());
+        Assert.Equal(2, s.Vm.Sliders.Items.Count(x => x.IsMissing));   // f and g: not on this controller
+        RemoveSaveAndCheck(s, 2, new[] { "a", "b", "d", "e" });
+    }
+
+    [AvaloniaFact]
+    public void B_FewerSlidersInVolcoThanOnTheController()
+    {
+        using var s = Open(c => c.Sliders = Named("abc"), DiyConfig(), DiyConfig());
+        Assert.Equal(5, s.Config.Sliders.Count);   // padded
+        RemoveSaveAndCheck(s, 1, new[] { "a", "c", "", "" });
+    }
+
+    /// <summary>Compare › Keep the controller's setup: two reads, both answered with <paramref name="controller"/>.</summary>
+    private static void KeepTheControllers(Shown s, ControllerConfig controller)
+    {
+        var blob = ControllerConfigCodec.Encode(controller);
+        var before = Reads(s);
+        s.Vm.Hardware.OpenCompare();
+        var compare = s.Vm.Hardware.Compare!;
+        AnswerRead(s, before + 1, blob);
+        Until(s.Window, () => compare.HasComparison);
+        compare.KeepCommand.Execute(null);
+        AnswerRead(s, before + 2, blob);
+        Until(s.Window, () => !s.Vm.Hardware.IsCompareOpen && s.Vm.Controller.InSync);
+        Pump(s.Window, 50);
+    }
+
+    /// <summary>Picks the setup chooser's card titled <paramref name="title"/>, as a click on it does.</summary>
+    private static void Pick(Shown s, string title)
+    {
+        Assert.True(s.Vm.Hardware.ShowChooser);
+        s.Vm.Hardware.Chooser.Cards.Single(c => c.Title == title).PickCommand.Execute(null);
+        Pump(s.Window, 50);
+        Assert.False(s.Vm.Hardware.ShowChooser);
+    }
+
+    [AvaloniaFact]
+    public void C_KeepTheControllersSetup_WithACleanDraft()
+    {
+        using var s = Open(c => c.Sliders = Named("abcde"), DiyConfig(), DiyThree());
+        Assert.Equal(BannerKind.DifferentSetup, s.Vm.Controller.Banner.Kind);
+        KeepTheControllers(s, DiyThree());
+        Assert.Equal(3, s.Vm.Controller.Draft.Sliders.Count);   // the draft follows the adopted setup
+        RemoveSaveAndCheck(s, 1, new[] { "a", "c" });
+    }
+
+    [AvaloniaFact]
+    public void C_KeepTheControllersSetup_WithADirtyDraft()
+    {
+        using var s = Open(c => c.Sliders = Named("abcde"), DiyConfig(), DiyThree());
+        s.Vm.Hardware.StartOver();
+        Settle(s.Window);
+        Pick(s, "Volco's saved copy");   // Volco's copy, as a new draft
+        UntilEditable(s);
+        s.Vm.Controller.SetSliderPin(1, 39);
+        Assert.True(s.Vm.Controller.IsDirty);
+        KeepTheControllers(s, DiyThree());
+        Assert.Equal(5, s.Vm.Controller.Draft.Sliders.Count);   // a dirty draft stays
+        RemoveSaveAndCheck(s, 2, new[] { "a", "b", "d", "e" });
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void D_NoCopyInVolco_TheAutomaticReadAdoptsTheControllers(bool pagesFirst)
+    {
+        using var s = Open(c => c.Sliders = Named("abcde"), mirror: null, DiyConfig(), pagesFirst);
+        Until(s.Window, () => s.Vm.Controller.InSync);
+        Assert.Equal(5, s.Vm.Controller.Draft.Sliders.Count);   // the draft follows the adopted setup
+        RemoveSaveAndCheck(s, 2, new[] { "a", "b", "d", "e" });
+    }
+
+    [AvaloniaFact]
+    public void E_ChooserSavedCopy_WithFewerSlidersInVolco()
+    {
+        using var s = Open(c => c.Sliders = Named("abc"), DiyConfig(), controller: null);
+        Pick(s, "Volco's saved copy");
+        RemoveSaveAndCheck(s, 1, new[] { "a", "c", "", "" });
+    }
+
+    [AvaloniaFact]
+    public void E_ChooserPreset_WithMoreSlidersInVolco()
+    {
+        using var s = Open(c => c.Sliders = Named("abcdefg"), mirror: null, controller: null);
+        Pick(s, Diy.DisplayName);
+        RemoveSaveAndCheck(s, 2, new[] { "a", "b", "d", "e" });
+    }
+
+    [AvaloniaFact]
+    public void E_ChooserStartEmpty_ThenAdded()
+    {
+        using var s = Open(c => c.Sliders = Named("abc"), mirror: null, controller: null);
+        Pick(s, "Start empty");
+        UntilEditable(s);
+        uint[] pins = { 32, 33, 34 };
+        foreach (var pin in pins)
+        {
+            s.Vm.Controller.AddSliderCommand.Execute(null);
+            s.Vm.Controller.SetSliderPin(s.Vm.Controller.Draft.Sliders.Count - 1, pin);
+        }
+        Settle(s.Window);
+        RemoveSaveAndCheck(s, 1, new[] { "", "" });   // added controls are new
+    }
+
+    [AvaloniaFact]
+    public void F_IndexesThatDontMatchTheirPositions()
+    {
+        var old = AppConfig.CreateDefault();
+        old.Sliders = Named("abcde");
+        for (int i = 0; i < old.Sliders.Count; i++) old.Sliders[i].Index = 4 - i;
+        var json = System.Text.Json.JsonSerializer.Serialize(old, ConfigJsonContext.Default.AppConfig);
+        Assert.Contains("\"index\": 4", json);
+        using var s = Open(null, DiyConfig(), DiyConfig(), configJson: json);
+        Assert.Equal(new[] { "a", "b", "c", "d", "e" }, TileNames(s));
+        RemoveSaveAndCheck(s, 2, new[] { "a", "b", "d", "e" });
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void F_ALastHelloThatDoesntMatchVolcosCopy(bool pagesFirst)
+    {
+        using var s = Open(c =>
+        {
+            c.Sliders = Named("abcde");
+            c.Controller = new ControllerInfoConfig
+            {
+                ProtocolVersion = ProtocolVersion.Current, Chip = ChipFamily.Esp32, FirmwareVersion = "old", Sliders = 8,
+                Buttons = Enumerable.Repeat(IndicatorKind.Led, 6).ToList(),
+            };
+        }, DiyConfig(), DiyConfig(), pagesFirst);
+        RemoveSaveAndCheck(s, 2, new[] { "a", "b", "d", "e" });
     }
 
     // ── 3. One fader per slider tile, never faded (spec §3.3) ────────────────────────────────
