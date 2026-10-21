@@ -332,18 +332,10 @@ public sealed class SidebarCardTests : IDisposable
         Assert.True(overlay.IsEffectivelyVisible);
         Until(s.Window, () => s.Window.FindControl<Border>("LeaveCard")!.IsKeyboardFocusWithin);
 
-        // The pointer doesn't reach the card's ⋯ or the nav: the scrim is over them.
         var more = In<Button>(s.Card, "MoreButton");
         var nav = s.Window.FindControl<ListBox>("NavList")!;
-        foreach (var target in new Control[] { more, nav })
-        {
-            var point = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), s.Window)!.Value;
-            var hit = s.Window.InputHitTest(point) as Visual;
-            Assert.False(ReferenceEquals(hit, target) || target.IsVisualAncestorOf(hit),
-                         $"{target.Name} is reachable at {point}: the hit is {hit?.GetType().Name} {(hit as Control)?.Name}");
-        }
 
-        // No key reaches them either, even with the focus forced onto them.
+        // No key reaches the card's ⋯ or the nav, even with the focus forced onto them.
         more.Focus();
         s.Window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
         Settle(s.Window);
@@ -354,11 +346,21 @@ public sealed class SidebarCardTests : IDisposable
         Assert.Equal("controller", s.NavTag);
         Assert.NotNull(s.Vm.Hardware.LeavePrompt);
 
-        // A click where ⋯ is is Stay.
+        // The pointer doesn't reach them: a click where ⋯ is lands on the scrim, which is Stay.
         Click(s, more);
         Assert.Null(s.Vm.Hardware.LeavePrompt);
         Assert.False(more.Flyout!.IsOpen);
         Assert.Equal("controller", s.NavTag);
+
+        // So does a click on the General entry while the prompt is up.
+        s.Window.ShowPage("general");
+        Settle(s.Window);
+        Assert.NotNull(s.Vm.Hardware.LeavePrompt);
+        var general = nav.GetVisualDescendants().OfType<ListBoxItem>().First();
+        Click(s, general);
+        Assert.Null(s.Vm.Hardware.LeavePrompt);
+        Assert.Equal("controller", s.NavTag);
+
         Assert.Equal(draft, ControllerConfigCodec.Encode(s.Vm.Controller.Draft));
         Assert.True(s.Vm.Controller.IsDirty);
     }
