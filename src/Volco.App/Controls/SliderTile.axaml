@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:conv="using:Volco.App.Converters"
+             xmlns:stage="using:Volco.App.Views.Stage"
              x:Class="Volco.App.Controls.SliderTile"
              x:DataType="vm:SliderItemViewModel"
              Focusable="True" ToolTip.Tip="{Binding Heading}">
@@ -27,47 +28,31 @@
           </Panel>
           <Panel Name="Fader" Grid.Column="1" Classes="Fader" Width="32">
             <Border Classes="Track" Width="12" HorizontalAlignment="Center"/>
-            <!-- The live level on Controls, the raw level on Hardware (spec §5.2) -->
-            <Panel Classes="ControlsLayer">
-              <Border Name="LevelFill" Classes="LevelFill" Width="6" HorizontalAlignment="Center"
-                      VerticalAlignment="Bottom" Margin="0,0,0,3">
-                <Border.Height>
-                  <MultiBinding Converter="{x:Static conv:FaderConverter.Fill}">
-                    <Binding Path="LiveLevel"/>
-                    <Binding ElementName="Fader" Path="Bounds.Height"/>
-                  </MultiBinding>
-                </Border.Height>
-              </Border>
-              <Border Name="Knob" Classes="Knob" VerticalAlignment="Bottom">
-                <Border.Margin>
-                  <MultiBinding Converter="{x:Static conv:FaderConverter.Knob}">
-                    <Binding Path="LiveLevel"/>
-                    <Binding ElementName="Fader" Path="Bounds.Height"/>
-                  </MultiBinding>
-                </Border.Margin>
-                <Border Classes="KnobLine"/>
-              </Border>
-            </Panel>
-            <Panel Classes="WiringLayer">
-              <Border Name="RawFill" Classes="LevelFill" Width="6" HorizontalAlignment="Center"
-                      VerticalAlignment="Bottom" Margin="0,0,0,3">
-                <Border.Height>
-                  <MultiBinding Converter="{x:Static conv:FaderConverter.Fill}">
-                    <Binding Path="Wiring.RawLevel"/>
-                    <Binding ElementName="Fader" Path="Bounds.Height"/>
-                  </MultiBinding>
-                </Border.Height>
-              </Border>
-              <Border Name="RawKnob" Classes="Knob" VerticalAlignment="Bottom">
-                <Border.Margin>
-                  <MultiBinding Converter="{x:Static conv:FaderConverter.Knob}">
-                    <Binding Path="Wiring.RawLevel"/>
-                    <Binding ElementName="Fader" Path="Bounds.Height"/>
-                  </MultiBinding>
-                </Border.Margin>
-                <Border Classes="KnobLine"/>
-              </Border>
-            </Panel>
+            <!-- One fader in both modes: the live level on Controls, the raw level on Hardware
+                 (spec §5.2). It is not a layer, so it never fades (§3.3): the knob moves to the
+                 other level at once. -->
+            <Border Name="LevelFill" Classes="LevelFill" Width="6" HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom" Margin="0,0,0,3">
+              <Border.Height>
+                <MultiBinding Converter="{x:Static conv:FaderConverter.Fill}">
+                  <Binding Path="LiveLevel"/>
+                  <Binding ElementName="Fader" Path="Bounds.Height"/>
+                  <Binding Path="Wiring.RawLevel" FallbackValue="0"/>
+                  <Binding Path="$parent[stage:StagePage].Mode" FallbackValue="{x:Static stage:StageMode.Controls}"/>
+                </MultiBinding>
+              </Border.Height>
+            </Border>
+            <Border Name="Knob" Classes="Knob" VerticalAlignment="Bottom">
+              <Border.Margin>
+                <MultiBinding Converter="{x:Static conv:FaderConverter.Knob}">
+                  <Binding Path="LiveLevel"/>
+                  <Binding ElementName="Fader" Path="Bounds.Height"/>
+                  <Binding Path="Wiring.RawLevel" FallbackValue="0"/>
+                  <Binding Path="$parent[stage:StagePage].Mode" FallbackValue="{x:Static stage:StageMode.Controls}"/>
+                </MultiBinding>
+              </Border.Margin>
+              <Border Classes="KnobLine"/>
+            </Border>
           </Panel>
         </Grid>
         <!-- The captions: on Controls the label, on Hardware the wiring. Both are always measured,

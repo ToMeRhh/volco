@@ -22,8 +22,8 @@
           <!-- The title row, the same height in both modes (spec §3.2–3.3): the page's word
                (PageTitle, crossfaded) and the page's buttons -->
           <Grid Name="TitleRow" Classes="StageTitleRow" ColumnDefinitions="*,Auto">
-            <TransitioningContentControl Name="TitleHost" VerticalAlignment="Center"/>
-            <TransitioningContentControl Name="TitleActions" Grid.Column="1" VerticalAlignment="Center"/>
+            <stage:StageContentHost Name="TitleHost" VerticalAlignment="Center"/>
+            <stage:StageContentHost Name="TitleActions" Grid.Column="1" VerticalAlignment="Center"/>
           </Grid>
 
           <Border Name="Case" Classes="Case" Classes.dense="{Binding IsDense}">
@@ -159,7 +159,7 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
               </StackPanel>
-              <TransitioningContentControl Name="ChooserHost"/>
+              <stage:StageContentHost Name="ChooserHost"/>
             </Grid>
           </Border>
 
@@ -179,7 +179,7 @@
       <!-- The side panel keeps its place and size in both modes; only its body scrolls. On
            Controls it holds the inspector, on Hardware the page's own panel (HardwareSidePanel). -->
       <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
-        <TransitioningContentControl Name="SidePanelHost">
+        <stage:StageContentHost Name="SidePanelHost">
           <ContentControl Name="InspectorContent" Content="{Binding Selected}">
             <ContentControl.DataTemplates>
               <DataTemplate DataType="{x:Type vm:SliderItemViewModel}" x:DataType="vm:SliderItemViewModel">
@@ -190,7 +190,7 @@
               </DataTemplate>
             </ContentControl.DataTemplates>
           </ContentControl>
-        </TransitioningContentControl>
+        </stage:StageContentHost>
       </Border>
     </Grid>
 

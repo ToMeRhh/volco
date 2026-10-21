@@ -373,10 +373,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private bool _settingsSelected;
 
     /// <summary>The title row's "Controller settings" chip: the inspector shows the controller's
-    /// settings and the tile and bus selection is cleared.</summary>
+    /// settings and the tile and bus selection is cleared. Not during a hardware test: the
+    /// inspector is hidden then (spec §8), so the chip is disabled.</summary>
     public void SelectControllerSettings()
     {
-        if (_disposed) return;
+        if (_disposed || IsTesting) return;
         _settingsSelected = true;
         _selectedBus = null;
         _controls.Selected = null;
@@ -386,7 +387,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private IRelayCommand? _selectControllerSettingsCommand;
 
     /// <summary>The title row's "Controller settings" chip.</summary>
-    public IRelayCommand SelectControllerSettingsCommand => _selectControllerSettingsCommand ??= new RelayCommand(SelectControllerSettings);
+    public IRelayCommand SelectControllerSettingsCommand
+        => _selectControllerSettingsCommand ??= new RelayCommand(SelectControllerSettings, () => !IsTesting);
 
     /// <summary>The inspector shows the controller's settings: the chip is marked.</summary>
     public bool IsSettingsSelected => Inspected is ControllerSettingsViewModel;
@@ -639,6 +641,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _testPresses.Clear();
         _testHeld.Clear();
         OnPropertyChanged(nameof(IsTesting));
+        _selectControllerSettingsCommand?.NotifyCanExecuteChanged();
         UpdateTestStates();
     }
 

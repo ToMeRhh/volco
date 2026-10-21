@@ -57,8 +57,10 @@ public static class LayoutConverters
     public static readonly IValueConverter IsCompact = new FuncValueConverter<double, bool>(w => w > 0 && w < CompactBelow);
 }
 
-/// <summary>A slider tile's fader: values are the live level (0..1) and the track's height.
-/// The parameter is what the moving part leaves free: the knob's height, or the fill's inset.</summary>
+/// <summary>A slider tile's fader: values are the live level (0..1) and the track's height, then
+/// optionally the raw level (0..1) and the stage's mode: on Hardware the fader shows the raw level
+/// (hardware-page spec §5.2). The parameter is what the moving part leaves free: the knob's height,
+/// or the fill's inset.</summary>
 public sealed class FaderConverter : IMultiValueConverter
 {
     /// <summary>The knob's bottom margin.</summary>
@@ -78,7 +80,9 @@ public sealed class FaderConverter : IMultiValueConverter
 
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        var level = values.Count > 0 && values[0] is double l ? Math.Clamp(l, 0, 1) : 0;
+        var hardware = values.Count > 3 && values[3] is Volco.App.Views.Stage.StageMode.Hardware;
+        var source = hardware ? values[2] : values.Count > 0 ? values[0] : null;
+        var level = source is double l ? Math.Clamp(l, 0, 1) : 0;
         var height = values.Count > 1 && values[1] is double h ? h : 0;
         var travel = Math.Max(0, height - _reserve) * level;
         return _asMargin ? new Thickness(0, 0, 0, travel) : travel;
