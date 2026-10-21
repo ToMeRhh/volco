@@ -152,16 +152,9 @@
     <Rectangle Classes="DropOutline"/>
     <Rectangle Classes="NewOutline" IsVisible="{Binding IsNew}"/>
     <!-- A new control's problem (its missing pin) shows only in the mark: the dashed outline stays -->
-    <Rectangle Classes="ProblemOutline">
-      <Rectangle.IsVisible>
-        <MultiBinding Converter="{x:Static BoolConverters.And}">
-          <Binding Path="Wiring.HasProblem" FallbackValue="False"/>
-          <Binding Path="!IsNew"/>
-          <!-- Without wiring, HasProblem yields no value, which And skips -->
-          <Binding Path="Wiring" Converter="{x:Static ObjectConverters.IsNotNull}"/>
-        </MultiBinding>
-      </Rectangle.IsVisible>
-    </Rectangle>
+    <Panel IsVisible="{Binding !IsNew}">
+      <Rectangle Classes="ProblemOutline" IsVisible="{Binding Wiring.HasProblem, FallbackValue=False}"/>
+    </Panel>
     <!-- A wiring problem (controller-page spec §4.1): the danger outline and this mark, with the problem as its tooltip -->
     <Border Name="ProblemMark" Classes="ProblemMark" IsVisible="{Binding Wiring.HasProblem, FallbackValue=False}"
             ToolTip.Tip="{Binding Wiring.Problem, FallbackValue={x:Null}}">

@@ -201,8 +201,8 @@ public sealed class ControllerTilesTests : IDisposable
         var mark = In<Border>(tile, "ProblemMark");
         Assert.True(mark.IsVisible);
         Assert.False(string.IsNullOrEmpty(ToolTip.GetTip(mark) as string));
-        Assert.False(Rect(tile, "ProblemOutline").IsVisible);
-        Assert.True(Rect(tile, "NewOutline").IsVisible);
+        Assert.False(Rect(tile, "ProblemOutline").IsEffectivelyVisible);
+        Assert.True(Rect(tile, "NewOutline").IsEffectivelyVisible);
     }
 
     /// <summary>Pins stay in the inspector: no tile draws a pin or an indicator's wiring, during a
