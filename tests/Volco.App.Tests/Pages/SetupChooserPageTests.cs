@@ -52,7 +52,6 @@ public sealed class SetupChooserPageTests : IDisposable
         var page = new StagePage(vm.Controls) { Hardware = vm.Hardware };
         var window = new Window { Content = page, Width = 1100, Height = 720 };
         window.Show();
-        page.Mode = StageMode.Hardware;
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", state, crc, 5, DiyKinds));
         Until(window, () => vm.Controller.Banner.Kind != BannerKind.None || vm.Controller.InSync);

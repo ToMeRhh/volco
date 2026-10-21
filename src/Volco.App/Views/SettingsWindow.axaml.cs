@@ -67,8 +67,7 @@ public partial class SettingsWindow : Window
         _navList.ItemsSource = new[]
         {
             Nav("General", "general", "Icon.Settings", () => new GeneralPage(vm.General)),
-            Nav("Controls", "controls", "Icon.Sliders", Stage),
-            _controllerNav = Nav("Hardware", "controller", "Icon.Chip", Stage),
+            _controllerNav = Nav("Controller", "controller", "Icon.Sliders", Stage),
         };
         _navList.SelectionChanged += OnNavSelectionChanged;
         _navList.SelectedIndex = 0;
@@ -125,18 +124,18 @@ public partial class SettingsWindow : Window
         return new NavItem(label, tag, icon, create);
     }
 
-    /// <summary>The one stage the Controls and Hardware entries both show (hardware-page spec §3.3):
-    /// selecting either sets its <see cref="StagePage.Mode"/>, so no tile is rebuilt.</summary>
+    /// <summary>The Controller page (controller-page spec §4).</summary>
     private StagePage Stage() => _stage ??= new StagePage(_vm.Controls)
     {
         Hardware = _vm.Hardware,
         HardwareSidePanel = new HardwareInspectorHost { DataContext = _vm.Hardware },
     };
 
-    /// <summary>Switches to the page with this tag ("general", "controls", "controller" (shown as
-    /// Hardware)).</summary>
+    /// <summary>Switches to the page with this tag ("general" or "controller"; "controls" is the
+    /// Controller page too).</summary>
     public void ShowPage(string tag)
     {
+        if (tag == "controls") tag = "controller";
         var items = _navList.ItemsSource?.Cast<NavItem>().ToList() ?? new List<NavItem>();
         var index = items.FindIndex(n => n.Tag == tag);
         if (index >= 0) _navList.SelectedIndex = index;
@@ -145,8 +144,8 @@ public partial class SettingsWindow : Window
     /// <summary>The page currently shown.</summary>
     internal Control? CurrentPage => _pageHost.Content as Control;
 
-    // Set while the selection goes back to Hardware for the leave prompt, and while the prompt's
-    // continuation leaves it.
+    // Set while the selection goes back to the Controller page for the leave prompt, and while the
+    // prompt's continuation leaves it.
     private bool _revertingNav;
     private bool _leaveAllowed;
 
@@ -155,8 +154,8 @@ public partial class SettingsWindow : Window
         if (_revertingNav) return;
         var left = e.RemovedItems.OfType<NavItem>().FirstOrDefault();
         if (_navList.SelectedItem is not NavItem item) return;
-        // Leaving Hardware with unsaved changes asks first (spec §3.3); the selection stays on
-        // Hardware until the prompt is answered.
+        // Leaving the Controller page with unsaved changes asks first (controller-page spec §4.4);
+        // the selection stays on it until the prompt is answered.
         if (left?.Tag == "controller" && !_leaveAllowed && _stage?.Hardware is { IsDirty: true } hardware)
         {
             // The selection goes back once this change has finished (the list doesn't take a new
@@ -170,13 +169,16 @@ public partial class SettingsWindow : Window
             hardware.AskToLeave(() => Navigate(item));
             return;
         }
-        // Leaving Hardware ends a running hardware test (spec §8).
-        if (left?.Tag == "controller") _vm.ControllerIfCreated?.OnPageLeft();
-        // Leaving the Controls page closes its dialog, which would otherwise hold off touch-to-select.
-        if (left?.Tag == "controls") _vm.ControlsIfCreated?.CloseDialog();
+        if (left?.Tag == "controller")
+        {
+            // Leaving the Controller page ends a running hardware test (hardware-page spec §8), and
+            // closes its dialog, which would otherwise hold off touch-to-select.
+            if (_stage?.Hardware is { } shown) shown.OnPageLeft();
+            else _vm.ControllerIfCreated?.OnPageLeft();
+            _vm.ControlsIfCreated?.CloseDialog();
+        }
         if (!_pages.TryGetValue(item.Tag, out var page))
             _pages[item.Tag] = page = item.CreatePage();
-        if (page is StagePage stage) stage.Mode = item.Tag == "controller" ? StageMode.Hardware : StageMode.Controls;
         if (ReferenceEquals(_pageHost.Content, page)) return;
         // General has no drawing, so going to or from it crossfades the whole content area; the
         // first page shows at once.
@@ -210,10 +212,10 @@ public partial class SettingsWindow : Window
         if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
         // Hiding ends a running test too, and doesn't ask about unsaved changes: the draft is kept
-        // and the window reopens on Hardware.
+        // and the window reopens on the Controller page.
         _stage?.Hardware?.CloseLeavePrompt();
         _vm.ControllerIfCreated?.OnPageLeft();
-        _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controls page's dialog
+        _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controller page's dialog
         Hide();
     }
 

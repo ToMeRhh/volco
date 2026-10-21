@@ -76,7 +76,6 @@ public class SettingsCoverageTests
         var page = new StagePage(vm.Controls) { Hardware = vm.Hardware, HardwareSidePanel = host };
         var window = new Window { Content = page, Width = 1100, Height = 900 };
         window.Show();
-        page.Mode = StageMode.Hardware;
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
             ControllerConfigCodec.Crc32(DiyBlob), 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));

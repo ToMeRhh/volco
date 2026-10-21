@@ -21,8 +21,8 @@ using Button = Avalonia.Controls.Button;
 
 namespace Volco.App.Tests.Pages;
 
-/// <summary>Hardware-page spec §5.2, §5.3, §6.1, §6.2, §6.4 and §6.5: the inspector of the
-/// selected tile or bus on the stage in Hardware mode.</summary>
+/// <summary>Hardware-page spec §5.2, §5.3, §6.1, §6.2, §6.4 and §6.5: the wiring inspector of the
+/// selected tile or bus in the Controller page's side panel, under the device card.</summary>
 public sealed class HardwareInspectorTests : IDisposable
 {
     public HardwareInspectorTests() => StageTransitions.Enabled = false;
@@ -47,7 +47,7 @@ public sealed class HardwareInspectorTests : IDisposable
 
     /// <summary>The stage in a 1100 × 720 window over the DIY setup (5 sliders; buttons LED, LED,
     /// pair), in sync with the controller so the draft can be edited.</summary>
-    private static Shown Show(StageMode mode = StageMode.Hardware)
+    private static Shown Show()
     {
         var rig = new TestRig();
         var c = rig.Config.Config;
@@ -64,7 +64,6 @@ public sealed class HardwareInspectorTests : IDisposable
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
                                                      ControllerConfigCodec.Crc32(DiyBlob), 5, DiyKinds));
         Until(window, () => vm.Controller.CanEdit);
-        page.Mode = mode;
         Settle(window);
         return new Shown(page, host, window, rig, vm);
     }
@@ -94,6 +93,14 @@ public sealed class HardwareInspectorTests : IDisposable
     private static List<T> Tiles<T>(Visual root) where T : Control
         => root.GetVisualDescendants().OfType<T>().ToList();
 
+    /// <summary>The opacity it is drawn with: its own times its ancestors'.</summary>
+    private static double DrawnOpacity(Visual visual)
+    {
+        var opacity = 1.0;
+        for (var v = visual; v is not null; v = v.GetVisualParent()) opacity *= v.Opacity;
+        return opacity;
+    }
+
     /// <summary>A left click at <paramref name="y"/> from the control's top (its middle when null).</summary>
     private static void Click(Shown s, Control control, double? y = null)
     {
@@ -109,7 +116,7 @@ public sealed class HardwareInspectorTests : IDisposable
 
     private static string PinValue(Visual field) => In<TextBlock>(field, "ValueText").Text!;
 
-    /// <summary>Spec §3.2, §4: the device card tops the side panel, over the inspector.</summary>
+    /// <summary>Spec §3.2, §4: the device card tops the side panel, over the inspectors.</summary>
     [AvaloniaFact]
     public void TheDeviceCardTopsTheSidePanel()
     {
@@ -124,6 +131,11 @@ public sealed class HardwareInspectorTests : IDisposable
         Assert.False(In<Button>(card, "ActionButton").IsVisible);
         var cardBottom = card.TranslatePoint(new Point(0, card.Bounds.Height), s.Host)!.Value.Y;
         Assert.True(In<TextBlock>(s.Host, "HeadingText").TranslatePoint(new Point(0, 0), s.Host)!.Value.Y >= cardBottom);
+        // The tile's Controls inspector is under the controller's panel.
+        var controls = In<TextBlock>(In<ContentControl>(s.Page, "InspectorContent"), "HeadingText");
+        Assert.Equal("Slider 1", controls.Text);
+        Assert.True(controls.TranslatePoint(new Point(0, 0), s.Page)!.Value.Y
+                    >= s.Host.TranslatePoint(new Point(0, s.Host.Bounds.Height), s.Page)!.Value.Y);
 
         Click(s, In<Button>(card, "StatusButton"));
         Assert.True(s.Hardware.IsConnectionDialogOpen);
@@ -138,19 +150,6 @@ public sealed class HardwareInspectorTests : IDisposable
         Assert.Equal("Slider 3", Heading(s));
         Assert.Equal("GPIO 32", PinValue(In<PinField>(s.Host, "PinField")));
         Assert.StartsWith("Controls: ", In<TextBlock>(s.Host, "SubtitleText").Text);
-    }
-
-    [AvaloniaFact]
-    public void SelectionCarriesOverFromControls()
-    {
-        using var s = Show(StageMode.Controls);
-        Click(s, Tiles<ButtonTile>(s.Page)[1], y: 6);
-        Assert.Same(s.Vm.Buttons.Items[1], s.Vm.Controls.Selected);
-
-        s.Page.Mode = StageMode.Hardware;
-        Settle(s.Window);
-        Assert.Equal("Button 2", Heading(s));
-        Assert.Equal("GPIO 14", PinValue(In<PinField>(s.Host, "PinField")));
     }
 
     [AvaloniaFact]
@@ -209,8 +208,10 @@ public sealed class HardwareInspectorTests : IDisposable
         Assert.Null(remove.FindAncestorOfType<ScrollViewer>());
     }
 
+    /// <summary>The bus chips aren't drawn on the Controller page (controller-page spec §4.1); a
+    /// bus selected through its chip's model still shows its inspector, which fills the side panel.</summary>
     [AvaloniaFact]
-    public void BusChipSelectsTheBus()
+    public void ABusSelectionShowsTheBus()
     {
         using var s = Show();
         Assert.False(In<ItemsControl>(s.Page, "BusChipList").IsVisible);   // no screen yet
@@ -220,7 +221,10 @@ public sealed class HardwareInspectorTests : IDisposable
 
         var chip = Tiles<Button>(s.Page).Single(b => b.Name == "BusChip");
         Assert.Equal("I2C bus 0 · SDA 25 · SCL 26", chip.Content);
-        Click(s, chip);
+        Assert.Equal(0, DrawnOpacity(chip));
+        Assert.False(chip.IsEffectivelyEnabled);
+        chip.Command!.Execute(null);
+        Settle(s.Window);
 
         Assert.Equal("I2C bus 0", Heading(s));
         Assert.Equal("GPIO 25", PinValue(In<PinField>(s.Host, "SdaField")));
@@ -257,9 +261,7 @@ public sealed class HardwareInspectorTests : IDisposable
         Assert.Equal("Slider 3", Heading(s));
         Assert.Equal("GPIO 36", PinValue(In<PinField>(s.Host, "PinField")));
 
-        // Controls still draws Volco's five sliders until the save.
-        s.Page.Mode = StageMode.Controls;
-        Settle(s.Window);
-        Assert.Equal(5, Tiles<SliderTile>(s.Page).Count);
+        // Volco's settings keep five sliders until the save.
+        Assert.Equal(5, s.Vm.Sliders.Items.Count);
     }
 }

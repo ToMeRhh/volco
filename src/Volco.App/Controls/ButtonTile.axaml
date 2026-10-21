@@ -43,7 +43,7 @@
           </Panel>
         </Panel>
 
-        <!-- On Hardware, the indicator's wiring in the same cell (spec §5.2) -->
+        <!-- During a hardware test, the indicator's wiring and test state in the same cell (hardware-page spec §5.2, §8) -->
         <TextBlock Name="WiringIndicator" Grid.ColumnSpan="3" Classes="WiringLayer WiringIndicator"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="{Binding Wiring.IndicatorText}"
                    IsVisible="{Binding Wiring.ShowIndicatorText, FallbackValue=False}"
@@ -139,8 +139,8 @@
           </Panel>
         </Grid>
 
-        <!-- On Hardware, "Button N" and its pin, in the same row as the actions; both are always
-             measured, so the tile keeps its size in both modes -->
+        <!-- During a hardware test, "Button N" and its test state, in the same row as the actions; both are always
+             measured, so the tile keeps its size when a test starts -->
         <StackPanel Name="WiringRow" Grid.Row="2" Grid.ColumnSpan="3" Classes="WiringLayer WiringCaptions"
                     IsVisible="{Binding Wiring, Converter={x:Static ObjectConverters.IsNotNull}}"
                     ToolTip.Tip="{Binding Wiring.Problem}">

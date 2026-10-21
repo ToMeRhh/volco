@@ -16,8 +16,8 @@ using Xunit;
 
 namespace Volco.App.Tests.Pages;
 
-/// <summary>Spec docs/design/hardware-page.md §3.3: Controls and Hardware decorate one stage, so
-/// switching between them never moves or resizes a tile.</summary>
+/// <summary>The Controller page's drawing (controller-page spec §4.1): the title row, the tiles'
+/// Controls layer with the wiring captions hidden, and the side panel.</summary>
 public sealed class StageGeometryTests : IDisposable
 {
     public StageGeometryTests() => StageTransitions.Enabled = false;
@@ -86,12 +86,6 @@ public sealed class StageGeometryTests : IDisposable
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static void SetMode(Shown s, StageMode mode)
-    {
-        s.Page.Mode = mode;
-        Settle(s.Window);
-    }
-
     private static List<Control> Tiles(Visual root)
         => root.GetVisualDescendants().Where(v => v is SliderTile or ButtonTile).Cast<Control>().ToList();
 
@@ -109,161 +103,93 @@ public sealed class StageGeometryTests : IDisposable
         return opacity;
     }
 
-    private static void AssertSameRects(List<Rect> expected, List<Rect> actual)
-    {
-        Assert.Equal(expected.Count, actual.Count);
-        for (var i = 0; i < expected.Count; i++)
-        {
-            Assert.Equal(expected[i].X, actual[i].X, 0.5);
-            Assert.Equal(expected[i].Y, actual[i].Y, 0.5);
-            Assert.Equal(expected[i].Width, actual[i].Width, 0.5);
-            Assert.Equal(expected[i].Height, actual[i].Height, 0.5);
-        }
-    }
-
     [AvaloniaFact]
-    public void TileBoundsAreEqualInBothModes()
-    {
-        using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
-        Assert.Equal(9, Tiles(s.Page).Count);
-        Assert.True(In<TextBlock>(Tiles(s.Page)[5], "MainAction").TextLayout.TextLines.Count >= 2);
-        var controls = TileRects(s);
-
-        SetMode(s, StageMode.Hardware);
-        AssertSameRects(controls, TileRects(s));
-
-        SetMode(s, StageMode.Controls);
-        AssertSameRects(controls, TileRects(s));
-    }
-
-    [AvaloniaFact]
-    public void TileBoundsAreEqualOnADenseBoard()
-    {
-        var kinds = Enumerable.Range(0, 10).Select(i => (IndicatorKind)(i % 4)).ToArray();
-        using var s = Show(10, kinds);
-        Assert.True(s.Vm.Controls.IsDense);
-        Assert.Equal(20, Tiles(s.Page).Count);
-        var controls = TileRects(s);
-
-        SetMode(s, StageMode.Hardware);
-        AssertSameRects(controls, TileRects(s));
-    }
-
-    [AvaloniaFact]
-    public void TitleRowHeightIsTheSame()
+    public void TitleRowSaysController_At32Px()
     {
         using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
         var row = In<Grid>(s.Page, "TitleRow");
-        Assert.Equal("Controls", In<TextBlock>(row, "PageTitle").Text);
-        var height = row.Bounds.Height;
-        Assert.Equal(32, height, 0.5);
-
-        SetMode(s, StageMode.Hardware);
-        Assert.Equal("Hardware", In<TextBlock>(row, "PageTitle").Text);
-        Assert.Equal(height, row.Bounds.Height, 0.5);
-        Assert.Contains("hardware", s.Page.Classes);
+        Assert.Equal("Controller", In<TextBlock>(row, "PageTitle").Text);
+        Assert.Equal(32, row.Bounds.Height, 0.5);
+        Assert.DoesNotContain("hardware", s.Page.Classes);
     }
 
+    /// <summary>Tiles don't show pins (controller-page spec §4.1): the wiring captions are hidden
+    /// and keep their measure; the actions, the lights and the grips show.</summary>
     [AvaloniaFact]
-    public void HardwareModeShowsWiringCaptions()
+    public void TilesShowTheirActions_NotTheirWiring()
     {
         using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
         var tiles = Tiles(s.Page);
         var pin = tiles[0].GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "GPIO 33");
-        var main = In<TextBlock>(tiles[5], "MainAction");
         var indicator = tiles[6].GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "18 · 19");
         Assert.Equal(0, DrawnOpacity(pin));
-        Assert.Equal(1, DrawnOpacity(main));
-
-        SetMode(s, StageMode.Hardware);
-        Assert.Equal(1, DrawnOpacity(pin));
-        Assert.Equal(1, DrawnOpacity(indicator));
-        Assert.Equal(0, DrawnOpacity(main));
-        Assert.Equal(0, DrawnOpacity(In<Panel>(tiles[6], "Indicator")));
-        Assert.Equal(0, DrawnOpacity(In<Border>(tiles[0], "Grip")));
-    }
-
-    [AvaloniaFact]
-    public void ModeTabsKeepTheirSpaceInHardware()
-    {
-        using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
+        Assert.Equal(0, DrawnOpacity(indicator));
+        Assert.Equal(1, DrawnOpacity(In<TextBlock>(tiles[5], "MainAction")));
+        Assert.Equal(1, DrawnOpacity(In<Panel>(tiles[6], "Indicator")));
+        Assert.Equal(1, DrawnOpacity(In<Border>(tiles[0], "Grip")));
         var tabs = In<ItemsControl>(s.Page, "ModeTabs");
-        var height = tabs.Bounds.Height;
-        Assert.True(height > 0);
+        Assert.Equal(1, DrawnOpacity(tabs));
         Assert.True(tabs.IsHitTestVisible);
-
-        SetMode(s, StageMode.Hardware);
-        Assert.Equal(height, tabs.Bounds.Height, 0.5);
-        Assert.False(tabs.IsHitTestVisible);
-        Assert.Equal(0, DrawnOpacity(tabs));
-        Assert.Equal(0, DrawnOpacity(In<Border>(s.Page, "ModeFrameTint")));
+        Assert.True(In<Button>(s.Page, "AddModeButton").IsEffectivelyEnabled);
     }
 
+    /// <summary>The controller's panel (the device card) sits over the selected tile's inspector,
+    /// and the side panel keeps its size.</summary>
     [AvaloniaFact]
-    public void SidePanelShowsTheHardwarePanel_AtTheSameSize()
+    public void SidePanelShowsTheControllersPanelOverTheInspector_AtTheSameSize()
     {
         using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
         var inspector = s.Page.FindControl<Border>("Inspector")!;
         var size = inspector.Bounds.Size;
-        var panel = new TextBlock { Name = "HardwarePanelProbe", Text = "Hardware side" };
+        var panel = new TextBlock { Name = "HardwarePanelProbe", Text = "Controller side" };
         s.Page.HardwareSidePanel = panel;
+        Settle(s.Window);
 
-        SetMode(s, StageMode.Hardware);
-        Assert.Same(panel, In<TransitioningContentControl>(s.Page, "SidePanelHost").Content);
+        Assert.Same(panel, In<ContentControl>(s.Page, "SidePanelHost").Content);
         Assert.True(panel.IsEffectivelyVisible);
         Assert.Equal(size, inspector.Bounds.Size);
-
-        SetMode(s, StageMode.Controls);
-        Assert.Same(s.Page.FindControl<ContentControl>("InspectorContent"),
-                    In<TransitioningContentControl>(s.Page, "SidePanelHost").Content);
+        var content = s.Page.FindControl<ContentControl>("InspectorContent")!;
+        Assert.True(content.IsEffectivelyVisible);
+        Assert.True(content.TranslatePoint(new Point(0, 0), s.Page)!.Value.Y
+                    >= panel.TranslatePoint(new Point(0, panel.Bounds.Height), s.Page)!.Value.Y);
     }
 
     [AvaloniaFact]
     public void UnwiredTiles_ShowNoWiringParts_AndKeepTheirControlsSize()
     {
         using var s = Show(false, 5, IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.Led);
-        foreach (var mode in new[] { StageMode.Controls, StageMode.Hardware })
+        foreach (var tile in Tiles(s.Page))
         {
-            SetMode(s, mode);
-            foreach (var tile in Tiles(s.Page))
-            {
-                Assert.All(tile.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>()
-                               .Where(r => r.Classes.Contains("ProblemOutline")), r => Assert.False(r.IsVisible));
-                Assert.All(tile.GetVisualDescendants().OfType<Control>().Where(c => c.Name == "WiringRow"),
-                           c => Assert.False(c.IsVisible));
-            }
-            foreach (var tile in Tiles(s.Page).OfType<ButtonTile>())
-            {
-                Assert.False(In<TextBlock>(tile, "WiringIndicator").IsVisible);
-                // Row 0 is the LED's height alone: the cap (top margin 7) starts where the LED ends.
-                var led = In<Avalonia.Controls.Shapes.Ellipse>(tile, "Led");
-                var ledBottom = led.TranslatePoint(new Point(0, led.Bounds.Height), tile)!.Value.Y;
-                var capTop = In<Avalonia.Controls.Shapes.Ellipse>(tile, "Cap").TranslatePoint(new Point(0, 0), tile)!.Value.Y;
-                Assert.Equal(ledBottom + 7, capTop, 0.5);
-            }
+            Assert.All(tile.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>()
+                           .Where(r => r.Classes.Contains("ProblemOutline")), r => Assert.False(r.IsVisible));
+            Assert.All(tile.GetVisualDescendants().OfType<Control>().Where(c => c.Name == "WiringRow"),
+                       c => Assert.False(c.IsVisible));
+        }
+        foreach (var tile in Tiles(s.Page).OfType<ButtonTile>())
+        {
+            Assert.False(In<TextBlock>(tile, "WiringIndicator").IsVisible);
+            // Row 0 is the LED's height alone: the cap (top margin 7) starts where the LED ends.
+            var led = In<Avalonia.Controls.Shapes.Ellipse>(tile, "Led");
+            var ledBottom = led.TranslatePoint(new Point(0, led.Bounds.Height), tile)!.Value.Y;
+            var capTop = In<Avalonia.Controls.Shapes.Ellipse>(tile, "Cap").TranslatePoint(new Point(0, 0), tile)!.Value.Y;
+            Assert.Equal(ledBottom + 7, capTop, 0.5);
         }
     }
 
+    /// <summary>A control with a wiring problem keeps the danger outline on the drawing
+    /// (controller-page spec §4.1).</summary>
     [AvaloniaFact]
-    public void ModeButtonsAreOutOfKeyboardReachInHardware()
+    public void AWiringProblemShowsTheOutline()
     {
         using var s = Show(5, IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen, IndicatorKind.None);
-        var add = In<Button>(s.Page, "AddModeButton");
-        var modes = s.Vm.Controls.Buttons.Modes.Count;
-        Assert.True(add.IsEffectivelyEnabled);
+        var tile = Tiles(s.Page)[1];
+        var outline = tile.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>()
+            .Single(r => r.Classes.Contains("ProblemOutline"));
+        Assert.False(outline.IsVisible);
 
-        SetMode(s, StageMode.Hardware);
-        foreach (var name in new[] { "AddModeButton", "MakeLiveButton", "EditModesButton" })
-            Assert.False(In<Button>(s.Page, name).IsEffectivelyEnabled, name);
-        Assert.All(s.Page.GetVisualDescendants().OfType<RadioButton>().Where(r => r.Name == "ModeTab"),
-                   tab => Assert.False(tab.IsEffectivelyEnabled));
-        Assert.False(add.Focus(Avalonia.Input.NavigationMethod.Tab));
-        add.Focus(Avalonia.Input.NavigationMethod.Tab);
+        s.Vm.Sliders.Items[1].Wiring!.Problem = "Slider 2 also uses GPIO 33.";
         Settle(s.Window);
-        Assert.False(add.IsFocused);
-        Assert.Equal(modes, s.Vm.Controls.Buttons.Modes.Count);
-
-        SetMode(s, StageMode.Controls);
-        Assert.True(add.IsEffectivelyEnabled);
+        Assert.True(outline.IsVisible);
+        Assert.Equal(1, DrawnOpacity(outline));
     }
 }

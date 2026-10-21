@@ -620,28 +620,30 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
   </Style>
 
-  <!-- ── The stage's two modes (spec hardware-page.md §3.3, §5.2) ─────────
-       Controls and Hardware draw the same tiles: each tile, the mode frame and its tabs hold a
-       ControlsLayer and a WiringLayer in the same cells, both always measured, and the mode only
-       swaps their opacity (Views/Stage/StageTransitions crossfades it), so no tile moves. The
-       stage puts "hardware" on Border.Case. -->
+  <!-- ── The tiles' two layers (controller-page spec §4.1, hardware-page spec §8) ─────────
+       Each tile, the mode frame and its tabs hold a ControlsLayer and a WiringLayer in the same
+       cells, both always measured. The drawing shows the ControlsLayer; while a hardware test runs
+       (the stage puts "testing" on Border.Case) the WiringLayer with the test state shows instead,
+       so no tile moves (Views/Stage/StageTransitions crossfades it). -->
   <Style Selector=":is(Control).WiringLayer">
     <Setter Property="Opacity" Value="0"/>
     <Setter Property="IsHitTestVisible" Value="False"/>
   </Style>
   <!-- Disabled too, so the faded mode tabs and buttons are out of keyboard reach (layout is kept) -->
-  <Style Selector="Border.Case.hardware :is(Control).ControlsLayer">
+  <Style Selector="Border.Case.testing :is(Control).ControlsLayer">
     <Setter Property="Opacity" Value="0"/>
     <Setter Property="IsHitTestVisible" Value="False"/>
     <Setter Property="IsEnabled" Value="False"/>
   </Style>
-  <Style Selector="Border.Case.hardware :is(Control).WiringLayer">
+  <Style Selector="Border.Case.testing :is(Control).WiringLayer">
     <Setter Property="Opacity" Value="1"/>
     <Setter Property="IsHitTestVisible" Value="True"/>
   </Style>
-  <!-- The I2C bus chips under the buttons (hardware-page spec §5.2): pills, the accent outline
-       when selected, out of keyboard reach on Controls -->
-  <Style Selector="Border.Case:not(.hardware) ItemsControl.BusChips">
+  <!-- The I2C bus chips under the buttons (hardware-page spec §5.2): not drawn on the Controller
+       page (controller-page spec §4.1), so out of sight and out of reach even during a test -->
+  <Style Selector="Border.Case ItemsControl.BusChips">
+    <Setter Property="Opacity" Value="0"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
     <Setter Property="IsEnabled" Value="False"/>
   </Style>
   <Style Selector="Button.BusChip">
@@ -717,17 +719,13 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
     <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
   </Style>
-  <!-- A problem with the draft's control: the danger outline, on Hardware only -->
+  <!-- A problem with the draft's control: the danger outline (controller-page spec §4.1) -->
   <Style Selector="Rectangle.ProblemOutline">
     <Setter Property="Stroke" Value="{DynamicResource DangerBrush}"/>
     <Setter Property="StrokeThickness" Value="1.5"/>
     <Setter Property="RadiusX" Value="11"/>
     <Setter Property="RadiusY" Value="11"/>
     <Setter Property="IsHitTestVisible" Value="False"/>
-    <Setter Property="Opacity" Value="0"/>
-  </Style>
-  <Style Selector="Border.Case.hardware Rectangle.ProblemOutline">
-    <Setter Property="Opacity" Value="1"/>
   </Style>
 
   <!-- The hardware test on the drawing (hardware-page spec §8): the case's accent outline (the
@@ -745,7 +743,7 @@
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Padding" Value="12,7"/>
   </Style>
-  <Style Selector="Border.Case.hardware Ellipse.Cap.pressed">
+  <Style Selector="Border.Case.testing Ellipse.Cap.pressed">
     <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
   </Style>

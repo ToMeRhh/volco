@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Volco.App.ViewModels"
              xmlns:conv="using:Volco.App.Converters"
-             xmlns:stage="using:Volco.App.Views.Stage"
              x:Class="Volco.App.Controls.SliderTile"
              x:DataType="vm:SliderItemViewModel"
              Focusable="True" ToolTip.Tip="{Binding Heading}">
@@ -28,8 +27,8 @@
           </Panel>
           <Panel Name="Fader" Grid.Column="1" Classes="Fader" Width="32">
             <Border Classes="Track" Width="12" HorizontalAlignment="Center"/>
-            <!-- One fader in both modes: the live level on Controls, the raw level on Hardware
-                 (spec §5.2). It is not a layer, so it never fades (§3.3): the knob moves to the
+            <!-- One fader: the live level, and during a hardware test the raw level (hardware-page
+                 spec §5.2, §8). It is not a layer, so it never fades (§3.3): the knob moves to the
                  other level at once. -->
             <Border Name="LevelFill" Classes="LevelFill" Width="6" HorizontalAlignment="Center"
                     VerticalAlignment="Bottom" Margin="0,0,0,3">
@@ -38,7 +37,7 @@
                   <Binding Path="LiveLevel"/>
                   <Binding ElementName="Fader" Path="Bounds.Height"/>
                   <Binding Path="Wiring.RawLevel" FallbackValue="0"/>
-                  <Binding Path="$parent[stage:StagePage].Mode" FallbackValue="{x:Static stage:StageMode.Controls}"/>
+                  <Binding Path="Wiring.IsTesting" FallbackValue="False"/>
                 </MultiBinding>
               </Border.Height>
             </Border>
@@ -48,15 +47,15 @@
                   <Binding Path="LiveLevel"/>
                   <Binding ElementName="Fader" Path="Bounds.Height"/>
                   <Binding Path="Wiring.RawLevel" FallbackValue="0"/>
-                  <Binding Path="$parent[stage:StagePage].Mode" FallbackValue="{x:Static stage:StageMode.Controls}"/>
+                  <Binding Path="Wiring.IsTesting" FallbackValue="False"/>
                 </MultiBinding>
               </Border.Margin>
               <Border Classes="KnobLine"/>
             </Border>
           </Panel>
         </Grid>
-        <!-- The captions: on Controls the label, on Hardware the wiring. Both are always measured,
-             so the tile keeps its size in both modes. -->
+        <!-- The captions: the label, and during a hardware test the wiring with the test state.
+             Both are always measured, so the tile keeps its size when a test starts. -->
         <Panel>
           <!-- The label, after the app's icon on an apps slider; a drag carries this row -->
           <Grid Name="LabelRow" Classes="ControlsLayer" ColumnDefinitions="Auto,*" HorizontalAlignment="Center">

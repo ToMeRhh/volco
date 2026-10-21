@@ -4,9 +4,10 @@
              xmlns:views="using:Volco.App.Views.Hardware"
              x:Class="Volco.App.Views.Hardware.HardwareInspectorHost"
              x:DataType="hw:HardwareViewModel">
-  <!-- The Hardware side panel (hardware-page spec §3.2): the device card (§4) at the top, then the
-       inspector (§6): the selected tile's or bus's wiring, and an inline question ("Remove Slider 3?")
-       at the bottom -->
+  <!-- The controller's part of the side panel (hardware-page spec §3.2): the device card (§4) at
+       the top, then the inspector (§6): the selected tile's or bus's wiring or Controller settings,
+       and an inline question ("Remove Slider 3?") at the bottom. On the Controller page the
+       selected tile's Controls inspector sits under it (StagePage). -->
   <DockPanel>
     <views:DeviceCard Name="Card" DockPanel.Dock="Top" DataContext="{Binding Card}"/>
     <Border Name="ConfirmPanel" DockPanel.Dock="Bottom" Classes="InspectorRows" Margin="16,0,16,16"

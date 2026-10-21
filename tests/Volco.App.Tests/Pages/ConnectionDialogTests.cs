@@ -50,7 +50,6 @@ public sealed class ConnectionDialogTests : IDisposable
         var page = new StagePage(vm.Controls) { Hardware = vm.Hardware };
         var window = new Window { Content = page, Width = 1100, Height = 720 };
         window.Show();
-        page.Mode = StageMode.Hardware;
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
                                                      ControllerConfigCodec.Crc32(DiyBlob), 5, DiyKinds));

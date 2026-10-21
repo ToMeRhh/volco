@@ -626,9 +626,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private readonly Dictionary<int, int> _testPresses = new();
     private readonly HashSet<int> _testHeld = new();
 
-    /// <summary>The Hardware stage was left (the stage switched to Controls): a running test ends,
-    /// and Controls gets a selection of its own when Hardware's (a bus, the settings chip) isn't one.</summary>
-    public void OnModeLeft()
+    /// <summary>The Controller page was left (for General): a running test ends, and Controls gets
+    /// a selection of its own when the inspected one (a bus, the settings chip) isn't a tile.</summary>
+    public void OnPageLeft()
     {
         if (_disposed) return;
         _controller.OnPageLeft();

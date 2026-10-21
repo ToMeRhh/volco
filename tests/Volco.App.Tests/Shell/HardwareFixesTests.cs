@@ -13,6 +13,7 @@ using Volco.App.ViewModels.Hardware;
 using Volco.App.Views;
 using Volco.App.Views.Hardware;
 using Volco.App.Views.Inspector;
+using Volco.App.Views.Pages;
 using Volco.App.Views.Stage;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -267,12 +268,16 @@ public sealed class HardwareFixesTests : IDisposable
         Settle(s.Window);
     }
 
+    /// <summary>To General and back: nothing unsaved, so no prompt asks, and the drawing is Volco's
+    /// settings again.</summary>
     private static void ShowControls(Shown s)
     {
-        s.Window.ShowPage("controls");
+        s.Window.ShowPage("general");
         Pump(s.Window, 50);
-        Assert.Equal(StageMode.Controls, s.Stage.Mode);
         Assert.Null(s.Vm.Hardware.LeavePrompt);   // nothing unsaved
+        Assert.IsType<GeneralPage>(s.Window.CurrentPage);
+        s.Window.ShowPage("controller");
+        Pump(s.Window, 50);
     }
 
     private static string[] TileNames(Shown s)
@@ -335,15 +340,18 @@ public sealed class HardwareFixesTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void RemovingThenSaveAndContinueToControlsShowsTheShiftedControls()
+    public void RemovingThenSaveAndContinueShowsTheShiftedControls()
     {
         using var s = Show();
         RemoveWithTheInspector<SliderTile>(s, 2);
-        s.Window.ShowPage("controls");   // unsaved: the leave prompt asks
+        var stage = s.Stage;
+        s.Window.ShowPage("general");   // unsaved: the leave prompt asks
         Settle(s.Window);
-        Press(In<Button>(s.Stage, "SaveAndContinueButton"));
+        Press(In<Button>(stage, "SaveAndContinueButton"));
         Answer(s, Reply.OkThenHello);
-        Until(s.Window, () => s.Stage.Mode == StageMode.Controls);
+        Until(s.Window, () => s.Window.CurrentPage is GeneralPage);
+        s.Window.ShowPage("controller");
+        Pump(s.Window, 50);
 
         Assert.Equal(new[] { "a", "b", "d", "e" }, s.Config.Sliders.Select(x => x.Name));
         Assert.Equal(new[] { "a", "b", "d", "e" }, Written(s).Sliders.Select(x => x.Name));
@@ -599,12 +607,14 @@ public sealed class HardwareFixesTests : IDisposable
         item.Wiring!.RawLevel = 0.75;
         Pump(s.Window, 50);
 
-        foreach (var (page, mode, level) in new[] { ("controls", StageMode.Controls, 0.25), ("controller", StageMode.Hardware, 0.75),
-                                                    ("controls", StageMode.Controls, 0.25) })
+        // The live level, then during a hardware test the raw one, then the live one again.
+        foreach (var (testing, level) in new[] { (false, 0.25), (true, 0.75), (false, 0.25) })
         {
-            s.Window.ShowPage(page);
-            Settle(s.Window);   // the crossfade has started
-            Assert.Equal(mode, s.Stage.Mode);
+            if (testing && !s.Vm.Hardware.IsTesting) s.Vm.Hardware.StartTestCommand.Execute(null);
+            else if (!testing && s.Vm.Hardware.IsTesting) s.Vm.Hardware.StopTestCommand.Execute(null);
+            Until(s.Window, () => s.Vm.Hardware.IsTesting == testing);
+            item.Wiring!.RawLevel = 0.75;
+            Settle(s.Window);   // the layers' crossfade has started
             var tile = s.Stage.Tiles().OfType<SliderTile>().First();
             Assert.Same(item, tile.DataContext);
             var fader = In<Panel>(tile, "Fader");
@@ -626,7 +636,7 @@ public sealed class HardwareFixesTests : IDisposable
         }
     }
 
-    // ── 4. The side panel after General (spec §3.3), with the crossfades on ─────────────────
+    // ── 4. The side panel after General (hardware-page spec §3.3), with the crossfades on ───
 
     /// <summary>To General and back to <paramref name="tag"/>. The hop to General swaps at once, so
     /// the stage is surely out of the window, as it is once the window's crossfade has ended (the
@@ -650,50 +660,38 @@ public sealed class HardwareFixesTests : IDisposable
         StageTransitions.Enabled = true;
         using var s = Show();
         s.Vm.Controls.Select(s.Vm.Sliders.Items[2]);
-        // The side panel and the title crossfade both ways, so each of their two presenters has
-        // been faded out once.
-        s.Window.ShowPage("controls");
-        Pump(s.Window);
-        s.Window.ShowPage("controller");
         Pump(s.Window);
 
-        ViaGeneral(s, "controls");   // the mode changes while the stage is out of the window
+        ViaGeneral(s, "controller");
         var inspector = s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single();
         Assert.Same(s.Vm.Sliders.Items[2], inspector.DataContext);
         AssertDrawn(inspector);
-        Assert.Equal("Controls", In<TextBlock>(s.Stage, "PageTitle").Text);
+        var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
+        AssertDrawn(In<Volco.App.Views.Hardware.DeviceCard>(host, "Card"));
+        Assert.Equal(2, Assert.IsType<SliderWiringViewModel>(s.Vm.Hardware.Inspected).Index);
+        AssertDrawn(host.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
+        Assert.Equal("Controller", In<TextBlock>(s.Stage, "PageTitle").Text);
         AssertDrawn(In<TextBlock>(s.Stage, "PageTitle"));
+        AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
 
         Click(s, s.Stage.Tiles().OfType<SliderTile>().ElementAt(3));   // a new selection shows too
         inspector = s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single();
         Assert.Same(s.Vm.Sliders.Items[3], inspector.DataContext);
         AssertDrawn(inspector);
 
-        ViaGeneral(s, "controls");   // the same mode
+        ViaGeneral(s, "controller");   // again
         AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single());
-
-        ViaGeneral(s, "controller");
-        var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
-        AssertDrawn(host);
-        AssertDrawn(In<Volco.App.Views.Hardware.DeviceCard>(host, "Card"));
-        Assert.Equal(3, Assert.IsType<SliderWiringViewModel>(s.Vm.Hardware.Inspected).Index);
-        AssertDrawn(host.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
-        Assert.Equal("Hardware", In<TextBlock>(s.Stage, "PageTitle").Text);
-        AssertDrawn(In<TextBlock>(s.Stage, "PageTitle"));
-        AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
-
-        Click(s, s.Stage.Tiles().OfType<SliderTile>().ElementAt(1));
-        Assert.Equal(1, Assert.IsType<SliderWiringViewModel>(s.Vm.Hardware.Inspected).Index);
-        AssertDrawn(host.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
-
-        ViaGeneral(s, "controller");   // the same mode
         AssertDrawn(host.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
         AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
 
-        // With the crossfades left on for the hop to General too, it is the same.
+        // Controller settings fills the side panel under the card.
+        Click(s, In<Button>(s.Stage, "ControllerSettingsChip"));
+        AssertDrawn(host.GetVisualDescendants().OfType<ControllerSettingsInspector>().Single());
+
+        // With the crossfades left on for the hop to General too, the tile's inspector shows.
         s.Window.ShowPage("general");
         Pump(s.Window);
-        s.Window.ShowPage("controls");
+        s.Window.ShowPage("controller");
         Pump(s.Window);
         AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single());
     }

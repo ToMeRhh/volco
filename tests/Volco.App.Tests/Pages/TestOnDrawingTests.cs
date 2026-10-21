@@ -64,7 +64,6 @@ public sealed class TestOnDrawingTests : IDisposable
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
                                                      ControllerConfigCodec.Crc32(DiyBlob), 5, DiyKinds));
         Until(window, () => vm.Controller.CanEdit && vm.Hardware.CanStartTest);
-        page.Mode = StageMode.Hardware;
         Settle(window);
         return new Shown(page, host, window, rig, vm);
     }
@@ -189,12 +188,12 @@ public sealed class TestOnDrawingTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void LeavingHardwareEndsTheTest()
+    public void LeavingThePageEndsTheTest()
     {
         using var s = Show();
         StartTest(s);
 
-        s.Page.Mode = StageMode.Controls;
+        s.Hardware.OnPageLeft();   // what the window does when General is chosen
         Settle(s.Window);
 
         Assert.False(s.Rig.Runtime.InTestMode);
@@ -210,12 +209,15 @@ public sealed class TestOnDrawingTests : IDisposable
         s.Vm.Controls.Select(s.Vm.Sliders.Items[0]);
         Settle(s.Window);
         var inspected = In<ContentControl>(s.Host, "InspectedContent");
+        var controls = In<ContentControl>(s.Page, "InspectorContent");
         var pin = s.Hardware.PinField(new PinOwner(PinOwnerKind.Slider, 0));
         Assert.True(inspected.IsVisible);
+        Assert.True(controls.IsVisible);
         Assert.True(pin.IsEditable);
 
         StartTest(s);
         Assert.False(inspected.IsVisible);
+        Assert.False(controls.IsVisible);
         Assert.False(pin.IsEditable);
         Assert.False(s.Vm.Controller.CanEdit);
         Assert.True(In<Volco.App.Views.Hardware.DeviceCard>(s.Host, "Card").IsVisible);
@@ -223,6 +225,7 @@ public sealed class TestOnDrawingTests : IDisposable
         s.Hardware.StopTestCommand.Execute(null);
         Until(s.Window, () => !s.Hardware.IsTesting);
         Assert.True(inspected.IsVisible);
+        Assert.True(controls.IsVisible);
         Assert.True(pin.IsEditable);
     }
 }

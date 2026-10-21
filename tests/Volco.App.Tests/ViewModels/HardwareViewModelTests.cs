@@ -252,7 +252,7 @@ public sealed class HardwareViewModelTests : IDisposable
 
         Controller.RevertCommand.Execute(null);
         Assert.NotSame(added, controls.Selected);
-        Hardware.OnModeLeft();   // the stage switches to Controls
+        Hardware.OnPageLeft();   // the page is left for General
         Assert.Same(controls.Sliders.Items[0], controls.Selected);
     }
 
@@ -266,19 +266,19 @@ public sealed class HardwareViewModelTests : IDisposable
         Hardware.StartOver();
         Hardware.Chooser.Cards[^1].PickCommand.Execute(null);   // Start empty
         Assert.Null(controls.Selected);
-        Hardware.OnModeLeft();
+        Hardware.OnPageLeft();
         Assert.Same(controls.Sliders.Items[0], controls.Selected);
     }
 
     [Fact]
-    public void TheSettingsChipOrABusChip_ThenControls_SelectsTheDefault()
+    public void TheSettingsChipOrABusChip_ThenGeneral_SelectsTheDefault()
     {
         SetUpInSync();
         var controls = _settings!.Controls;
         controls.Select(controls.Sliders.Items[2]);
         Hardware.SelectControllerSettings();
         Assert.Null(controls.Selected);
-        Hardware.OnModeLeft();
+        Hardware.OnPageLeft();
         Assert.Same(controls.Sliders.Items[0], controls.Selected);
     }
 

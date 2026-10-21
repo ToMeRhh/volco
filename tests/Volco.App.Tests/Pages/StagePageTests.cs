@@ -102,7 +102,7 @@ public class StagePageTests
     // ── Navigation and window ─────────────────────────────────────────────────
 
     [AvaloniaFact]
-    public void Nav_HasGeneralControlsHardware()
+    public void Nav_HasGeneralAndController()
     {
         using var rig = new TestRig(EngineWithAudio());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -110,8 +110,8 @@ public class StagePageTests
         var nav = window.FindControl<ListBox>("NavList")!;
 
         var items = nav.Items.Cast<NavItem>().ToList();
-        Assert.Equal(new[] { "General", "Controls", "Hardware" }, items.Select(n => n.Label));
-        Assert.Equal(new[] { "general", "controls", "controller" }, items.Select(n => n.Tag));
+        Assert.Equal(new[] { "General", "Controller" }, items.Select(n => n.Label));
+        Assert.Equal(new[] { "general", "controller" }, items.Select(n => n.Tag));
         Assert.True(Application.Current!.TryFindResource("Icon.Sliders", out var sliders));
         Assert.Same(sliders, items[1].Icon);
 
@@ -155,7 +155,7 @@ public class StagePageTests
         Assert.Contains("compact", narrow.Classes);
         Assert.Equal(56, narrow.FindControl<Border>("Sidebar")!.Bounds.Width);
         var labels = Tiles<TextBlock>(narrow).Where(t => t.Classes.Contains("NavLabel")).ToList();
-        Assert.Equal(3, labels.Count);
+        Assert.Equal(2, labels.Count);
         Assert.All(labels, t => Assert.False(t.IsEffectivelyVisible));
         var page = (StagePage)narrow.CurrentPage!;
         Assert.Equal(300, Inspector(page).Bounds.Width);

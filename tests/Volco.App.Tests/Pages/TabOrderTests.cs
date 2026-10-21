@@ -17,7 +17,7 @@ namespace Volco.App.Tests.Pages;
 /// <summary>
 /// Keyboard-only use. Tab walks the Controls page in reading order: each slider tile, the mode
 /// tabs, Add mode and the edit pencil, each button tile, then the selected control's inspector.
-/// On Hardware it starts at the title row's buttons, and the mode tabs (faded out) are skipped.
+/// With the controller draft it starts at the title row's buttons.
 /// </summary>
 public class TabOrderTests
 {
@@ -60,7 +60,7 @@ public class TabOrderTests
     }
 
     [AvaloniaFact]
-    public void HardwareStage_TabGoesThroughTheTitleRow_ThenTileByTile()
+    public void ControllerPage_TabGoesThroughTheTitleRow_ThenTileByTile()
     {
         var blob = ControllerConfigCodec.Encode(ControllerPresets.ApplyTo(new Volco.Core.Controller.Proto.ControllerConfig(),
             ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId)));
@@ -80,7 +80,6 @@ public class TabOrderTests
         rig.Connection!.SetStatus(TransportStatus.Open);
         rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
             ControllerConfigCodec.Crc32(blob), 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
-        page.Mode = StageMode.Hardware;
         for (int i = 0; i < 100 && !(vm.Controller.CanEdit && vm.Hardware.CanStartTest); i++)
         {
             Dispatcher.UIThread.RunJobs();
@@ -95,9 +94,10 @@ public class TabOrderTests
             {
                 "ControllerSettingsChip", "TestButton",
                 "SliderTile", "SliderTile", "SliderTile", "SliderTile", "SliderTile",
+                "ModeTab", "AddModeButton", "EditModesButton",
                 "ButtonTile", "ButtonTile", "ButtonTile",
             },
-            TabSequence(window, add, 10));
+            TabSequence(window, add, 13));
         window.Close();
     }
 }

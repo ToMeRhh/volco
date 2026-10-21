@@ -28,9 +28,9 @@ using Button = Avalonia.Controls.Button;
 namespace Volco.App.Tests.Shell;
 
 /// <summary>
-/// Hardware-page spec §3.3: the settings window hosts one stage for Controls and Hardware, General
-/// crossfades in, and leaving Hardware with unsaved changes asks first. Also the title row's
-/// buttons (§3.2) and the inline confirmation's styles.
+/// The settings window's Controller page (controller-page spec §4): General crossfades in, and
+/// leaving the Controller page with unsaved changes asks first (§4.4). Also the title row's
+/// buttons (§4.2) and the inline confirmation's styles.
 /// </summary>
 public sealed class StageNavigationTests
 {
@@ -52,7 +52,7 @@ public sealed class StageNavigationTests
         }
     }
 
-    /// <summary>The settings window on Hardware over the DIY setup (5 sliders; buttons LED, LED,
+    /// <summary>The settings window on the Controller page over the DIY setup (5 sliders; buttons LED, LED,
     /// pair), in sync with the controller so the draft can be edited.</summary>
     /// <param name="extraButtons">Buttons with no light after the DIY ones, so the drawing scrolls.</param>
     private static Shown Show(double height = 720, int extraButtons = 0)
@@ -134,8 +134,8 @@ public sealed class StageNavigationTests
                                                  ControllerConfigCodec.Crc32(ControllerConfigCodec.Encode(s.Vm.Controller.Draft)), 5, DiyKinds));
     }
 
-    /// <summary>An unsaved pin change, then a click on the Controls entry: the prompt opens.</summary>
-    private static void LeaveDirty(Shown s, string tag = "controls")
+    /// <summary>An unsaved pin change, then a click on the General entry: the prompt opens.</summary>
+    private static void LeaveDirty(Shown s, string tag = "general")
     {
         s.Vm.Controller.SetSliderPin(1, 39);
         Settle(s.Window);
@@ -143,42 +143,7 @@ public sealed class StageNavigationTests
         Settle(s.Window);
     }
 
-    // ── One stage ────────────────────────────────────────────────────────────────────────────
-
-    [AvaloniaFact]
-    public void SwitchingControlsAndHardwareKeepsTheStage()
-    {
-        using var s = Show(height: 520, extraButtons: 8);
-        s.Window.ShowPage("controls");
-        Settle(s.Window);
-        var stage = s.Stage;
-        Assert.Equal(StageMode.Controls, stage.Mode);
-        s.Vm.Controls.Select(s.Vm.Sliders.Items[2]);
-        var scroll = In<ScrollViewer>(stage, "DrawingScroll");
-        var room = scroll.Extent.Height - scroll.Viewport.Height;
-        Assert.True(room > 0, "the drawing scrolls at 520 px");
-        scroll.Offset = new Vector(0, Math.Min(40, room));
-        Settle(s.Window);
-        var tiles = stage.Tiles();
-        var rects = TileRects(stage);
-        var offset = scroll.Offset;
-
-        s.Window.ShowPage("controller");
-        Settle(s.Window);
-        Assert.Same(stage, s.Window.CurrentPage);
-        Assert.Equal(StageMode.Hardware, stage.Mode);
-        Assert.Equal(tiles, stage.Tiles());                 // the same tile controls
-        Assert.Equal(rects, TileRects(stage));               // at the same places
-        Assert.Equal(offset, scroll.Offset);                 // at the same scroll position
-        Assert.Same(s.Vm.Sliders.Items[2], s.Vm.Controls.Selected);
-        Assert.Equal(2, Assert.IsType<SliderWiringViewModel>(s.Vm.Hardware.Inspected).Index);
-
-        s.Window.ShowPage("controls");
-        Settle(s.Window);
-        Assert.Same(stage, s.Window.CurrentPage);
-        Assert.Equal(rects, TileRects(stage));
-        Assert.Equal(offset, scroll.Offset);
-    }
+    // ── One page ─────────────────────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
     public void GeneralCrossfades()
@@ -197,7 +162,7 @@ public sealed class StageNavigationTests
     }
 
     [AvaloniaFact]
-    public void TrayOpensHardware()
+    public void TrayOpensTheControllerPage()
     {
         using var s = Show();
         s.Window.ShowPage("general");
@@ -206,15 +171,14 @@ public sealed class StageNavigationTests
 
         s.Window.ShowPage("controller");   // the tray's "Update controller firmware…" and the nav dot
         Settle(s.Window);
-        Assert.Equal(StageMode.Hardware, s.Stage.Mode);
         Assert.Equal("controller", s.NavTag);
-        Assert.Equal("Hardware", In<TextBlock>(s.Stage, "PageTitle").Text);
+        Assert.Equal("Controller", In<TextBlock>(s.Stage, "PageTitle").Text);
         Assert.Same(s.Vm.Hardware, s.Stage.Hardware);
         Assert.IsType<HardwareInspectorHost>(s.Stage.HardwareSidePanel);
     }
 
     [AvaloniaFact]
-    public void TheHardwareEntrysDotFollowsTheVm()
+    public void TheControllerEntrysDotFollowsTheVm()
     {
         using var s = Show();
         var item = s.Window.FindControl<ListBox>("NavList")!.Items.Cast<NavItem>().Single(n => n.Tag == "controller");
@@ -224,7 +188,7 @@ public sealed class StageNavigationTests
     }
 
     [AvaloniaFact]
-    public void LeavingHardwareForAnyPageOrHidingEndsTheTest()
+    public void LeavingForGeneralOrHidingEndsTheTest()
     {
         using var s = Show();
         s.Vm.Hardware.StartTestCommand.Execute(null);
@@ -254,10 +218,10 @@ public sealed class StageNavigationTests
         Assert.Equal(rects, TileRects(s.Stage));
     }
 
-    // ── The title row (spec §3.2) ────────────────────────────────────────────────────────────
+    // ── The title row (spec §4.2) ────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
-    public void HardwareTitleRowHasAddControllerSettingsAndTest()
+    public void TitleRowHasAddControllerSettingsAndTest()
     {
         using var s = Show();
         var actions = In<TransitioningContentControl>(s.Stage, "TitleActions");
@@ -294,10 +258,6 @@ public sealed class StageNavigationTests
         Assert.False(add.IsEffectivelyEnabled);   // editing is paused
         Click(s, In<Button>(actions, "StopTestButton"));
         Until(s.Window, () => !s.Rig.Runtime.InTestMode);
-
-        s.Window.ShowPage("controls");
-        Settle(s.Window);
-        Assert.Null(actions.Content);   // Controls has none
     }
 
     [AvaloniaFact]
@@ -365,7 +325,7 @@ public sealed class StageNavigationTests
         return Assert.IsAssignableFrom<ISolidColorBrush>(value).Color;
     }
 
-    // ── Leaving with unsaved changes (spec §3.3) ─────────────────────────────────────────────
+    // ── Leaving with unsaved changes (spec §4.4) ─────────────────────────────────────────────
 
     [AvaloniaFact]
     public void LeavingWithChangesPrompts()
@@ -374,7 +334,7 @@ public sealed class StageNavigationTests
         LeaveDirty(s);
 
         Assert.Equal("controller", s.NavTag);
-        Assert.Equal(StageMode.Hardware, s.Stage.Mode);
+        Assert.Same(s.Stage, s.Window.CurrentPage);
         Assert.True(In<Border>(s.Stage, "LeaveOverlay").IsVisible);
         Assert.Equal("Unsaved changes", In<TextBlock>(s.Stage, "LeaveTitle").Text);
 
@@ -422,8 +382,8 @@ public sealed class StageNavigationTests
         Assert.Equal("Saving to the controller…", In<TextBlock>(s.Stage, "LeaveProgress").Text);
 
         Answer(s, ConfigResultCode.Ok);
-        Until(s.Window, () => s.NavTag == "controls");
-        Assert.Equal(StageMode.Controls, s.Stage.Mode);
+        Until(s.Window, () => s.NavTag == "general");
+        Assert.IsType<GeneralPage>(s.Window.CurrentPage);
         Assert.Null(s.Vm.Hardware.LeavePrompt);
         Until(s.Window, () => !s.Vm.Controller.IsDirty);
     }
@@ -458,7 +418,7 @@ public sealed class StageNavigationTests
         Press(In<Button>(In<SaveBar>(s.Stage, "SaveBarHost"), "SaveButton"));
         Until(s.Window, () => AnyWrite(s));
 
-        s.Window.ShowPage("controls");
+        s.Window.ShowPage("general");
         Settle(s.Window);
         var prompt = s.Vm.Hardware.LeavePrompt;
         Assert.NotNull(prompt);
@@ -469,8 +429,8 @@ public sealed class StageNavigationTests
         Assert.Equal("controller", s.NavTag);
 
         Answer(s, ConfigResultCode.Ok);
-        Until(s.Window, () => s.NavTag == "controls");
-        Assert.Equal(StageMode.Controls, s.Stage.Mode);
+        Until(s.Window, () => s.NavTag == "general");
+        Assert.IsType<GeneralPage>(s.Window.CurrentPage);
         Assert.Null(s.Vm.Hardware.LeavePrompt);
         Assert.Equal(39u, s.Vm.Controller.Draft.Sliders[1].Pin);   // the save landed, nothing reverted
     }
@@ -500,7 +460,6 @@ public sealed class StageNavigationTests
         Until(s.Window, () => !s.Vm.Controller.IsSaving);
 
         Assert.Equal("controller", s.NavTag);
-        Assert.Equal(StageMode.Hardware, s.Stage.Mode);
         Assert.Null(s.Vm.Hardware.LeavePrompt);
         var failure = "The controller couldn't save the setup. Its previous setup is unchanged.";
         Assert.Equal(failure, s.Vm.Controller.Failure);
@@ -534,7 +493,6 @@ public sealed class StageNavigationTests
         s.Window.Show();
         Settle(s.Window);
         Assert.Equal("controller", s.NavTag);
-        Assert.Equal(StageMode.Hardware, s.Stage.Mode);
         Assert.Equal(39u, s.Vm.Controller.Draft.Sliders[1].Pin);
         Assert.True(In<SaveBar>(s.Stage, "SaveBarHost").IsVisible);
     }

@@ -17,8 +17,9 @@ using Volco.Core.Input;
 namespace Volco.App.Views.Stage;
 
 /// <summary>
-/// The stage: the drawing and the side panel, decorated for Controls or Hardware by
-/// <see cref="Mode"/> (spec hardware-page.md §3.3). Bindings do the work; the code-behind selects a tile on a click,
+/// The Controller page (spec docs/design/controller-page.md §4): the drawing, with the controller
+/// draft's title row, save bar, setup chooser and hardware test, and the side panel. Bindings do
+/// the work; the code-behind selects a tile on a click,
 /// Enter or Space, moves the focus between tiles with the arrow keys (spec §4.5), closes the
 /// dialog on Escape or a click on the scrim (the device dialog over it first), runs the mode tabs (StagePage.ModeTabs.cs), drag
 /// to swap (<see cref="TileSwapDrag"/>) and the tiles' "Swap with" menu.
@@ -52,38 +53,29 @@ public partial class StagePage : UserControl
         this.FindControl<Border>("LeaveOverlay")!.PointerPressed += OnLeaveOverlayPressed;
         InitModeTabs();
         InitStage();
-        // Drag to swap is a Controls thing: on Hardware the grips are faded out and inactive.
-        SwapDrag = TileSwapDrag.Attach(_case, () => Mode == StageMode.Controls ? Vm : null);
+        // No drag to swap during a hardware test: the grips give way to the test.
+        SwapDrag = TileSwapDrag.Attach(_case, () => Hardware is { IsTesting: true } ? null : Vm);
         // Tunnel, so "Swap with" is filled before the tile's own handler opens its menu.
         AddHandler(ContextRequestedEvent, OnTileContextRequested, RoutingStrategies.Tunnel);
     }
 
-    public static readonly StyledProperty<StageMode> ModeProperty =
-        AvaloniaProperty.Register<StagePage, StageMode>(nameof(Mode));
-
     public static readonly StyledProperty<Control?> HardwareSidePanelProperty =
         AvaloniaProperty.Register<StagePage, Control?>(nameof(HardwareSidePanel));
-
-    /// <summary>Which page the stage decorates (spec hardware-page.md §3.3). Switching crossfades
-    /// the title, the tiles' captions, the mode frame and the side panel; no tile moves.</summary>
-    public StageMode Mode
-    {
-        get => GetValue(ModeProperty);
-        set => SetValue(ModeProperty, value);
-    }
 
     public static readonly StyledProperty<HardwareViewModel?> HardwareProperty =
         AvaloniaProperty.Register<StagePage, HardwareViewModel?>(nameof(Hardware));
 
-    /// <summary>The Hardware page's view model: on Hardware the stage draws its controls (the
-    /// draft's, spec §5.1) and its bus chips. Null draws the Controls items in both modes.</summary>
+    /// <summary>The controller draft's view model: the stage draws its controls when they differ
+    /// from the Controls items (controller-page spec §4.1), and its title row, save bar, chooser
+    /// and test. Null draws the Controls items alone.</summary>
     public HardwareViewModel? Hardware
     {
         get => GetValue(HardwareProperty);
         set => SetValue(HardwareProperty, value);
     }
 
-    /// <summary>The side panel's content on Hardware; Controls shows the inspector.</summary>
+    /// <summary>The controller's part of the side panel (the device card, then the selected tile's
+    /// wiring or Controller settings), over the selected tile's inspector.</summary>
     public Control? HardwareSidePanel
     {
         get => GetValue(HardwareSidePanelProperty);
@@ -102,13 +94,11 @@ public partial class StagePage : UserControl
     private ContentControl _leaveHost = null!;
     private TransitioningContentControl _titleActions = null!;
     private HardwareTitleActions? _hardwareActions;
-    private TransitioningContentControl _titleHost = null!;
-    private TransitioningContentControl _sidePanelHost = null!;
+    private ContentControl _sidePanelHost = null!;
+    private Grid _sidePanel = null!;
     private Control _inspector = null!;
     private ItemsControl _sliderList = null!;
     private ItemsControl _buttonList = null!;
-    private readonly TextBlock _controlsTitle = new() { Name = "PageTitle", Classes = { "Title" }, Text = "Controls" };
-    private readonly TextBlock _hardwareTitle = new() { Name = "PageTitle", Classes = { "Title" }, Text = "Hardware" };
 
     private void InitStage()
     {
@@ -124,22 +114,18 @@ public partial class StagePage : UserControl
         _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
         _titleActions = this.FindControl<TransitioningContentControl>("TitleActions")!;
         _titleActions.PageTransition = null;
-        _titleHost = this.FindControl<TransitioningContentControl>("TitleHost")!;
-        _sidePanelHost = this.FindControl<TransitioningContentControl>("SidePanelHost")!;
+        _sidePanelHost = this.FindControl<ContentControl>("SidePanelHost")!;
+        _sidePanel = this.FindControl<Grid>("SidePanel")!;
         _inspector = this.FindControl<ContentControl>("InspectorContent")!;
         _sliderList = this.FindControl<ItemsControl>("SliderList")!;
         _buttonList = this.FindControl<ItemsControl>("ButtonList")!;
-        _titleHost.PageTransition = null;
-        _sidePanelHost.PageTransition = null;
-        _titleHost.Content = _controlsTitle;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
         if (_case is null) return;   // still loading
-        if (change.Property == ModeProperty) ApplyMode();
-        else if (change.Property == HardwareProperty)
+        if (change.Property == HardwareProperty)
         {
             if (change.OldValue is HardwareViewModel old)
             {
@@ -163,52 +149,37 @@ public partial class StagePage : UserControl
             UpdateSaveBar();
             UpdateTesting();
             UpdateLeavePrompt();
+            UpdateSidePanel();
         }
-        else if (change.Property == HardwareSidePanelProperty && Mode == StageMode.Hardware)
+        else if (change.Property == HardwareSidePanelProperty)
         {
-            _sidePanelHost.PageTransition = StageTransitions.PageTransition();
             _sidePanelHost.Content = HardwareSidePanel;
+            UpdateSidePanel();
         }
     }
 
-    /// <summary>Swaps the decorations: the "hardware" class (styles fade the tiles' layers and the
-    /// mode frame), the title word and the side panel's content.</summary>
-    private void ApplyMode()
-    {
-        var hardware = Mode == StageMode.Hardware;
-        StageTransitions.Prepare(_case);
-        Classes.Set("hardware", hardware);
-        _case.Classes.Set("hardware", hardware);
-        _titleHost.PageTransition = StageTransitions.PageTransition();
-        _titleHost.Content = hardware ? _hardwareTitle : _controlsTitle;
-        _sidePanelHost.PageTransition = StageTransitions.PageTransition();
-        _sidePanelHost.Content = hardware ? HardwareSidePanel : _inspector;
-        _titleActions.PageTransition = StageTransitions.PageTransition();
-        UpdateTitleActions();
-        UpdateTileSources();
-        UpdateChooser();
-        UpdateCompare();
-        UpdateConnection();
-        UpdateSaveBar();
-        UpdateTesting();
-        UpdateLeavePrompt();
-        // Leaving Hardware ends a running hardware test (spec §8).
-        if (!hardware) Hardware?.OnModeLeft();
-    }
-
-    /// <summary>Hardware's title-row buttons (spec §3.2): + Add, Controller settings and Test;
-    /// Controls has none.</summary>
+    /// <summary>The title row's buttons (controller-page spec §4.2): + Add, Controller settings and Test.</summary>
     private void UpdateTitleActions()
     {
-        var content = Mode == StageMode.Hardware ? _hardwareActions : null;
-        if (!ReferenceEquals(_titleActions.Content, content)) _titleActions.Content = content;
+        if (!ReferenceEquals(_titleActions.Content, _hardwareActions)) _titleActions.Content = _hardwareActions;
     }
 
-    /// <summary>The leave prompt's card over the stage while Hardware has one open; the focus moves into it.</summary>
+    /// <summary>The side panel's rows (an interim layout until the combined inspector,
+    /// controller-page spec §4.3): while the controller's panel inspects something that isn't a
+    /// tile (Controller settings, a bus) it takes the height; else it is as tall as its card and the
+    /// tile's wiring, and the selected tile's inspector under it takes the rest.</summary>
+    private void UpdateSidePanel()
+    {
+        var panelInspects = HardwareSidePanel is not null
+                            && Hardware?.Inspected is not null and not (SliderWiringViewModel or ButtonWiringViewModel);
+        _sidePanel.RowDefinitions[0].Height = panelInspects ? GridLength.Star : GridLength.Auto;
+        _sidePanel.RowDefinitions[1].Height = panelInspects ? GridLength.Auto : GridLength.Star;
+    }
+
+    /// <summary>The leave prompt's card over the stage while one is open; the focus moves into it.</summary>
     private void UpdateLeavePrompt()
     {
-        var hw = Mode == StageMode.Hardware ? Hardware : null;
-        var prompt = hw?.LeavePrompt;
+        var prompt = Hardware?.LeavePrompt;
         _leaveHost.Content = prompt;
         var open = prompt is not null;
         if (_leaveOverlay.IsVisible == open) return;
@@ -235,22 +206,24 @@ public partial class StagePage : UserControl
         else card.Focus();
     });
 
-    /// <summary>While a hardware test runs on Hardware, the case has the accent outline ("testing")
-    /// and the band shows under it (spec §8).</summary>
+    /// <summary>While a hardware test runs, the case has the accent outline ("testing", which also
+    /// shows the tiles' test layer), the band shows under it and the tile inspector is hidden:
+    /// editing is paused (hardware-page spec §8).</summary>
     private void UpdateTesting()
     {
-        var testing = Mode == StageMode.Hardware && Hardware is { IsTesting: true };
+        var testing = Hardware is { IsTesting: true };
+        StageTransitions.Prepare(_case);
         _case.Classes.Set("testing", testing);
         this.FindControl<Control>("TestBand")!.IsVisible = testing;
+        _inspector.IsVisible = !testing;
     }
 
-    /// <summary>The save bar (spec §6.5) shows on Hardware while the draft is unsaved.</summary>
+    /// <summary>The save bar (hardware-page spec §6.5) shows while the draft is unsaved.</summary>
     private void UpdateSaveBar()
     {
         var bar = this.FindControl<Control>("SaveBarHost")!;
-        var hw = Mode == StageMode.Hardware ? Hardware : null;
         bar.DataContext = Hardware;
-        bar.IsVisible = hw is { ShowSaveBar: true };
+        bar.IsVisible = Hardware is { ShowSaveBar: true };
     }
 
     private void OnHardwarePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -261,14 +234,15 @@ public partial class StagePage : UserControl
         else if (e.PropertyName is nameof(HardwareViewModel.IsCompareOpen) or nameof(HardwareViewModel.Compare)) UpdateCompare();
         else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
         else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
+        else if (e.PropertyName is nameof(HardwareViewModel.Inspected)) UpdateSidePanel();
     }
 
-    /// <summary>On Hardware, the setup chooser takes the case's rectangle (spec §3.3, §7.1): the
+    /// <summary>The setup chooser takes the case's rectangle (hardware-page spec §3.3, §7.1): the
     /// drawing fades out and keeps its measure, out of pointer and keyboard reach, and the chooser
     /// crossfades in over it.</summary>
     private void UpdateChooser()
     {
-        var show = Mode == StageMode.Hardware && Hardware is { ShowChooser: true };
+        var show = Hardware is { ShowChooser: true };
         if (show && Hardware is { } hw) _chooser ??= new SetupChooser { DataContext = hw.Chooser };
         if (StageTransitions.Enabled && _drawing.Transitions is not { Count: > 0 })
             _drawing.Transitions = new Avalonia.Animation.Transitions
@@ -285,10 +259,10 @@ public partial class StagePage : UserControl
         _chooserHost.Content = content;
     }
 
-    /// <summary>Compare's card over the stage while Hardware has it open; the focus moves into it.</summary>
+    /// <summary>Compare's card over the stage while it is open; the focus moves into it.</summary>
     private void UpdateCompare()
     {
-        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        var hw = Hardware;
         var open = hw is { IsCompareOpen: true, Compare: not null };
         _compareHost.Content = open ? hw!.Compare : null;
         if (_compareOverlay.IsVisible == open) return;
@@ -307,10 +281,10 @@ public partial class StagePage : UserControl
         });
     }
 
-    /// <summary>The Connection dialog's card over the stage while Hardware has it open; the focus moves into it.</summary>
+    /// <summary>The Connection dialog's card over the stage while it is open; the focus moves into it.</summary>
     private void UpdateConnection()
     {
-        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        var hw = Hardware;
         var open = hw is { IsConnectionDialogOpen: true, ConnectionDialog: not null };
         _connectionHost.Content = open ? hw!.ConnectionDialog : null;
         if (_connectionOverlay.IsVisible == open) return;
@@ -365,13 +339,12 @@ public partial class StagePage : UserControl
         });
     }
 
-    /// <summary>The tiles drawn: on Hardware the draft's controls (spec §5.1), else the Controls
-    /// items. While the draft's are the Controls items in order the stage keeps drawing those, so
-    /// switching modes rebuilds no tile.</summary>
+    /// <summary>The tiles drawn (controller-page spec §4.1): the draft's controls when the draft
+    /// has added or removed ones, else the Controls items.</summary>
     private void UpdateTileSources()
     {
         var vm = Vm;
-        var hw = Mode == StageMode.Hardware ? Hardware : null;
+        var hw = Hardware;
         Show(_sliderList, vm is null ? null
              : hw is not null && !hw.Sliders.SequenceEqual(vm.Sliders.Items) ? hw.Sliders : vm.Sliders.Items);
         Show(_buttonList, vm is null ? null
@@ -392,9 +365,9 @@ public partial class StagePage : UserControl
     {
         if (TileOf(e.Source as Visual) is not { ContextMenu: { } menu } tile || Vm is not { } vm) return;
         var swapWith = menu.Items.OfType<MenuItem>().First();
-        if (Mode == StageMode.Hardware)
+        if (Hardware is { IsTesting: true })
         {
-            // The menu only has "Swap with", which Hardware doesn't offer.
+            // The menu only has "Swap with", which a hardware test doesn't offer.
             swapWith.ItemsSource = null;
             swapWith.IsEnabled = false;
             e.Handled = true;
@@ -584,7 +557,7 @@ public partial class StagePage : UserControl
             }
             return;
         }
-        if (e.Key == Key.Escape && Mode == StageMode.Hardware && Hardware is { IsStartingOver: true } over)
+        if (e.Key == Key.Escape && Hardware is { IsStartingOver: true } over)
         {
             // Escape cancels Start over: the drawing comes back.
             over.CancelStartOver();
