@@ -144,7 +144,10 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// setup, and nobody has started a draft from it: it counts as dirty against the empty baseline
     /// but holds nothing the user changed.</summary>
     public bool IsPlaceholder => _baseline.Length == 0 && !_hasPermission && !_fixIt
-                                 && _draft.ToByteArray().AsSpan().SequenceEqual(new ControllerConfig { Preset = ControllerPresets.BlankId }.ToByteArray());
+                                 && _draft.ToByteArray().AsSpan().SequenceEqual(BlankBytes);
+
+    /// <summary>The Blank placeholder draft's bytes.</summary>
+    private static readonly byte[] BlankBytes = new ControllerConfig { Preset = ControllerPresets.BlankId }.ToByteArray();
 
     /// <summary>The draft holds changes the user made and hasn't saved (dirty, and not the
     /// placeholder): leaving the Controller page asks first, and the drawing shows the draft's

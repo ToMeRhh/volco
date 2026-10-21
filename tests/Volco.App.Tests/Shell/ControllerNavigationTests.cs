@@ -203,6 +203,8 @@ public sealed class ControllerNavigationTests : IDisposable
             var stage = Assert.IsType<StagePage>(window.CurrentPage);
             Assert.True(vm.Sliders.Items.Count > 0);
             Assert.Equal(vm.Sliders.Items.Count + vm.Buttons.Items.Count, stage.Tiles().Count);
+            Assert.False(vm.Hardware.ShowSaveBar);
+            Assert.False(In<Volco.App.Views.Hardware.SaveBar>(stage, "SaveBarHost").IsVisible);   // nothing the user changed
 
             window.ShowPage("general");
             Settle(window);

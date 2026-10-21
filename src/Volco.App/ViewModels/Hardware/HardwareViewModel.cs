@@ -249,7 +249,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (e.PropertyName == nameof(ControllerViewModel.Layout)) Refresh();
         if (e.PropertyName is nameof(ControllerViewModel.IsTesting) or null or "") OnTestingChanged();
         if (e.PropertyName is nameof(ControllerViewModel.CanStartTest) or null or "") OnPropertyChanged(nameof(CanStartTest));
-        if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or nameof(ControllerViewModel.IsSaving)
+        if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or nameof(ControllerViewModel.HasUnsavedChanges)
+            or nameof(ControllerViewModel.IsSaving)
             or nameof(ControllerViewModel.IsSettingUp) or nameof(ControllerViewModel.CanSave)
             or nameof(ControllerViewModel.Notice) or null or "") UpdateSaveBar();
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or null or "") OnPropertyChanged(nameof(IsDirty));
@@ -259,9 +260,10 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     // ── The save bar (spec §6.5) ─────────────────────────────────────────────────────────────
 
-    /// <summary>The bar at the bottom of the drawing: shown while the draft is unsaved, no save runs
-    /// and the setup chooser isn't in the drawing's place.</summary>
-    public bool ShowSaveBar => _controller.IsDirty && !_controller.IsSaving && !ShowChooser;
+    /// <summary>The bar at the bottom of the drawing: shown while the draft holds the user's unsaved
+    /// changes (not the Blank placeholder), no save runs and the setup chooser isn't in the
+    /// drawing's place.</summary>
+    public bool ShowSaveBar => _controller.HasUnsavedChanges && !_controller.IsSaving && !ShowChooser;
 
     /// <summary>"1 change not saved", "N changes not saved"; for a new draft, that the setup isn't on the
     /// controller; and after the controller's setup changed under the draft, that Discard loads it.</summary>
