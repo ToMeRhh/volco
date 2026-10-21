@@ -157,6 +157,8 @@
         <MultiBinding Converter="{x:Static BoolConverters.And}">
           <Binding Path="Wiring.HasProblem" FallbackValue="False"/>
           <Binding Path="!IsNew"/>
+          <!-- Without wiring, HasProblem yields no value, which And skips -->
+          <Binding Path="Wiring" Converter="{x:Static ObjectConverters.IsNotNull}"/>
         </MultiBinding>
       </Rectangle.IsVisible>
     </Rectangle>
