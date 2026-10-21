@@ -157,10 +157,10 @@
       </Grid>
 
       <!-- The side panel (controller-page spec §4.3). The controller's panel (HardwareSidePanel:
-           the preset chooser and, when selected, Controller settings; the device card is in the
-           sidebar) sits over the selected tile's inspector, whose two fixed sections, Controls or
-           Actions over Hardware, each scroll on their own; the draft's inline questions are at the
-           bottom, under both. -->
+           the preset chooser and, when selected, Controller settings; the status is in the
+           sidebar and the banner) sits over the selected tile's inspector, whose two fixed
+           sections, Controls or Actions over Hardware, each scroll on their own; the draft's
+           inline questions are at the bottom, under both. -->
       <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
         <Grid Name="SidePanel" RowDefinitions="Auto,*,Auto">
           <ContentControl Name="SidePanelHost"/>

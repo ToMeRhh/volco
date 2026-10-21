@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:conv="using:Volco.App.Converters"
+             x:Class="Volco.App.Views.Hardware.SidebarStatus"
+             x:DataType="hw:ControllerStatusViewModel">
+  <UserControl.Resources>
+    <conv:LinkToneToBrushConverter x:Key="ToneToBrush"/>
+  </UserControl.Resources>
+  <!-- The controller's status at the bottom of the sidebar (controller-page spec §5): a dot and one
+       short line ("Connected", "Connecting…", or what needs the user), with the whole line as the
+       tooltip; a click opens the menu of the rare actions (hardware-page spec §4.2). The compact
+       (56 px) sidebar shows only the dot, and the whole line while the sidebar opens over the page. -->
+  <Button Name="StatusLineButton" Classes="SidebarStatus" HorizontalAlignment="Stretch"
+          ToolTip.Tip="{Binding FullText}" AutomationProperties.Name="{Binding FullText}">
+    <Grid ColumnDefinitions="Auto,*">
+      <Ellipse Name="StatusDot" Width="8" Height="8" VerticalAlignment="Center"
+               Fill="{Binding State.Tone, Converter={StaticResource ToneToBrush}}"/>
+      <TextBlock Name="StatusText" Grid.Column="1" Classes="SidebarStatusText" Margin="10,0,0,0"
+                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxLines="1"
+                 Text="{Binding ShortText}"/>
+    </Grid>
+    <Button.Flyout>
+      <MenuFlyout Placement="TopEdgeAlignedLeft">
+        <MenuItem Name="ConnectionMenuItem" Header="Connection…" Command="{Binding OpenConnectionCommand}"/>
+        <MenuItem Name="ReconnectMenuItem" Header="Reconnect" Command="{Binding ReconnectCommand}"/>
+        <MenuItem Name="DisconnectMenuItem" Header="Disconnect" Command="{Binding DisconnectCommand}"/>
+        <Separator/>
+        <MenuItem Name="CheckFirmwareMenuItem" Header="Check firmware" Command="{Binding CheckFirmwareCommand}"/>
+        <MenuItem Name="ReinstallMenuItem" Header="Reinstall firmware…" Foreground="{DynamicResource DangerBrush}"
+                  Command="{Binding ReinstallFirmwareCommand}"/>
+        <Separator/>
+        <MenuItem Name="LoadPresetMenuItem" Header="Load a preset…" Command="{Binding LoadPresetCommand}"/>
+        <MenuItem Name="StartOverMenuItem" Header="Start over…" Command="{Binding StartOverCommand}"/>
+      </MenuFlyout>
+    </Button.Flyout>
+  </Button>
+</UserControl>

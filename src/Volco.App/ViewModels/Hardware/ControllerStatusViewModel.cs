@@ -8,26 +8,30 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// The device card in the settings window's sidebar, on every page (controller-page spec §5;
-/// hardware-page spec §4): "Volco controller", one status line with its dot, one detail line, at
-/// most one primary button (<see cref="DeviceCard"/>), and the ⋯ menu of the rare actions (§4.2).
-/// It reads the page's <see cref="ControllerViewModel"/> and the shared <see cref="ConnectionViewModel"/>,
-/// so it agrees with the tray. The actions that belong to the drawing raise <see cref="RequestController"/>
-/// first. UI thread.
+/// The controller's status in the settings window, on every page (controller-page spec §5;
+/// hardware-page spec §4.1's states); its <see cref="Level"/> decides where it shows. The quiet
+/// line at the bottom of the sidebar always shows (a dot and <see cref="ShortText"/>, with the menu
+/// of the rare actions, §4.2); when the status needs the user, the banner across the top of the
+/// content area shows too (the dot, <see cref="FullText"/> and at most one primary button,
+/// <see cref="DeviceCard"/>). It reads the page's <see cref="ControllerViewModel"/> and the shared
+/// <see cref="ConnectionViewModel"/>, so it agrees with the tray. The actions that belong to the
+/// drawing raise <see cref="RequestController"/> first. UI thread.
 /// </summary>
-public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
+public sealed partial class ControllerStatusViewModel : ObservableObject, IDisposable
 {
     private readonly ControllerViewModel _controller;
     private readonly HardwareViewModel _hardware;
     private bool _disposed;
 
-    public DeviceCardViewModel(ControllerViewModel controller, HardwareViewModel hardware)
+    public ControllerStatusViewModel(ControllerViewModel controller, HardwareViewModel hardware)
     {
         _controller = controller;
         _hardware = hardware;
         _controller.PropertyChanged += OnSourceChanged;
         _controller.Connection.PropertyChanged += OnSourceChanged;
-        _state = Compute();
+        var inputs = Inputs();
+        _state = DeviceCard.From(inputs);
+        _level = DeviceCard.LevelOf(inputs, _state);
     }
 
     /// <summary>The page's controller logic: the Install confirmation binds to it.</summary>
@@ -38,8 +42,24 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
     public string Name => DeviceCard.Name;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(HasDetail), nameof(HasProgress), nameof(DetailOpensChooser))]
+    [NotifyPropertyChangedFor(nameof(ActionLabel), nameof(HasAction), nameof(HasProgress), nameof(ShortText), nameof(FullText))]
     private CardState _state;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShortText), nameof(ShowsBanner))]
+    private StatusLevel _level;
+
+    /// <summary>The sidebar line's words: "Connected" or "Connecting…" when all is fine, else the
+    /// state's status line.</summary>
+    public string ShortText => Level != StatusLevel.Fine ? State.Status
+                             : State.Tone == LinkTone.Good ? "Connected" : "Connecting…";
+
+    /// <summary>The status and its detail on one line: the banner's text and the sidebar line's tooltip.</summary>
+    public string FullText => State.Detail is { } detail ? $"{State.Status} · {detail}" : State.Status;
+
+    /// <summary>The banner shows while the status needs the user. A running operation shows there
+    /// too until the progress dialog takes it over.</summary>
+    public bool ShowsBanner => Level != StatusLevel.Fine;
 
     /// <summary>Raised before an action that belongs to the drawing acts (Fix it, Test your
     /// controller now, Load a preset…, Start over…, the not-set-up states' chooser): the window
@@ -50,12 +70,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
 
     public string ActionLabel => DeviceCard.Label(State.Action);
     public bool HasAction => State.Action != CardAction.None;
-    public bool HasDetail => State.Detail is not null;
     public bool HasProgress => State.Progress is not null;
-
-    /// <summary>The detail line points to the setup chooser ("Choose how to start."), which is on
-    /// the Controller page: a click on it goes there.</summary>
-    public bool DetailOpensChooser => State.Detail is DeviceCard.ChooseDetail or DeviceCard.UnusableDetail;
 
     /// <summary>The inputs of <see cref="DeviceCard.From"/>, read from the page now.</summary>
     internal CardInputs Inputs()
@@ -76,12 +91,12 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
                               c.SavePhaseText, c.Failure, c.OfferTest, c.OfferInstall);
     }
 
-    private CardState Compute() => DeviceCard.From(Inputs());
-
     private void OnSourceChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_disposed) return;
-        State = Compute();
+        var inputs = Inputs();
+        State = DeviceCard.From(inputs);
+        Level = DeviceCard.LevelOf(inputs, State);
         ActionCommand.NotifyCanExecuteChanged();
         CheckFirmwareCommand.NotifyCanExecuteChanged();
         ReinstallFirmwareCommand.NotifyCanExecuteChanged();
@@ -100,6 +115,7 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
         CardAction.CheckFirmware or CardAction.Update => _controller.CanUseFirmware,
         CardAction.TestNow => _controller.CanStartTest,
         CardAction.Install => _controller.CanUseFirmware && !_controller.Busy,
+        CardAction.ChooseHowToStart => true,
         _ => !_controller.Busy,
     };
 
@@ -118,21 +134,15 @@ public sealed partial class DeviceCardViewModel : ObservableObject, IDisposable
             case CardAction.Compare: _hardware.OpenCompare(); break;
             case CardAction.TestNow: ToController(); _controller.TestNowCommand.Execute(null); break;
             case CardAction.Install: _controller.InstallFirmwareCommand.Execute(null); break;   // asks first
+            case CardAction.ChooseHowToStart: ToController(); break;   // the chooser is on the Controller page
         }
     }
 
-    /// <summary>The detail line of a not-set-up state: the Controller page, where the chooser is.</summary>
-    [RelayCommand]
-    private void OpenChooser()
-    {
-        if (DetailOpensChooser) ToController();
-    }
-
-    /// <summary>The status line's ›: the Connection dialog, on the tab of the current connection.</summary>
+    /// <summary>The menu's Connection…: the Connection dialog, on the tab of the current connection.</summary>
     [RelayCommand]
     private void OpenConnection() => _hardware.OpenConnection(wifi: Connection.ConnectionType == ConnectionType.Udp);
 
-    // ── The ⋯ menu (spec §4.2) ───────────────────────────────────────────────────────────────
+    // ── The status line's menu (spec §4.2) ────────────────────────────────────────────────────
 
     [RelayCommand]
     private void Reconnect() => Connection.ReconnectCommand.Execute(null);

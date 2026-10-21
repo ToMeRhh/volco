@@ -35,11 +35,11 @@ public sealed class DeviceCardTests : IDisposable
     [InlineData(LinkState.Incompatible, BannerKind.Incompatible, BannerActions.Update, true, false,
                 "Firmware too old for this Volco", LinkTone.Warning, "Update it to use the controller again.", CardAction.Update)]
     [InlineData(LinkState.Connected, BannerKind.NotSetUp, BannerActions.SetUp, false, false,
-                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.None)]
+                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.ChooseHowToStart)]
     [InlineData(LinkState.Connected, BannerKind.NotSetUpHasMirror, BannerActions.ApplySaved, false, false,
-                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.None)]
+                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.ChooseHowToStart)]
     [InlineData(LinkState.Connected, BannerKind.Unusable, BannerActions.SetUpFromScratch, false, false,
-                "The controller's setup can't be used", LinkTone.Warning, "Start again from Volco's copy or from scratch.", CardAction.None)]
+                "The controller's setup can't be used", LinkTone.Warning, "Start again from Volco's copy or from scratch.", CardAction.ChooseHowToStart)]
     [InlineData(LinkState.Connected, BannerKind.BrokenWithFirmware, BannerActions.FixIt, false, false,
                 "Your setup doesn't work with this firmware", LinkTone.Warning, "Fix it in the drawing, then Save.", CardAction.FixIt)]
     [InlineData(LinkState.Connected, BannerKind.DifferentSetup, BannerActions.UseControllers, false, false,
@@ -157,6 +157,47 @@ public sealed class DeviceCardTests : IDisposable
         Assert.Equal("Test your controller now", DeviceCard.Label(card.Action));
     }
 
+    // ── Controller-page spec §5: the three levels ───────────────────────────────────────────
+
+    [Theory]
+    [InlineData(LinkState.Disconnected, BannerKind.None, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.PortBusy, BannerKind.None, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.NoAnswer, BannerKind.NoAnswer, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Searching, BannerKind.None, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Incompatible, BannerKind.Incompatible, true, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Connected, BannerKind.NotSetUp, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Connected, BannerKind.NotSetUpHasMirror, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Connected, BannerKind.Unusable, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Connected, BannerKind.BrokenWithFirmware, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Connected, BannerKind.DifferentSetup, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Connected, BannerKind.ReadFailed, false, false, StatusLevel.NeedsYou)]
+    [InlineData(LinkState.Connected, BannerKind.None, true, false, StatusLevel.NeedsYou)]   // update available
+    [InlineData(LinkState.Connected, BannerKind.None, false, false, StatusLevel.Fine)]
+    [InlineData(LinkState.Connected, BannerKind.None, false, true, StatusLevel.Fine)]      // development firmware
+    [InlineData(LinkState.Waiting, BannerKind.None, false, false, StatusLevel.Fine)]       // connecting
+    [InlineData(LinkState.Connected, BannerKind.Saving, false, false, StatusLevel.Running)]
+    public void EachRowHasItsLevel(LinkState link, BannerKind kind, bool notice, bool dev, StatusLevel level)
+    {
+        var inputs = Inputs(link, kind, notice: notice, dev: dev);
+        Assert.Equal(level, DeviceCard.LevelOf(inputs, DeviceCard.From(inputs)));
+    }
+
+    [Fact]
+    public void RunningOperationsAndKeptFailuresHaveTheirLevels()
+    {
+        static StatusLevel Level(CardInputs i) => DeviceCard.LevelOf(i, DeviceCard.From(i));
+
+        Assert.Equal(StatusLevel.Running, Level(Inputs(LinkState.Waiting) with { FirmwareStage = "Updating firmware…", FirmwareProgress = 0.4 }));
+        Assert.Equal(StatusLevel.Running, Level(Inputs(LinkState.Waiting) with { FirmwareStage = "Checking firmware…" }));
+        Assert.Equal(StatusLevel.Running, Level(Inputs(LinkState.Waiting) with { SavePhase = "Restarting…" }));
+        Assert.Equal(StatusLevel.Fine, Level(Inputs(LinkState.Waiting) with { Link = new LinkStatus(LinkState.Waiting, LinkActivity.Restarting) }));
+        // A failure is kept until the next action: it needs the user even while connected.
+        Assert.Equal(StatusLevel.NeedsYou, Level(Inputs(LinkState.Connected) with { Failure = "The controller didn't answer." }));
+        // An offered next step too.
+        Assert.Equal(StatusLevel.NeedsYou, Level(Inputs(LinkState.Connected) with { OfferInstall = true }));
+        Assert.Equal(StatusLevel.NeedsYou, Level(Inputs(LinkState.Connected) with { OfferTest = true }));
+    }
+
     [Fact]
     public void IncompatibleOverWifiCantUpdate()
         => Assert.Equal(CardAction.None,
@@ -214,12 +255,16 @@ public sealed class DeviceCardTests : IDisposable
     [Fact]
     public void TheCardFollowsThePage()
     {
-        var card = InSync().Hardware.Card;
+        var card = InSync().Hardware.Status;
 
         Assert.Equal("Volco controller", card.Name);
         Assert.Equal("Connected over USB (COM3)", card.State.Status);
         Assert.Equal("Development firmware", card.State.Detail);
         Assert.True(card.State.StatusOpensConnection);
+        Assert.Equal(StatusLevel.Fine, card.Level);
+        Assert.False(card.ShowsBanner);
+        Assert.Equal("Connected", card.ShortText);
+        Assert.Equal("Connected over USB (COM3) · Development firmware", card.FullText);
 
         card.OpenConnectionCommand.Execute(null);
         Assert.True(_settings!.Hardware.IsConnectionDialogOpen);
@@ -228,6 +273,10 @@ public sealed class DeviceCardTests : IDisposable
         card.DisconnectCommand.Execute(null);
         Until(() => card.State.Action == CardAction.Connect);
         Assert.Equal("Disconnected", card.State.Status);
+        Assert.Equal(StatusLevel.NeedsYou, card.Level);
+        Assert.True(card.ShowsBanner);
+        Assert.Equal("Disconnected", card.ShortText);
+        Assert.Equal("Disconnected · You disconnected Volco from the controller.", card.FullText);
         Assert.Equal("Connect", card.ActionLabel);
         Assert.True(card.ActionCommand.CanExecute(null));
     }
@@ -236,7 +285,7 @@ public sealed class DeviceCardTests : IDisposable
     public void MenuWritersDisabledDuringATest()
     {
         var settings = InSync();
-        var card = settings.Hardware.Card;
+        var card = settings.Hardware.Status;
         Assert.True(card.CheckFirmwareCommand.CanExecute(null));
         Assert.True(card.ReinstallFirmwareCommand.CanExecute(null));
         Assert.True(card.LoadPresetCommand.CanExecute(null));
@@ -257,7 +306,7 @@ public sealed class DeviceCardTests : IDisposable
     public void AProbeThatOffersInstall_MakesTheButtonInstall_WhichAsksFirst()
     {
         var settings = InSync();
-        var card = settings.Hardware.Card;
+        var card = settings.Hardware.Status;
         _flasher!.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
         card.CheckFirmwareCommand.Execute(null);
         Until(() => card.State.Action == CardAction.Install);
@@ -282,7 +331,7 @@ public sealed class DeviceCardTests : IDisposable
     public void DrawingActionsAskForTheControllerPageFirst()
     {
         var settings = InSync();
-        var card = settings.Hardware.Card;
+        var card = settings.Hardware.Status;
         var asked = new List<bool>();   // whether the chooser was already shown when the page was asked for
         card.RequestController += (_, _) => asked.Add(settings.Hardware.ShowChooser);
 
@@ -304,7 +353,7 @@ public sealed class DeviceCardTests : IDisposable
     public void ReinstallAsksFirst()
     {
         var settings = InSync();
-        settings.Hardware.Card.ReinstallFirmwareCommand.Execute(null);
+        settings.Hardware.Status.ReinstallFirmwareCommand.Execute(null);
 
         Assert.True(settings.Controller.ConfirmInstallPending);
         Assert.False(settings.Controller.IsFirmwareRunning);
@@ -314,7 +363,7 @@ public sealed class DeviceCardTests : IDisposable
     public void LoadAPresetAsksBeforeReplacingControls()
     {
         var settings = InSync();
-        var card = settings.Hardware.Card;
+        var card = settings.Hardware.Status;
         card.LoadPresetCommand.Execute(null);
         Assert.True(card.IsPresetChooserOpen);
 
@@ -331,7 +380,7 @@ public sealed class DeviceCardTests : IDisposable
     public void StartOverShowsTheChooser()
     {
         var settings = InSync();
-        settings.Hardware.Card.StartOverCommand.Execute(null);
+        settings.Hardware.Status.StartOverCommand.Execute(null);
 
         Assert.True(settings.Hardware.ShowChooser);
         Assert.Equal(5, settings.Controller.Draft.Sliders.Count);   // kept until a choice is made

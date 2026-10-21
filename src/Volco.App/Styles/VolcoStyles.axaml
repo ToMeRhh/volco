@@ -1029,7 +1029,7 @@
   </Style>
   <!-- The sidebar lies over the page, and its room in the layout (SidebarSpacer) keeps the page
        beside it. In the compact layout, the mouse on the sidebar opens it to full width, over
-       the page; the icons keep their place, and it stays open while the card's ⋯ menu is ("pinned").
+       the page; the icons keep their place, and it stays open while the status line's menu is ("pinned").
        These come after the compact styles above, so they win. -->
   <Style Selector="Grid.SidebarHost">
     <Setter Property="Width" Value="168"/>
@@ -1049,26 +1049,41 @@
   <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost.pinned TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost.pinned TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost.pinned StackPanel.AboutFooter">
     <Setter Property="IsVisible" Value="True"/>
   </Style>
-  <!-- The device card in the sidebar (controller-page spec §5): only its status dot in the
-       compact layout, the whole card while the sidebar opens over the page. -->
-  <Style Selector="Ellipse.CardDot">
+  <!-- The controller's status line in the sidebar (controller-page spec §5): a quiet row, its dot
+       under the nav icons; only the dot in the compact layout, the whole line while the sidebar
+       opens over the page. -->
+  <Style Selector="Button.SidebarStatus">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="17,7,8,7"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
+  </Style>
+  <Style Selector="Button.SidebarStatus:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  </Style>
+  <Style Selector=":is(Window).compact Button.SidebarStatus">
+    <Setter Property="Padding" Value="0,7"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector=":is(Window).compact TextBlock.SidebarStatusText">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
-  <Style Selector=":is(Window).compact Ellipse.CardDot">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Button.SidebarStatus, :is(Window).compact Grid.SidebarHost.pinned Button.SidebarStatus">
+    <Setter Property="Padding" Value="17,7,8,7"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.SidebarStatusText, :is(Window).compact Grid.SidebarHost.pinned TextBlock.SidebarStatusText">
     <Setter Property="IsVisible" Value="True"/>
   </Style>
-  <Style Selector=":is(Window).compact Border.SidebarCard">
-    <Setter Property="IsVisible" Value="False"/>
-  </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Ellipse.CardDot, :is(Window).compact Grid.SidebarHost.pinned Ellipse.CardDot">
-    <Setter Property="IsVisible" Value="False"/>
-  </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Border.SidebarCard, :is(Window).compact Grid.SidebarHost.pinned Border.SidebarCard">
-    <Setter Property="IsVisible" Value="True"/>
-  </Style>
-  <!-- A not-set-up state's detail line goes to the chooser -->
-  <Style Selector="TextBlock.Secondary.Link">
-    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  <!-- The status banner across the top of the content area, while the controller needs the user -->
+  <Style Selector="Border.StatusBanner">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    <Setter Property="Padding" Value="20,8"/>
+    <Setter Property="MinHeight" Value="48"/>
   </Style>
 
   <!-- ── Settings window chrome ────────────────────────────────────────── -->

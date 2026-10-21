@@ -66,8 +66,8 @@
                              ToolTip.Tip="Third-party notices" Command="{Binding About.OpenNoticesCommand}"/>
           </StackPanel>
         </StackPanel>
-        <!-- The device card (controller-page spec §5), above the version and links on every page -->
-        <hwviews:DeviceCard Name="Card" DockPanel.Dock="Bottom" Margin="0,8,0,0" DataContext="{Binding Hardware.Card}"/>
+        <!-- The controller's status line (controller-page spec §5), above the version and links on every page -->
+        <hwviews:SidebarStatus Name="StatusLine" DockPanel.Dock="Bottom" Margin="0,8,0,0" DataContext="{Binding Hardware.Status}"/>
         <ListBox Name="NavList" Classes="Nav">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="views:NavItem">
@@ -91,25 +91,29 @@
     <Border Grid.Column="1" Name="PageTitleBar" Classes="TitleBarDrag"
             WindowDecorationProperties.ElementRole="TitleBar"/>
 
-    <!-- The page, with the undo message floating over its bottom edge -->
-    <Panel Grid.Column="1" Grid.Row="1">
-      <!-- General and the Controller page; going between them crossfades -->
-      <TransitioningContentControl Name="PageHost"/>
-      <Border Name="Toast" IsVisible="{Binding Toast.IsOpen}"
-              HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
-              Background="{DynamicResource TextBrush}" CornerRadius="{StaticResource ControlCornerRadius}"
-              Padding="14,6,6,6" BoxShadow="0 6 20 0 #33000000">
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Name="ToastText" Text="{Binding Toast.Message}" VerticalAlignment="Center"
-                     Foreground="{DynamicResource BgBrush}"/>
-          <Button Name="UndoButton" Content="Undo" Command="{Binding Toast.UndoCommand}"
-                  Background="Transparent" BorderThickness="0" FontWeight="SemiBold"
-                  Foreground="{DynamicResource BgBrush}"/>
-        </StackPanel>
-      </Border>
-    </Panel>
+    <!-- The page, under the status banner when the controller needs the user (controller-page
+         spec §5), with the undo message floating over its bottom edge -->
+    <DockPanel Grid.Column="1" Grid.Row="1">
+      <hwviews:StatusBanner Name="StatusBanner" DockPanel.Dock="Top" DataContext="{Binding Hardware.Status}"/>
+      <Panel>
+        <!-- General and the Controller page; going between them crossfades -->
+        <TransitioningContentControl Name="PageHost"/>
+        <Border Name="Toast" IsVisible="{Binding Toast.IsOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
+                Background="{DynamicResource TextBrush}" CornerRadius="{StaticResource ControlCornerRadius}"
+                Padding="14,6,6,6" BoxShadow="0 6 20 0 #33000000">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Name="ToastText" Text="{Binding Toast.Message}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource BgBrush}"/>
+            <Button Name="UndoButton" Content="Undo" Command="{Binding Toast.UndoCommand}"
+                    Background="Transparent" BorderThickness="0" FontWeight="SemiBold"
+                    Foreground="{DynamicResource BgBrush}"/>
+          </StackPanel>
+        </Border>
+      </Panel>
+    </DockPanel>
 
-    <!-- The device card's dialogs, over the whole window since the card is on every page
+    <!-- The status's dialogs, over the whole window since the status is on every page
          (controller-page spec §5): modal cards; Escape or a click on the scrim closes them, and
          the focus moves in and back. Compare (hardware-page spec §7.2): -->
     <Border Name="CompareOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
@@ -140,7 +144,7 @@
     </Border>
 
     <!-- Leaving the Controller page with unsaved changes (controller-page spec §4.4): over the
-         whole window, sidebar included, so neither the nav nor the card's actions change the draft
+         whole window, sidebar included, so neither the nav nor the status's actions change the draft
          under it; Escape or a click outside is Stay -->
     <Border Name="LeaveOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
       <Border Name="LeaveCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
@@ -155,18 +159,18 @@
       </Border>
     </Border>
 
-    <!-- ⋯ Reinstall firmware…: today's Install confirmation, since it erases the setup -->
+    <!-- The status menu's Reinstall firmware…: today's Install confirmation, since it erases the setup -->
     <Border Name="ReinstallOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
-            IsVisible="{Binding Hardware.Card.Controller.ConfirmInstallPending}">
+            IsVisible="{Binding Hardware.Status.Controller.ConfirmInstallPending}">
       <Border Name="ReinstallConfirm" Classes="Panel DialogCard Small" Padding="20" KeyboardNavigation.TabNavigation="Cycle"
               Focusable="True">
         <StackPanel Spacing="14">
           <TextBlock TextWrapping="Wrap"
                      Text="Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards."/>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-            <Button Name="CancelReinstallButton" Content="Cancel" Command="{Binding Hardware.Card.Controller.CancelInstallCommand}"/>
+            <Button Name="CancelReinstallButton" Content="Cancel" Command="{Binding Hardware.Status.Controller.CancelInstallCommand}"/>
             <Button Name="ConfirmReinstallButton" Classes="Danger" Content="Reinstall"
-                    Command="{Binding Hardware.Card.Controller.ConfirmInstallCommand}"/>
+                    Command="{Binding Hardware.Status.Controller.ConfirmInstallCommand}"/>
           </StackPanel>
         </StackPanel>
       </Border>

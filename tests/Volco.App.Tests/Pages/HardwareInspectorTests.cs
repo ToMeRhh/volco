@@ -114,8 +114,8 @@ public sealed class HardwareInspectorTests : IDisposable
 
     private static string PinValue(Visual field) => In<TextBlock>(field, "ValueText").Text!;
 
-    /// <summary>Controller-page spec §4.3, §5: the device card is in the sidebar, not the side
-    /// panel; the tile's inspector is under the controller's panel.</summary>
+    /// <summary>Controller-page spec §4.3, §5: the status is in the sidebar and the banner, not
+    /// the side panel; the tile's inspector is under the controller's panel.</summary>
     [AvaloniaFact]
     public void TheTileInspectorIsUnderTheControllersPanel()
     {
@@ -123,7 +123,8 @@ public sealed class HardwareInspectorTests : IDisposable
         s.Vm.Controls.Select(s.Vm.Sliders.Items[0]);
         Settle(s.Window);
 
-        Assert.Empty(s.Page.GetVisualDescendants().OfType<Volco.App.Views.Hardware.DeviceCard>());
+        Assert.Empty(s.Page.GetVisualDescendants().OfType<Volco.App.Views.Hardware.SidebarStatus>());
+        Assert.Empty(s.Page.GetVisualDescendants().OfType<Volco.App.Views.Hardware.StatusBanner>());
         // The tile's inspector, with its Hardware section, is under the controller's panel.
         var controls = In<TextBlock>(In<ContentControl>(s.Page, "InspectorContent"), "HeadingText");
         Assert.Equal("Slider 1", controls.Text);

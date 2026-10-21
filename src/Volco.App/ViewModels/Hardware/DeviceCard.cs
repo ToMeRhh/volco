@@ -4,8 +4,8 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels.Hardware;
 
-/// <summary>The device card's one primary button (hardware-page spec §4.1).</summary>
-public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Install }
+/// <summary>The status's one primary button (hardware-page spec §4.1; controller-page spec §5).</summary>
+public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Install, ChooseHowToStart }
 
 /// <param name="Link">The runtime's link status, as the sidebar and the tray read it.</param>
 /// <param name="Banner">The §8.3 banner and the firmware notice.</param>
@@ -92,10 +92,10 @@ public static class DeviceCard
         switch (banner.Kind)
         {
             case BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror:
-                return new("Not set up yet", LinkTone.Accent, ChooseDetail, CardAction.None, null, true);
+                return new("Not set up yet", LinkTone.Accent, ChooseDetail, CardAction.ChooseHowToStart, null, true);
             case BannerKind.Unusable:
                 return new("The controller's setup can't be used", LinkTone.Warning,
-                           UnusableDetail, CardAction.None, null, true);
+                           UnusableDetail, CardAction.ChooseHowToStart, null, true);
             case BannerKind.BrokenWithFirmware:
                 return new("Your setup doesn't work with this firmware", LinkTone.Warning,
                            "Fix it in the drawing, then Save.", CardAction.FixIt, null, true);
@@ -116,6 +116,26 @@ public static class DeviceCard
         };
         return new(status, LinkTone.Good, banner.DevelopmentFirmware ? "Development firmware" : "Firmware up to date",
                    i.OfferTest ? CardAction.TestNow : CardAction.None, null, true);
+    }
+
+    /// <summary>
+    /// How much <paramref name="state"/> (<see cref="From"/> of <paramref name="inputs"/>) needs the
+    /// user (controller-page spec §5): <see cref="StatusLevel.Running"/> while a firmware operation
+    /// or a save runs; <see cref="StatusLevel.Fine"/> when connected and in sync (any firmware line
+    /// but an update) and in the expected waits; <see cref="StatusLevel.NeedsYou"/> otherwise,
+    /// a kept failure and an offered next step included.
+    /// </summary>
+    public static StatusLevel LevelOf(CardInputs inputs, CardState state)
+    {
+        if (inputs.FirmwareStage is not null || inputs.SavePhase is not null || inputs.Banner.Kind == BannerKind.Saving)
+            return StatusLevel.Running;
+        if (inputs.Failure is not null || state.Action != CardAction.None) return StatusLevel.NeedsYou;
+        return inputs.Link.State switch
+        {
+            LinkState.Connected when state.Tone == LinkTone.Good => StatusLevel.Fine,
+            LinkState.Waiting when state.Tone == LinkTone.Neutral => StatusLevel.Fine,
+            _ => StatusLevel.NeedsYou,
+        };
     }
 
     /// <summary>Check firmware only where Volco can check it (USB).</summary>
@@ -141,6 +161,7 @@ public static class DeviceCard
         CardAction.Compare => "Compare…",
         CardAction.TestNow => "Test your controller now",
         CardAction.Install => "Install firmware",
+        CardAction.ChooseHowToStart => "Choose how to start",
         _ => "",
     };
 }

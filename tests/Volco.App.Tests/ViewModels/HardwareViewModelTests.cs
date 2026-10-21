@@ -318,12 +318,12 @@ public sealed class HardwareViewModelTests : IDisposable
     public void StartOverNeedsAReadyController()
     {
         Settings(DiyBlob);   // offline: the mirror, read-only
-        Assert.False(Hardware.Card.StartOverCommand.CanExecute(null));
+        Assert.False(Hardware.Status.StartOverCommand.CanExecute(null));
         Hardware.StartOver();
         Assert.False(Hardware.ShowChooser);
 
         GreetInSync(DiyBlob);
-        Assert.True(Hardware.Card.StartOverCommand.CanExecute(null));
+        Assert.True(Hardware.Status.StartOverCommand.CanExecute(null));
     }
 
     // ── The Connection dialog ────────────────────────────────────────────────────────────────

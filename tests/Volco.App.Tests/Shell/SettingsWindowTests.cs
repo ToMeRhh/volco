@@ -87,23 +87,23 @@ public class SettingsWindowTests
     }
 
     [AvaloniaFact]
-    public void SettingsWindow_TheCardShowsTheConnectionState()
+    public void SettingsWindow_TheStatusLineShowsTheConnectionState()
     {
         var window = Create();
         window.Show();
-        var card = window.FindControl<Volco.App.Views.Hardware.DeviceCard>("Card")!;
+        var line = window.FindControl<Volco.App.Views.Hardware.SidebarStatus>("StatusLine")!;
 
         Assert.Equal("Looking for your controller",
-                     card.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "StatusText").Text);
+                     line.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "StatusText").Text);
     }
 
     [AvaloniaFact]
-    public void SettingsWindow_TheCardSitsAboveAbout()
+    public void SettingsWindow_TheStatusLineSitsAboveAbout()
     {
         var window = Create();
         window.Show();
         var about = window.FindControl<StackPanel>("AboutFooter")!;
-        var card = window.FindControl<Volco.App.Views.Hardware.DeviceCard>("Card")!;
+        var card = window.FindControl<Volco.App.Views.Hardware.SidebarStatus>("StatusLine")!;
 
         Assert.True(about.IsEffectivelyVisible);
         Assert.Equal(new AboutViewModel().VersionText, window.FindControl<TextBlock>("VersionText")!.Text);
@@ -112,7 +112,7 @@ public class SettingsWindowTests
         Assert.True(link.IsEffectivelyVisible);
         var cardBottom = card.TranslatePoint(new Point(0, card.Bounds.Height), window)!.Value.Y;
         var aboutTop = about.TranslatePoint(new Point(0, 0), window)!.Value.Y;
-        Assert.True(cardBottom <= aboutTop, $"The card ends at {cardBottom}, About starts at {aboutTop}");
+        Assert.True(cardBottom <= aboutTop, $"The status line ends at {cardBottom}, About starts at {aboutTop}");
     }
 
     [Fact]

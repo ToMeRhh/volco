@@ -100,11 +100,11 @@ public partial class SettingsWindow : Window
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         this.FindControl<Border>("NoticesOverlay")!.PointerPressed += OnNoticesOverlayPressed;
 
-        // The device card is in the sidebar on every page (controller-page spec §5): the actions
-        // that belong to the drawing go to the Controller page first (arriving never asks to leave),
-        // and its dialogs open over the whole window.
+        // The controller's status is on every page (controller-page spec §5): the actions that
+        // belong to the drawing go to the Controller page first (arriving never asks to leave), and
+        // its dialogs open over the whole window.
         _hardware = vm.Hardware;
-        _hardware.Card.RequestController += (_, _) =>
+        _hardware.Status.RequestController += (_, _) =>
         {
             ShowPage("controller");
             // The drawing is what the action changes, so a Controller page dialog over it (and the
@@ -121,23 +121,25 @@ public partial class SettingsWindow : Window
         _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
         foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _reinstallOverlay, _leaveOverlay })
             overlay.PointerPressed += OnScrimPressed;
-        TrackFocus(_compareOverlay, this.FindControl<Border>("CompareCard")!);
-        TrackFocus(_connectionOverlay, this.FindControl<Border>("ConnectionCard")!);
-        // Reinstall is opened from the ⋯ menu, whose item is gone once it closes: the focus goes back to ⋯.
-        TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!, CardMoreButton);
+        // Compare is opened from the banner, which goes once the setups agree.
+        TrackFocus(_compareOverlay, this.FindControl<Border>("CompareCard")!, StatusLineButton);
+        // Connection and Reinstall are opened from the status line's menu, whose item is gone once
+        // it closes: the focus goes back to the status line.
+        TrackFocus(_connectionOverlay, this.FindControl<Border>("ConnectionCard")!, StatusLineButton);
+        TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!, StatusLineButton);
         TrackFocus(_leaveOverlay, this.FindControl<Border>("LeaveCard")!);
         UpdateCompare();
         UpdateConnection();
         UpdateLeavePrompt();
 
-        // The card's ⋯ menu is a popup of its own: the mouse on it is off the sidebar, which would
-        // close the compact sidebar (and the card with ⋯) under the menu. While it is open the
+        // The status line's menu is a popup of its own: the mouse on it is off the sidebar, which
+        // would close the compact sidebar (and the line under the menu). While it is open the
         // sidebar stays open ("pinned").
         var sidebar = this.FindControl<Grid>("SidebarHost")!;
-        if (this.FindControl<Volco.App.Views.Hardware.DeviceCard>("Card")!.FindControl<Button>("MoreButton")!.Flyout is { } more)
+        if (StatusLineButton()?.Flyout is { } menu)
         {
-            more.Opened += (_, _) => sidebar.Classes.Add("pinned");
-            more.Closed += (_, _) => sidebar.Classes.Remove("pinned");
+            menu.Opened += (_, _) => sidebar.Classes.Add("pinned");
+            menu.Closed += (_, _) => sidebar.Classes.Remove("pinned");
         }
     }
 
@@ -156,7 +158,7 @@ public partial class SettingsWindow : Window
             e.Handled = true;
             return;
         }
-        // The card's dialogs and the leave prompt are modal: Escape closes the open one (the leave
+        // The status's dialogs and the leave prompt are modal: Escape closes the open one (the leave
         // prompt's is Stay), and no key reaches the window under it.
         var open = OpenCardOverlay();
         if (open is null) return;
@@ -172,7 +174,7 @@ public partial class SettingsWindow : Window
         else if (e.Source is not Visual source || !open.IsVisualAncestorOf(source)) e.Handled = true;
     }
 
-    /// <summary>The device card's dialog that is open, if any.</summary>
+    /// <summary>The status's dialog that is open, if any.</summary>
     private Border? OpenCardOverlay()
         => _leaveOverlay.IsVisible ? _leaveOverlay
          : _reinstallOverlay.IsVisible ? _reinstallOverlay
@@ -183,12 +185,12 @@ public partial class SettingsWindow : Window
     private void CloseCardOverlay(Border overlay)
     {
         if (ReferenceEquals(overlay, _leaveOverlay)) _hardware.CloseLeavePrompt();
-        else if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Card.Controller.CancelInstallCommand.Execute(null);
+        else if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Status.Controller.CancelInstallCommand.Execute(null);
         else if (ReferenceEquals(overlay, _connectionOverlay)) _hardware.CloseConnection();
         else _hardware.CloseCompare();
     }
 
-    /// <summary>A click on a card dialog's scrim closes it.</summary>
+    /// <summary>A click on a status dialog's scrim closes it.</summary>
     private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!ReferenceEquals(e.Source, sender) || sender is not Border overlay) return;   // a click inside the card
@@ -211,10 +213,8 @@ public partial class SettingsWindow : Window
         _leaveOverlay.IsVisible = prompt is not null;
     }
 
-    /// <summary>The device card's ⋯ button.</summary>
-    private InputElement? CardMoreButton()
-        => this.FindControl<Volco.App.Views.Hardware.DeviceCard>("Card")?.GetVisualDescendants().OfType<Button>()
-               .FirstOrDefault(b => b.Name == "MoreButton");
+    /// <summary>The sidebar's status line, which opens the status menu.</summary>
+    private Button? StatusLineButton() => this.FindControl<SidebarStatus>("StatusLine")?.LineButton;
 
     /// <summary>Compare's card over the window while it is open.</summary>
     private void UpdateCompare()
@@ -234,7 +234,7 @@ public partial class SettingsWindow : Window
 
     /// <summary>When <paramref name="overlay"/> opens, the focus moves to <paramref name="card"/>'s
     /// first focusable control (else the card itself, so Escape works while nothing in it can take
-    /// the focus); when it closes, the focus goes back to where it was (the card's status line),
+    /// the focus); when it closes, the focus goes back to where it was (the sidebar's status line),
     /// else to <paramref name="fallback"/>.</summary>
     private void TrackFocus(Border overlay, Border card, Func<InputElement?>? fallback = null)
     {

@@ -42,16 +42,16 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.Buttons.Items.CollectionChanged += OnItemsChanged;
         _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
-        Card = new DeviceCardViewModel(controller, this);
+        Status = new ControllerStatusViewModel(controller, this);
         SaveCommand = new RelayCommand(() => _controller.SaveCommand.Execute(null), () => _controller.CanSave && _controller.Problems.Count == 0);
         Chooser = new SetupChooserViewModel(controller, OnChooserPicked, CancelStartOver);
         Refresh();
     }
 
-    /// <summary>The device card at the top of the side panel (spec §4).</summary>
-    public DeviceCardViewModel Card { get; }
+    /// <summary>The controller status: the sidebar line and the page banner (controller-page spec §5).</summary>
+    public ControllerStatusViewModel Status { get; }
 
-    // ── What the card opens (spec §4.2, §7, §10); the views attach in later steps ──────────────
+    // ── What the status opens (spec §4.2, §7, §10); the views attach in later steps ──────────────
 
     /// <summary>Compare (spec §7.2) is open.</summary>
     [ObservableProperty] private bool _isCompareOpen;
@@ -118,7 +118,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     // Discard and leaving Hardware end a Start over that wasn't picked.
     private void OnStartOverEnded(object? sender, EventArgs e) => CancelStartOver();
 
-    /// <summary>The card's Compare…: the controller's setup beside Volco's (spec §7.2); opening it
+    /// <summary>The banner's Compare…: the controller's setup beside Volco's (spec §7.2); opening it
     /// reads the controller's setup.</summary>
     public void OpenCompare()
     {
@@ -137,7 +137,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         Compare = null;
     }
 
-    /// <summary>The card's status line and ⋯ Connection…: the Connection dialog, on the Wi-Fi tab
+    /// <summary>The status menu's Connection…: the Connection dialog, on the Wi-Fi tab
     /// when <paramref name="wifi"/>.</summary>
     public void OpenConnection(bool wifi)
     {
@@ -746,7 +746,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.Buttons.Items.CollectionChanged -= OnItemsChanged;
         _controls.PropertyChanged -= OnControlsPropertyChanged;
         _runtime.RawInput -= OnRawInput;
-        Card.Dispose();
+        Status.Dispose();
         Compare?.Dispose();
         ConnectionDialog?.Dispose();
         LeavePrompt?.Dispose();

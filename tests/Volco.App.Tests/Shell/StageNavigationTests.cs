@@ -300,20 +300,24 @@ public sealed class StageNavigationTests
     }
 
     [AvaloniaFact]
-    public void TheCardsDotFollowsTheLink()
+    public void TheStatusDotFollowsTheLink()
     {
         using var s = Show();
-        var host = In<Volco.App.Views.Hardware.DeviceCard>(s.Window, "Card");
-        Assert.StartsWith("Connected over USB", In<TextBlock>(host, "StatusText").Text);
-        Assert.Equal(ThemeColor("SuccessBrush"), ((ISolidColorBrush)In<Avalonia.Controls.Shapes.Ellipse>(host, "StatusDot").Fill!).Color);
+        var line = In<SidebarStatus>(s.Window, "StatusLine");
+        var banner = In<StatusBanner>(s.Window, "StatusBanner");
+        Assert.Equal("Connected", In<TextBlock>(line, "StatusText").Text);
+        Assert.Equal(ThemeColor("SuccessBrush"), ((ISolidColorBrush)In<Avalonia.Controls.Shapes.Ellipse>(line, "StatusDot").Fill!).Color);
+        Assert.False(banner.IsVisible);
 
-        s.Vm.Hardware.Card.DisconnectCommand.Execute(null);
-        Until(s.Window, () => In<TextBlock>(host, "StatusText").Text == "Disconnected");
-        var connect = In<Button>(host, "ActionButton");
+        s.Vm.Hardware.Status.DisconnectCommand.Execute(null);
+        Until(s.Window, () => In<TextBlock>(line, "StatusText").Text == "Disconnected");
+        Assert.True(banner.IsEffectivelyVisible);
+        Assert.StartsWith("Disconnected", In<TextBlock>(banner, "BannerText").Text);
+        var connect = In<Button>(banner, "BannerAction");
         Assert.Equal("Connect", connect.Content);
         var old = s.Conn;
         Press(connect);
-        Until(s.Window, () => In<TextBlock>(host, "StatusText").Text == "Looking for your controller");
+        Until(s.Window, () => In<TextBlock>(line, "StatusText").Text == "Looking for your controller");
         Assert.NotSame(old, s.Rig.Connection);
     }
 
@@ -462,7 +466,7 @@ public sealed class StageNavigationTests
         Assert.Null(s.Vm.Hardware.LeavePrompt);
         var failure = "The controller couldn't save the setup. Its previous setup is unchanged.";
         Assert.Equal(failure, s.Vm.Controller.Failure);
-        Assert.Equal(failure, In<TextBlock>(In<Volco.App.Views.Hardware.DeviceCard>(s.Window, "Card"), "DetailText").Text);
+        Assert.EndsWith(failure, In<TextBlock>(In<StatusBanner>(s.Window, "StatusBanner"), "BannerText").Text);
         Assert.True(s.Vm.Controller.IsDirty);
     }
 

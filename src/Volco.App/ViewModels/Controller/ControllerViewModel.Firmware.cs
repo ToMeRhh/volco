@@ -8,7 +8,7 @@ using Volco.Core.Runtime;
 namespace Volco.App.ViewModels;
 
 /// <summary>The firmware part (spec §8.6; hardware-page spec §4): Reinstall (today's Install),
-/// Update and Check firmware, whose progress and result the device card shows.</summary>
+/// Update and Check firmware, whose progress and result the status shows.</summary>
 public sealed partial class ControllerViewModel
 {
     private FirmwareService? _firmware;

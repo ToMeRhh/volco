@@ -174,7 +174,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Replaces the draft's wiring with <paramref name="preset"/>, asking first when the
-    /// draft has hardware (the device card's "Load a preset…").</summary>
+    /// draft has hardware (the status menu's "Load a preset…").</summary>
     internal void LoadPreset(ControllerPreset preset)
     {
         if (!preset.IsAvailable || !CanEdit) return;
@@ -362,7 +362,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     // ── Save and Revert ──────────────────────────────────────────────────────────────────────
 
-    /// <summary>The last save's result (or why it couldn't start); a failure shows on the device card.</summary>
+    /// <summary>The last save's result (or why it couldn't start); a failure shows in the status banner.</summary>
     [ObservableProperty] private string? _progressText;
     [ObservableProperty] private bool _isSaving;
 
@@ -383,12 +383,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ProgressTone));
     }
 
-    /// <summary>The device card's save line (hardware-page spec §4.1) while a save runs; null otherwise.</summary>
+    /// <summary>The status's save line (hardware-page spec §4.1) while a save runs; null otherwise.</summary>
     internal string? SavePhaseText => !IsSaving ? null
         : _service.Progress is { Phase: SavePhase.Confirming } ? "Restarting…" : "Saving to the controller…";
 
     /// <summary>The last operation's error (a save's, or a firmware install's, update's or check's),
-    /// which the device card shows instead of its detail line until the next action; null for none.</summary>
+    /// which the status shows instead of its detail line until the next action; null for none.</summary>
     internal string? Failure => !IsSaving && ProgressText is not null && _progressTone == LinkTone.Danger ? ProgressText
         : !IsFirmwareRunning && FirmwareMessage is not null && FirmwareMessageTone is LinkTone.Danger or LinkTone.Warning ? FirmwareMessage
         : null;
@@ -499,7 +499,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             _fixIt = false;
             SetSetupChanged(false);
         }
-        if (r.Status == SaveStatus.Confirmed && _savingSetup) OfferTest = true;   // the device card offers a test
+        if (r.Status == SaveStatus.Confirmed && _savingSetup) OfferTest = true;   // the status offers a test
         var layout = _savingLayout;
         var saved = _savingBlob;
         _savingLayout = null;
