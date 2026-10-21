@@ -387,7 +387,7 @@ public sealed class HardwareFixesTests : IDisposable
         Pump(s.Window);
         var host = (HardwareInspectorHost)s.Stage.HardwareSidePanel!;
         AssertDrawn(host);
-        AssertDrawn(In<DeviceCard>(host, "Card"));
+        AssertDrawn(In<Volco.App.Views.Hardware.DeviceCard>(host, "Card"));
         Assert.Equal(3, Assert.IsType<SliderWiringViewModel>(s.Vm.Hardware.Inspected).Index);
         AssertDrawn(host.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
         AssertDrawn(In<TextBlock>(s.Stage, "PageTitle"));
