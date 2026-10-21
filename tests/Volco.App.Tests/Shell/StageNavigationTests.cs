@@ -466,7 +466,16 @@ public sealed class StageNavigationTests
         Assert.Null(s.Vm.Hardware.LeavePrompt);
         var failure = "The controller couldn't save the setup. Its previous setup is unchanged.";
         Assert.Equal(failure, s.Vm.Controller.Failure);
+        // The progress dialog shows it first, with Try again; closed, the banner keeps it.
+        var progress = s.Vm.Hardware.Status.Progress;
+        Assert.True(progress.IsDone);
+        Assert.Equal(failure, progress.ResultText);
+        Assert.Equal("Try again", progress.NextLabel);
+        Assert.False(In<StatusBanner>(s.Window, "StatusBanner").IsVisible);
+        progress.CloseCommand.Execute(null);
+        Settle(s.Window);
         Assert.EndsWith(failure, In<TextBlock>(In<StatusBanner>(s.Window, "StatusBanner"), "BannerText").Text);
+        Assert.True(In<StatusBanner>(s.Window, "StatusBanner").IsVisible);
         Assert.True(s.Vm.Controller.IsDirty);
     }
 

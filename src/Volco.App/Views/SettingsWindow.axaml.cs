@@ -61,6 +61,8 @@ public partial class SettingsWindow : Window
     private readonly Border _reinstallOverlay;
     private readonly Border _leaveOverlay;
     private readonly ContentControl _leaveHost;
+    private readonly Border _progressOverlay;
+    private readonly Border _progressCard;
 
     /// <summary>Set by the composition root at shutdown so Closing is not cancelled.</summary>
     internal bool AllowClose { get; set; }
@@ -119,7 +121,9 @@ public partial class SettingsWindow : Window
         _reinstallOverlay = this.FindControl<Border>("ReinstallOverlay")!;
         _leaveOverlay = this.FindControl<Border>("LeaveOverlay")!;
         _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
-        foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _reinstallOverlay, _leaveOverlay })
+        _progressOverlay = this.FindControl<Border>("ProgressOverlay")!;
+        _progressCard = this.FindControl<Border>("ProgressCard")!;
+        foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _reinstallOverlay, _leaveOverlay, _progressOverlay })
             overlay.PointerPressed += OnScrimPressed;
         // Compare is opened from the banner, which goes once the setups agree.
         TrackFocus(_compareOverlay, this.FindControl<Border>("CompareCard")!, StatusLineButton);
@@ -128,6 +132,13 @@ public partial class SettingsWindow : Window
         TrackFocus(_connectionOverlay, this.FindControl<Border>("ConnectionCard")!, StatusLineButton);
         TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!, StatusLineButton);
         TrackFocus(_leaveOverlay, this.FindControl<Border>("LeaveCard")!);
+        TrackFocus(_progressOverlay, _progressCard, StatusLineButton);
+        // At the end the focus moves to the next step (else Close), which can take it now.
+        _hardware.Status.Progress.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ProgressDialogViewModel.IsRunning) && _hardware.Status.Progress.IsDone)
+                Dispatcher.UIThread.Post(FocusProgressResult);
+        };
         UpdateCompare();
         UpdateConnection();
         UpdateLeavePrompt();
@@ -151,6 +162,18 @@ public partial class SettingsWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // The progress dialog is above everything: while the operation runs Escape does nothing,
+        // afterwards it closes the dialog; no key reaches the window under it.
+        if (_progressOverlay.IsVisible)
+        {
+            if (e.Key == Key.Escape)
+            {
+                _hardware.Status.Progress.Close();
+                e.Handled = true;
+            }
+            else if (e.Source is not Visual inside || !_progressCard.IsVisualAncestorOf(inside)) e.Handled = true;
+            return;
+        }
         if (_vm.About.IsNoticesOpen)
         {
             if (e.Key != Key.Escape) return;
@@ -184,7 +207,8 @@ public partial class SettingsWindow : Window
 
     private void CloseCardOverlay(Border overlay)
     {
-        if (ReferenceEquals(overlay, _leaveOverlay)) _hardware.CloseLeavePrompt();
+        if (ReferenceEquals(overlay, _progressOverlay)) _hardware.Status.Progress.Close();   // only once it ended
+        else if (ReferenceEquals(overlay, _leaveOverlay)) _hardware.CloseLeavePrompt();
         else if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Status.Controller.CancelInstallCommand.Execute(null);
         else if (ReferenceEquals(overlay, _connectionOverlay)) _hardware.CloseConnection();
         else _hardware.CloseCompare();
@@ -247,6 +271,13 @@ public partial class SettingsWindow : Window
                 before = FocusManager?.GetFocusedElement();
                 DialogFocus.MoveInto(card);
             }
+            else if (_progressOverlay.IsVisible && !ReferenceEquals(overlay, _progressOverlay))
+            {
+                // A dialog under the progress dialog closed (the leave prompt, once its save ended):
+                // the focus stays in the progress dialog.
+                before = null;
+                DialogFocus.MoveInto(_progressCard);
+            }
             else
             {
                 var back = CanFocus(before) ? before : fallback?.Invoke();
@@ -254,6 +285,17 @@ public partial class SettingsWindow : Window
                 if (CanFocus(back)) ((InputElement)back!).Focus(NavigationMethod.Tab);
             }
         };
+    }
+
+    /// <summary>The progress dialog's next step, else its Close, takes the focus once the operation ended.</summary>
+    private void FocusProgressResult()
+    {
+        if (!_progressOverlay.IsVisible) return;
+        _progressCard.UpdateLayout();
+        var target = _progressCard.GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(b => b.Name == "ProgressNextButton" && b is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
+            ?? _progressCard.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == "ProgressCloseButton");
+        target?.Focus(NavigationMethod.Tab);
     }
 
     private void OnNoticesOverlayPressed(object? sender, PointerPressedEventArgs e)
@@ -372,6 +414,7 @@ public partial class SettingsWindow : Window
         // Hiding ends a running test too, and doesn't ask about unsaved changes: the draft is kept
         // and the window reopens on the Controller page.
         _stage?.Hardware?.CloseLeavePrompt();
+        _hardware.Status.Progress.Close();   // a result goes with the window; a running operation stays
         _vm.ControllerIfCreated?.OnWindowHidden();   // and the last firmware result goes
         _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controller page's dialog
         Hide();

@@ -35,9 +35,9 @@ public sealed class DeviceCardTests : IDisposable
     [InlineData(LinkState.Incompatible, BannerKind.Incompatible, BannerActions.Update, true, false,
                 "Firmware too old for this Volco", LinkTone.Warning, "Update it to use the controller again.", CardAction.Update)]
     [InlineData(LinkState.Connected, BannerKind.NotSetUp, BannerActions.SetUp, false, false,
-                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.ChooseHowToStart)]
+                "Not set up yet", LinkTone.Accent, null, CardAction.ChooseHowToStart)]
     [InlineData(LinkState.Connected, BannerKind.NotSetUpHasMirror, BannerActions.ApplySaved, false, false,
-                "Not set up yet", LinkTone.Accent, "Choose how to start.", CardAction.ChooseHowToStart)]
+                "Not set up yet", LinkTone.Accent, "Volco has a saved copy for it.", CardAction.ChooseHowToStart)]
     [InlineData(LinkState.Connected, BannerKind.Unusable, BannerActions.SetUpFromScratch, false, false,
                 "The controller's setup can't be used", LinkTone.Warning, "Start again from Volco's copy or from scratch.", CardAction.ChooseHowToStart)]
     [InlineData(LinkState.Connected, BannerKind.BrokenWithFirmware, BannerActions.FixIt, false, false,

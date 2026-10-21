@@ -371,7 +371,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The result's tone: a confirmed save is good, a failed one a danger.</summary>
     internal LinkTone ProgressTone => ProgressText is null ? LinkTone.Neutral : _progressTone;
 
-    partial void OnIsSavingChanged(bool value) => OnPropertyChanged(nameof(CanEdit));
+    partial void OnIsSavingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(SavingPhase));
+    }
 
     /// <summary>A save finished, with its status (the leave prompt continues on Confirmed). UI thread.</summary>
     internal event EventHandler<SaveStatus>? SaveFinished;
@@ -386,6 +390,32 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The status's save line (hardware-page spec §4.1) while a save runs; null otherwise.</summary>
     internal string? SavePhaseText => !IsSaving ? null
         : _service.Progress is { Phase: SavePhase.Confirming } ? "Restarting…" : "Saving to the controller…";
+
+    /// <summary>The running save's phase (the progress dialog's "Sending…", then "Restarting…"); null
+    /// when no save runs.</summary>
+    internal SavePhase? SavingPhase => IsSaving ? _service.Progress?.Phase ?? SavePhase.Sending : null;
+
+    /// <summary>The last save failed in a way another attempt may fix (not a setup the controller
+    /// refused): the progress dialog offers Try again.</summary>
+    internal bool LastSaveCanRetry { get; private set; }
+
+    /// <summary>The last save sent the draft (Save), not Volco's saved copy (Send Volco's).</summary>
+    private bool _lastSaveFromDraft;
+
+    /// <summary>Try again can send the last save's setup now.</summary>
+    internal bool CanRetrySave => _lastSaveFromDraft ? CanSave
+        : !Busy && _runtime.ControllerState == ControllerState.Ready && _service.Mirror is { Length: > 0 };
+
+    /// <summary>The progress dialog's Try again after a failed save: the same setup once more.</summary>
+    internal void RetrySave()
+    {
+        if (!CanRetrySave) return;
+        if (_lastSaveFromDraft) SaveCommand.Execute(null);
+        else ApplyMine();
+    }
+
+    /// <summary>The window's dispatcher, for the progress dialog's short "Saved." hold.</summary>
+    internal IUiDispatcher Ui => _ui;
 
     /// <summary>The last operation's error (a save's, or a firmware install's, update's or check's),
     /// which the status shows instead of its detail line until the next action; null for none.</summary>
@@ -456,6 +486,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _savingLayout = layout;
         _savingBlob = blob;
         _savingSetup = IsSettingUp || IsNotSetUp;
+        _lastSaveFromDraft = layout is not null;
         IsSaving = true;
         FirmwareMessage = null;   // a firmware result belongs to the operation before
         SetProgress("Sending…");
@@ -492,6 +523,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             _ => null,
         };
         var confirmed = r.Status == SaveStatus.Confirmed;
+        LastSaveCanRetry = r.Status is not (SaveStatus.Confirmed or SaveStatus.Rejected)
+                           || r is { Status: SaveStatus.Rejected, Code: ConfigResultCode.StorageFailed };
         SetProgress(text, confirmed ? LinkTone.Good : LinkTone.Danger);
         if (r.Status == SaveStatus.Rejected && r.Code == ConfigResultCode.Invalid) _remoteError = (r.Item, r.Field);
         if (r.Status == SaveStatus.Confirmed)
@@ -713,6 +746,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (_hasPermission && (h is null ? _permission is not null : _permission != (h.Version, h.ConfigState, h.ConfigCrc)))
             _hasPermission = false;   // a different Hello ends a "new draft" permission
         OnPropertyChanged(nameof(SavePhaseText));
+        OnPropertyChanged(nameof(SavingPhase));
         RefreshAll();
     });
 

@@ -296,7 +296,7 @@ public sealed class StatusLevelsTests : IDisposable
     {
         using var s = Show(ControllerConfigState.None, 0);
         Until(s.Window, () => s.Vm.Controller.Banner.Kind == BannerKind.NotSetUpHasMirror);
-        Assert.Equal("Not set up yet · Choose how to start.", s.BannerText);
+        Assert.Equal("Not set up yet · Volco has a saved copy for it.", s.BannerText);
         Assert.Equal("general", s.NavTag);
 
         Click(s, ActionShows(s, "Choose how to start"));

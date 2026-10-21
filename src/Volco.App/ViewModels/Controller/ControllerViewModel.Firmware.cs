@@ -74,6 +74,14 @@ public sealed partial class ControllerViewModel
     [ObservableProperty] private double _firmwareProgress;
     [ObservableProperty] private string? _firmwareMessage;
 
+    /// <summary>The running write's stage, as the flasher last reported it; null before the first
+    /// report and when nothing runs.</summary>
+    [ObservableProperty] private FlashStage? _firmwareStep;
+
+    /// <summary>A firmware operation ended and its result, tone and offers are set (the progress
+    /// dialog shows them). UI thread.</summary>
+    internal event EventHandler? FirmwareFinished;
+
     /// <summary>The card offers "Test your controller now": after an Update or a first save.</summary>
     [ObservableProperty] private bool _offerTest;
 
@@ -119,6 +127,21 @@ public sealed partial class ControllerViewModel
         StartTest();
     }
 
+    /// <summary>The progress dialog was closed without taking the test it offered: the offer goes.</summary>
+    internal void DeclineTest() => OfferTest = false;
+
+    /// <summary>The progress dialog's Try again: the operation that just failed, once more (an
+    /// Install was confirmed already).</summary>
+    internal void RetryFirmware(LinkActivity activity)
+    {
+        switch (activity)
+        {
+            case LinkActivity.InstallingFirmware: _ = RunFlash(FlashMode.Install); break;
+            case LinkActivity.UpdatingFirmware: _ = RunFlash(FlashMode.Update); break;
+            case LinkActivity.CheckingFirmware: _ = RunProbe(); break;
+        }
+    }
+
     private IProgress<FlashProgress> FirmwareProgressReporter() => new UiProgress(this);
 
     private sealed class UiProgress(ControllerViewModel vm) : IProgress<FlashProgress>
@@ -129,6 +152,7 @@ public sealed partial class ControllerViewModel
         {
             if (vm._disposed || !vm.IsFirmwareRunning || p.Stage < _latest) return;   // late or after the end
             _latest = p.Stage;
+            vm.FirmwareStep = p.Stage;
             vm.FirmwareProgress = p.Stage == FlashStage.Writing ? p.Fraction : vm.FirmwareProgress;
         });
     }
@@ -148,6 +172,7 @@ public sealed partial class ControllerViewModel
         OfferTest = false;
         OfferInstall = false;
         FirmwareProgress = 0;
+        FirmwareStep = null;
         return true;
     }
 
@@ -155,6 +180,7 @@ public sealed partial class ControllerViewModel
     {
         IsFirmwareRunning = false;
         FirmwareActivity = LinkActivity.None;
+        FirmwareStep = null;
         FirmwareMessageTone = tone;
         FirmwareMessage = message;
         RefreshAll();
@@ -174,6 +200,7 @@ public sealed partial class ControllerViewModel
                 _ => LinkTone.Danger,
             });
             OfferInstall = outcome.OfferInstall;
+            FirmwareFinished?.Invoke(this, EventArgs.Empty);
         });
     }
 
@@ -187,6 +214,7 @@ public sealed partial class ControllerViewModel
             if (_disposed) return;
             EndFirmware(outcome.Message, outcome.Succeeded ? LinkTone.Good : LinkTone.Danger);
             OfferTest = outcome.Succeeded && mode == FlashMode.Update;
+            FirmwareFinished?.Invoke(this, EventArgs.Empty);
         });
     }
 

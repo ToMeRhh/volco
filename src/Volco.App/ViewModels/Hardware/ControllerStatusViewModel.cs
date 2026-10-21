@@ -32,6 +32,16 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         var inputs = Inputs();
         _state = DeviceCard.From(inputs);
         _level = DeviceCard.LevelOf(inputs, _state);
+        Progress = new ProgressDialogViewModel(controller, ToController);
+        Progress.PropertyChanged += OnProgressChanged;
+    }
+
+    /// <summary>The progress dialog: a running operation, then its result (spec §5's third level).</summary>
+    public ProgressDialogViewModel Progress { get; }
+
+    private void OnProgressChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProgressDialogViewModel.IsOpen)) OnPropertyChanged(nameof(ShowsBanner));
     }
 
     /// <summary>The page's controller logic: the Install confirmation binds to it.</summary>
@@ -57,9 +67,9 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
     /// <summary>The status and its detail on one line: the banner's text and the sidebar line's tooltip.</summary>
     public string FullText => State.Detail is { } detail ? $"{State.Status} · {detail}" : State.Status;
 
-    /// <summary>The banner shows while the status needs the user. A running operation shows there
-    /// too until the progress dialog takes it over.</summary>
-    public bool ShowsBanner => Level != StatusLevel.Fine;
+    /// <summary>The banner shows while the status needs the user, except under the progress dialog,
+    /// which shows the running operation and then its result; after Close, what remains shows here.</summary>
+    public bool ShowsBanner => Level != StatusLevel.Fine && !Progress.IsOpen;
 
     /// <summary>Raised before an action that belongs to the drawing acts (Fix it, Test your
     /// controller now, Load a preset…, Start over…, the not-set-up states' chooser): the window
@@ -211,5 +221,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         _disposed = true;
         _controller.PropertyChanged -= OnSourceChanged;
         _controller.Connection.PropertyChanged -= OnSourceChanged;
+        Progress.PropertyChanged -= OnProgressChanged;
+        Progress.Dispose();
     }
 }

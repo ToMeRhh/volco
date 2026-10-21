@@ -176,6 +176,17 @@
       </Border>
     </Border>
 
+    <!-- A firmware install, update or check, or a save, runs (controller-page spec §5, "Running,
+         don't interrupt"): above every other dialog, over the whole window. Nothing closes it while
+         the operation runs; afterwards Close, Escape or a click on the scrim does. -->
+    <Border Name="ProgressOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="3" Background="#66000000"
+            IsVisible="{Binding Hardware.Status.Progress.IsOpen}">
+      <Border Name="ProgressCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <hwviews:ProgressDialog Name="ProgressDialog" DataContext="{Binding Hardware.Status.Progress}"/>
+      </Border>
+    </Border>
+
     <!-- Third-party notices: a modal card over the whole window; Escape or a click outside closes it -->
     <Border Name="NoticesOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
             IsVisible="{Binding About.IsNoticesOpen}">

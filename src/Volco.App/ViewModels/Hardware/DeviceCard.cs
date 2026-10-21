@@ -36,8 +36,9 @@ public static class DeviceCard
 {
     public const string Name = "Volco controller";
 
-    /// <summary>The not-set-up states' detail lines: the setup chooser is on the Controller page.</summary>
-    public const string ChooseDetail = "Choose how to start.";
+    /// <summary>The not-set-up state's detail line when Volco has a copy; the button (Choose how to
+    /// start) says the rest.</summary>
+    public const string HasMirrorDetail = "Volco has a saved copy for it.";
     public const string UnusableDetail = "Start again from Volco's copy or from scratch.";
 
     public static CardState From(CardInputs i)
@@ -91,8 +92,10 @@ public static class DeviceCard
 
         switch (banner.Kind)
         {
-            case BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror:
-                return new("Not set up yet", LinkTone.Accent, ChooseDetail, CardAction.ChooseHowToStart, null, true);
+            case BannerKind.NotSetUp:
+                return new("Not set up yet", LinkTone.Accent, null, CardAction.ChooseHowToStart, null, true);
+            case BannerKind.NotSetUpHasMirror:
+                return new("Not set up yet", LinkTone.Accent, HasMirrorDetail, CardAction.ChooseHowToStart, null, true);
             case BannerKind.Unusable:
                 return new("The controller's setup can't be used", LinkTone.Warning,
                            UnusableDetail, CardAction.ChooseHowToStart, null, true);
