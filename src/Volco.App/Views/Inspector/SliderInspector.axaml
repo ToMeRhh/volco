@@ -10,7 +10,7 @@
        it controls, its response) and the Hardware section (its pin, Remove). -->
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
-      <TextBlock Name="HeadingText" Classes="InspectorKind" Text="{Binding Heading}"/>
+      <TextBlock Name="HeadingText" Classes="InspectorKind" Text="{Binding DisplayHeading}"/>
       <TextBox Name="NameBox" Classes="NameField" Text="{Binding Name, Mode=TwoWay}"
                PlaceholderText="{Binding TargetLabel}"/>
     </StackPanel>

@@ -54,7 +54,7 @@
       <StackPanel Spacing="2">
         <TextBlock Name="KindText" Classes="InspectorKind" Text="{Binding KindText}"
                    IsVisible="{Binding KindText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-        <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding Heading}"/>
+        <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding DisplayHeading}"/>
       </StackPanel>
       <Button Name="ClearButton" Grid.Column="1" VerticalAlignment="Center" Content="Clear"
               Command="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).ClearCommand}"

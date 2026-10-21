@@ -27,7 +27,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     internal ButtonConfig Config { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Heading))]
+    [NotifyPropertyChangedFor(nameof(Heading), nameof(DisplayHeading))]
     private int _index;
 
     // Only what depends on the input number changes here.
@@ -44,6 +44,16 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>The button's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Button {Index + 1}";
+
+    /// <summary>"Button N" at its place in the controller draft while the draft draws it (set by
+    /// the Hardware view model; an unsaved removal moves the later ones up), else null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayHeading))]
+    private string? _draftHeading;
+
+    /// <summary>The name the Controller page shows (the inspector header, the tile's tooltip):
+    /// the draft's number while the draft draws it (hardware-page spec §6.5), else <see cref="Heading"/>.</summary>
+    public string DisplayHeading => DraftHeading ?? Heading;
 
     /// <summary>The tile's captions on Hardware; null until the Hardware page fills them.</summary>
     [ObservableProperty]
@@ -133,9 +143,16 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     public string LightRowLabel => IsScreen ? "Screen" : "Light";
 
     /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited
-    /// mode; "Follows the new light after saving" while the draft changes its light.</summary>
-    public string LightRowText => IsLightChanged ? "Follows the new light after saving"
+    /// mode; while the draft changes its light, "Follows the new light after saving", or "No light
+    /// after saving" when the draft takes the light away.</summary>
+    public string LightRowText => IsLightChanged ? (IsLightRemoved ? "No light after saving" : "Follows the new light after saving")
         : MainGesture is { } gesture ? $"Follows {GestureName(gesture)}" : "Off";
+
+    /// <summary>The draft takes this button's light away (the Hello has one, the draft none). Set
+    /// by the Hardware view model with <see cref="IsLightChanged"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LightRowText))]
+    private bool _isLightRemoved;
 
     /// <summary>The controller draft gives this button another kind of light than the controller
     /// has (its Hello): until it is saved, the light row says so (controller-page spec §4.3). Set by

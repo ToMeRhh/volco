@@ -112,6 +112,9 @@ public sealed partial class ControlsViewModel : ObservableObject
             _ => false,
         };
         if (present) return;
+        // With SettingsViewModel.OnControlsShifted (which reselects across the rebuild after a
+        // confirmed save), this keeps an added control selected when a Hello's AddMissing puts it
+        // in the lists first.
         Selected = Selected switch
         {
             SliderItemViewModel { IsNew: true } s when s.Index < Sliders.Items.Count => Sliders.Items[s.Index],

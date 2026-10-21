@@ -163,6 +163,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private void OnControlsShifted(object? sender, EventArgs e)
     {
         if (_disposed) return;
+        // One of two ways the selection survives a save: this one covers the rebuild below;
+        // ControlsViewModel.FixSelection covers a Hello's AddMissing that adds an added control
+        // to the lists before this runs (the two events can come in either order).
         var hardware = _hardwareViewModel;
         var selected = _controlsViewModel?.Selected switch
         {

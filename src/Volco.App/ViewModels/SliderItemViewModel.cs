@@ -28,11 +28,21 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     /// <summary>The hardware input number (= list position). Relabelled live while dragging.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Heading))]
+    [NotifyPropertyChangedFor(nameof(Heading), nameof(DisplayHeading))]
     private int _index;
 
     /// <summary>The slider's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Slider {Index + 1}";
+
+    /// <summary>"Slider N" at its place in the controller draft while the draft draws it (set by
+    /// the Hardware view model; an unsaved removal moves the later ones up), else null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayHeading))]
+    private string? _draftHeading;
+
+    /// <summary>The name the Controller page shows (the inspector header, the tile's tooltip):
+    /// the draft's number while the draft draws it (hardware-page spec §6.5), else <see cref="Heading"/>.</summary>
+    public string DisplayHeading => DraftHeading ?? Heading;
 
     /// <summary>The Controls page's selected tile.</summary>
     [ObservableProperty]

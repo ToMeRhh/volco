@@ -292,6 +292,43 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.NotEqual("Follows the new light after saving", In<TextBlock>(ButtonInspector(s), "LightText").Text);
     }
 
+    /// <summary>Hardware-page spec §6.5: after an unsaved removal the header and the tile's tooltip
+    /// number the control by its place in the draft, as its Remove does.</summary>
+    [AvaloniaFact]
+    public void TheHeaderFollowsTheDraftsNumbering()
+    {
+        using var s = Show();
+        s.Hardware.Sections.SliderHardwareOpen = true;
+        s.Vm.Controller.RemoveSlider(1);
+        Settle(s.Window);
+        var moved = s.Vm.Sliders.Items[2];   // was Slider 3, now the draft's Slider 2
+        Select(s, moved);
+
+        var inspector = SliderInspector(s);
+        Assert.Same(moved, inspector.DataContext);
+        Assert.Equal("Slider 2", In<TextBlock>(inspector, "HeadingText").Text);
+        Assert.Equal("Remove Slider 2", In<Button>(Section(inspector), "HardwareRemoveButton").Content);
+        var tile = s.Page.Tiles().OfType<SliderTile>().Single(t => ReferenceEquals(t.DataContext, moved));
+        Assert.Equal("Slider 2", ToolTip.GetTip(tile));
+
+        s.Vm.Controller.RevertCommand.Execute(null);   // Discard: Volco's numbering again
+        Settle(s.Window);
+        Assert.Equal("Slider 3", In<TextBlock>(SliderInspector(s), "HeadingText").Text);
+    }
+
+    [AvaloniaFact]
+    public void ARemovedLightSaysNoLightAfterSaving()
+    {
+        using var s = Show();
+        Select(s, s.Vm.Buttons.Items[0]);
+        s.Hardware.InspectedButton!.IsNone = true;   // the draft takes the LED away
+        Settle(s.Window);
+
+        var inspector = ButtonInspector(s);
+        Assert.True(In<Border>(inspector, "LightRow").IsEffectivelyVisible);
+        Assert.Equal("No light after saving", In<TextBlock>(inspector, "LightText").Text);
+    }
+
     [AvaloniaFact]
     public void ControllerSettingsChipShowsSettings()
     {

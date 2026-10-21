@@ -5,7 +5,7 @@
              xmlns:controls="using:Volco.App.Controls"
              x:Class="Volco.App.Controls.ButtonTile"
              x:DataType="vm:ButtonItemViewModel"
-             Focusable="True" ToolTip.Tip="{Binding Heading}">
+             Focusable="True" ToolTip.Tip="{Binding DisplayHeading}">
   <!-- The page fills "Swap with" when the menu opens (StagePage.OnTileContextRequested) -->
   <UserControl.ContextMenu>
     <ContextMenu>

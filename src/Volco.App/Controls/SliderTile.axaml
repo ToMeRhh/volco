@@ -4,7 +4,7 @@
              xmlns:conv="using:Volco.App.Converters"
              x:Class="Volco.App.Controls.SliderTile"
              x:DataType="vm:SliderItemViewModel"
-             Focusable="True" ToolTip.Tip="{Binding Heading}">
+             Focusable="True" ToolTip.Tip="{Binding DisplayHeading}">
   <!-- The page fills "Swap with" when the menu opens (StagePage.OnTileContextRequested) -->
   <UserControl.ContextMenu>
     <ContextMenu>
@@ -68,7 +68,7 @@
                        TextAlignment="Center">
               <ToolTip.Tip>
                 <MultiBinding StringFormat="{}{0}: {1}">
-                  <Binding Path="Heading"/>
+                  <Binding Path="DisplayHeading"/>
                   <Binding Path="Label"/>
                 </MultiBinding>
               </ToolTip.Tip>

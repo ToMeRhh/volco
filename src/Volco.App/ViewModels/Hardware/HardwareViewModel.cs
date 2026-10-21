@@ -350,7 +350,18 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         // (controller-page spec §4.3): until then the controller still has the Hello's.
         foreach (var item in _controls.Buttons.Items) item.IsLightChanged = false;
         for (int i = 0; i < Buttons.Count; i++)
-            Buttons[i].IsLightChanged = !Buttons[i].IsNew && Buttons[i].Indicator is { } hello && hello != KindOf(draft.Buttons[i]);
+        {
+            var kind = KindOf(draft.Buttons[i]);
+            Buttons[i].IsLightChanged = !Buttons[i].IsNew && Buttons[i].Indicator is { } hello && hello != kind;
+            Buttons[i].IsLightRemoved = Buttons[i].IsLightChanged && kind == IndicatorKind.None;
+        }
+
+        // The Controller page names a control by its place in the draft while the draft draws it
+        // (hardware-page spec §6.5): after an unsaved removal the later ones are numbered up.
+        foreach (var item in _controls.Sliders.Items) item.DraftHeading = null;
+        foreach (var item in _controls.Buttons.Items) item.DraftHeading = null;
+        for (int i = 0; i < Sliders.Count; i++) Sliders[i].DraftHeading = $"Slider {i + 1}";
+        for (int i = 0; i < Buttons.Count; i++) Buttons[i].DraftHeading = $"Button {i + 1}";
 
         // A Controls tile the draft doesn't draw still measures its wiring layer.
         foreach (var item in _controls.Sliders.Items) item.Wiring ??= new TileWiring { Title = item.Heading };
