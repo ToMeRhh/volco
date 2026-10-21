@@ -178,7 +178,7 @@ Values that don't land on a list entry (a config set elsewhere) show as "Custom 
 
 Replaces today's setup dialog. It fills the case rectangle when the controller is not set up, its setup can't be used, or the user chose Start over:
 
-"How do you want to start?" / "Nothing is sent to the controller until you Save." and up to three cards, each with a small picture of its controls:
+"How do you want to start?" / "Nothing is sent to the controller until you Save." and one card per preset (after Volco's saved copy when there is one, before Start empty), each with a small picture of its controls:
 - **Volco's saved copy** (only with a mirror; first and outlined): "5 sliders, 4 buttons, 1 screen".
 - **A preset** per `ControllerPresets` entry (today: DIY reference).
 - **Start empty** (dashed): "Add sliders and buttons yourself, with Detect".
@@ -245,7 +245,7 @@ Drives an output-capable pin that is free or a configured LED pin, then restores
 
 ## 10. Connection dialog
 
-Opened from the card's status line or the ⋯ menu. "Connection", "Stored in Volco on this PC; applies at once." A segment **USB / Wi-Fi / Simulator** (decision 4: one transport at a time).
+Opened from the card's status line or the ⋯ menu. "Connection", "Stored in Volco on this PC; applies at once." A segment **USB / Wi-Fi / Simulator** (decision 4: one transport at a time). For now (interim rule, until the Wi-Fi steps of §10.2 are built) the segment only selects a tab; a tab that isn't the transport in use says **Use USB** / **Use Wi-Fi** / **Use the simulator**, which switches Volco's transport at once, and the one in use says "In use".
 
 ### 10.1 USB
 
