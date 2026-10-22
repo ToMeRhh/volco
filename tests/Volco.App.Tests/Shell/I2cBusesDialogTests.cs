@@ -104,7 +104,7 @@ public sealed class I2cBusesDialogTests : IDisposable
     {
         using var s = Show();
         // Controller settings has one row for the buses, no bus fields of its own
-        Assert.Equal("Bus 0", In<TextBlock>(s.Window, "BusesSummary").Text);
+        Assert.Equal("Buses 0 and 1", In<TextBlock>(s.Window, "BusesSummary").Text);   // the DIY preset's
         Assert.DoesNotContain(s.Window.GetVisualDescendants(), v => v is Control { Name: "SdaField" });
 
         Click(s.Window, In<Button>(s.Window, "BusesButton"));
@@ -116,20 +116,20 @@ public sealed class I2cBusesDialogTests : IDisposable
         Assert.True(In<Control>(card, "SdaField").IsEffectivelyVisible);
         Assert.True(In<Control>(card, "SclField").IsEffectivelyVisible);
         Assert.False(In<Button>(card, "BusRemoveButton").IsEffectivelyEnabled);   // a screen uses it
-        Assert.Equal("Add bus 1", In<Button>(overlay, "AddBusButton").Content);
+        Assert.Equal("Add bus 2", In<Button>(overlay, "AddBusButton").Content);
         // The focus is in the dialog
         var busesCard = In<Border>(s.Window, "BusesCard");
         var focused = s.Window.FocusManager?.GetFocusedElement() as Visual;
         Assert.True(ReferenceEquals(focused, busesCard) || focused is not null && busesCard.IsVisualAncestorOf(focused));
 
         Click(s.Window, In<Button>(overlay, "AddBusButton"));
-        Assert.Equal(2, overlay.GetVisualDescendants().OfType<Border>().Count(b => b.Name == "BusCard"));
-        Assert.Equal("Buses 0 and 1", In<TextBlock>(s.Window, "BusesSummary").Text);
+        Assert.Equal(3, overlay.GetVisualDescendants().OfType<Border>().Count(b => b.Name == "BusCard"));
+        Assert.Equal("Buses 0, 1 and 2", In<TextBlock>(s.Window, "BusesSummary").Text);
 
         s.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
         Settle(s.Window);
         Assert.False(overlay.IsVisible);
         Assert.Null(s.Vm.Hardware.Buses);
-        Assert.NotNull(ControllerDraft.Bus(s.Vm.Controller.Draft, 1));   // the edit stays in the draft
+        Assert.NotNull(ControllerDraft.Bus(s.Vm.Controller.Draft, 2));   // the edit stays in the draft
     }
 }

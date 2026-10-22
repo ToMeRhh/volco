@@ -187,9 +187,9 @@ public class SettingsCoverageTests
 
         vm.Hardware.ShowBus(1);                                                // the button's bus link: the I2C buses dialog
         Settle(window);
-        PickPin(window, Named<PinField>(window, "SdaField"), 17);              // i2c1.sda
-        PickPin(window, Named<PinField>(window, "SclField"), 2);               // i2c1.scl
-        OtherChoice(Named<ComboBox>(window, "ClockBox"));                      // i2c1.clock_hz
+        PickPin(window, Named<PinField>(window, "SdaField", 1), 17);           // i2c1.sda (bus 1's card, after bus 0's)
+        PickPin(window, Named<PinField>(window, "SclField", 1), 2);            // i2c1.scl
+        OtherChoice(Named<ComboBox>(window, "ClockBox", 1));                   // i2c1.clock_hz
         Click(Named<Button>(window, "BusesDoneButton"));
         Settle(window);
 

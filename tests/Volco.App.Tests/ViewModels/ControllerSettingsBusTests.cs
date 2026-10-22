@@ -63,27 +63,29 @@ public sealed class ControllerSettingsBusTests : IDisposable
         return Assert.IsType<I2cBusesViewModel>(Hardware.Buses);
     }
 
-    /// <summary>The DIY preset defines bus 0; the dialog lists it whether or not a screen uses it.</summary>
+    /// <summary>The DIY preset defines buses 0 and 1; the dialog lists them whether or not a screen
+    /// uses them.</summary>
     [Fact]
     public void TheDialogListsTheDraftsBusesAndTheUsedOnes()
     {
         SetUp(screen: true);
         var dialog = Dialog();
-        var row = Assert.Single(dialog.Buses);
-        Assert.Equal(0, row.Bus);
+        Assert.Equal(new[] { 0, 1 }, dialog.Buses.Select(b => b.Bus));
+        var row = dialog.Buses[0];
         Assert.Equal("Bus 0", row.Title);
         Assert.Equal("Hardware I2C", row.KindText);
         Assert.Equal("Used by Button 1", row.UsedByText);
         Assert.Equal("GPIO 25", row.Sda.ValueText);
         Assert.False(row.HasProblem);
+        Assert.Equal("No screen uses it", dialog.Buses[1].UsedByText);
 
         // A screen on a bus the draft doesn't have adds that bus, in bus order, with a problem.
         Controller.Draft.Buttons[1].Screen = new Screen { Bus = 2 };
         Controller.OnDraftEdited();
-        Assert.Equal(new[] { 0, 2 }, dialog.Buses.Select(b => b.Bus));
+        Assert.Equal(new[] { 0, 1, 2 }, dialog.Buses.Select(b => b.Bus));
         Assert.Same(row, dialog.Buses[0]);
-        Assert.Equal("Software I2C", dialog.Buses[1].KindText);
-        Assert.True(dialog.Buses[1].HasProblem);
+        Assert.Equal("Software I2C", dialog.Buses[2].KindText);
+        Assert.True(dialog.Buses[2].HasProblem);
         Assert.Equal("Bus 2 needs attention", Settings().BusesSummary);
         Assert.True(Settings().BusesHaveProblem);
     }
@@ -92,7 +94,7 @@ public sealed class ControllerSettingsBusTests : IDisposable
     public void ABusAScreenUsesCantBeRemoved()
     {
         SetUp(screen: true);
-        var row = Assert.Single(Dialog().Buses);
+        var row = Dialog().Buses.Single(b => b.Bus == 0);
         Assert.False(row.CanRemove);
         Assert.False(row.RemoveCommand.CanExecute(null));
         Assert.Equal("Used by Button 1: put their screens on another bus first", row.RemoveTooltip);
@@ -109,11 +111,13 @@ public sealed class ControllerSettingsBusTests : IDisposable
     {
         SetUp(screen: false);
         var dialog = Dialog();
-        Assert.Equal("Bus 0", Settings().BusesSummary);
-        Assert.Equal("Add bus 1", dialog.AddText);
+        Assert.Equal("Buses 0 and 1", Settings().BusesSummary);
+        Assert.Equal("Add bus 2", dialog.AddText);
 
         dialog.Buses[0].RemoveCommand.Execute(null);
         Assert.Null(ControllerDraft.Bus(Controller.Draft, 0));
+        Assert.Equal("Bus 1", Settings().BusesSummary);
+        dialog.Buses[0].RemoveCommand.Execute(null);
         Assert.True(dialog.HasNoBuses);
         Assert.Equal("None", Settings().BusesSummary);
         Assert.True(Controller.IsDirty);
@@ -144,7 +148,7 @@ public sealed class ControllerSettingsBusTests : IDisposable
 
         var dialog = Assert.IsType<I2cBusesViewModel>(Hardware.Buses);
         Assert.Equal(0, dialog.FocusedBus);
-        Assert.True(Assert.Single(dialog.Buses).IsFocused);
+        Assert.Equal(0, dialog.Buses.Single(b => b.IsFocused).Bus);
         Assert.Same(button, Hardware.Inspected);   // the button stays in the inspector
 
         dialog.DoneCommand.Execute(null);
@@ -157,7 +161,7 @@ public sealed class ControllerSettingsBusTests : IDisposable
         SetUp(screen: true);
         var settings = Settings();
         settings.OpenSection = ControllerSettingsViewModel.InputSection;
-        var row = Assert.Single(Dialog().Buses);
+        var row = Dialog().Buses.Single(b => b.Bus == 0);
 
         DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.BusScl, 0), 25);   // SDA = SCL
         Controller.OnDraftEdited();
