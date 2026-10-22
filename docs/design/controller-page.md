@@ -43,7 +43,7 @@ The header is today's Controls header ("Slider N" with its name field; "Button N
 
 **Slider**
 1. **Controls**: Controls row (target), Response (curve, dead zone, smoothing, reverse; today's collapsed sub-section).
-2. **Hardware**: Pin; Remove Slider N.
+2. **Hardware**: Pin; Auto-calibrate (a switch, a draft field saved with the controller config); Calibration (the learned ends or "Not learned yet", and Re-calibrate, which opens the sweep dialog; spec `slider-calibration.md`); Remove Slider N.
 
 **Button**
 1. **Actions**: the mode pill and the three gesture rows, Light or Screen row (follows the main action), Timing (collapsed sub-section).

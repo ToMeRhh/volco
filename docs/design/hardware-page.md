@@ -243,7 +243,7 @@ Drives an output-capable pin that is free or a configured LED pin, then restores
 - Golden frames for each message in `firmware/test/golden/frames.txt`; parser, encoder and simulator tests.
 - `kProtocolVersion` stays 1 (app and firmware ship together).
 - The simulator answers all three: its pins are its builder's layout; dragging a slider or clicking a button while a watch is on reports its pin; Find screens reports the screens it draws.
-- Slider calibration (parked) will take the next free types; its design doc is updated to say so.
+- Slider calibration takes `0x8E` Calibrate (PC→controller) and `0x09` Calibration (controller→PC); see `slider-calibration.md`.
 
 ## 10. Connection dialog
 

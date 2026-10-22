@@ -24,7 +24,7 @@ These were settled while brainstorming and are not reopened by this spec.
 | D2 | The controller owns its configuration, stored in NVS. Volco reads it, edits it and writes it back, and keeps a **single** mirror copy (the last config it read or saved). |
 | D3 | Button and slider *actions* stay in Volco's `config.json`, keyed by input number, as today. They are not part of the controller config. |
 | D4 | The protocol stays **v1**. There are no existing users, so frames are redesigned freely. App, firmware and simulator update together. |
-| D5 | Hardware is entered manually (a pin per thing). Learn mode is deferred to a later task. The app does no electrical pin validation; the firmware rejects only configs that **cannot work on the chip** (§6.4). |
+| D5 | Hardware is entered manually (a pin per thing). Learn mode is deferred to a later task (a slider's travel ends are learned separately, by `slider-calibration.md`). The app does no electrical pin validation; the firmware rejects only configs that **cannot work on the chip** (§6.4). |
 | D6 | Presets: "DIY reference" (today's `config.h`), "Volco PCB" (`proto/presets/volco-pcb.json`) and Blank. Choosing a preset fills the form, and the user may edit the result. |
 | D7 | USB serial is always on. UDP over Wi-Fi is an **advanced, opt-in** setting. It needs an explicit SSID, password, PC IP address and PC port. There is **no discovery and no broadcast**: the controller sends only to the configured IP and accepts UDP only from it. |
 | D8 | The ESP32 firmware drops its WebSocket client and the `TRANSPORT_LOCAL_DEBUG` mode. Volco keeps its WebSocket *server* for the simulator and alternative controllers. |
@@ -37,7 +37,7 @@ These were settled while brainstorming and are not reopened by this spec.
 
 ## 3. Non-goals
 
-- Learn mode or automatic wiring detection.
+- Learn mode or automatic wiring detection (a slider's calibration is not wiring; see `slider-calibration.md`).
 - Pin validation beyond §6.4: pull-up resistors, strapping-pin boot behaviour, module-specific unbonded pins and wiring mistakes are not checked. The UI gives hints, §8.7.
 - OTA updates, UDP discovery, mDNS, WebSocket on the ESP32.
 - More than one mirror copy, or identifying controllers by MAC address.
@@ -113,6 +113,8 @@ The frame format is unchanged: `0xAA | length | type | body | XOR checksum`, `le
 | `0x88` | ConfigWriteBegin | PC→C | `seq` u8, `total` u16, `crc32` u32 |
 | `0x89` | ConfigWriteChunk | PC→C | `seq` u8, `offset` u16, `data` (1–240 bytes) |
 | `0x8A` | ConfigWriteEnd | PC→C | `seq` u8 |
+| `0x8E` | Calibrate | PC→C | `index` u8, `action` u8 (0 query, 1 start, 2 done, 3 cancel); `slider-calibration.md` |
+| `0x09` | Calibration | C→PC | `index` u8, `flags` u8, `low` u16, `high` u16; `slider-calibration.md` |
 
 - **Sizes:** the largest payloads are ConfigData at 1 + 9 + 240 = 250 bytes and ConfigWriteChunk at 1 + 3 + 240 = 244 bytes. Both are within 255.
 - **Proof of life:** every PC→C frame, including the config frames, counts toward the host timeout, as every valid frame does today.
@@ -282,6 +284,7 @@ message ControllerConfig {
 
 message Slider {
   optional uint32 pin = 1;         // ADC-capable GPIO
+  optional bool auto_calibrate = 2 [default = true];  // learn the travel's ends while in use (slider-calibration.md)
 }
 
 message Button {
