@@ -107,13 +107,19 @@ public sealed class CalibrationRuntimeTests : IDisposable
 
         c.RaiseMessage(Report(1, sweeping: false));
         c.RaiseMessage(Report(4, sweeping: false));
+        var events = new ConcurrentQueue<(int Slider, SliderCalibrationState? State)>();
+        runtime.CalibrationChanged += (_, e) => events.Enqueue(e);
         var before = c.SentCount;
         c.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 3, new[] { IndicatorKind.Led }));
 
-        // Queried again, three this time; slider 4's state is gone with it, slider 1's stays until its answer.
+        // Every state is forgotten, each with an event saying so, before the queries (three this time).
+        Assert.Null(runtime.GetCalibration(4));
+        Assert.Null(runtime.GetCalibration(1));
+        Assert.Equal(new (int, SliderCalibrationState?)[] { (1, null), (4, null) }, events.ToArray());
         var queries = c.SentFrames.Skip(before).Where(f => f[2] == (byte)MessageType.Calibrate).ToList();
         Assert.Equal(Enumerable.Range(0, 3).Select(i => ProtocolEncoder.EncodeCalibrate(i, CalibrateAction.Query)), queries);
-        Assert.Null(runtime.GetCalibration(4));
+
+        c.RaiseMessage(Report(1, sweeping: false));
         Assert.NotNull(runtime.GetCalibration(1));
     }
 
@@ -132,14 +138,14 @@ public sealed class CalibrationRuntimeTests : IDisposable
     {
         var runtime = StartConnected();
         var c = Connection(0);
-        var events = new ConcurrentQueue<(int Slider, SliderCalibrationState State)>();
+        var events = new ConcurrentQueue<(int Slider, SliderCalibrationState? State)>();
         runtime.CalibrationChanged += (_, e) => events.Enqueue(e);
         Assert.Null(runtime.GetCalibration(2));
 
         c.RaiseMessage(new CalibrationMessage(2, learned: false, sweeping: true, autoCalibrate: false, low: 4095, high: 0));
         var expected = new SliderCalibrationState(false, true, false, 4095, 0);
         Assert.Equal(expected, runtime.GetCalibration(2));
-        Assert.Equal((2, expected), Assert.Single(events));
+        Assert.Equal((2, (SliderCalibrationState?)expected), Assert.Single(events));
 
         c.RaiseMessage(new CalibrationMessage(2, learned: true, sweeping: false, autoCalibrate: false, low: 300, high: 3900));
         Assert.Equal(new SliderCalibrationState(true, false, false, 300, 3900), runtime.GetCalibration(2));
@@ -255,5 +261,30 @@ public sealed class CalibrationRuntimeTests : IDisposable
         Assert.False(runtime.IsSliderHeld(4));
         runtime.HoldSlider(4).Dispose();   // after dispose: an inert handle
         Assert.False(runtime.IsSliderHeld(4));
+    }
+
+    [Fact]
+    public void ASweepWithNoHold_IsCancelled()
+    {
+        StartConnected();
+        var c = Connection(0);
+        var cancel = ProtocolEncoder.EncodeCalibrate(3, CalibrateAction.Cancel);
+
+        c.RaiseMessage(Report(3, sweeping: false));   // not sweeping: left alone
+        Assert.False(Sent(c, cancel));
+        c.RaiseMessage(Report(3, sweeping: true, learned: false));   // e.g. this app restarted mid-sweep
+        Assert.True(Sent(c, cancel));
+    }
+
+    [Fact]
+    public void AHeldSweep_IsNotCancelled()
+    {
+        var runtime = StartConnected();
+        var c = Connection(0);
+        using var hold = runtime.HoldSlider(3);   // a dialog holds the slider before it sends Start
+        runtime.SendCalibrate(3, CalibrateAction.Start);
+        c.RaiseMessage(Report(3, sweeping: true, learned: false));
+        Assert.False(Sent(c, ProtocolEncoder.EncodeCalibrate(3, CalibrateAction.Cancel)));
+        Assert.True(runtime.IsSliderHeld(3));
     }
 }

@@ -284,12 +284,13 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         public bool SawSweep { get; set; }
     }
 
-    /// <summary>A Calibration report arrived from the current connection (the slider's 0-based input
-    /// and its new state). Any thread (the transport's).</summary>
-    public event EventHandler<(int Slider, SliderCalibrationState State)>? CalibrationChanged;
+    /// <summary>A slider's calibration changed (its 0-based input and its new state): a Calibration
+    /// report arrived from the current connection, or, with a null state, a Hello made the last one
+    /// unknown until the slider's answer. Any thread (the transport's).</summary>
+    public event EventHandler<(int Slider, SliderCalibrationState? State)>? CalibrationChanged;
 
     /// <summary>The controller's last report for a slider (0-based input), or null before one.
-    /// Every slider is queried after each Hello; slider numbers the Hello no longer has are dropped.</summary>
+    /// Every slider's state is forgotten and queried again after each Hello.</summary>
     public SliderCalibrationState? GetCalibration(int sliderIndex)
     {
         lock (_calibrationGate) return _calibrations.TryGetValue(sliderIndex, out var state) ? state : null;
@@ -356,11 +357,14 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     private void OnCalibration(CalibrationMessage message)
     {
         var state = SliderCalibrationState.From(message);
-        bool released = false;
+        bool released = false, orphan = false;
         lock (_calibrationGate)
         {
             _calibrations[message.SliderIndex] = state;
-            if (_holds.TryGetValue(message.SliderIndex, out var hold))
+            // A sweep no hold is waiting for (this app restarted or its dialog is gone): cancel it, so
+            // the slider's input is not stuck learning. A dialog takes its hold before it sends Start.
+            if (!_holds.TryGetValue(message.SliderIndex, out var hold)) orphan = state.Sweeping;
+            else
             {
                 if (state.Sweeping) hold.SawSweep = true;
                 else if (hold.SawSweep)
@@ -373,16 +377,25 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         AppLog.Debug($"Calibration: index={message.SliderIndex}, learned={state.Learned}, sweeping={state.Sweeping}, " +
                      $"auto={state.AutoCalibrate}, ends {state.Low}-{state.High}");
         if (released) AppLog.Info($"Slider {message.SliderIndex + 1} released: its sweep ended");
+        if (orphan)
+        {
+            AppLog.Info($"Slider {message.SliderIndex + 1} is sweeping with no calibration open: cancelling it");
+            _link.SendRaw(ProtocolEncoder.EncodeCalibrate(message.SliderIndex, CalibrateAction.Cancel));
+        }
         CalibrationChanged?.Invoke(this, (message.SliderIndex, state));
     }
 
-    /// <summary>After a Hello this app speaks: forgets the sliders it no longer has and asks for
-    /// every slider's calibration.</summary>
+    /// <summary>After a Hello this app speaks: forgets every slider's calibration (the controller may
+    /// have rebooted with another config) and asks for each one again.</summary>
     private void QueryCalibrations(int sliderCount)
     {
+        int[] cleared;
         lock (_calibrationGate)
-            foreach (var stale in _calibrations.Keys.Where(i => i >= sliderCount).ToArray())
-                _calibrations.Remove(stale);
+        {
+            cleared = _calibrations.Keys.Order().ToArray();
+            _calibrations.Clear();
+        }
+        foreach (var slider in cleared) CalibrationChanged?.Invoke(this, (slider, null));
         for (int i = 0; i < sliderCount; i++)
             _link.SendRaw(ProtocolEncoder.EncodeCalibrate(i, CalibrateAction.Query));
     }
