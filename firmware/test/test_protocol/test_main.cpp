@@ -402,6 +402,48 @@ void test_accept_udp_source() {
   TEST_ASSERT_FALSE(acceptUdpSource(0, 0));  // no configured PC: accept nothing
 }
 
+// ── Calibration ─────────────────────────────────────────────────────────────
+void test_calibration_frames_encode_to_golden_bytes() {
+  uint8_t out[16];
+  size_t n = encodeCalibration(1, 0x05, 170, 2550, out);
+  auto g = golden("calibration_1_learned_auto");
+  TEST_ASSERT_FALSE(g.empty());
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  n = encodeCalibration(0, 0x02, 4095, 0, out);
+  g = golden("calibration_0_raw_sweeping");
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  // The PC's Calibrate frames.
+  TEST_ASSERT_TRUE(frameOf({MSG_CALIBRATE, 2, CALIBRATE_START}) == golden("calibrate_2_start"));
+  TEST_ASSERT_TRUE(frameOf({MSG_CALIBRATE, 0, CALIBRATE_QUERY}) == golden("calibrate_0_query"));
+}
+
+struct CalibrateSink : FakeSink {
+  std::vector<std::vector<uint32_t>> calibrations;
+  void calibrate(uint8_t index, uint8_t action, uint32_t now) override { calibrations.push_back({index, action, now}); }
+};
+
+void test_calibrate_reaches_the_sink() {
+  CalibrateSink sink;
+  Link link(config(), sink);
+  link.begin(0);
+  deliver(link, golden("calibrate_2_start"), 10);
+  deliver(link, golden("calibrate_0_query"), 20);
+  TEST_ASSERT_EQUAL(2, sink.calibrations.size());
+  TEST_ASSERT_TRUE((std::vector<uint32_t>{2, CALIBRATE_START, 10}) == sink.calibrations[0]);
+  TEST_ASSERT_TRUE((std::vector<uint32_t>{0, CALIBRATE_QUERY, 20}) == sink.calibrations[1]);
+}
+
+void test_short_calibrate_is_ignored() {
+  CalibrateSink sink;
+  Link link(config(), sink);
+  link.begin(0);
+  deliver(link, frameOf({MSG_CALIBRATE, 2}), 10);
+  deliver(link, frameOf({MSG_CALIBRATE}), 20);
+  TEST_ASSERT_EQUAL(0, sink.calibrations.size());
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_parser_resyncs_after_garbage_and_bad_checksum);
@@ -430,5 +472,8 @@ int main(int, char**) {
   RUN_TEST(test_host_lost_unlatches);
   RUN_TEST(test_latch_set_before_reply_routes_to_new_transport);
   RUN_TEST(test_accept_udp_source);
+  RUN_TEST(test_calibration_frames_encode_to_golden_bytes);
+  RUN_TEST(test_calibrate_reaches_the_sink);
+  RUN_TEST(test_short_calibrate_is_ignored);
   return UNITY_END();
 }
