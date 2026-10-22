@@ -8,7 +8,7 @@
         x:Class="Volco.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Volco Settings"
-        Width="1100" Height="720" MinWidth="820" MinHeight="520"
+        Width="1540" Height="900" MinWidth="820" MinHeight="520"
         Classes.compact="{Binding $self.Bounds.Width, Converter={x:Static conv:LayoutConverters.IsCompact}}"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"

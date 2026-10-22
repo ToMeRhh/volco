@@ -121,14 +121,14 @@ public class StagePageTests
     }
 
     [AvaloniaFact]
-    public void Window_DefaultSize_1100x720_Min_820x520()
+    public void Window_DefaultSize_1540x900_Min_820x520()
     {
         using var rig = new TestRig(EngineWithAudio());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var window = new SettingsWindow(vm, rig.Runtime);
 
-        Assert.Equal(1100, window.Width);
-        Assert.Equal(720, window.Height);
+        Assert.Equal(1540, window.Width);
+        Assert.Equal(900, window.Height);
         Assert.Equal(820, window.MinWidth);
         Assert.Equal(520, window.MinHeight);
     }

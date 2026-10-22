@@ -39,7 +39,7 @@ The page becomes the Controls page's pattern:
 
 ### 3.1 Window
 
-Unchanged from Controls (§3.1 there): 1100 × 720 default, 820 × 520 minimum, the 1000 px breakpoint (168 px labelled sidebar and 380 px side panel, or 56 px icon sidebar and 300 px side panel). Only the drawing scrolls.
+Unchanged from Controls (§3.1 there): 1540 × 900 default (changed 2026-10-22; was 1100 × 720), 820 × 520 minimum, the 1000 px breakpoint (168 px labelled sidebar and 380 px side panel, or 56 px icon sidebar and 300 px side panel). Only the drawing scrolls.
 
 ### 3.2 Layout
 
