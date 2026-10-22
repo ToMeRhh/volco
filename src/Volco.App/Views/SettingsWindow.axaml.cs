@@ -139,15 +139,17 @@ public partial class SettingsWindow : Window
         // The attention dialog opens by itself (a state began), so the focus goes back to where it
         // was, else to the status line.
         TrackFocus(_attentionOverlay, _attentionCard, StatusLineButton);
-        // It may have opened while the window was hidden: the focus moves into it when the window shows.
+        // It shows only while the window does: a state that began while it was hidden shows (and
+        // takes the focus) when it opens.
+        _hardware.Status.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ControllerStatusViewModel.IsAttentionOpen)) UpdateAttention();
+        };
         PropertyChanged += (_, e) =>
         {
-            if (e.Property == IsVisibleProperty && IsVisible && _attentionOverlay.IsVisible && !_progressOverlay.IsVisible)
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (_attentionOverlay.IsVisible && !_progressOverlay.IsVisible) DialogFocus.MoveInto(_attentionCard);
-                });
+            if (e.Property == IsVisibleProperty) UpdateAttention();
         };
+        UpdateAttention();
         // The progress dialog's opener may be gone (the save bar's Save): the focus goes back to
         // the Controller page when it shows, else to the status line.
         TrackFocus(_progressOverlay, _progressCard, ControllerPageFocus);
@@ -248,6 +250,9 @@ public partial class SettingsWindow : Window
         else if (e.PropertyName is nameof(HardwareViewModel.IsConnectionDialogOpen) or nameof(HardwareViewModel.ConnectionDialog)) UpdateConnection();
         else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
     }
+
+    /// <summary>The attention dialog over the window while the status asks for it and the window shows.</summary>
+    private void UpdateAttention() => _attentionOverlay.IsVisible = IsVisible && _hardware.Status.IsAttentionOpen;
 
     /// <summary>The leave prompt's card over the window while one is open.</summary>
     private void UpdateLeavePrompt()

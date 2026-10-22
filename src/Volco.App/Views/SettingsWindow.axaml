@@ -184,8 +184,7 @@
          firmware is too old. Opens once each time the state begins, over every other status dialog
          but under the progress dialog, which takes over when its button starts an operation. Not
          now, Escape or a click on the scrim closes it; the banner stays. -->
-    <Border Name="AttentionOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
-            IsVisible="{Binding Hardware.Status.IsAttentionOpen}">
+    <Border Name="AttentionOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
       <Border Name="AttentionCard" Classes="Panel DialogCard Small" Padding="20" KeyboardNavigation.TabNavigation="Cycle"
               Focusable="True">
         <StackPanel Spacing="10">

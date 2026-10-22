@@ -187,21 +187,34 @@ public sealed class AttentionDialogTests : IDisposable
         NoAnswer(s);
         Until(s.Window, () => s.Overlay.IsVisible && s.ActionButton.IsEffectivelyEnabled);
 
+        var before = s.Rig.Connection!;
+        var probing = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        s.Flasher.DuringProbe = () => { probing.TrySetResult(); return release.Task; };
+
         Click(s, s.ActionButton);
 
-        Until(s.Window, () => s.Status.Progress.IsOpen);
+        Until(s.Window, () => s.Status.Progress.IsOpen && probing.Task.IsCompleted);
         Assert.False(s.Overlay.IsVisible);                 // the progress dialog takes over
         Assert.True(s.Progress.IsEffectivelyVisible);
         Assert.Equal("Checking firmware", s.Status.Progress.Title);
-        Until(s.Window, () => s.Status.Progress.IsDone);
-        Assert.Equal("probe COM3", s.Flasher.Calls.Single());
+        // The real USB port reopens at once after the check; the fake opens when told, so this
+        // covers the gap until it does.
+        using (s.Rig.Runtime.ExpectInterruption(LinkActivity.Connecting))
+        {
+            release.SetResult();
+            Until(s.Window, () => s.Status.Progress.IsDone);
+            Assert.Equal("probe COM3", s.Flasher.Calls.Single());
+            Until(s.Window, () => !ReferenceEquals(s.Rig.Connection, before) && !s.Rig.Runtime.IsSuspended);
+            s.Rig.Connection!.SetStatus(TransportStatus.Open);
+        }
 
         // The check's reset and reconnect, with the board still silent, don't reopen it.
         s.Status.Progress.Close();
-        Settle(s.Window);
-        Until(s.Window, () => s.Rig.Runtime.LinkStatus.State == LinkState.NoAnswer || s.Rig.Runtime.LinkStatus.State == LinkState.Waiting);
+        Until(s.Window, () => s.Rig.Runtime.LinkStatus.State == LinkState.NoAnswer);
         Wait(s.Window, 300);
         Assert.False(s.Overlay.IsVisible);
+        Assert.True(s.Banner.IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -255,7 +268,7 @@ public sealed class AttentionDialogTests : IDisposable
         using var s = Show(show: false);
         NoAnswer(s);
         Until(s.Window, () => s.Status.AttentionPending);
-        Assert.False(s.Overlay.IsEffectivelyVisible);   // nothing is shown while the window is hidden
+        Assert.False(s.Overlay.IsVisible);   // nothing is shown while the window is hidden
 
         s.Window.Show();
         Until(s.Window, () => s.Overlay.IsEffectivelyVisible);
