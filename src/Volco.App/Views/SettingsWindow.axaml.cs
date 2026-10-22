@@ -61,6 +61,8 @@ public partial class SettingsWindow : Window
     private readonly Border _reinstallOverlay;
     private readonly Border _leaveOverlay;
     private readonly ContentControl _leaveHost;
+    private readonly Border _attentionOverlay;
+    private readonly Border _attentionCard;
     private readonly Border _progressOverlay;
     private readonly Border _progressCard;
 
@@ -121,9 +123,11 @@ public partial class SettingsWindow : Window
         _reinstallOverlay = this.FindControl<Border>("ReinstallOverlay")!;
         _leaveOverlay = this.FindControl<Border>("LeaveOverlay")!;
         _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
+        _attentionOverlay = this.FindControl<Border>("AttentionOverlay")!;
+        _attentionCard = this.FindControl<Border>("AttentionCard")!;
         _progressOverlay = this.FindControl<Border>("ProgressOverlay")!;
         _progressCard = this.FindControl<Border>("ProgressCard")!;
-        foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _reinstallOverlay, _leaveOverlay, _progressOverlay })
+        foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _reinstallOverlay, _leaveOverlay, _attentionOverlay, _progressOverlay })
             overlay.PointerPressed += OnScrimPressed;
         // Compare is opened from the banner, which goes once the setups agree.
         TrackFocus(_compareOverlay, this.FindControl<Border>("CompareCard")!, StatusLineButton);
@@ -132,6 +136,18 @@ public partial class SettingsWindow : Window
         TrackFocus(_connectionOverlay, this.FindControl<Border>("ConnectionCard")!, StatusLineButton);
         TrackFocus(_reinstallOverlay, this.FindControl<Border>("ReinstallConfirm")!, StatusLineButton);
         TrackFocus(_leaveOverlay, this.FindControl<Border>("LeaveCard")!);
+        // The attention dialog opens by itself (a state began), so the focus goes back to where it
+        // was, else to the status line.
+        TrackFocus(_attentionOverlay, _attentionCard, StatusLineButton);
+        // It may have opened while the window was hidden: the focus moves into it when the window shows.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty && IsVisible && _attentionOverlay.IsVisible && !_progressOverlay.IsVisible)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_attentionOverlay.IsVisible && !_progressOverlay.IsVisible) DialogFocus.MoveInto(_attentionCard);
+                });
+        };
         // The progress dialog's opener may be gone (the save bar's Save): the focus goes back to
         // the Controller page when it shows, else to the status line.
         TrackFocus(_progressOverlay, _progressCard, ControllerPageFocus);
@@ -201,7 +217,8 @@ public partial class SettingsWindow : Window
 
     /// <summary>The status's dialog that is open, if any.</summary>
     private Border? OpenCardOverlay()
-        => _leaveOverlay.IsVisible ? _leaveOverlay
+        => _attentionOverlay.IsVisible ? _attentionOverlay
+         : _leaveOverlay.IsVisible ? _leaveOverlay
          : _reinstallOverlay.IsVisible ? _reinstallOverlay
          : _connectionOverlay.IsVisible ? _connectionOverlay
          : _compareOverlay.IsVisible ? _compareOverlay
@@ -210,6 +227,7 @@ public partial class SettingsWindow : Window
     private void CloseCardOverlay(Border overlay)
     {
         if (ReferenceEquals(overlay, _progressOverlay)) _hardware.Status.Progress.Close();   // only once it ended
+        else if (ReferenceEquals(overlay, _attentionOverlay)) _hardware.Status.NotNowCommand.Execute(null);
         else if (ReferenceEquals(overlay, _leaveOverlay)) _hardware.CloseLeavePrompt();
         else if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Status.Controller.CancelInstallCommand.Execute(null);
         else if (ReferenceEquals(overlay, _connectionOverlay)) _hardware.CloseConnection();

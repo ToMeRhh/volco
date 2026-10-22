@@ -180,6 +180,29 @@
       </Border>
     </Border>
 
+    <!-- The controller can't be used (controller-page spec §5): no controller answers, or its
+         firmware is too old. Opens once each time the state begins, over every other status dialog
+         but under the progress dialog, which takes over when its button starts an operation. Not
+         now, Escape or a click on the scrim closes it; the banner stays. -->
+    <Border Name="AttentionOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
+            IsVisible="{Binding Hardware.Status.IsAttentionOpen}">
+      <Border Name="AttentionCard" Classes="Panel DialogCard Small" Padding="20" KeyboardNavigation.TabNavigation="Cycle"
+              Focusable="True">
+        <StackPanel Spacing="10">
+          <TextBlock Name="AttentionTitle" Classes="DialogTitle" TextWrapping="Wrap"
+                     Text="{Binding Hardware.Status.State.Status}"/>
+          <TextBlock Name="AttentionDetail" TextWrapping="Wrap" Text="{Binding Hardware.Status.State.Detail}"
+                     IsVisible="{Binding Hardware.Status.State.Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,4,0,0">
+            <Button Name="AttentionNotNowButton" Content="Not now" Command="{Binding Hardware.Status.NotNowCommand}"/>
+            <Button Name="AttentionActionButton" Classes="Primary" Content="{Binding Hardware.Status.ActionLabel}"
+                    IsVisible="{Binding Hardware.Status.HasAction}"
+                    Command="{Binding Hardware.Status.AttentionActCommand}"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+
     <!-- A firmware install, update or check, or a save, runs (controller-page spec §5, "Running,
          don't interrupt"): above every other dialog, over the whole window. Nothing closes it while
          the operation runs; afterwards Close, Escape or a click on the scrim does. -->

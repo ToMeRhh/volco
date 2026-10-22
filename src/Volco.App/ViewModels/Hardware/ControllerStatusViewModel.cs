@@ -35,6 +35,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         _shortText = DeviceCard.ShortStatus(inputs, _state, _level);
         Progress = new ProgressDialogViewModel(controller, ToController);
         Progress.PropertyChanged += OnProgressChanged;
+        UpdateAttention(inputs);
     }
 
     /// <summary>The progress dialog: a running operation, then its result (spec §5's third level).</summary>
@@ -42,7 +43,52 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
 
     private void OnProgressChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ProgressDialogViewModel.IsOpen)) OnPropertyChanged(nameof(ShowsBanner));
+        if (e.PropertyName != nameof(ProgressDialogViewModel.IsOpen)) return;
+        OnPropertyChanged(nameof(ShowsBanner));
+        OnPropertyChanged(nameof(IsAttentionOpen));
+    }
+
+    // ── The attention dialog (controller-page spec §5) ───────────────────────────────────────
+
+    private AttentionKind _attention;
+
+    /// <summary>A state that makes the controller unusable (no controller answers, firmware too
+    /// old) began and the user hasn't answered its dialog yet. Set once each time such a state
+    /// begins; cleared by Not now, by the dialog's action, and when the state ends.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAttentionOpen))]
+    private bool _attentionPending;
+
+    /// <summary>The attention dialog shows: the status as its title, the detail, the status's button
+    /// and Not now. The progress dialog, above it, takes over while it is open. The window shows it
+    /// whenever it is itself shown, so a state that began while it was hidden shows on opening.</summary>
+    public bool IsAttentionOpen => AttentionPending && !Progress.IsOpen;
+
+    /// <summary>Which attention state the status is in, the last time it was in one or none (the
+    /// expected waits keep it).</summary>
+    public AttentionKind Attention => _attention;
+
+    private void UpdateAttention(CardInputs inputs)
+    {
+        if (DeviceCard.AttentionOf(inputs) is not { } now || now == _attention) return;
+        _attention = now;
+        // A state that begins under the progress dialog was told there (the operation's result).
+        AttentionPending = now != AttentionKind.None && !Progress.IsOpen;
+    }
+
+    /// <summary>Not now (Escape and the scrim too): the dialog closes and the banner stays; it opens
+    /// again only after the state ends and begins again.</summary>
+    [RelayCommand]
+    private void NotNow() => AttentionPending = false;
+
+    /// <summary>The dialog's button: the status's action (Check firmware, Update). An operation it
+    /// starts shows in the progress dialog.</summary>
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private void AttentionAct()
+    {
+        if (!CanAct) return;
+        AttentionPending = false;
+        Action();
     }
 
     /// <summary>The page's controller logic: the Install confirmation binds to it.</summary>
@@ -108,7 +154,9 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         State = DeviceCard.From(inputs);
         Level = DeviceCard.LevelOf(inputs, State);
         ShortText = DeviceCard.ShortStatus(inputs, State, Level);
+        UpdateAttention(inputs);
         ActionCommand.NotifyCanExecuteChanged();
+        AttentionActCommand.NotifyCanExecuteChanged();
         CheckFirmwareCommand.NotifyCanExecuteChanged();
         ReinstallFirmwareCommand.NotifyCanExecuteChanged();
         LoadPresetCommand.NotifyCanExecuteChanged();

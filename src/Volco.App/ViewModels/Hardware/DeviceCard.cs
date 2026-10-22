@@ -4,6 +4,10 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels.Hardware;
 
+/// <summary>The states that open the attention dialog when they begin (controller-page spec §5):
+/// the controller can't be used until the user acts.</summary>
+public enum AttentionKind { None, NoAnswer, Incompatible }
+
 /// <summary>The status's one primary button (hardware-page spec §4.1; controller-page spec §5).</summary>
 public enum CardAction { None, Connect, Retry, CheckFirmware, Update, FixIt, Compare, TestNow, Install, Reinstall, ChooseHowToStart }
 
@@ -170,6 +174,27 @@ public static class DeviceCard
         }
         if (inputs.Failure is null && state.Action == CardAction.Update) return "Update available";
         return "Needs attention";
+    }
+
+    /// <summary>
+    /// Which attention state <paramref name="i"/> is in (controller-page spec §5): the rows of
+    /// <see cref="From"/> that show "No controller answers" and "Firmware too old for this Volco",
+    /// else <see cref="AttentionKind.None"/>. Null while an operation runs or the link waits as
+    /// expected (a reconnect, a check's reset): those neither begin nor end a state, so a check that
+    /// finds the board still silent doesn't open the dialog again.
+    /// </summary>
+    public static AttentionKind? AttentionOf(CardInputs i)
+    {
+        if (i.FirmwareStage is not null || i.SavePhase is not null || i.Banner.Kind == BannerKind.Saving) return null;
+        switch (i.Link.State)
+        {
+            case LinkState.Disconnected or LinkState.PortBusy or LinkState.Searching: return AttentionKind.None;
+            case LinkState.NoAnswer: return AttentionKind.NoAnswer;
+            case LinkState.Incompatible: return AttentionKind.Incompatible;
+        }
+        if (i.Banner.Kind == BannerKind.NoAnswer) return AttentionKind.NoAnswer;
+        if (i.Banner.Kind == BannerKind.Incompatible) return AttentionKind.Incompatible;
+        return i.Link.State == LinkState.Waiting ? null : AttentionKind.None;
     }
 
     /// <summary>Check firmware only where Volco can check it (USB).</summary>
