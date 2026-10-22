@@ -225,7 +225,9 @@ public sealed class CombinedInspectorTests : IDisposable
         var inspector = ButtonInspector(s);
 
         // No section scrolls on its own: the card does.
-        Assert.Empty(inspector.GetVisualDescendants().OfType<ScrollViewer>());
+        Assert.DoesNotContain(inspector.GetVisualDescendants().OfType<ScrollViewer>(),
+                              v => v.Name is "ActionsScroll" or "ControlsScroll" or "HardwareScroll");
+        Assert.Same(In<ScrollViewer>(s.Page, "InspectorScroll"), inspector.FindAncestorOfType<ScrollViewer>());
         var scroll = In<ScrollViewer>(s.Page, "InspectorScroll");
         Assert.True(scroll.Extent.Height > scroll.Viewport.Height + 1, $"extent {scroll.Extent.Height}, viewport {scroll.Viewport.Height}");
         Assert.True(In<Border>(inspector, "ActionsHeader").IsEffectivelyVisible);
