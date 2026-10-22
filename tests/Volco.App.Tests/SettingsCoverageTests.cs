@@ -110,7 +110,7 @@ public class SettingsCoverageTests
     /// <summary>Opens a collapsed section by its header.</summary>
     private static void Open(Window window, Control root, string header, string body)
     {
-        if (!Named<StackPanel>(root, body).IsVisible) Click(Named<Button>(root, header));
+        if (!Named<Control>(root, body).IsVisible) Click(Named<Button>(root, header));
         Settle(window);
     }
 
