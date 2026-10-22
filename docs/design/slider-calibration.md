@@ -14,7 +14,7 @@ Some boards keep each slider's wiper away from the ADC rails (a resistor at each
 
 ## Non-goals
 
-- No change to the slider's Controls section; Response (curve, dead zone, smoothing, reverse) is unchanged.
+- No change to the slider's Controls section; Response (curve, dead zone, reverse) is unchanged.
 - No calibration of anything but the two ends (no midpoint, no curve fitting).
 - No backward compatibility with older firmware or configs (single user; app and firmware ship together).
 

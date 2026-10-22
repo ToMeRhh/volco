@@ -291,6 +291,5 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         Invert = s.Invert,
         Curve = s.Curve,
         DeadZonePercent = s.DeadZonePercent,
-        SmoothingFactor = s.SmoothingFactor,
     };
 }

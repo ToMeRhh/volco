@@ -342,7 +342,6 @@ public class SettingsCoverageTests
         Named<ToggleSwitch>(inspector, "InvertSwitch").IsChecked = true;       // Sliders[i].Invert
         Named<ListBox>(inspector, "CurveList").SelectedIndex = 2;              // Sliders[i].Curve
         Named<Slider>(inspector, "DeadZoneSlider").Value = 0.1;                // Sliders[i].DeadZonePercent
-        Named<Slider>(inspector, "SmoothingSlider").Value = 0.5;               // Sliders[i].SmoothingFactor
 
         // Slider 3: the main output (no device).
         dialog = OpenTarget(page, window, vm, 3);
@@ -361,7 +360,6 @@ public class SettingsCoverageTests
         Assert.True(s[2].Invert);
         Assert.Equal(ResponseCurve.Exponential, s[2].Curve);
         Assert.Equal(0.1, s[2].DeadZonePercent);
-        Assert.Equal(0.5, s[2].SmoothingFactor);
         Assert.Equal(SliderMappingType.Device, s[3].Type);
         Assert.Null(s[3].Device);
     }
