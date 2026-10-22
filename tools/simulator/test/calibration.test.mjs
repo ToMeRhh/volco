@@ -20,7 +20,8 @@ test('the Calibration encoder and the Calibrate decoder match the golden frames'
   assert.deepEqual(P.decodeCalibrate(payloadOf('calibrate_2_start')), { index: 2, action: P.CALIBRATE.START });
   assert.deepEqual(P.decodeCalibrate(payloadOf('calibrate_0_query')), { index: 0, action: P.CALIBRATE.QUERY });
   assert.equal(P.decodeCalibrate([P.MSG.CALIBRATE, 0]), null);
-  assert.equal(P.decodeCalibrate([P.MSG.CALIBRATE, 0, 9]), null);
+  assert.deepEqual(P.decodeCalibrate([P.MSG.CALIBRATE, 0, 9]), { index: 0, action: P.CALIBRATE.QUERY });  // unknown: a query
+  assert.equal(P.decodeCalibrate([P.MSG.CALIBRATE, 0, 0, 0]), null);   // exactly 3 bytes, as the firmware
   assert.equal(P.nameOf(P.MSG.CALIBRATE), 'Calibrate');
   assert.equal(P.nameOf(P.MSG.CALIBRATION), 'Calibration');
 });
@@ -40,7 +41,7 @@ function harness({ autos = [true, false] } = {}) {
     onHostLost: () => cal.hostLost(), onCalibrate: (i, a, t) => cal.calibrate(i, a, t),
   });
   h.link.setHardware({ sliders: 2, kinds: [] });
-  cal.configure(autos);
+  cal.configure(autos.map((auto, i) => ({ pin: 33 + i, auto })));
   h.rx = p => h.link.onPayload(p, h.clock.now());
   h.advance = ms => { h.clock.advance(ms); cal.tick(h.clock.now()); };
   /** The fader moves to v: the reading learns, then the position is sent as the board does. */
@@ -142,11 +143,50 @@ test('losing the host cancels a sweep', () => {
 
 test('mapping: raw until learned, then stretched with a 1.5 % band at each stop', () => {
   const s = C.createCalibrations({ send() {}, sendSlider() {}, raw: () => 0 });
-  s.configure([true]);
+  s.configure([{ pin: 33, auto: true }]);
   assert.equal(s.map(0, 777), 777);
   s.reading(0, 170); s.reading(0, 2550);
   assert.equal(s.map(0, 170), 0);
   assert.equal(s.map(0, 2550), 4095);
   assert.equal(s.map(0, 170 + Math.round(0.014 * 2380)), 0);
   assert.equal(s.map(0, 1360), 2048);
+});
+
+test('an unknown Calibrate action is answered as a query', () => {
+  const h = harness();
+  h.rx([P.MSG.HEARTBEAT]);
+  h.take();
+  h.rx([P.MSG.CALIBRATE, 0, 7]);
+  assert.deepEqual(h.take(), [P.calibration(0, AUTO, 0x0FFF, 0)]);
+  assert.ok(!h.cal.slider(0).sweeping());
+});
+
+test('a reboot keeps the ends by pin and Auto-calibrate setting, and drops any sweep', () => {
+  const s = C.createCalibrations({ send() {}, sendSlider() {}, raw: () => 0 });
+  s.configure([{ pin: 33, auto: true }, { pin: 35, auto: true }, { pin: 32, auto: true }]);
+  [[100, 2000], [200, 2100], [300, 2200]].forEach(([lo, hi], i) => { s.reading(i, lo); s.reading(i, hi); });
+  s.slider(2).startSweep(0);
+  // The middle slider is removed: the others keep their ends, matched by pin.
+  s.configure([{ pin: 33, auto: true }, { pin: 32, auto: true }]);
+  assert.equal(s.count(), 2);
+  assert.deepEqual([s.slider(0).lo(), s.slider(0).hi()], [100, 2000]);
+  assert.ok(!s.slider(1).sweeping());
+  assert.deepEqual([s.slider(1).lo(), s.slider(1).hi()], [300, 2200]);   // the stored ends, not the sweep's
+  // Auto-calibrate flipped: that slider's ends are forgotten.
+  s.configure([{ pin: 33, auto: false }, { pin: 32, auto: true }]);
+  assert.ok(!s.slider(0).learned());
+  assert.equal(s.map(0, 1234), 1234);
+});
+
+test('Auto-calibrate learning the span is flagged once, never in a sweep', () => {
+  const s = C.createCalibrations({ send() {}, sendSlider() {}, raw: () => 0 });
+  s.configure([{ pin: 33, auto: true }]);
+  s.reading(0, 170);
+  assert.equal(s.becameLearned(0), false);
+  s.reading(0, 2550);
+  assert.equal(s.becameLearned(0), true);
+  assert.equal(s.becameLearned(0), false);
+  s.slider(0).startSweep(0);
+  s.reading(0, 170); s.reading(0, 2550);
+  assert.equal(s.becameLearned(0), false);
 });

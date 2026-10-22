@@ -122,7 +122,7 @@
   function boot({ drop = false } = {}) {
     hw = current();
     beh = O.behaviour(hw.config.screens);
-    cal.configure(hw.config.sliders.slice(0, hw.sliders).map(s => s.autoCalibrate !== false));
+    cal.configure(hw.config.sliders.slice(0, hw.sliders).map(s => ({ pin: s.pin, auto: s.autoCalibrate !== false })));
     link.setHardware({ sliders: hw.sliders, kinds: hw.kinds, configState: hw.state, configCrc: hw.crc });
     slots = []; leds = [];
     hw.kinds.forEach((k, i) => {
@@ -178,7 +178,8 @@
     cal.reading(i, raw);
     const send = () => { lastSlider[i] = now(); link.sendSlider(i, cal.map(i, raw), now()); };
     clearTimeout(pendingSlider[i]);
-    if (now() - (lastSlider[i] || 0) >= SLIDER_MS) send();
+    // Auto-calibrate just learned the span: the stretched position goes out at once.
+    if (cal.becameLearned(i) || now() - (lastSlider[i] || 0) >= SLIDER_MS) send();
     else pendingSlider[i] = setTimeout(send, SLIDER_MS);   // the last position always goes out
   }
   function onButton(i, pressed) {

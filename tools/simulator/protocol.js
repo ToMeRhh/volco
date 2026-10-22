@@ -67,10 +67,11 @@
   /** Calibration report (slider calibration spec): a slider's flags (CAL_FLAG) and learned ends. */
   const calibration = (index, flags, lo, hi) =>
     [MSG.CALIBRATION, index, flags, (lo >> 8) & 255, lo & 255, (hi >> 8) & 255, hi & 255];
-  /** Decodes a Calibrate payload: { index, action }, or null when it is short or the action unknown. */
+  /** Decodes a Calibrate payload: { index, action }, or null unless it is exactly 3 bytes, as the
+   *  firmware reads it. An unknown action is answered as a Query, so it comes back as one. */
   function decodeCalibrate(p) {
-    if (p.length < 3 || p[0] !== MSG.CALIBRATE || p[2] > CALIBRATE.CANCEL) return null;
-    return { index: p[1], action: p[2] };
+    if (p.length !== 3 || p[0] !== MSG.CALIBRATE) return null;
+    return { index: p[1], action: p[2] > CALIBRATE.CANCEL ? CALIBRATE.QUERY : p[2] };
   }
 
   /** Layout-1 screen content, as the firmware's screenText builds it. */
