@@ -19,7 +19,10 @@ enum MsgType : uint8_t {
   MSG_BEGIN = 0x85, MSG_COMMIT = 0x86,
   MSG_CONFIG_DATA = 0x05, MSG_CONFIG_RESULT = 0x06,                     // controller → PC (spec §5.3, §5.4)
   MSG_CONFIG_READ = 0x87, MSG_CONFIG_BEGIN = 0x88, MSG_CONFIG_CHUNK = 0x89, MSG_CONFIG_END = 0x8A,
+  MSG_CALIBRATE = 0x8E, MSG_CALIBRATION = 0x09,                         // slider calibration (its design doc)
 };
+// A Calibrate's action.
+enum CalibrateAction : uint8_t { CALIBRATE_QUERY = 0, CALIBRATE_START = 1, CALIBRATE_DONE = 2, CALIBRATE_CANCEL = 3 };
 enum Kind : uint8_t { KIND_NONE = 0, KIND_LED = 1, KIND_LED_PAIR = 2, KIND_SCREEN = 3 };
 enum Transition : uint8_t { TRANSITION_NONE = 0, TRANSITION_SLIDE_LEFT = 1, TRANSITION_SLIDE_RIGHT = 2 };
 enum TopKind : uint8_t { TOP_EMPTY = 0, TOP_TEXT = 1, TOP_DOTS = 2 };
@@ -82,6 +85,8 @@ size_t encodeConfigData(uint8_t seq, uint16_t total, uint16_t offset, uint32_t c
                         uint8_t* out);
 // The answer to a config write (spec §5.4): seq, result code, item, field.
 size_t encodeConfigResult(uint8_t seq, uint8_t code, uint8_t item, uint8_t field, uint8_t* out);
+// A slider's calibration: index, flags (bit 0 learned, bit 1 sweeping, bit 2 auto-calibrate), low and high end.
+size_t encodeCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi, uint8_t* out);
 
 // Decodes a Screen payload. False when a length overruns the payload (the message is dropped).
 bool decodeScreen(const uint8_t* payload, uint8_t len, uint8_t& button, uint8_t& transition, ScreenContent& out);
@@ -93,6 +98,8 @@ struct LinkSink {
   virtual void applyScreen(uint8_t button, uint8_t transition, const ScreenContent& content, uint32_t now) = 0;
   virtual void hostLost() = 0;  // LEDs off, local "not connected" screen
   virtual uint16_t sliderValue(uint8_t index) = 0;  // current filtered position, sent after every Hello
+  // A Calibrate frame (a CalibrateAction); the index is not checked here.
+  virtual void calibrate(uint8_t /*index*/, uint8_t /*action*/, uint32_t /*now*/) {}
   virtual ~LinkSink() = default;
 };
 
@@ -130,6 +137,7 @@ class Link {
   void tick(uint32_t now);                                        // every loop pass
   void sendSlider(uint8_t index, uint16_t value, uint32_t now);
   void sendButton(uint8_t index, bool pressed, uint32_t now);
+  void sendCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi, uint32_t now);
   bool hostAlive() const { return hostAlive_; }
   bool holding() const { return holding_; }
 

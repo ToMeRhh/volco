@@ -6,7 +6,9 @@
 #include "debug_log.h"
 #include "indicators.h"
 #include "screens.h"
+#include "slider_ends_store.h"
 #include "transport.h"
+#include "volco_calibration.h"
 #include "volco_protocol.h"
 #include "volco_runtime.h"
 
@@ -25,6 +27,11 @@ static const volco::RuntimeConfig& rc = loaded.rc;
 static uint16_t lastSliderValues[volco::kMaxSliders];
 static float smoothedValues[volco::kMaxSliders] = {0};
 static unsigned long lastSliderReadTime = 0;
+// Each slider's calibration (docs/design/slider-calibration.md): what is sent is the reading
+// stretched between its learned ends.
+static volco::SliderCalibration calibrations[volco::kMaxSliders];
+static unsigned long lastEndsSaveTime = 0;
+static bool endsSaveNow = false;  // a sweep ended: store without waiting for SLIDER_ENDS_SAVE_MS
 
 static bool buttonRawStates[volco::kMaxButtons];
 static bool buttonReportedStates[volco::kMaxButtons];
@@ -35,6 +42,23 @@ static uint8_t kinds[volco::kMaxButtons];
 
 static volco::ActiveTransport active;  // spec §5.5
 static volco::FrameParser parsers[2];  // one per transport, so their bytes never mix
+
+static volco::Link* pcLink = nullptr;
+
+static void sendCalibration(uint8_t i, uint32_t now) {
+  const volco::SliderCalibration& c = calibrations[i];
+  pcLink->sendCalibration(i, c.flags(), c.lo(), c.hi(), now);
+}
+
+// A sweep ended (any way): its report, then the position stretched by the final ends, whatever the
+// deadband says; and the ends are stored at once.
+static void finishSweep(uint8_t i, uint32_t now) {
+  calibrations[i].reportDue(now);  // consumed: the report goes out here
+  sendCalibration(i, now);
+  lastSliderValues[i] = (uint16_t)smoothedValues[i];
+  pcLink->sendSlider(i, calibrations[i].map(lastSliderValues[i]), now);
+  endsSaveNow = true;
+}
 
 // ============================================================
 // The PC link: protocol state lives in lib/volco_protocol; this sink connects it to the hardware.
@@ -55,16 +79,30 @@ class HardwareSink : public volco::LinkSink {
     active.onHostLost();
     for (uint8_t i = 0; i < rc.buttonCount; i++) showIndicator(rc.buttons[i], 0);
     screens_host_lost(millis());
+    for (uint8_t i = 0; i < rc.sliderCount; i++) calibrations[i].hostLost();  // a sweep ends as a Cancel
   }
   // Sent after every Hello (PR #68). The deadband then measures from the value just sent.
   uint16_t sliderValue(uint8_t i) override {
     lastSliderValues[i] = (uint16_t)smoothedValues[i];
-    return lastSliderValues[i];
+    return calibrations[i].map(lastSliderValues[i]);
+  }
+  // Every Calibrate for a slider that exists is answered with its Calibration.
+  void calibrate(uint8_t i, uint8_t action, uint32_t now) override {
+    if (i >= rc.sliderCount) return;
+    volco::SliderCalibration& c = calibrations[i];
+    if (action == volco::CALIBRATE_START) c.startSweep(now);
+    else if (action == volco::CALIBRATE_DONE) c.done(now);
+    else if (action == volco::CALIBRATE_CANCEL) c.cancel();
+    if (c.sweepEnded()) {
+      finishSweep(i, now);
+    } else {
+      c.reportDue(now);  // this answer is the report
+      sendCalibration(i, now);
+    }
   }
 };
 
 static HardwareSink sink;
-static volco::Link* pcLink = nullptr;
 
 // Spec §5.5 exception: whenever Wi-Fi connects, Hello goes out on UDP even if serial is latched,
 // followed by every slider's position like any Hello.
@@ -95,6 +133,15 @@ void setup() {
     kinds[i] = rc.buttons[i].kind;  // Kind values are the wire values
   }
 
+  // Each slider's calibration: its Auto-calibrate setting, then its stored ends.
+  for (uint8_t i = 0; i < rc.sliderCount; i++) calibrations[i].configure(rc.sliderAutoCalibrate[i]);
+  slider_ends_load(rc, calibrations);
+  for (uint8_t i = 0; i < rc.sliderCount; i++)
+    DEBUG_LOG("[DBG] Slider " + String(i) + " ends: " +
+              (calibrations[i].learned() ? String(calibrations[i].lo()) + "-" + String(calibrations[i].hi())
+                                         : String("not learned")) +
+              (calibrations[i].autoCalibrate() ? ", auto" : ", manual"));
+
   // Seed from an average, not one noisy read: Hello reports these positions right away.
   analogReadResolution(12);
   for (uint8_t i = 0; i < rc.sliderCount; i++) {
@@ -102,6 +149,7 @@ void setup() {
     for (uint8_t r = 0; r < SLIDER_SEED_READS; r++) sum += analogRead(rc.sliderPins[i]);
     lastSliderValues[i] = sum / SLIDER_SEED_READS;
     smoothedValues[i] = lastSliderValues[i];
+    calibrations[i].reading(lastSliderValues[i], millis());
   }
 
   transport_begin_udp(rc.udp);
@@ -121,18 +169,49 @@ void setup() {
 void loop() {
   const uint32_t now = millis();
 
-  // 1. Sliders: EMA smoothing, then a deadband.
+  // 1. Sliders: EMA smoothing, the calibration learns from it, then a deadband on the reading.
+  //    What is sent is the reading stretched between the learned ends.
   if (now - lastSliderReadTime >= rc.input.sliderIntervalMs) {
     lastSliderReadTime = now;
     for (uint8_t i = 0; i < rc.sliderCount; i++) {
       uint16_t raw = analogRead(rc.sliderPins[i]);
       smoothedValues[i] = raw * rc.input.filterWeight + smoothedValues[i] * (1.0f - rc.input.filterWeight);
       uint16_t filtered = (uint16_t)smoothedValues[i];
+      calibrations[i].reading(filtered, now);
       int16_t delta = (int16_t)filtered - (int16_t)lastSliderValues[i];
-      if (abs(delta) > rc.input.sliderDeadband) {
+      // Auto-calibrate just learned the span: the stretched position goes out at once.
+      if (calibrations[i].becameLearned() || abs(delta) > rc.input.sliderDeadband) {
         lastSliderValues[i] = filtered;
         screens_activity(now);
-        pcLink->sendSlider(i, filtered, now);
+        pcLink->sendSlider(i, calibrations[i].map(filtered), now);
+      }
+    }
+  }
+
+  // 1b. Calibration: the 60 s sweep timeout, a sweep's end, and a report when the ends widened.
+  bool sweeping = false;
+  for (uint8_t i = 0; i < rc.sliderCount; i++) {
+    calibrations[i].tick(now);
+    if (calibrations[i].sweepEnded()) finishSweep(i, now);
+    else if (calibrations[i].reportDue(now)) sendCalibration(i, now);
+    sweeping |= calibrations[i].sweeping();
+  }
+
+  // 1c. Store the learned ends when one moved: at most every SLIDER_ENDS_SAVE_MS (flash wear), at
+  //     once when a sweep ended, and never during a sweep (storage keeps the ends a Cancel restores).
+  if (!sweeping && (endsSaveNow || now - lastEndsSaveTime >= SLIDER_ENDS_SAVE_MS)) {
+    bool dirty = false;
+    for (uint8_t i = 0; i < rc.sliderCount; i++) dirty |= calibrations[i].needsSave();
+    endsSaveNow = false;
+    if (dirty) {
+      lastEndsSaveTime = now;
+      if (slider_ends_save(rc, calibrations)) {
+        for (uint8_t i = 0; i < rc.sliderCount; i++) {
+          calibrations[i].markSaved();
+          DEBUG_LOG("[DBG] Slider " + String(i) + " ends saved: " +
+                    (calibrations[i].learned() ? String(calibrations[i].lo()) + "-" + String(calibrations[i].hi())
+                                               : String("not learned")));
+        }
       }
     }
   }

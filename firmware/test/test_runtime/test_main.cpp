@@ -137,6 +137,16 @@ void test_udp_copied() {
   TEST_ASSERT_EQUAL_UINT(12346, r.udp.localPort);
 }
 
+void test_auto_calibrate_copied_default_on() {
+  RuntimeConfig r;
+  toRuntime(decoded("diy_reference"), r);  // absent: on
+  for (uint8_t i = 0; i < 5; i++) TEST_ASSERT_TRUE(r.sliderAutoCalibrate[i]);
+  toRuntime(decoded("auto_calibrate_off"), r);
+  TEST_ASSERT_TRUE(r.sliderAutoCalibrate[0]);
+  TEST_ASSERT_FALSE(r.sliderAutoCalibrate[1]);
+  TEST_ASSERT_TRUE(r.sliderAutoCalibrate[2]);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_diy_reference);
@@ -144,5 +154,6 @@ int main(int, char**) {
   RUN_TEST(test_defaults_are_empty_and_sane);
   RUN_TEST(test_screen_buses_used_only);
   RUN_TEST(test_udp_copied);
+  RUN_TEST(test_auto_calibrate_copied_default_on);
   return UNITY_END();
 }

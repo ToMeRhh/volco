@@ -269,6 +269,148 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         }
     }
 
+    // ── Slider calibration (slider-calibration spec) ─────────────────────────────────────────
+
+    private readonly object _calibrationGate = new();
+    private readonly Dictionary<int, SliderCalibrationState> _calibrations = new();   // guarded by _calibrationGate
+    private readonly Dictionary<int, SliderHold> _holds = new();                      // guarded by _calibrationGate
+    private int _nextHoldGeneration;                                                  // guarded by _calibrationGate
+
+    /// <summary>One slider's input hold. <see cref="SawSweep"/>: a report since it began said the
+    /// slider was sweeping, so the next one that says it isn't is the sweep's end.</summary>
+    private sealed class SliderHold(int generation)
+    {
+        public int Generation { get; } = generation;
+        public bool SawSweep { get; set; }
+    }
+
+    /// <summary>A slider's calibration changed (its 0-based input and its new state): a Calibration
+    /// report arrived from the current connection, or, with a null state, a Hello made the last one
+    /// unknown until the slider's answer. Any thread (the transport's).</summary>
+    public event EventHandler<(int Slider, SliderCalibrationState? State)>? CalibrationChanged;
+
+    /// <summary>The controller's last report for a slider (0-based input), or null before one.
+    /// Every slider's state is forgotten and queried again after each Hello.</summary>
+    public SliderCalibrationState? GetCalibration(int sliderIndex)
+    {
+        lock (_calibrationGate) return _calibrations.TryGetValue(sliderIndex, out var state) ? state : null;
+    }
+
+    /// <summary>Sends a Calibrate for a slider (0-based input). False when no connection is attached.</summary>
+    public bool SendCalibrate(int sliderIndex, CalibrateAction action)
+    {
+        if (IsDisposed || sliderIndex is < 0 or > byte.MaxValue) return false;
+        return _link.SendRaw(ProtocolEncoder.EncodeCalibrate(sliderIndex, action));
+    }
+
+    /// <summary>Keeps a slider's input (0-based) away from audio during a sweep: its Slider messages
+    /// still raise <see cref="RawInput"/> but reach no slider processor. Released by disposing the
+    /// handle (idempotent; never a later hold), by the report that ends the sweep (Sweeping off after
+    /// one that had it on), by a connection replacement, Detach or the transport closing, and on
+    /// dispose. On a replacement and on dispose the runtime also cancels the sweep.</summary>
+    public IDisposable HoldSlider(int sliderIndex)
+    {
+        int generation;
+        lock (_calibrationGate)
+        {
+            if (IsDisposed) return new SliderHoldHandle(this, sliderIndex, -1);
+            generation = ++_nextHoldGeneration;
+            _holds[sliderIndex] = new SliderHold(generation);
+        }
+        AppLog.Info($"Slider {sliderIndex + 1} held for calibration");
+        return new SliderHoldHandle(this, sliderIndex, generation);
+    }
+
+    /// <summary>A hold keeps this slider's input (0-based) away from audio.</summary>
+    public bool IsSliderHeld(int sliderIndex)
+    {
+        lock (_calibrationGate) return _holds.ContainsKey(sliderIndex);
+    }
+
+    private void ReleaseSlider(int sliderIndex, int generation)
+    {
+        lock (_calibrationGate)
+        {
+            if (!_holds.TryGetValue(sliderIndex, out var hold) || hold.Generation != generation) return;
+            _holds.Remove(sliderIndex);
+        }
+        AppLog.Info($"Slider {sliderIndex + 1} released");
+    }
+
+    /// <summary>Ends every hold; with <paramref name="cancelSweeps"/>, first tells the controller to
+    /// cancel each held slider's sweep (best effort: the controller also cancels when the host is lost).</summary>
+    private void ReleaseAllSliders(bool cancelSweeps)
+    {
+        int[] held;
+        lock (_calibrationGate)
+        {
+            held = _holds.Keys.ToArray();
+            _holds.Clear();
+        }
+        foreach (var slider in held)
+        {
+            if (cancelSweeps) _link.SendRaw(ProtocolEncoder.EncodeCalibrate(slider, CalibrateAction.Cancel));
+            AppLog.Info($"Slider {slider + 1} released{(cancelSweeps ? ", its sweep cancelled" : "")}");
+        }
+    }
+
+    private void OnCalibration(CalibrationMessage message)
+    {
+        var state = SliderCalibrationState.From(message);
+        bool released = false, orphan = false;
+        lock (_calibrationGate)
+        {
+            _calibrations[message.SliderIndex] = state;
+            // A sweep no hold is waiting for (this app restarted or its dialog is gone): cancel it, so
+            // the slider's input is not stuck learning. A dialog takes its hold before it sends Start.
+            if (!_holds.TryGetValue(message.SliderIndex, out var hold)) orphan = state.Sweeping;
+            else
+            {
+                if (state.Sweeping) hold.SawSweep = true;
+                else if (hold.SawSweep)
+                {
+                    _holds.Remove(message.SliderIndex);
+                    released = true;
+                }
+            }
+        }
+        AppLog.Debug($"Calibration: index={message.SliderIndex}, learned={state.Learned}, sweeping={state.Sweeping}, " +
+                     $"auto={state.AutoCalibrate}, ends {state.Low}-{state.High}");
+        if (released) AppLog.Info($"Slider {message.SliderIndex + 1} released: its sweep ended");
+        if (orphan)
+        {
+            AppLog.Info($"Slider {message.SliderIndex + 1} is sweeping with no calibration open: cancelling it");
+            _link.SendRaw(ProtocolEncoder.EncodeCalibrate(message.SliderIndex, CalibrateAction.Cancel));
+        }
+        CalibrationChanged?.Invoke(this, (message.SliderIndex, state));
+    }
+
+    /// <summary>After a Hello this app speaks: forgets every slider's calibration (the controller may
+    /// have rebooted with another config) and asks for each one again.</summary>
+    private void QueryCalibrations(int sliderCount)
+    {
+        int[] cleared;
+        lock (_calibrationGate)
+        {
+            cleared = _calibrations.Keys.Order().ToArray();
+            _calibrations.Clear();
+        }
+        foreach (var slider in cleared) CalibrationChanged?.Invoke(this, (slider, null));
+        for (int i = 0; i < sliderCount; i++)
+            _link.SendRaw(ProtocolEncoder.EncodeCalibrate(i, CalibrateAction.Query));
+    }
+
+    private sealed class SliderHoldHandle(VolcoRuntime runtime, int slider, int generation) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (generation < 0 || Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            runtime.ReleaseSlider(slider, generation);
+        }
+    }
+
     /// <summary>The test state of every button, from its presses so far (<see cref="TestMode"/>).</summary>
     private IReadOnlyList<ButtonDisplay?> TestDisplays()
     {
@@ -717,6 +859,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         var displaced = Interlocked.Exchange(ref _connection, connection);
         if (displaced != null)
         {
+            ReleaseAllSliders(cancelSweeps: true);   // while the link still sends to the old transport
             RetireTransport(displaced);
             _link.Detach();
             ControllerConfig.OnConnectionReplaced();
@@ -773,6 +916,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             // settings page would keep showing the old transport's "Connected" while e.g. a new
             // WebSocket listener sits Disconnected and raises nothing.
             var lastStatus = old.Status;
+            ReleaseAllSliders(cancelSweeps: true);   // while the link still sends to the old transport
             RetireTransport(old);
             _link.Detach(); // its Disconnected no longer reaches OnTransportStatusChanged
             ControllerConfig.OnConnectionReplaced();
@@ -896,6 +1040,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             _link.Detach();
             ControllerConfig.OnDetached();
             ExitTestMode(-1);
+            ReleaseAllSliders(cancelSweeps: false);   // the controller cancels a sweep when the host is lost
         }
         UpdateLink();
     }
@@ -917,7 +1062,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                     AppLog.Info($"Hello: v{hello.Version}, {hello.Chip}, firmware '{hello.FirmwareVersion}', config {hello.ConfigState} " +
                                 $"crc {hello.ConfigCrc:X8}, {hello.SliderCount} sliders, buttons [{string.Join(",", hello.Buttons)}]");
                     HelloReceived?.Invoke(this, hello);
+                    if (hello.Version == ProtocolVersion.Current) QueryCalibrations(hello.SliderCount);
                 }
+                break;
+            case CalibrationMessage calibration:
+                // Same stale-sender filter as Hello.
+                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) OnCalibration(calibration);
                 break;
             case ConfigDataMessage or ConfigResultMessage:
                 // Same stale-sender filter as Hello (spec §8.2).
@@ -926,8 +1076,9 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             case SliderMessage slider:
                 // Every slider and button raises raw input (hardware-page spec §12.1); in a test
                 // (spec §8.5) that is all: nothing reaches the slider processor or the detector.
+                // A slider held for a calibration sweep (slider-calibration spec) likewise.
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Slider, slider.SliderIndex, slider.Value));
-                if (InTestMode) break;
+                if (InTestMode || IsSliderHeld(slider.SliderIndex)) break;
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
                 _sliderProcessor?.HandleSliderEvent(slider.SliderIndex, slider.Value);
                 break;
@@ -1496,6 +1647,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         // The one event raised after Dispose began (spec §8.5): a page holding a test handle learns
         // that the test is over.
         if (wasTesting) InTestModeChanged?.Invoke(this, false);
+        ReleaseAllSliders(cancelSweeps: true);   // before the link goes, so the Cancel can still be sent
         _link.Dispose();
 
         // Take ownership of the current transport (see _connection): a concurrent restart that

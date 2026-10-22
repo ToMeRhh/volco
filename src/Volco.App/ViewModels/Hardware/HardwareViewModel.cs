@@ -42,6 +42,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.Buttons.Items.CollectionChanged += OnItemsChanged;
         _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
+        _runtime.CalibrationChanged += OnCalibrationChanged;
         Status = new ControllerStatusViewModel(controller, this);
         SaveCommand = new RelayCommand(() => _controller.SaveCommand.Execute(null), () => _controller.CanSave && _controller.Problems.Count == 0);
         Chooser = new SetupChooserViewModel(controller, OnChooserPicked, CancelStartOver);
@@ -157,6 +158,75 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         dialog?.Dispose();
     }
 
+    // ── Re-calibrate (slider-calibration spec, "The sweep") ───────────────────────────────────
+
+    /// <summary>The open sweep dialog's view model, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCalibrationOpen))]
+    private CalibrationDialogViewModel? _calibration;
+
+    /// <summary>The sweep dialog is open.</summary>
+    public bool IsCalibrationOpen => Calibration is not null;
+
+    /// <summary>A slider's Re-calibrate: the sweep dialog for draft slider <paramref name="sliderIndex"/>
+    /// (0-based, as drawn), which runs on its hardware input. Nothing happens while Re-calibrate
+    /// is disabled for it.</summary>
+    public void OpenCalibration(int sliderIndex)
+    {
+        if (_disposed || Calibration is not null || !CanRecalibrate(sliderIndex, out _)) return;
+        if (Source(_controller.Layout.Sliders, sliderIndex) is not int input) return;
+        CalibrationDialogViewModel? dialog = null;
+        dialog = new CalibrationDialogViewModel(input, _runtime, _ui, () => { if (ReferenceEquals(Calibration, dialog)) CloseCalibration(); },
+                                                number: sliderIndex + 1);
+        Calibration = dialog;
+    }
+
+    /// <summary>Closes the sweep dialog; one whose sweep hadn't ended cancels it.</summary>
+    public void CloseCalibration()
+    {
+        var dialog = Calibration;
+        Calibration = null;
+        dialog?.Dispose();
+    }
+
+    /// <summary>Re-calibrate is enabled for draft slider <paramref name="index"/> (spec, "The sweep"): the
+    /// controller is ready and runs Volco's saved setup, the slider is saved and unchanged, and no
+    /// test, save or firmware operation runs. <paramref name="why"/>: the button's tooltip when the
+    /// slider's unsaved changes or a controller that holds another setup hold it off.</summary>
+    private bool CanRecalibrate(int index, out string? why)
+    {
+        why = null;
+        if (index < 0 || index >= Sliders.Count) return false;
+        var tile = Sliders[index];
+        if (tile.IsNew) return false;
+        if (tile.Wiring is { HasChange: true })
+        {
+            why = "Save to controller first";
+            return false;
+        }
+        if (_controller.IsControllerReady && !_controller.InSync)
+        {
+            why = "Volco's setup differs from the controller's";
+            return false;
+        }
+        return Source(_controller.Layout.Sliders, index) is not null
+               && _controller.IsControllerReady && _controller.CanEdit && !_controller.Busy;
+    }
+
+    /// <summary>The inspected slider's calibration rows: the controller's last report for its input
+    /// (none while it isn't ready) and whether Re-calibrate is enabled.</summary>
+    private void UpdateCalibrationRows()
+    {
+        if (_disposed || Inspected is not SliderWiringViewModel s || s.Index >= Sliders.Count) return;
+        var source = Source(_controller.Layout.Sliders, s.Index);
+        var saved = Saved(_controller.BaselineConfig().Sliders, source);
+        var state = source is int input && _controller.IsControllerReady ? _runtime.GetCalibration(input) : null;
+        var can = CanRecalibrate(s.Index, out var why);
+        s.UpdateCalibration(Sliders[s.Index].IsNew ? null : saved, state, can, why);
+    }
+
+    private void OnCalibrationChanged(object? sender, (int Slider, SliderCalibrationState? State) e) => _ui.Post(UpdateCalibrationRows);
+
     // ── Leaving with unsaved changes (spec §3.3) ─────────────────────────────────────────────
 
     /// <summary>The draft isn't on the controller yet.</summary>
@@ -250,6 +320,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or null or "") OnPropertyChanged(nameof(IsDirty));
         if (e.PropertyName is nameof(ControllerViewModel.HasUnsavedChanges) or null or "") OnPropertyChanged(nameof(HasUnsavedChanges));
         UpdateChooser();
+        UpdateCalibrationRows();
     }
 
     // ── The save bar (spec §6.5) ─────────────────────────────────────────────────────────────
@@ -449,7 +520,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         else if (_controls.Selected is SliderItemViewModel slider && Sliders.IndexOf(slider) is >= 0 and var si)
         {
             if (Inspected is not SliderWiringViewModel { } shown || shown.Index != si || !ReferenceEquals(shown.Item, slider))
-                next = new SliderWiringViewModel(si, slider, PinField(new PinOwner(PinOwnerKind.Slider, si)), () => AskRemove(slider));
+            {
+                var index = si;
+                next = new SliderWiringViewModel(si, slider, PinField(new PinOwner(PinOwnerKind.Slider, si)), () => AskRemove(slider),
+                                                 _controller, () => OpenCalibration(index));
+            }
         }
         else if (_controls.Selected is ButtonItemViewModel button && Buttons.IndexOf(button) is >= 0 and var bi)
         {
@@ -473,6 +548,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             case SliderWiringViewModel s:
                 s.IsEditable = _controller.CanEdit;
                 s.HasProblem = s.Item.Wiring?.HasProblem == true;
+                UpdateCalibrationRows();
                 break;
             case ButtonWiringViewModel b:
                 b.Refresh();
@@ -746,7 +822,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.Buttons.Items.CollectionChanged -= OnItemsChanged;
         _controls.PropertyChanged -= OnControlsPropertyChanged;
         _runtime.RawInput -= OnRawInput;
+        _runtime.CalibrationChanged -= OnCalibrationChanged;
         Status.Dispose();
+        CloseCalibration();
         Compare?.Dispose();
         ConnectionDialog?.Dispose();
         LeavePrompt?.Dispose();

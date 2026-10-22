@@ -110,6 +110,8 @@ public class ConfigGoldenTests
             },
             "buttons.0.screen.bus" => b0!.Screen.Bus.ToString(),
             "buttons.0.screen.address" => b0!.Screen.Address.ToString(),
+            _ when key.StartsWith("sliders.") && key.EndsWith(".auto_calibrate") =>
+                c.Sliders[int.Parse(key.Split('.')[1])].AutoCalibrate ? "1" : "0",
             _ => "?" + key,
         };
     }

@@ -54,6 +54,11 @@ public static class ProtocolEncoder
         return burst.ToArray();
     }
 
+    /// <summary>A slider calibration request (slider-calibration spec, Wire); the controller answers
+    /// with that slider's Calibration.</summary>
+    public static byte[] EncodeCalibrate(int index, CalibrateAction action)
+        => BuildFrame(new[] { (byte)MessageType.Calibrate, (byte)index, (byte)action });
+
     /// <summary>LED: lit when value ≠ 0. LED pair: 1 lights A, 2 lights B, anything else neither.</summary>
     public static byte[] EncodeLed(int button, byte value)
         => BuildFrame(new[] { (byte)MessageType.Led, (byte)button, value });
@@ -104,6 +109,14 @@ public static class ProtocolEncoder
 
     public static byte[] EncodeButton(int index, ButtonState state)
         => BuildFrame(new[] { (byte)MessageType.Button, (byte)index, (byte)state });
+
+    public static byte[] EncodeCalibration(int index, bool learned, bool sweeping, bool autoCalibrate, ushort low, ushort high)
+        => BuildFrame(new[]
+        {
+            (byte)MessageType.Calibration, (byte)index,
+            (byte)((learned ? 1 : 0) | (sweeping ? 2 : 0) | (autoCalibrate ? 4 : 0)),
+            (byte)(low >> 8), (byte)low, (byte)(high >> 8), (byte)high,
+        });
 
     private static void AppendText(List<byte> body, string text)
     {

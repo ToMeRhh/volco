@@ -69,6 +69,13 @@
           "pin": {
            "type": "uint32",
            "id": 1
+          },
+          "autoCalibrate": {
+           "type": "bool",
+           "id": 2,
+           "options": {
+            "default": true
+           }
           }
          }
         },

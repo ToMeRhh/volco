@@ -15,6 +15,7 @@
    * @param {(button:number, transition:number, content:object, now:number) => void} o.onScreen
    * @param {(now:number) => void} o.onHostLost            LEDs off, "not connected" screens
    * @param {(payload:number[], now:number) => boolean} [o.onConfigFrame]  true when it took the frame
+   * @param {(index:number, action:number, now:number) => void} [o.onCalibrate]  a Calibrate frame
    */
   function createLink(o) {
     let hw = { sliders: 0, kinds: [], configState: 0, configCrc: 0, firmware: 'sim' };
@@ -80,6 +81,11 @@
               const transition = h.screen && s.transition === P.TRANSITION.NONE ? h.transition : s.transition;
               held[s.button] = { ...h, screen: s.content, transition };
             } else o.onScreen(s.button, s.transition, s.content, now);
+            break;
+          }
+          case P.MSG.CALIBRATE: {
+            const c = P.decodeCalibrate(p);
+            if (c && o.onCalibrate) o.onCalibrate(c.index, c.action, now);
             break;
           }
           case P.MSG.BEGIN: holding = true; holdStart = now; break;

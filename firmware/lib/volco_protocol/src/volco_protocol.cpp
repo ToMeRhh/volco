@@ -162,6 +162,11 @@ size_t encodeConfigResult(uint8_t seq, uint8_t code, uint8_t item, uint8_t field
   return encodeFrame(p, sizeof p, out);
 }
 
+size_t encodeCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi, uint8_t* out) {
+  const uint8_t p[] = {MSG_CALIBRATION, index, flags, (uint8_t)(lo >> 8), (uint8_t)lo, (uint8_t)(hi >> 8), (uint8_t)hi};
+  return encodeFrame(p, sizeof p, out);
+}
+
 Link::Link(const LinkConfig& config, LinkSink& sink) : config_(config), sink_(sink) {
   if (config_.buttons > kMaxButtons) config_.buttons = kMaxButtons;
 }
@@ -239,6 +244,9 @@ void Link::onPayload(const uint8_t* p, uint8_t len, uint32_t now, uint8_t transp
     case MSG_CONFIG_END:
       if (configSink_ && len >= 2) configSink_->configEnd(transport, p[1], now);
       break;
+    case MSG_CALIBRATE:
+      if (len == 3) sink_.calibrate(p[1], p[2], now);
+      break;
     default:
       break;  // Heartbeat (its arrival is the point) and unknown types
   }
@@ -293,6 +301,11 @@ void Link::sendSlider(uint8_t index, uint16_t value, uint32_t now) {
 
 void Link::sendButton(uint8_t index, bool pressed, uint32_t now) {
   const uint8_t p[] = {MSG_BUTTON, index, (uint8_t)(pressed ? 1 : 0)};
+  sendFrame(p, sizeof p, now);
+}
+
+void Link::sendCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi, uint32_t now) {
+  const uint8_t p[] = {MSG_CALIBRATION, index, flags, (uint8_t)(lo >> 8), (uint8_t)lo, (uint8_t)(hi >> 8), (uint8_t)hi};
   sendFrame(p, sizeof p, now);
 }
 

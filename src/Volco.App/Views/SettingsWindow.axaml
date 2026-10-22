@@ -143,6 +143,21 @@
       </Border>
     </Border>
 
+    <!-- A slider's Re-calibrate sweep (slider-calibration spec, "The sweep"): Escape and a click on
+         the scrim are Cancel -->
+    <Border Name="CalibrationOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="CalibrationCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="CalibrationHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:CalibrationDialogViewModel}" x:DataType="hw:CalibrationDialogViewModel">
+              <hwviews:CalibrationDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
     <!-- Leaving the Controller page with unsaved changes (controller-page spec §4.4): over the
          whole window, sidebar included, so neither the nav nor the status's actions change the draft
          under it; Escape or a click outside is Stay -->

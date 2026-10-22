@@ -133,10 +133,35 @@ public class ProtocolGoldenTests
     }
 
     [Fact]
+    public void CalibrationFrames_EncodeToTheGoldenBytes()
+    {
+        Assert.Equal(Golden["calibrate_2_start"], ProtocolEncoder.EncodeCalibrate(2, CalibrateAction.Start));
+        Assert.Equal(Golden["calibrate_0_query"], ProtocolEncoder.EncodeCalibrate(0, CalibrateAction.Query));
+        Assert.Equal(Golden["calibration_1_learned_auto"],
+            ProtocolEncoder.EncodeCalibration(1, learned: true, sweeping: false, autoCalibrate: true, 170, 2550));
+        Assert.Equal(Golden["calibration_0_raw_sweeping"],
+            ProtocolEncoder.EncodeCalibration(0, learned: false, sweeping: true, autoCalibrate: false, 4095, 0));
+    }
+
+    [Fact]
+    public void CalibrationFrames_ParseFromTheGoldenBytes()
+    {
+        var learned = Assert.IsType<CalibrationMessage>(Assert.Single(Parse(Golden["calibration_1_learned_auto"])));
+        Assert.Equal((1, true, false, true, 170, 2550),
+            (learned.SliderIndex, learned.Learned, learned.Sweeping, learned.AutoCalibrate, (int)learned.Low, (int)learned.High));
+
+        var raw = Assert.IsType<CalibrationMessage>(Assert.Single(Parse(Golden["calibration_0_raw_sweeping"])));
+        Assert.Equal((0, false, true, false, 4095, 0),
+            (raw.SliderIndex, raw.Learned, raw.Sweeping, raw.AutoCalibrate, (int)raw.Low, (int)raw.High));
+    }
+
+    [Fact]
     public void PcOnlyMessages_AreNotParsedAsControllerMessages()
     {
         Assert.Empty(Parse(Golden["heartbeat"]));
         Assert.Empty(Parse(Golden["screen_muted_mic"]));
+        Assert.Empty(Parse(Golden["calibrate_2_start"]));
+        Assert.Empty(Parse(Golden["calibrate_0_query"]));
     }
 
     [Fact]

@@ -22,6 +22,22 @@ public enum MessageType : byte
     ConfigWriteBegin = 0x88,
     ConfigWriteChunk = 0x89,
     ConfigWriteEnd = 0x8A,
+    Calibration = 0x09,
+    Calibrate = 0x8E,
+}
+
+/// <summary>What a Calibrate asks of the controller (slider-calibration spec, Wire). Every one is
+/// answered with that slider's Calibration.</summary>
+public enum CalibrateAction : byte
+{
+    /// <summary>Only the answer: the slider's current ends and flags.</summary>
+    Query = 0,
+    /// <summary>Starts a sweep: the current ends are kept for Cancel and learning starts afresh.</summary>
+    Start = 1,
+    /// <summary>Ends the sweep and stores what it learned.</summary>
+    Done = 2,
+    /// <summary>Ends the sweep and restores the ends it started with.</summary>
+    Cancel = 3,
 }
 
 /// <summary>The protocol version this app speaks; Hello carries the firmware's.</summary>
@@ -145,6 +161,22 @@ public sealed class ConfigResultMessage : ControllerMessage
 
     public ConfigResultMessage(byte seq, Volco.Core.Controller.ConfigResultCode code, byte item, byte field)
         : base(MessageType.ConfigResult) => (Seq, Code, Item, Field) = (seq, code, item, field);
+}
+
+/// <summary>A slider's calibration (slider-calibration spec, Wire): the answer to every Calibrate, and
+/// sent whenever the slider's ends widen and when a sweep ends. <see cref="Low"/> and
+/// <see cref="High"/> are raw 12-bit readings; before anything is learned they are 4095 and 0.</summary>
+public sealed class CalibrationMessage(int sliderIndex, bool learned, bool sweeping, bool autoCalibrate,
+                                       ushort low, ushort high) : ControllerMessage(MessageType.Calibration)
+{
+    public int SliderIndex { get; } = sliderIndex;
+
+    /// <summary>The span between the ends is wide enough to be used (1000 codes).</summary>
+    public bool Learned { get; } = learned;
+    public bool Sweeping { get; } = sweeping;
+    public bool AutoCalibrate { get; } = autoCalibrate;
+    public ushort Low { get; } = low;
+    public ushort High { get; } = high;
 }
 
 /// <summary>The controller's keepalive: sent when it has sent nothing else for a second.</summary>
