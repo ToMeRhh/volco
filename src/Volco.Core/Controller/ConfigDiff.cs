@@ -26,6 +26,7 @@ public static class ConfigDiff
             var s = side.Sliders[i];
             var o = other.Sliders[i];
             if (s.HasPin != o.HasPin || s.Pin != o.Pin) lines.Add($"Slider {i + 1} {On(s.HasPin, s.Pin)}");
+            if (s.AutoCalibrate != o.AutoCalibrate) lines.Add($"Slider {i + 1} auto-calibrate {(s.AutoCalibrate ? "on" : "off")}");
         }
 
         for (int i = 0; i < Math.Min(side.Buttons.Count, other.Buttons.Count); i++)

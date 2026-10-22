@@ -15,6 +15,26 @@ public class ControllerConfigCodecTests
     }
 
     [Fact]
+    public void AutoCalibrateDefaultsToOn()
+    {
+        var config = new ControllerConfig();
+        config.Sliders.Add(new Slider { Pin = 32 });
+        var slider = ControllerConfigCodec.Decode(ControllerConfigCodec.Encode(config)).Sliders[0];
+        Assert.True(slider.AutoCalibrate);
+        Assert.False(slider.HasAutoCalibrate);
+    }
+
+    [Fact]
+    public void AutoCalibrateRoundTrips()
+    {
+        var config = new ControllerConfig();
+        config.Sliders.Add(new Slider { Pin = 32, AutoCalibrate = false });
+        var slider = ControllerConfigCodec.Decode(ControllerConfigCodec.Encode(config)).Sliders[0];
+        Assert.True(slider.HasAutoCalibrate);
+        Assert.False(slider.AutoCalibrate);
+    }
+
+    [Fact]
     public void Encode_DoesNotChangeTheCallersConfig()
     {
         var config = new ControllerConfig();

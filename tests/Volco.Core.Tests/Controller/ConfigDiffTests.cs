@@ -34,6 +34,16 @@ public class ConfigDiffTests
     }
 
     [Fact]
+    public void ConfigDiffListsAutoCalibrate()
+    {
+        var mine = Sliders(32, 33);
+        var theirs = mine.Clone();
+        theirs.Sliders[1].AutoCalibrate = false;
+        Assert.Equal(new[] { "Slider 2 auto-calibrate off" }, ConfigDiff.Lines(mine, theirs, forTheirs: true));
+        Assert.Equal(new[] { "Slider 2 auto-calibrate on" }, ConfigDiff.Lines(mine, theirs, forTheirs: false));
+    }
+
+    [Fact]
     public void ScreensLightsAndWifi()
     {
         var mine = Sliders(32);
