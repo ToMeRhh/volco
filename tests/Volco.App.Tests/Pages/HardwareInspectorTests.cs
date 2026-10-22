@@ -202,28 +202,24 @@ public sealed class HardwareInspectorTests : IDisposable
                                              < remove.TranslatePoint(new Point(0, 0), section)!.Value.Y));
     }
 
-    /// <summary>A screen button's bus link opens the bus's row in Controller settings (controller-page
-    /// spec §4.3): its pins and clock are fields of the row.</summary>
+    /// <summary>A screen button's bus link names its bus's wiring and opens the I2C buses dialog at
+    /// that bus (controller-page spec §4.3); the button stays selected.</summary>
     [AvaloniaFact]
-    public void TheBusLinkOpensTheBusRow()
+    public void TheBusLinkOpensTheBusesDialog()
     {
         using var s = Show();
         s.Vm.Controls.Select(s.Vm.Buttons.Items[0]);
         Settle(s.Window);
         Click(s, In<RadioButton>(s.Page, "LightScreen"));   // a screen on bus 0
 
-        Assert.Equal("Bus 0, address 3C", In<TextBlock>(s.Page, "BusLinkText").Text);
+        Assert.Equal("Bus 0 wiring", In<TextBlock>(s.Page, "BusLinkLabel").Text);
+        Assert.Equal("SDA 25 · SCL 26 · 400 kHz", In<TextBlock>(s.Page, "BusLinkText").Text);
         Click(s, In<Button>(s.Page, "BusLink"));
 
-        Assert.Equal("Controller", Heading(s));
-        Assert.Equal("I2C bus 0 · SDA 25 · SCL 26 · 400 kHz", In<TextBlock>(s.Page, "BusSummary").Text);
-        Assert.Equal("GPIO 25", PinValue(In<PinField>(s.Page, "SdaField")));
-        Assert.Equal("GPIO 26", PinValue(In<PinField>(s.Page, "SclField")));
-        Assert.Equal(1, In<ComboBox>(s.Page, "ClockBox").SelectedIndex);   // 400 kHz
-        Assert.Null(s.Vm.Controls.Selected);
-
-        Click(s, Tiles<SliderTile>(s.Page)[0], y: 6);
-        Assert.Equal("Slider 1", Heading(s));
+        var dialog = Assert.IsType<I2cBusesViewModel>(s.Vm.Hardware.Buses);
+        Assert.Equal(0, dialog.FocusedBus);
+        Assert.True(dialog.Buses.Single(b => b.Bus == 0).IsFocused);
+        Assert.Equal("Button 1", Heading(s));
     }
 
     [AvaloniaFact]

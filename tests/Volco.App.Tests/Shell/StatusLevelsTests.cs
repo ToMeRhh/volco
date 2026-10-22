@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.ViewModels;
@@ -156,7 +157,11 @@ public sealed class StatusLevelsTests : IDisposable
         using var s = Show();
         Until(s.Window, () => s.Vm.Controller.InSync);
         var hardware = In<TextBlock>(s.Line, "HardwareText");
-        Assert.Equal("ESP32 · 5 sliders, 3 buttons", hardware.Text);
+        Assert.Equal("ESP32 · 5 sliders, 3 buttons", hardware.Text!.Replace('\u00A0', ' '));
+        // It wraps whole rather than ending in "…", and only between its parts
+        Assert.Equal(TextWrapping.Wrap, hardware.TextWrapping);
+        Assert.Equal(TextTrimming.None, hardware.TextTrimming);
+        Assert.Equal(2, hardware.Text!.Count(c => c == ' '));   // after the chip's dot and the comma
         Assert.True(hardware.IsEffectivelyVisible);
         double Top(Visual v) => v.TranslatePoint(new Point(0, 0), s.Line)!.Value.Y;
         Assert.True(Top(hardware) > Top(In<TextBlock>(s.Line, "StatusText")));

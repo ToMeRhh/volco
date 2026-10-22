@@ -40,17 +40,16 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     private readonly ControllerViewModel _controller;
     private readonly Action _openWifi;
-    private readonly Func<PinOwner, PinFieldViewModel> _pin;
 
-    /// <param name="pin">The pin field of a use (a bus's SDA or SCL), shared with the rest of the page.</param>
-    public ControllerSettingsViewModel(ControllerViewModel controller, Action openWifi, Func<PinOwner, PinFieldViewModel> pin)
+    /// <param name="openBuses">Opens the I2C buses dialog.</param>
+    public ControllerSettingsViewModel(ControllerViewModel controller, Action openWifi, Action openBuses)
     {
         _controller = controller;
         _openWifi = openWifi;
-        _pin = pin;
         _openSection = ShowScreens ? ScreensSection : InputSection;
-        RefreshBuses();
         OpenWifiCommand = new RelayCommand(_openWifi);
+        OpenBusesCommand = new RelayCommand(openBuses);
+        RefreshBuses();
         _controller.PropertyChanged += OnControllerChanged;
     }
 
@@ -225,41 +224,33 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     // ── I2C buses (controller-page spec §4.3) ────────────────────────────────────────────────
 
-    private IReadOnlyList<BusWiringViewModel> _buses = [];
     private readonly HashSet<int> _problemBuses = new();
 
-    /// <summary>One row per I2C bus a screen uses, in bus order, in the Screens section.</summary>
-    public IReadOnlyList<BusWiringViewModel> Buses => _buses;
+    /// <summary>"Buses 0 and 2", "Bus 0", "None"; or, while one has a problem, "Bus 0 needs
+    /// attention" (<see cref="BusesHaveProblem"/>).</summary>
+    [ObservableProperty] private string _busesSummary = "";
 
-    /// <summary>Opens Screens and bus <paramref name="bus"/>'s row (the button's bus link).</summary>
-    public void OpenBus(int bus)
-    {
-        if (!ShowScreens) return;
-        OpenSection = ScreensSection;
-        if (_buses.FirstOrDefault(b => b.Bus == bus) is { } row) row.IsOpen = true;
-    }
+    /// <summary>The draft has a problem with a bus: the summary is red.</summary>
+    [ObservableProperty] private bool _busesHaveProblem;
 
-    /// <summary>Follows the draft: a row per bus a screen uses, each re-read; a bus that gains a
-    /// problem opens its row (once per problem) and the Screens section.</summary>
+    /// <summary>The I2C buses row's Edit: opens the I2C buses dialog.</summary>
+    public IRelayCommand OpenBusesCommand { get; }
+
+    /// <summary>Follows the draft: the buses row's summary; a bus that gains a problem opens the
+    /// Screens section (once per problem), where the row is.</summary>
     internal void RefreshBuses()
     {
-        var used = _controller.Draft.Buttons.Where(b => b.IndicatorCase == Button.IndicatorOneofCase.Screen)
-                              .Select(b => (int)b.Screen.Bus).Where(b => b <= 3).Distinct().Order().ToList();
-        if (!_buses.Select(b => b.Bus).SequenceEqual(used))
-        {
-            var old = _buses.ToDictionary(b => b.Bus);
-            _buses = used.Select(bus => old.TryGetValue(bus, out var row) ? row
-                : new BusWiringViewModel(bus, _controller, _pin(new PinOwner(PinOwnerKind.BusSda, bus)),
-                                         _pin(new PinOwner(PinOwnerKind.BusScl, bus)))).ToList();
-            OnPropertyChanged(nameof(Buses));
-        }
-        foreach (var row in _buses)
-        {
-            row.Refresh();
-            if (!row.HasProblem) _problemBuses.Remove(row.Bus);
-            else if (_problemBuses.Add(row.Bus)) { row.IsOpen = true; OpenSection = ScreensSection; }
-        }
-        _problemBuses.IntersectWith(used);
+        var listed = I2cBusesViewModel.Listed(_controller.Draft);
+        var problems = listed.Where(bus => _controller.Problems.Any(p => p.Item == bus
+            && p.Field is ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock)).ToList();
+        BusesHaveProblem = problems.Count > 0;
+        BusesSummary = problems.Count > 0 ? $"Bus {problems[0]} needs attention"
+            : listed.Count == 0 ? "None"
+            : listed.Count == 1 ? $"Bus {listed[0]}"
+            : $"Buses {BusWiringViewModel.Join(listed.Select(b => $"{b}").ToList())}";
+        foreach (var bus in problems)
+            if (_problemBuses.Add(bus) && ShowScreens) OpenSection = ScreensSection;
+        _problemBuses.IntersectWith(problems);
     }
 
     // ── Input feel ───────────────────────────────────────────────────────────────────────────

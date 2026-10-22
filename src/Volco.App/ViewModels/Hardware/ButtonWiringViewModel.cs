@@ -55,10 +55,13 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
     /// <summary>The draft can be edited: the light's choices and Remove are enabled.</summary>
     [ObservableProperty] private bool _isEditable;
 
-    /// <summary>"Bus 0, address 3C": the link to the bus's row in Controller settings.</summary>
-    public string BusLinkText => $"Bus {BusIndex}, address {(AddressIndex == 1 ? "3D" : "3C")}";
+    /// <summary>"Bus 0 wiring": the label of the link to the I2C buses dialog.</summary>
+    public string BusLinkLabel => $"Bus {BusIndex} wiring";
 
-    /// <summary>Opens the bus's row in Controller settings › Screens.</summary>
+    /// <summary>"SDA 25 · SCL 26 · 400 kHz": the screen's bus, set in the I2C buses dialog.</summary>
+    public string BusLinkText => BusWiringViewModel.Wiring(ControllerDraft.Bus(_controller.Draft, BusIndex));
+
+    /// <summary>Opens the I2C buses dialog at the screen's bus.</summary>
     public IRelayCommand OpenBusCommand { get; }
 
     public static IReadOnlyList<string> BusChoices { get; } = new[] { "0", "1", "2 (software)", "3 (software)" };
@@ -160,7 +163,7 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
     {
         IsEditable = _controller.CanEdit;
         foreach (var name in new[] { nameof(LightIndex), nameof(IsNone), nameof(IsLed), nameof(IsPair), nameof(IsScreen),
-                                     nameof(HasLeds), nameof(LitWhenHigh), nameof(LitWhenLow), nameof(BusIndex), nameof(AddressIndex), nameof(BusLinkText) })
+                                     nameof(HasLeds), nameof(LitWhenHigh), nameof(LitWhenLow), nameof(BusIndex), nameof(AddressIndex), nameof(BusLinkLabel), nameof(BusLinkText) })
             OnPropertyChanged(name);
     }
 }

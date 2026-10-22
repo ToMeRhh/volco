@@ -158,6 +158,21 @@
       </Border>
     </Border>
 
+    <!-- The I2C buses dialog (controller-page spec §4.3): its edits are already in the draft, so
+         Escape and a click on the scrim close it like Done -->
+    <Border Name="BusesOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="BusesCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="BusesHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:I2cBusesViewModel}" x:DataType="hw:I2cBusesViewModel">
+              <hwviews:I2cBusesDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
     <!-- Leaving the Controller page with unsaved changes (controller-page spec §4.4): over the
          whole window, sidebar included, so neither the nav nor the status's actions change the draft
          under it; Escape or a click outside is Stay -->

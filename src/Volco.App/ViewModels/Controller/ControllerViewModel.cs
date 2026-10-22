@@ -82,10 +82,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>"ESP32 · 5 sliders, 4 buttons": the connected controller's hardware, from its Hello
     /// (under the sidebar's status line); "" while not connected.</summary>
     public string HardwareText => Connection.IsConnected && _service.LastHello is { } h
-        ? $"{ChipText} · {Count(h.SliderCount, "slider")}, {Count(h.Buttons.Count, "button")}"
+        ? $"{ChipText}\u00A0· {Count(h.SliderCount, "slider")}, {Count(h.Buttons.Count, "button")}"
         : "";
 
-    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+    /// <summary>"5 sliders", with a no-break space: the sidebar's line wraps only after a comma
+    /// or the chip.</summary>
+    private static string Count(int n, string noun) => n == 1 ? $"1\u00A0{noun}" : $"{n}\u00A0{noun}s";
 
     public ControllerBanner Banner => _service.Banner;
 

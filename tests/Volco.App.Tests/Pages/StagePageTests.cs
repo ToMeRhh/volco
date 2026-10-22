@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -351,7 +352,7 @@ public class StagePageTests
         Assert.Equal("Light", In<TextBlock>(Inspector(s.Page), "LightLabel").Text);
         var cfg = s.Config.Buttons[1];
         Assert.Equal($"{cfg.LongPressMs} ms · {cfg.DoublePressWindowMs} ms", In<TextBlock>(Inspector(s.Page), "TimingSummaryText").Text);
-        Assert.False(In<StackPanel>(Inspector(s.Page), "TimingBody").IsEffectivelyVisible);   // starts closed
+        Assert.False(In<Border>(Inspector(s.Page), "TimingBody").IsEffectivelyVisible);   // starts closed
     }
 
     [AvaloniaFact]
@@ -572,7 +573,7 @@ public class StagePageTests
         var inspector = Inspector(s.Page);
         StackPanel Body() => In<StackPanel>(inspector, "ActionsContent");
         double LightTop() => In<Border>(inspector, "LightRow").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
-        double TimingTop() => In<Border>(inspector, "TimingSection").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
+        double TimingTop() => In<ToggleButton>(inspector, "TimingToggle").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
         var bodyBefore = Body().DesiredSize.Height;
         var lightBefore = LightTop();
         var timingBefore = TimingTop();

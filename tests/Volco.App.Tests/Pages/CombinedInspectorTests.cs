@@ -134,7 +134,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(In<Border>(inspector, "ControlsHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(inspector, "ControlsBody").IsEffectivelyVisible);
         Assert.True(In<Button>(inspector, "ControlsRow").IsEffectivelyVisible);
-        Assert.True(In<Border>(inspector, "ResponseSection").IsEffectivelyVisible);
+        Assert.True(In<ToggleButton>(inspector, "ResponseToggle").IsEffectivelyVisible);
         var section = Section(inspector);
         Assert.True(In<Border>(section, "HardwareHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(section, "HardwareBody").IsEffectivelyVisible);
@@ -176,43 +176,54 @@ public sealed class CombinedInspectorTests : IDisposable
     public void HardwareStartsAtOneHeightForEveryTile()
     {
         using var s = Show(width: 1100, height: 900);
+        var items = new object[] { s.Vm.Sliders.Items[0], s.Vm.Buttons.Items[0], s.Vm.Buttons.Items[2], s.Vm.Sliders.Items[4] };
         var tops = new List<double>();
         var gaps = new List<double>();
-        foreach (var item in new object[] { s.Vm.Sliders.Items[0], s.Vm.Buttons.Items[0], s.Vm.Buttons.Items[2], s.Vm.Sliders.Items[4] })
-        {
-            Select(s, item);
-            Control inspector = item is SliderItemViewModel ? SliderInspector(s) : ButtonInspector(s);
-            var top = HardwareTop(s, inspector);
-            tops.Add(top);
-            gaps.Add(top - ContentBottom(s, inspector));
-        }
+        foreach (var open in new[] { false, true })
+            foreach (var item in items)
+            {
+                // Response or Timing closed, then open
+                if (item is SliderItemViewModel slider) slider.IsAdvancedOpen = open;
+                else ((ButtonItemViewModel)item).IsAdvancedOpen = open;
+                Select(s, item);
+                Control inspector = item is SliderItemViewModel ? SliderInspector(s) : ButtonInspector(s);
+                var top = HardwareTop(s, inspector);
+                tops.Add(top);
+                if (open) gaps.Add(top - ContentBottom(s, inspector));
+            }
 
-        // The same height for sliders and buttons, under every tile's content…
+        // The same height for sliders and buttons, their sub-sections open or closed…
         Assert.All(tops, t => Assert.InRange(t, tops[0] - 0.5, tops[0] + 0.5));
+        // …under every tile's content with its sub-section open, and no lower than the tallest one needs.
         Assert.All(gaps, g => Assert.True(g >= -0.5, $"gap {g}"));
-        // …and no lower than the tallest one needs.
         Assert.InRange(gaps.Min(), -0.5, 0.5);
         Assert.True(gaps.Max() > 1, "a slider's Controls section is shorter than a button's Actions");
     }
 
+    /// <summary>Opening Response or Timing doesn't move the Hardware section: the probes measure
+    /// every tile with its sub-section open (user, 2026-10-22).</summary>
     [AvaloniaFact]
-    public void OpeningASubSectionPushesHardwareDownForThatTileOnly()
+    public void OpeningASubSectionDoesNotMoveHardware()
     {
         using var s = Show(width: 1100, height: 900);
-        Select(s, s.Vm.Buttons.Items[1]);
-        var closed = HardwareTop(s, ButtonInspector(s));
+        var item = s.Vm.Buttons.Items[0];
+        Select(s, item);
+        var inspector = ButtonInspector(s);
+        Assert.False(In<Border>(inspector, "TimingBody").IsEffectivelyVisible);
+        var closed = HardwareTop(s, inspector);
         var height = s.Page.InspectorTopHeight;
 
-        s.Vm.Buttons.Items[0].IsAdvancedOpen = true;   // Timing open on another tile
-        Select(s, s.Vm.Buttons.Items[0]);
-        var inspector = ButtonInspector(s);
-        Assert.True(In<StackPanel>(inspector, "TimingBody").IsEffectivelyVisible);
-        Assert.Equal(height, s.Page.InspectorTopHeight, 1);   // the probes measure Timing closed
-        Assert.True(HardwareTop(s, inspector) >= ContentBottom(s, inspector) - 0.5);
-        Assert.True(HardwareTop(s, inspector) > closed + 1, "Timing's rows push Hardware down");
+        In<ToggleButton>(inspector, "TimingToggle").IsChecked = true;   // no click: it would scroll the card
+        Settle(s.Window);
+        Assert.True(item.IsAdvancedOpen);
+        Assert.True(In<Border>(inspector, "TimingBody").IsEffectivelyVisible);
+        Assert.Equal(height, s.Page.InspectorTopHeight, 1);
+        Assert.Equal(closed, HardwareTop(s, inspector), 1);
+        Assert.True(HardwareTop(s, inspector) >= ContentBottom(s, inspector) - 0.5, "Timing's rows fit above Hardware");
 
-        Select(s, s.Vm.Buttons.Items[1]);   // a closed tile: back where it was
-        Assert.Equal(closed, HardwareTop(s, ButtonInspector(s)), 1);
+        // The probes never show what the real inspector's toggle does
+        Assert.All(s.Page.GetVisualDescendants().OfType<ButtonInspector>().Where(i => i.IsProbe),
+                   probe => Assert.True(In<Border>(probe, "TimingBody").IsVisible));
     }
 
     [AvaloniaFact]

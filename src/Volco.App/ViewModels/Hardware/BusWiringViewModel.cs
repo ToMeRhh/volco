@@ -6,9 +6,9 @@ using Volco.Core.Controller.Proto;
 namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
-/// One I2C bus a screen uses, as a row of Controller settings › Screens (controller-page spec §4.3):
-/// the summary "I2C bus 0 · SDA 25 · SCL 26 · 400 kHz", opened to its SDA and SCL pins and its clock
-/// (100 or 400 kHz). A clock set elsewhere to another value shows no choice and is kept.
+/// One I2C bus in the I2C buses dialog (controller-page spec §4.3): "Bus 0 · Hardware I2C", which
+/// screens use it, its SDA and SCL pins and its clock (100 or 400 kHz), and Remove, which only a bus
+/// no screen uses has. A clock set elsewhere to another value shows no choice and is kept.
 /// </summary>
 public sealed partial class BusWiringViewModel : ObservableObject
 {
@@ -17,33 +17,33 @@ public sealed partial class BusWiringViewModel : ObservableObject
 
     private readonly ControllerViewModel _controller;
 
-    internal BusWiringViewModel(int bus, ControllerViewModel controller, PinFieldViewModel sda, PinFieldViewModel scl)
+    internal BusWiringViewModel(int bus, ControllerViewModel controller, PinFieldViewModel sda, PinFieldViewModel scl, Action<int> remove)
     {
         Bus = bus;
         _controller = controller;
         Sda = sda;
         Scl = scl;
-        ToggleCommand = new RelayCommand(() => IsOpen = !IsOpen);
+        RemoveCommand = new RelayCommand(() => remove(Bus), () => CanRemove);
         Refresh();
     }
 
     /// <summary>The bus's hardware number (0-3).</summary>
     public int Bus { get; }
 
-    /// <summary>"I2C bus N".</summary>
-    public string Title => $"I2C bus {Bus}";
+    /// <summary>"Bus N".</summary>
+    public string Title => $"Bus {Bus}";
 
-    /// <summary>"I2C bus 0 · SDA 25 · SCL 26 · 400 kHz".</summary>
-    [ObservableProperty] private string _summary = "";
+    /// <summary>Buses 0 and 1 are the ESP32's I2C hardware; 2 and 3 run in software.</summary>
+    public string KindText => Bus < 2 ? "Hardware I2C" : "Software I2C";
 
-    /// <summary>The row shows its pins and clock.</summary>
-    [ObservableProperty] private bool _isOpen;
+    /// <summary>"Used by Button 1 and Button 3", or "No screen uses it".</summary>
+    [ObservableProperty] private string _usedByText = "";
 
-    /// <summary>The draft has a problem with this bus: the row's danger mark, and it opens itself.</summary>
+    /// <summary>The draft has a problem with this bus: the card's danger mark.</summary>
     [ObservableProperty] private bool _hasProblem;
 
-    /// <summary>The row's header click.</summary>
-    public IRelayCommand ToggleCommand { get; }
+    /// <summary>The dialog was opened for this bus (a button's bus link): its card is marked.</summary>
+    [ObservableProperty] private bool _isFocused;
 
     public PinFieldViewModel Sda { get; }
     public PinFieldViewModel Scl { get; }
@@ -52,6 +52,15 @@ public sealed partial class BusWiringViewModel : ObservableObject
 
     /// <summary>The draft can be edited: the clock is enabled.</summary>
     [ObservableProperty] private bool _isEditable;
+
+    /// <summary>No screen uses the bus and the draft can be edited.</summary>
+    [ObservableProperty] private bool _canRemove;
+
+    /// <summary>Why Remove is disabled while screens use the bus, else null.</summary>
+    [ObservableProperty] private string? _removeTooltip;
+
+    /// <summary>Takes the bus out of the draft (its pins become free).</summary>
+    public IRelayCommand RemoveCommand { get; }
 
     private I2cBus? Message => ControllerDraft.Bus(_controller.Draft, Bus);
 
@@ -75,12 +84,28 @@ public sealed partial class BusWiringViewModel : ObservableObject
     {
         IsEditable = _controller.CanEdit;
         OnPropertyChanged(nameof(ClockIndex));
-        var bus = Message;
-        var clock = (bus?.ClockHz ?? Fast) / 1000;
-        Summary = $"{Title} · SDA {Part(bus?.HasSda == true, bus?.Sda ?? 0)} · SCL {Part(bus?.HasScl == true, bus?.Scl ?? 0)} · {clock} kHz";
+        var users = ScreensOn(_controller.Draft, Bus);
+        UsedByText = users.Count == 0 ? "No screen uses it" : $"Used by {Join(users.Select(i => $"Button {i + 1}").ToList())}";
+        CanRemove = users.Count == 0 && _controller.CanEdit;
+        RemoveTooltip = users.Count == 0 ? null : $"{UsedByText}: put their screens on another bus first";
+        RemoveCommand.NotifyCanExecuteChanged();
         HasProblem = _controller.Problems.Any(p => p.Item == Bus
             && p.Field is ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock);
     }
 
+    /// <summary>The draft buttons (0-based) whose screen is on <paramref name="bus"/>.</summary>
+    internal static IReadOnlyList<int> ScreensOn(ControllerConfig draft, int bus)
+        => Enumerable.Range(0, draft.Buttons.Count)
+                     .Where(i => draft.Buttons[i].IndicatorCase == Button.IndicatorOneofCase.Screen && draft.Buttons[i].Screen.Bus == bus)
+                     .ToList();
+
+    /// <summary>"SDA 25 · SCL 26 · 400 kHz", with "–" for a pin not set: a bus's wiring in one line.</summary>
+    internal static string Wiring(I2cBus? bus)
+        => $"SDA {Part(bus?.HasSda == true, bus?.Sda ?? 0)} · SCL {Part(bus?.HasScl == true, bus?.Scl ?? 0)} · {(bus?.ClockHz ?? Fast) / 1000} kHz";
+
     private static string Part(bool has, uint pin) => has ? $"{pin}" : "–";
+
+    /// <summary>"A", "A and B", "A, B and C".</summary>
+    internal static string Join(IReadOnlyList<string> parts)
+        => parts.Count <= 1 ? string.Concat(parts) : $"{string.Join(", ", parts.Take(parts.Count - 1))} and {parts[^1]}";
 }

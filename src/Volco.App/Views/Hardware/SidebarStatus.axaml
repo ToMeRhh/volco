@@ -20,7 +20,9 @@
       <StackPanel Grid.Column="1" Classes="SidebarStatusText" Margin="10,0,0,0" Spacing="1">
         <TextBlock Name="StatusText" TextTrimming="CharacterEllipsis" MaxLines="1"
                    Text="{Binding ShortText}"/>
-        <TextBlock Name="HardwareText" Classes="Caption" TextTrimming="CharacterEllipsis" MaxLines="1"
+        <!-- Wraps rather than ending in "…" (its spaces are no-break but the one after the comma
+             and the one after the chip) -->
+        <TextBlock Name="HardwareText" Classes="Caption" TextWrapping="Wrap"
                    Text="{Binding HardwareText}"
                    IsVisible="{Binding HardwareText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
       </StackPanel>

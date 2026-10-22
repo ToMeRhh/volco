@@ -185,11 +185,12 @@ public class SettingsCoverageTests
         Named<ComboBox>(page, "AddressBox").SelectedIndex = 1;                 // buttons[1].screen.address
         Settle(window);
 
-        vm.Hardware.ShowBus(1);                                                // the button's bus link
+        vm.Hardware.ShowBus(1);                                                // the button's bus link: the I2C buses dialog
         Settle(window);
-        PickPin(window, Named<PinField>(host, "SdaField"), 17);                // i2c1.sda
-        PickPin(window, Named<PinField>(host, "SclField"), 2);                 // i2c1.scl
-        OtherChoice(Named<ComboBox>(host, "ClockBox"));                        // i2c1.clock_hz
+        PickPin(window, Named<PinField>(window, "SdaField"), 17);              // i2c1.sda
+        PickPin(window, Named<PinField>(window, "SclField"), 2);               // i2c1.scl
+        OtherChoice(Named<ComboBox>(window, "ClockBox"));                      // i2c1.clock_hz
+        Click(Named<Button>(window, "BusesDoneButton"));
         Settle(window);
 
         Click(Named<Button>(page, "ControllerSettingsChip"));
@@ -336,7 +337,7 @@ public class SettingsCoverageTests
         Settle(window);
         var inspector = Inspector(page);
         Named<TextBox>(inspector, "NameBox").Text = "Music";                   // Sliders[i].Name
-        Assert.False(Named<StackPanel>(inspector, "ResponseBody").IsEffectivelyVisible);   // starts closed
+        Assert.False(Named<Border>(inspector, "ResponseBody").IsEffectivelyVisible);   // starts closed
         Named<ToggleButton>(inspector, "ResponseToggle").IsChecked = true;
         Settle(window);
         Named<ToggleSwitch>(inspector, "InvertSwitch").IsChecked = true;       // Sliders[i].Invert

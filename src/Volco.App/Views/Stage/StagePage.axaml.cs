@@ -132,7 +132,7 @@ public partial class StagePage : UserControl
         foreach (var list in new[] { _sliderProbes, _buttonProbes })
             foreach (var container in list.GetRealizedContainers())
                 if (container is ContentPresenter { Child: TileInspector probe })
-                    top = Math.Max(top, probe.ClosedTopHeight);
+                    top = Math.Max(top, probe.TopHeight);
         if (Math.Abs(top - InspectorTopHeight) > 0.5) InspectorTopHeight = top;
     }
 
