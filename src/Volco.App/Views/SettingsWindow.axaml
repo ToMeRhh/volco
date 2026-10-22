@@ -3,10 +3,12 @@
         xmlns:views="using:Volco.App.Views"
         xmlns:vm="using:Volco.App.ViewModels"
         xmlns:conv="using:Volco.App.Converters"
+        xmlns:hw="using:Volco.App.ViewModels.Hardware"
+        xmlns:hwviews="using:Volco.App.Views.Hardware"
         x:Class="Volco.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Volco Settings"
-        Width="1100" Height="720" MinWidth="820" MinHeight="520"
+        Width="1540" Height="900" MinWidth="820" MinHeight="520"
         Classes.compact="{Binding $self.Bounds.Width, Converter={x:Static conv:LayoutConverters.IsCompact}}"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
@@ -53,14 +55,6 @@
       </Border>
 
       <DockPanel Grid.Row="1" Margin="10,4,10,12" Classes="NavPane">
-        <StackPanel Name="ConnectionFooter" DockPanel.Dock="Bottom" Orientation="Horizontal" Classes="ConnectionFooter"
-                    ToolTip.Tip="{Binding Connection.FooterText}"
-                    Spacing="8" Margin="12,8">
-          <Ellipse Name="FooterDot" Width="8" Height="8" VerticalAlignment="Center"
-                   Fill="{Binding Connection.StatusTone, Converter={StaticResource ToneToBrush}}"/>
-          <TextBlock Name="FooterText" Classes="Caption FooterLabel" VerticalAlignment="Center"
-                     Text="{Binding Connection.FooterText}"/>
-        </StackPanel>
         <StackPanel Name="AboutFooter" DockPanel.Dock="Bottom" Spacing="2" Margin="12,8,12,0" Classes="AboutFooter">
           <!-- Non-release builds carry their branch, commit and build time as the tooltip -->
           <TextBlock Name="VersionText" Classes="Caption" Text="{Binding About.VersionText}"
@@ -72,6 +66,8 @@
                              ToolTip.Tip="Third-party notices" Command="{Binding About.OpenNoticesCommand}"/>
           </StackPanel>
         </StackPanel>
+        <!-- The controller's status line (controller-page spec §5), above the version and links on every page -->
+        <hwviews:SidebarStatus Name="StatusLine" DockPanel.Dock="Bottom" Margin="0,8,0,0" DataContext="{Binding Hardware.Status}"/>
         <ListBox Name="NavList" Classes="Nav">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="views:NavItem">
@@ -95,22 +91,127 @@
     <Border Grid.Column="1" Name="PageTitleBar" Classes="TitleBarDrag"
             WindowDecorationProperties.ElementRole="TitleBar"/>
 
-    <!-- The page, with the undo message floating over its bottom edge -->
-    <Panel Grid.Column="1" Grid.Row="1">
-      <ContentControl Name="PageHost"/>
-      <Border Name="Toast" IsVisible="{Binding Toast.IsOpen}"
-              HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
-              Background="{DynamicResource TextBrush}" CornerRadius="{StaticResource ControlCornerRadius}"
-              Padding="14,6,6,6" BoxShadow="0 6 20 0 #33000000">
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Name="ToastText" Text="{Binding Toast.Message}" VerticalAlignment="Center"
-                     Foreground="{DynamicResource BgBrush}"/>
-          <Button Name="UndoButton" Content="Undo" Command="{Binding Toast.UndoCommand}"
-                  Background="Transparent" BorderThickness="0" FontWeight="SemiBold"
-                  Foreground="{DynamicResource BgBrush}"/>
+    <!-- The page, under the status banner when the controller needs the user (controller-page
+         spec §5), with the undo message floating over its bottom edge -->
+    <DockPanel Grid.Column="1" Grid.Row="1">
+      <hwviews:StatusBanner Name="StatusBanner" DockPanel.Dock="Top" DataContext="{Binding Hardware.Status}"/>
+      <Panel>
+        <!-- General and the Controller page; going between them crossfades -->
+        <TransitioningContentControl Name="PageHost"/>
+        <Border Name="Toast" IsVisible="{Binding Toast.IsOpen}"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
+                Background="{DynamicResource TextBrush}" CornerRadius="{StaticResource ControlCornerRadius}"
+                Padding="14,6,6,6" BoxShadow="0 6 20 0 #33000000">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Name="ToastText" Text="{Binding Toast.Message}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource BgBrush}"/>
+            <Button Name="UndoButton" Content="Undo" Command="{Binding Toast.UndoCommand}"
+                    Background="Transparent" BorderThickness="0" FontWeight="SemiBold"
+                    Foreground="{DynamicResource BgBrush}"/>
+          </StackPanel>
+        </Border>
+      </Panel>
+    </DockPanel>
+
+    <!-- The status's dialogs, over the whole window since the status is on every page
+         (controller-page spec §5): modal cards; Escape or a click on the scrim closes them, and
+         the focus moves in and back. Compare (hardware-page spec §7.2): -->
+    <Border Name="CompareOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="CompareCard" Classes="Panel DialogCard" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="CompareHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:CompareViewModel}" x:DataType="hw:CompareViewModel">
+              <hwviews:CompareDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
+    <!-- The Connection dialog (hardware-page spec §10) -->
+    <Border Name="ConnectionOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="ConnectionCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="ConnectionHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:ConnectionDialogViewModel}" x:DataType="hw:ConnectionDialogViewModel">
+              <hwviews:ConnectionDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
+    <!-- Leaving the Controller page with unsaved changes (controller-page spec §4.4): over the
+         whole window, sidebar included, so neither the nav nor the status's actions change the draft
+         under it; Escape or a click outside is Stay -->
+    <Border Name="LeaveOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="LeaveCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="LeaveHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:LeavePromptViewModel}" x:DataType="hw:LeavePromptViewModel">
+              <hwviews:LeavePrompt/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
+    <!-- The install confirmation (the status menu's Reinstall firmware…, the banner's or the progress
+         dialog's Install firmware): it erases the setup, or replaces what a board without Volco's
+         firmware runs -->
+    <Border Name="ReinstallOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"
+            IsVisible="{Binding Hardware.Status.Controller.ConfirmInstallPending}">
+      <Border Name="ReinstallConfirm" Classes="Panel DialogCard Small" Padding="20" KeyboardNavigation.TabNavigation="Cycle"
+              Focusable="True">
+        <StackPanel Spacing="14">
+          <TextBlock Name="ReinstallQuestion" TextWrapping="Wrap"
+                     Text="{Binding Hardware.Status.Controller.InstallQuestion}"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Name="CancelReinstallButton" Content="Cancel" Command="{Binding Hardware.Status.Controller.CancelInstallCommand}"/>
+            <Button Name="ConfirmReinstallButton" Classes.Danger="{Binding !Hardware.Status.Controller.OfferFreshInstall}"
+                    Classes.Primary="{Binding Hardware.Status.Controller.OfferFreshInstall}"
+                    Content="{Binding Hardware.Status.Controller.InstallConfirmLabel}"
+                    Command="{Binding Hardware.Status.Controller.ConfirmInstallCommand}"/>
+          </StackPanel>
         </StackPanel>
       </Border>
-    </Panel>
+    </Border>
+
+    <!-- The controller can't be used (controller-page spec §5): no controller answers, or its
+         firmware is too old. Opens once each time the state begins, over every other status dialog
+         but under the progress dialog, which takes over when its button starts an operation. Not
+         now, Escape or a click on the scrim closes it; the banner stays. -->
+    <Border Name="AttentionOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="AttentionCard" Classes="Panel DialogCard Small" Padding="20" KeyboardNavigation.TabNavigation="Cycle"
+              Focusable="True">
+        <StackPanel Spacing="10">
+          <TextBlock Name="AttentionTitle" Classes="DialogTitle" TextWrapping="Wrap"
+                     Text="{Binding Hardware.Status.State.Status}"/>
+          <TextBlock Name="AttentionDetail" TextWrapping="Wrap" Text="{Binding Hardware.Status.State.Detail}"
+                     IsVisible="{Binding Hardware.Status.State.Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,4,0,0">
+            <Button Name="AttentionNotNowButton" Content="Not now" Command="{Binding Hardware.Status.NotNowCommand}"/>
+            <Button Name="AttentionActionButton" Classes="Primary" Content="{Binding Hardware.Status.ActionLabel}"
+                    IsVisible="{Binding Hardware.Status.HasAction}"
+                    Command="{Binding Hardware.Status.AttentionActCommand}"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+
+    <!-- A firmware install, update or check, or a save, runs (controller-page spec §5, "Running,
+         don't interrupt"): above every other dialog, over the whole window. Nothing closes it while
+         the operation runs; afterwards Close, Escape or a click on the scrim does. -->
+    <Border Name="ProgressOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="3" Background="#66000000"
+            IsVisible="{Binding Hardware.Status.Progress.IsOpen}">
+      <Border Name="ProgressCard" Classes="Panel DialogCard Narrow" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <hwviews:ProgressDialog Name="ProgressDialog" DataContext="{Binding Hardware.Status.Progress}"/>
+      </Border>
+    </Border>
 
     <!-- Third-party notices: a modal card over the whole window; Escape or a click outside closes it -->
     <Border Name="NoticesOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000"

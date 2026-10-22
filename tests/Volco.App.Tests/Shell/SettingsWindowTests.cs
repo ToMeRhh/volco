@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Config;
 using Volco.Core.Runtime;
 using Volco.Core.Updates;
@@ -59,16 +60,16 @@ public class SettingsWindowTests
 
         var expected = new[]
         {
-            typeof(GeneralPage), typeof(ControlsPage), typeof(ControllerPage),
+            typeof(GeneralPage), typeof(StagePage),
         };
-        Assert.Equal(3, nav.ItemCount);
+        Assert.Equal(2, nav.ItemCount);
         for (var i = 0; i < expected.Length; i++)
         {
             nav.SelectedIndex = i;
             Assert.IsType(expected[i], host.Content);
         }
         Assert.Equal(
-            new[] { "General", "Controls", "Hardware" },
+            new[] { "General", "Controller" },
             nav.Items.Cast<NavItem>().Select(n => n.Label).ToArray());
     }
 
@@ -79,37 +80,39 @@ public class SettingsWindowTests
         window.Show();
 
         window.ShowPage("controls");
-        Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.IsType<StagePage>(window.CurrentPage);
 
         window.ShowPage("general");
         Assert.IsType<GeneralPage>(window.CurrentPage);
     }
 
     [AvaloniaFact]
-    public void SettingsWindow_FooterShowsTheConnectionState()
+    public void SettingsWindow_TheStatusLineShowsTheConnectionState()
     {
         var window = Create();
         window.Show();
+        var line = window.FindControl<Volco.App.Views.Hardware.SidebarStatus>("StatusLine")!;
 
-        Assert.Equal("Looking for your controller", window.FindControl<TextBlock>("FooterText")!.Text);
+        Assert.Equal("Not connected",
+                     line.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "StatusText").Text);
     }
 
     [AvaloniaFact]
-    public void SettingsWindow_AboutSitsAboveTheConnectionState()
+    public void SettingsWindow_TheStatusLineSitsAboveAbout()
     {
         var window = Create();
         window.Show();
         var about = window.FindControl<StackPanel>("AboutFooter")!;
-        var connection = window.FindControl<StackPanel>("ConnectionFooter")!;
+        var card = window.FindControl<Volco.App.Views.Hardware.SidebarStatus>("StatusLine")!;
 
         Assert.True(about.IsEffectivelyVisible);
         Assert.Equal(new AboutViewModel().VersionText, window.FindControl<TextBlock>("VersionText")!.Text);
         var link = window.FindControl<HyperlinkButton>("RepoLink")!;
         Assert.Equal(new Uri("https://github.com/ToMeRhh/volco"), link.NavigateUri);
         Assert.True(link.IsEffectivelyVisible);
-        var aboutBottom = about.TranslatePoint(new Point(0, about.Bounds.Height), window)!.Value.Y;
-        var connectionTop = connection.TranslatePoint(new Point(0, 0), window)!.Value.Y;
-        Assert.True(aboutBottom <= connectionTop, $"About ends at {aboutBottom}, the connection starts at {connectionTop}");
+        var cardBottom = card.TranslatePoint(new Point(0, card.Bounds.Height), window)!.Value.Y;
+        var aboutTop = about.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+        Assert.True(cardBottom <= aboutTop, $"The status line ends at {cardBottom}, About starts at {aboutTop}");
     }
 
     [Fact]
@@ -242,7 +245,7 @@ public class SettingsWindowTests
         {
             nav.SelectedIndex = i;
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            if (host.Content is ControlsPage { DataContext: ControlsViewModel controls })
+            if (host.Content is StagePage { DataContext: ControlsViewModel controls })
             {
                 controls.Select(controls.Buttons.Items[0]);
                 controls.Buttons.Items[0].IsAdvancedOpen = true;

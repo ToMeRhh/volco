@@ -48,10 +48,13 @@ internal sealed class TestRig : IDisposable
 
     /// <param name="custom">Media, program and script services; null: none (those actions are
     /// unavailable, as on a platform without them).</param>
-    public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null, CustomActionServices? custom = null)
+    /// <param name="configJson">config.json as it is on disk before the app starts; null: none.</param>
+    public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null, CustomActionServices? custom = null,
+                   string? configJson = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        if (configJson is not null) File.WriteAllText(Path.Combine(dir, "config.json"), configJson);
         Config = new ConfigManager(Path.Combine(dir, "config.json"));
         Config.Load();
         Engine = engine ?? new FakeAudioEngine();

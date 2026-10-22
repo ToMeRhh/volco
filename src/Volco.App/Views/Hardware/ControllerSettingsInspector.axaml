@@ -1,0 +1,202 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Hardware.ControllerSettingsInspector"
+             x:DataType="hw:ControllerSettingsViewModel">
+  <!-- The controller's settings (hardware-page spec §6.6): Screens, Input feel and Wi-Fi, one open at
+       a time; the raw numbers are under Fine tune -->
+  <UserControl.Styles>
+    <Style Selector="TextBlock.problem">
+      <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+    </Style>
+  </UserControl.Styles>
+  <UserControl.Resources>
+    <conv:NumberWithUnitConverter x:Key="Seconds" Unit="s"/>
+    <conv:NumberWithUnitConverter x:Key="Milliseconds" Unit="ms"/>
+    <conv:NumberWithUnitConverter x:Key="PixelsPerSecond" Unit="px/s"/>
+    <conv:NumberWithUnitConverter x:Key="Percent" Unit="%"/>
+  </UserControl.Resources>
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Classes="InspectorHeader" Spacing="2">
+      <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding Title}"/>
+      <TextBlock Name="SubtitleText" Classes="Secondary" Text="{Binding Subtitle}"/>
+    </StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Classes="InspectorBody">
+        <Border Name="ScreensSection" Classes="InspectorRows" IsVisible="{Binding ShowScreens}">
+          <StackPanel>
+            <Button Name="ScreensHeader" Classes="InspectorRow" Classes.open="{Binding IsScreensOpen}"
+                    Command="{Binding ToggleScreensCommand}">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Screens"/>
+                <TextBlock Name="ScreensSummary" Grid.Column="1" Classes="Caption" VerticalAlignment="Center" Text="{Binding ScreensSummary}"/>
+                <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </Button>
+            <StackPanel Name="ScreensBody" IsEnabled="{Binding IsEditable}" IsVisible="{Binding IsScreensOpen}">
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto,40" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Brightness"/>
+                <Slider Name="BrightnessSlider" Grid.Column="1" Width="120" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                        VerticalAlignment="Center" Value="{Binding BrightnessSlider, Mode=TwoWay}"/>
+                <TextBlock Name="BrightnessText" Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
+                           Text="{Binding BrightnessPct, StringFormat={}{0}%}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Dim after"/>
+                <ComboBox Name="DimAfterBox" Grid.Column="1" Classes="RowControl" ItemsSource="{Binding DimAfter}"
+                          SelectedIndex="{Binding DimAfterIndex, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Dimmed to"/>
+                <ComboBox Name="DimmedToBox" Grid.Column="1" Classes="RowControl" ItemsSource="{Binding DimmedTo}"
+                          SelectedIndex="{Binding DimmedToIndex, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Turn off after"/>
+                <ComboBox Name="OffAfterBox" Grid.Column="1" Classes="RowControl" ItemsSource="{Binding OffAfter}"
+                          SelectedIndex="{Binding OffAfterIndex, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Prevent burn-in"/>
+                <ToggleSwitch Name="BurnInToggle" Grid.Column="1" OnContent="" OffContent="" IsChecked="{Binding PreventBurnIn, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="First press only wakes the screen"/>
+                <ToggleSwitch Name="WakeToggle" Grid.Column="1" OnContent="" OffContent="" IsChecked="{Binding FirstPressOnlyWakes, Mode=TwoWay}"/>
+              </Grid>
+              <ItemsControl Name="BusRows" ItemsSource="{Binding Buses}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="hw:BusWiringViewModel">
+                    <StackPanel>
+                      <Button Name="BusHeader" Classes="InspectorRow" Classes.open="{Binding IsOpen}"
+                              Command="{Binding ToggleCommand}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                          <TextBlock Name="BusSummary" Classes="RowLabel" VerticalAlignment="Center"
+                                     Classes.problem="{Binding HasProblem}" Text="{Binding Summary}"/>
+                          <PathIcon Grid.Column="1" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+                        </Grid>
+                      </Button>
+                      <StackPanel Name="BusBody" IsVisible="{Binding IsOpen}">
+                        <controls:PinField Name="SdaField" DataContext="{Binding Sda}"/>
+                        <controls:PinField Name="SclField" DataContext="{Binding Scl}"/>
+                        <Grid Name="ClockRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                          <TextBlock Classes="RowLabel" Text="Clock"/>
+                          <ComboBox Name="ClockBox" Grid.Column="1" Classes="RowControl"
+                                    ItemsSource="{x:Static hw:BusWiringViewModel.ClockChoices}"
+                                    SelectedIndex="{Binding ClockIndex, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
+                        </Grid>
+                      </StackPanel>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Name="ScreensFineHeader" Classes="InspectorRow" Classes.open="{Binding IsScreensFineOpen}"
+                    Command="{Binding ToggleScreensFineCommand}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Fine tune"/>
+                <PathIcon Grid.Column="1" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </Button>
+              <StackPanel Name="ScreensFineBody" IsVisible="{Binding IsScreensFineOpen}">
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Scroll hold"/>
+                <NumericUpDown Name="ScrollHoldBox" Grid.Column="1" Classes="RowControl" Minimum="0" Maximum="10000" TextConverter="{StaticResource Milliseconds}"
+                               Value="{Binding Controller.ScrollHoldMs, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Scroll speed"/>
+                <NumericUpDown Name="ScrollSpeedBox" Grid.Column="1" Classes="RowControl" Minimum="5" Maximum="200" TextConverter="{StaticResource PixelsPerSecond}"
+                               Value="{Binding Controller.ScrollSpeed, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Scroll end hold"/>
+                <NumericUpDown Name="ScrollEndHoldBox" Grid.Column="1" Classes="RowControl" Minimum="0" Maximum="10000" TextConverter="{StaticResource Milliseconds}"
+                               Value="{Binding Controller.ScrollEndHoldMs, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Slide duration"/>
+                <NumericUpDown Name="TransitionBox" Grid.Column="1" Classes="RowControl" Minimum="0" Maximum="2000" TextConverter="{StaticResource Milliseconds}"
+                               Value="{Binding Controller.TransitionMs, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Pixel shift every"/>
+                <NumericUpDown Name="PixelShiftBox" Grid.Column="1" Classes="RowControl" Minimum="1" Maximum="86400" TextConverter="{StaticResource Seconds}"
+                               Value="{Binding Controller.PixelShiftEveryS, Mode=TwoWay}"/>
+              </Grid>
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Name="InputSection" Classes="InspectorRows">
+          <StackPanel>
+            <Button Name="InputHeader" Classes="InspectorRow" Classes.open="{Binding IsInputOpen}"
+                    Command="{Binding ToggleInputCommand}">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Input feel"/>
+                <TextBlock Name="InputSummary" Grid.Column="1" Classes="Caption" VerticalAlignment="Center" Text="{Binding InputSummary}"/>
+                <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </Button>
+            <StackPanel Name="InputBody" IsEnabled="{Binding IsEditable}" IsVisible="{Binding IsInputOpen}">
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Slider smoothing"/>
+                <Border Name="FeelSegment" Grid.Column="1" Classes="SegmentTrack">
+                  <StackPanel Orientation="Horizontal" Spacing="2">
+                    <RadioButton Name="FeelLow" Classes="Segment" Content="Low" IsChecked="{Binding IsFeelLow, Mode=TwoWay}"/>
+                    <RadioButton Name="FeelNormal" Classes="Segment" Content="Normal" IsChecked="{Binding IsFeelNormal, Mode=TwoWay}"/>
+                    <RadioButton Name="FeelHigh" Classes="Segment" Content="High" IsChecked="{Binding IsFeelHigh, Mode=TwoWay}"/>
+                    <RadioButton Name="FeelCustom" Classes="Segment" Content="Custom" IsChecked="{Binding IsFeelCustom, Mode=OneWay}"
+                                 IsVisible="{Binding IsFeelCustom}" IsHitTestVisible="False"/>
+                  </StackPanel>
+                </Border>
+              </Grid>
+              <Button Name="InputFineHeader" Classes="InspectorRow" Classes.open="{Binding IsInputFineOpen}"
+                    Command="{Binding ToggleInputFineCommand}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Fine tune"/>
+                <PathIcon Grid.Column="1" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </Button>
+              <StackPanel Name="InputFineBody" IsVisible="{Binding IsInputFineOpen}">
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Debounce"/>
+                <NumericUpDown Name="DebounceBox" Grid.Column="1" Classes="RowControl" Minimum="1" Maximum="200" TextConverter="{StaticResource Milliseconds}"
+                               Value="{Binding Controller.DebounceMs, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Read sliders every"/>
+                <NumericUpDown Name="SliderIntervalBox" Grid.Column="1" Classes="RowControl" Minimum="1" Maximum="100" TextConverter="{StaticResource Milliseconds}"
+                               Value="{Binding Controller.SliderIntervalMs, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Smoothing weight"/>
+                <NumericUpDown Name="SmoothingBox" Grid.Column="1" Classes="RowControl" Minimum="1" Maximum="100" TextConverter="{StaticResource Percent}"
+                               Value="{Binding Controller.SmoothingPct, Mode=TwoWay}"/>
+              </Grid>
+              <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Classes="RowLabel" Text="Ignore changes below"/>
+                <NumericUpDown Name="DeadbandBox" Grid.Column="1" Classes="RowControl" Minimum="0" Maximum="500"
+                               Value="{Binding Controller.Deadband, Mode=TwoWay}"/>
+              </Grid>
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Name="WifiSection" Classes="InspectorRows">
+          <Button Name="WifiHeader" Classes="InspectorRow"
+                    Command="{Binding OpenWifiCommand}">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Wi-Fi"/>
+                <TextBlock Name="WifiSummary" Grid.Column="1" Classes="Caption" VerticalAlignment="Center" Text="{Binding WifiSummary}"/>
+                <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </Button>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

@@ -94,8 +94,8 @@ internal sealed class CompositionRoot : IDisposable
             return done.Task;
         });
         var firmware = _firmware;
-        VolcoApplication.Gate = new ExitGate(() => firmware.IsBusy);
-        firmware.BusyChanged += (_, _) => Dispatcher.UIThread.Post(() => VolcoApplication.Gate?.OnBusyChanged());
+        // Exit and the updater's restart wait for a firmware write and for a config save.
+        VolcoApplication.Gate = ExitGate.For(firmware, _runtime.ControllerConfig, a => Dispatcher.UIThread.Post(a));
 
         // Rule (a): the OSD is subscribed before Start(). Show is thread-safe and posts to the UI
         // thread itself (rule b), so the handler calls it directly.
@@ -227,22 +227,17 @@ internal sealed class CompositionRoot : IDisposable
         _trayShowsAttention = banner.NeedsAttention;
         if (_trayIcon is not { } tray) return;
 
-        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection);
+        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection, banner);
         var attention = _trayShowsAttention;
         tray.Icon = status.Down ? _disconnectedIcon : attention ? _attentionIcon : _connectedIcon;
-        // No second line where the headline already says it ("Controller not responding",
-        // "Firmware update needed").
-        tray.ToolTipText = !attention || banner.Kind is BannerKind.NoAnswer or BannerKind.Incompatible ? status.ToolTip
-            : _trayShowsUpdate ? $"{status.ToolTip}\nController firmware update available"
-            : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? $"{status.ToolTip}\nThe controller needs setting up"
-            : $"{status.ToolTip}\nThe controller needs attention";
+        tray.ToolTipText = status.ToolTip;
         if (_trayConnectionItem is not null) _trayConnectionItem.Header = status.ConnectionMenuText;
         if (_firmwareMenuItem is not null)
         {
             _firmwareMenuItem.IsVisible = attention;
             _firmwareMenuItem.Header = _trayShowsUpdate ? "Update controller firmware…"
                 : banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror ? "Set up the controller…"
-                : "Open the Hardware page…";
+                : "Open the Controller page…";
         }
     }
 

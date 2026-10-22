@@ -850,16 +850,17 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void TestMode_RawInputIsNotRaisedOutsideTestMode()
+    public void RawInputIsRaisedOutsideTestMode_AndInputStillWorks()
     {
         var runtime = StartRuntime();
         var c = Connection(0);
         ConnectAndGreet(c);
-        var raw = 0;
-        runtime.RawInput += (_, _) => raw++;
+        var raw = new ConcurrentQueue<RawInputEventArgs>();
+        runtime.RawInput += (_, e) => raw.Enqueue(e);
         c.RaiseMessage(new SliderMessage(0, 100));
         Press(c, 0);
-        Assert.Equal(0, raw);
+        Assert.Equal(new[] { (RawInputKind.Slider, 0, 100), (RawInputKind.Button, 0, 1), (RawInputKind.Button, 0, 0) },
+                     raw.Select(e => (e.Kind, e.Index, e.Value)).ToArray());
         Assert.True(WaitUntil(() => Snapshot(_engine.ToggleMuteCalls).Count == 1));
     }
 
@@ -930,6 +931,43 @@ public sealed class VolcoRuntimeTests : IDisposable
         test.Dispose();
         Assert.Equal(real0, LastLed(c, 0));
         Assert.Equal(real2, LastLed(c, 2));
+    }
+
+    [Fact]
+    public void AdvanceTestIndicatorMovesLikeAPress()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c, new HelloMessage(ProtocolVersion.Current, 5,
+                                            new[] { IndicatorKind.Led, IndicatorKind.LedPair, IndicatorKind.Screen }));
+        var activity = 0;
+        runtime.ButtonActivity += (_, _) => activity++;
+        Assert.Equal(0, runtime.AdvanceTestIndicator(0));   // no test: nothing moves
+
+        using (runtime.EnterTestMode())
+        {
+            Assert.Equal(1, runtime.AdvanceTestIndicator(0));
+            Assert.Equal(ProtocolEncoder.EncodeLed(0, 1), LastLed(c, 0));   // a single LED: On …
+            Assert.Equal(2, runtime.AdvanceTestIndicator(0));
+            Assert.Equal(ProtocolEncoder.EncodeLed(0, 0), LastLed(c, 0));   // … then Off
+
+            runtime.AdvanceTestIndicator(1);
+            Assert.Equal(ProtocolEncoder.EncodeLed(1, 1), LastLed(c, 1));   // a pair: A …
+            runtime.AdvanceTestIndicator(1);
+            Assert.Equal(ProtocolEncoder.EncodeLed(1, 2), LastLed(c, 1));   // … B …
+            runtime.AdvanceTestIndicator(1);
+            Assert.Equal(ProtocolEncoder.EncodeLed(1, 1), LastLed(c, 1));   // … A
+
+            Assert.Equal(1, runtime.AdvanceTestIndicator(2));
+            Assert.True(ContainsFrame(c.SentFrames, ProtocolEncoder.EncodeScreen(2, ScreenTransition.None,
+                ScreenContent.Text("Button 3", ScreenIcon.Generic, false, "1 press"))));
+            Press(c, 2);   // a real press counts on from there
+            Assert.True(ContainsFrame(c.SentFrames, ProtocolEncoder.EncodeScreen(2, ScreenTransition.None,
+                ScreenContent.Text("Button 3", ScreenIcon.Generic, false, "2 presses"))));
+        }
+        Assert.Equal(0, activity);
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+        Assert.Empty(Snapshot(_engine.DeviceVolumeCalls));
     }
 
     [Fact]

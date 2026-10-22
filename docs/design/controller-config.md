@@ -807,7 +807,7 @@ The result is one of: `NoDevice | UnsupportedChip(name) | VolcoMatches | Differe
   | `UnsupportedChip` | the chip message above | — |
   | `VolcoMatches`, and the board's Hello (bundled build) arrives within 10 s of the resume | "This controller runs Volco's firmware <id>." | — |
   | `VolcoMatches`, no Hello within 10 s | "Volco's firmware is installed but didn't answer. Reinstall it?" | Install |
-  | `DifferentFirmware` | "This ESP32 doesn't have this version of Volco's firmware." | Install |
+  | `DifferentFirmware` | "This ESP32 doesn't have Volco's firmware yet." | Install |
 
 - **Cancellation:** possible only before the first write. After that the dialog can't be cancelled.
 - **Failure mid-write:** "Install failed: <reason>. The controller won't work until the install succeeds. Try again." The ROM bootloader is in mask ROM, so the board always stays recoverable over USB.

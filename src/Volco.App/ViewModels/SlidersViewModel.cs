@@ -8,7 +8,7 @@ using Volco.Core.Config;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The sliders of the Controls page, in hardware-input order. Position is identity, so moving a
+/// The sliders of the Controller page, in hardware-input order. Position is identity, so moving a
 /// slider moves its configuration to another physical slider, and only the last can be removed.
 /// </summary>
 public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDisposable
@@ -53,6 +53,27 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         => new(cfg, index, _devices, this, Save);
 
     private void Save() => _config.RequestSave();
+
+    /// <summary>A "Not set up" slider for a control the Controller page's draft adds: not in
+    /// <see cref="Items"/> and never saved (Volco's settings get it once the controller confirms).</summary>
+    public SliderItemViewModel CreateDetached(int index)
+        => new(new SliderConfig { Index = index, Type = SliderMappingType.None }, index, _devices, this, () => { }) { IsNew = true };
+
+    /// <summary>Rebuilds <see cref="Items"/> from <c>config.json</c> after its list was rewritten
+    /// (a confirmed save removed or added controls). Live levels stay with their positions.</summary>
+    public void Reload()
+    {
+        var levels = Items.Select(i => i.LiveLevel).ToList();
+        Items.Clear();
+        for (int i = 0; i < Sliders.Count; i++)
+        {
+            var item = NewItem(Sliders[i], i);
+            if (i < levels.Count) item.LiveLevel = levels[i];
+            Items.Add(item);
+        }
+        Renumber();
+        AppsChanged();
+    }
 
     // ── Add / remove ──────────────────────────────────────────────────────────
 

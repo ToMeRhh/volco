@@ -9,14 +9,14 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 
-namespace Volco.App.Views.Pages;
+namespace Volco.App.Views.Stage;
 
 /// <summary>
 /// The mode tabs (spec §9): a click edits a mode (and renames it inline in edit mode), a
 /// right-click or the context-menu key opens its menu, and <see cref="ModeTabReorder"/> moves
 /// tabs while editing. The menu opens whenever MenuModeId is set (Add mode sets it too).
 /// </summary>
-public partial class ControlsPage
+public partial class StagePage
 {
     private ItemsControl _modeTabs = null!;
     private ButtonsViewModel? _buttons;

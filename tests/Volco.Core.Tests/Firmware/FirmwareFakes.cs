@@ -51,12 +51,16 @@ public sealed class FakeFlasher : IFirmwareFlasher
     public bool WasSuspended { get; private set; } = true;
     public Func<Task>? DuringFlash { get; set; }
 
-    public Task<ProbeResult> ProbeAsync(string port, FirmwareImage bundled, IProgress<FlashProgress> progress, CancellationToken ct)
+    /// <summary>Awaited inside the probe, while the port is held.</summary>
+    public Func<Task>? DuringProbe { get; set; }
+
+    public async Task<ProbeResult> ProbeAsync(string port, FirmwareImage bundled, IProgress<FlashProgress> progress, CancellationToken ct)
     {
         Calls.Add($"probe {port}");
         WasSuspended &= _isSuspended();
         progress.Report(new FlashProgress(FlashStage.Connecting, 1));
-        return Task.FromResult(ProbeResult);
+        if (DuringProbe is not null) await DuringProbe();
+        return ProbeResult;
     }
 
     public async Task FlashAsync(string port, FirmwareImage image, FlashMode mode, IProgress<FlashProgress> progress, CancellationToken ct)

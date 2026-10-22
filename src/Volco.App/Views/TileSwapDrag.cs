@@ -12,7 +12,7 @@ using Volco.App.ViewModels;
 namespace Volco.App.Views;
 
 /// <summary>
-/// Drag to swap on the Controls page's drawing (spec controls-page §2.9–10, §11).
+/// Drag to swap on the Controller page's drawing (spec controls-page §2.9–10, §11).
 /// <list type="bullet">
 /// <item>A left press on a tile's grip followed by more than <see cref="DragThreshold"/> px of
 /// movement picks it up: a button's action rows, or a slider's label row (what it controls). Missing tiles have no grip.</item>

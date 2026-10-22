@@ -9,7 +9,7 @@ using Volco.Core.Input;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// The Controls page (spec docs/design/controls-page.md): one drawing of the controller, its
+/// The Controller page (spec docs/design/controls-page.md): one drawing of the controller, its
 /// sliders and buttons, and an inspector for the selected one. It owns the Sliders and Buttons
 /// view models, which keep the lists and their edits, and adds the drawing's counts, the selection
 /// and the page's dialog. The controller's presses and slider moves only flash their tiles.
@@ -100,8 +100,10 @@ public sealed partial class ControlsViewModel : ObservableObject
            : null;
 
     /// <summary>Moves the selection to the default when its control is no longer in the lists.
-    /// A control that is only missing from the controller stays selected.</summary>
-    private void FixSelection()
+    /// A control that is only missing from the controller stays selected, and a control only the
+    /// controller draft had (added with + Add) gives the selection to the item Volco's settings now
+    /// have at its place, once a confirmed save added it.</summary>
+    internal void FixSelection()
     {
         var present = Selected switch
         {
@@ -109,7 +111,16 @@ public sealed partial class ControlsViewModel : ObservableObject
             ButtonItemViewModel b => Buttons.Items.Contains(b),
             _ => false,
         };
-        if (!present) Selected = DefaultSelection();
+        if (present) return;
+        // With SettingsViewModel.OnControlsShifted (which reselects across the rebuild after a
+        // confirmed save), this keeps an added control selected when a Hello's AddMissing puts it
+        // in the lists first.
+        Selected = Selected switch
+        {
+            SliderItemViewModel { IsNew: true } s when s.Index < Sliders.Items.Count => Sliders.Items[s.Index],
+            ButtonItemViewModel { IsNew: true } b when b.Index < Buttons.Items.Count => Buttons.Items[b.Index],
+            _ => DefaultSelection(),
+        };
     }
 
     // ── Dialog ────────────────────────────────────────────────────────────────
@@ -246,15 +257,16 @@ public sealed partial class ControlsViewModel : ObservableObject
     }
 
     /// <summary>The context menu's "Swap with" entries: the other controls of the item's kind that
-    /// the controller has.</summary>
+    /// the controller has, named as the Controller page names them (the draft's numbering while
+    /// the draft draws them).</summary>
     public IReadOnlyList<SwapChoice> SwapChoices(ObservableObject item)
     {
         if (item is SliderItemViewModel)
-            return Sliders.Items.Where(o => !ReferenceEquals(o, item) && !o.IsMissing)
-                .Select(o => new SwapChoice($"Slider {o.Index + 1}", o)).ToList();
+            return Sliders.Items.Where(o => !ReferenceEquals(o, item) && o.CanSwap)
+                .Select(o => new SwapChoice(o.DisplayHeading, o)).ToList();
         if (item is ButtonItemViewModel)
-            return Buttons.Items.Where(o => !ReferenceEquals(o, item) && !o.IsMissing)
-                .Select(o => new SwapChoice($"Button {o.Index + 1}", o)).ToList();
+            return Buttons.Items.Where(o => !ReferenceEquals(o, item) && o.CanSwap)
+                .Select(o => new SwapChoice(o.DisplayHeading, o)).ToList();
         return Array.Empty<SwapChoice>();
     }
 

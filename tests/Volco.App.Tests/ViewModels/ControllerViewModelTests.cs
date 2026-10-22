@@ -10,8 +10,8 @@ using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
 
-/// <summary>Spec §8.4 and §12.4: the Controller page's editing model, against a real runtime over
-/// a fake connection.</summary>
+/// <summary>Spec §8.4 and §12.4 (hardware-page spec §6.5): the controller draft's editing model,
+/// against a real runtime over a fake connection.</summary>
 public sealed class ControllerViewModelTests : IDisposable
 {
     private readonly TestRig _rig = new();
@@ -79,8 +79,7 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         Assert.False(vm.CanEdit);
-        Assert.Equal(5, vm.Sliders.Count);
-        Assert.False(vm.Sliders[0].CanEdit);
+        Assert.Equal(5, vm.Draft.Sliders.Count);
     }
 
     [Fact]
@@ -100,8 +99,6 @@ public sealed class ControllerViewModelTests : IDisposable
         Greet(Hello(ControllerConfigState.Stored, 0x1234));
         Assert.Equal(BannerKind.DifferentSetup, vm.Banner.Kind);
         Assert.False(vm.CanEdit);
-        Assert.True(vm.ShowUseControllers);
-        Assert.True(vm.ShowApplyMine);
     }
 
     [Fact]
@@ -109,9 +106,9 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm();
         Greet(Hello(ControllerConfigState.None, 0));
-        Assert.Equal("This controller isn't set up yet.", vm.BannerText);
+        Assert.Equal(BannerKind.NotSetUp, vm.Banner.Kind);
         Assert.False(vm.CanEdit);
-        vm.SetUpCommand.Execute(null);
+        vm.StartFromScratchCommand.Execute(null);
         Assert.True(vm.CanEdit);
 
         Conn.RaiseMessage(Hello(ControllerConfigState.None, 0));   // the same Hello: still allowed
@@ -126,46 +123,17 @@ public sealed class ControllerViewModelTests : IDisposable
     // ── Onboarding ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ANotSetUpController_OpensTheSetupDialogOnce_TheBannerReopensIt()
-    {
-        var vm = Vm();
-        Greet(Hello(ControllerConfigState.None, 0));
-        Assert.True(vm.IsSetupDialogOpen);
-        Assert.True(vm.HasDialog);
-        Assert.False(vm.SetupHasSavedSetup);
-        Assert.False(vm.ShowSetUp);                   // the banner's own buttons moved into the dialog
-        Assert.False(vm.ShowOpenSetup);
-
-        vm.CloseSetupCommand.Execute(null);
-        Assert.False(vm.HasDialog);
-        Assert.True(vm.ShowOpenSetup);
-        Conn.RaiseMessage(Hello(ControllerConfigState.None, 0));   // the same Hello: not asked again
-        _ui.RunAll();
-        Assert.False(vm.IsSetupDialogOpen);
-
-        vm.OpenSetupCommand.Execute(null);
-        Assert.True(vm.IsSetupDialogOpen);
-
-        Conn.SetStatus(TransportStatus.Closed);       // unplugged: the dialog goes, a replug asks again
-        _ui.RunAll();
-        Assert.False(vm.IsSetupDialogOpen);
-        Greet(Hello(ControllerConfigState.None, 0));
-        Assert.True(vm.IsSetupDialogOpen);
-    }
-
-    [Fact]
     public void SetupFromAPreset_StartsADraftThatMustBeSaved()
     {
         var vm = Vm();
         Greet(Hello(ControllerConfigState.None, 0));
-        Assert.Equal(Diy, vm.SetupPreset);
-        vm.StartFromPresetCommand.Execute(null);
-        Assert.False(vm.IsSetupDialogOpen);
+        Assert.Equal(Diy, vm.SetupPresets[0]);
+        vm.StartFromPresetCommand.Execute(Diy);
         Assert.True(vm.CanEdit);
-        Assert.Equal(5, vm.Sliders.Count);
+        Assert.Equal(5, vm.Draft.Sliders.Count);
         Assert.True(vm.IsSettingUp);
+        Assert.True(vm.IsDirty);
         Assert.True(vm.CanSave);
-        Assert.Equal("This setup isn't on the controller yet.", vm.FooterText);
     }
 
     [Fact]
@@ -176,8 +144,7 @@ public sealed class ControllerViewModelTests : IDisposable
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.None, 0));
         Assert.Equal(BannerKind.NotSetUpHasMirror, vm.Banner.Kind);
-        Assert.True(vm.SetupHasSavedSetup);
-        vm.StartFromPresetCommand.Execute(null);
+        vm.StartFromPresetCommand.Execute(Diy);
         Assert.Equal(DiyBlob, ControllerConfigCodec.Encode(vm.Draft));
         Assert.True(vm.IsDirty);
         Assert.True(vm.CanSave);
@@ -189,17 +156,16 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.True(vm.InSync);
         Assert.False(vm.IsSettingUp);
         Assert.False(vm.IsDirty);
-        Assert.False(vm.IsSetupDialogOpen);
     }
 
     [Fact]
-    public void SetupApplySaved_SendsTheMirror()
+    public void SetupApplySaved_SendsTheMirrorAtOnce_NoDraft()
     {
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.None, 0));
         vm.SetupApplySavedCommand.Execute(null);
-        Assert.False(vm.IsSetupDialogOpen);
         Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        Assert.False(vm.HasUnsavedChanges);
     }
 
     // ── Dirty ──────────────────────────────────────────────────────────────────────────────
@@ -212,15 +178,15 @@ public sealed class ControllerViewModelTests : IDisposable
         GreetInSync(mirror);
         Assert.False(vm.IsDirty);
 
-        vm.Sliders[0].Pin = 39;
+        vm.SetSliderPin(0, 39);
         Assert.True(vm.IsDirty);
         Assert.True(vm.CanSave);
-        vm.Sliders[0].Pin = 33;
+        vm.SetSliderPin(0, 33);
         Assert.False(vm.IsDirty);
     }
 
     [Fact]
-    public void AMirrorChange_RebasesACleanDraft_KeepsADirtyOneWithTheNotice()
+    public void AMirrorChange_RebasesACleanDraft_KeepsADirtyOne()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
@@ -230,23 +196,45 @@ public sealed class ControllerViewModelTests : IDisposable
         var blob1 = ControllerConfigCodec.Encode(changed);
         var save1 = _rig.Runtime.ControllerConfig.SaveAsync(blob1, TestContext.Current.CancellationToken);
         ConfirmLastWrite(blob1);
-        Until(() => save1.IsCompleted && vm.Sliders.Count == 5 && vm.Sliders[0].Pin == 39);
+        Until(() => save1.IsCompleted && vm.Draft.Sliders.Count == 5 && vm.Draft.Sliders[0].Pin == 39);
         Assert.False(vm.IsDirty);
         Assert.Null(vm.Notice);
 
-        vm.Sliders[1].Pin = 34;   // dirty now
+        vm.SetSliderPin(1, 34);   // dirty now
         changed.Sliders[0].Pin = 33;
         var blob2 = ControllerConfigCodec.Encode(changed);
         var save2 = _rig.Runtime.ControllerConfig.SaveAsync(blob2, TestContext.Current.CancellationToken);
         ConfirmLastWrite(blob2);
-        Until(() => save2.IsCompleted && vm.Notice is not null);
-        Assert.Equal("The controller's setup changed. Revert to load it.", vm.Notice);
-        Assert.Equal(34m, vm.Sliders[1].Pin);
+        Until(() => save2.IsCompleted && vm.BaselineConfig().Sliders[0].Pin == 33);
+        Assert.Equal(34u, vm.Draft.Sliders[1].Pin);   // the dirty draft stays
+        Assert.True(vm.IsDirty);
+        Assert.Equal("The controller's setup changed. Discard to load it.", vm.Notice);
 
         vm.RevertCommand.Execute(null);
         Assert.Null(vm.Notice);
-        Assert.Equal(33m, vm.Sliders[0].Pin);
-        Assert.Equal(35m, vm.Sliders[1].Pin);
+        Assert.Equal(33u, vm.Draft.Sliders[0].Pin);
+        Assert.Equal(35u, vm.Draft.Sliders[1].Pin);
+    }
+
+    [Fact]
+    public void TheSetupChangedNotice_GoesWhenTheDraftIsCleanAgain()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.SetSliderPin(1, 34);   // dirty
+
+        var changed = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        changed.Sliders[0].Pin = 39;
+        var blob = ControllerConfigCodec.Encode(changed);
+        var save = _rig.Runtime.ControllerConfig.SaveAsync(blob, TestContext.Current.CancellationToken);
+        ConfirmLastWrite(blob);
+        Until(() => save.IsCompleted && vm.BaselineConfig().Sliders[0].Pin == 39);
+        Assert.NotNull(vm.Notice);
+
+        vm.SetSliderPin(0, 39);   // the draft now equals the controller's new setup
+        vm.SetSliderPin(1, 35);
+        Assert.False(vm.IsDirty);
+        Assert.Null(vm.Notice);
     }
 
     // ── Presets ────────────────────────────────────────────────────────────────────────────
@@ -256,60 +244,49 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm();
         Greet(Hello(ControllerConfigState.None, 0));
-        vm.SetUpCommand.Execute(null);
+        vm.StartFromScratchCommand.Execute(null);
         vm.Brightness = 40;
         vm.UdpEnabled = true;
 
-        vm.SelectedPreset = Diy;                       // a blank draft: no question
+        vm.LoadPreset(Diy);                            // a blank draft: no question
         Assert.Null(vm.Confirmation);
-        Assert.Equal(5, vm.Sliders.Count);
+        Assert.Equal(5, vm.Draft.Sliders.Count);
         Assert.Equal(40m, vm.Brightness);
         Assert.True(vm.UdpEnabled);
-        Assert.Equal("Based on DIY reference", vm.BasedOnText);
 
-        vm.SelectedPreset = Blank;                     // replaces hardware: asks
+        vm.LoadPreset(Blank);                          // replaces hardware: asks, not in red
         Assert.Equal("Replace the current hardware with Blank?", vm.Confirmation!.Message);
+        Assert.False(vm.Confirmation.IsDestructive);
         vm.Confirmation.CancelCommand.Execute(null);
-        Assert.Equal(5, vm.Sliders.Count);
+        Assert.Equal(5, vm.Draft.Sliders.Count);
 
-        vm.SelectedPreset = Blank;
+        vm.LoadPreset(Blank);
         vm.Confirmation!.ConfirmCommand.Execute(null);
-        Assert.Empty(vm.Sliders);
+        Assert.Empty(vm.Draft.Sliders);
         Assert.Null(vm.Confirmation);
-    }
-
-    [Fact]
-    public void TheModifiedCaption()
-    {
-        var vm = Vm(DiyBlob);
-        GreetInSync(DiyBlob);
-        Assert.Equal("Based on DIY reference", vm.BasedOnText);
-        vm.Buttons[0].Pin = 13;
-        Assert.Equal("Based on DIY reference (modified)", vm.BasedOnText);
     }
 
     // ── Errors ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ALocalViolation_IsShownOnItsRow()
+    public void ALocalViolation_IsAProblemOfItsField()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.Sliders[0].Pin = 6;
-        Assert.NotNull(vm.Sliders[0].ErrorText);
-        Assert.All(vm.Sliders.Skip(1), r => Assert.Null(r.ErrorText));
-
-        Assert.Equal("Pin 6 is reserved on the ESP32 (USB serial or flash).", vm.Sliders[0].ErrorText);
-        Assert.True(vm.Sliders[0].PinInvalid);
+        vm.SetSliderPin(0, 6);
+        var problem = Assert.Single(vm.Problems);
+        Assert.Equal((ConfigField.SliderPin, 0), (problem.Field, (int)problem.Item));
+        Assert.Equal("Pin 6 is reserved on the ESP32 (USB serial or flash).", problem.Message);
 
         vm.SaveCommand.Execute(null);
         Assert.Equal("Fix the problem marked in red first.", vm.ProgressText);
-        Assert.Equal(LinkTone.Danger, vm.FooterTone);
+        Assert.Equal(LinkTone.Danger, vm.ProgressTone);
+        Assert.Equal(vm.ProgressText, vm.Failure);   // the card shows it
         Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
     }
 
     [Fact]
-    public void AnInvalidResult_IsShownOnItsRow_WithTheFooterMessage()
+    public void AnInvalidResult_IsAProblemOfItsField_AndTheCardsError()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
@@ -319,54 +296,44 @@ public sealed class ControllerViewModelTests : IDisposable
         Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Invalid, 0, 2));
         Until(() => !vm.IsSaving);
         Assert.Equal("The controller rejected the setup: the button pin on Button 1.", vm.ProgressText);
-        Assert.Equal("The controller didn't accept the button pin.", vm.Buttons[0].ErrorText);
-        Assert.True(vm.CanDismissFooter);   // a failure stays until closed
+        Assert.Equal(vm.ProgressText, vm.Failure);   // a failure stays on the card until the next action
+        var problem = Assert.Single(vm.Problems);
+        Assert.Equal((ConfigField.ButtonPin, 0), (problem.Field, (int)problem.Item));
+        Assert.Equal("The controller didn't accept the button pin.", problem.Message);
     }
 
+    // ── Controls ───────────────────────────────────────────────────────────────────────────
+
     [Fact]
-    public void Hints_AppearOnTheirRows()
+    public void RemovingAControl_AsksFirst_InRed()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.Buttons[0].Pin = 35;
-        Assert.Equal("This pin has no internal pull-up; add a resistor to 3.3 V.", vm.Buttons[0].HintText);
-        vm.Sliders[0].Pin = 25;
-        Assert.Equal("This pin can't be read if you enable Wi-Fi.", vm.Sliders[0].HintText);
-    }
-
-    // ── Rows ───────────────────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void RemovingARowWithLaterRows_AsksAboutRenumbering()
-    {
-        var vm = Vm(DiyBlob);
-        GreetInSync(DiyBlob);
-        vm.Sliders[0].RemoveCommand.Execute(null);
-        Assert.Equal("Sliders after it are renumbered, and their actions move with the number.", vm.Confirmation!.Message);
+        vm.AskRemoveSlider(0);
+        Assert.Equal("Remove Slider 1?", vm.Confirmation!.Message);
+        Assert.True(vm.Confirmation.IsDestructive);
         vm.Confirmation.CancelCommand.Execute(null);
-        Assert.Equal(5, vm.Sliders.Count);
+        Assert.Equal(5, vm.Draft.Sliders.Count);
 
-        vm.Sliders[4].RemoveCommand.Execute(null);     // the last one: no question
-        Assert.Null(vm.Confirmation);
-        Assert.Equal(4, vm.Sliders.Count);
-
-        vm.Buttons[0].RemoveCommand.Execute(null);
+        vm.AskRemoveSlider(4);                         // the last one asks too
         vm.Confirmation!.ConfirmCommand.Execute(null);
-        Assert.Equal(2, vm.Buttons.Count);
-        Assert.Equal("Button 1", vm.Buttons[0].Title);
+        Assert.Equal(4, vm.Draft.Sliders.Count);
+        Assert.False(vm.Layout.IsIdentity);
+
+        vm.AskRemoveButton(0);
+        vm.Confirmation!.ConfirmCommand.Execute(null);
+        Assert.Equal(2, vm.Draft.Buttons.Count);
     }
 
     [Fact]
-    public void AScreenButton_ShowsItsBusRow_AndBehaviour()
+    public void AScreenButton_BringsTheScreenSettings()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
         Assert.False(vm.ShowBehaviour);
-        Assert.False(vm.HasBuses);
-        vm.Buttons[0].IndicatorIndex = 3;
-        vm.Buttons[0].ScreenBusIndex = 2;
+        vm.Draft.Buttons[0].Screen = new Screen { Bus = 2, Address = 0x3C };
+        vm.OnDraftEdited();
         Assert.True(vm.ShowBehaviour);
-        Assert.Equal(new[] { 2 }, vm.Buses.Select(b => b.Index));
     }
 
     // ── Save ───────────────────────────────────────────────────────────────────────────────
@@ -376,66 +343,47 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.Sliders[0].Pin = 39;
+        vm.SetSliderPin(0, 39);
         vm.SaveCommand.Execute(null);
         Assert.Equal("Sending…", vm.ProgressText);
         var expected = ControllerConfigCodec.Encode(vm.Draft);
         ConfirmLastWrite(expected);
         Until(() => !vm.IsSaving);
         Assert.Equal("Saved. The controller restarted with the new setup.", vm.ProgressText);
-        Assert.Equal(LinkTone.Good, vm.FooterTone);
+        Assert.Equal(LinkTone.Good, vm.ProgressTone);
+        Assert.Null(vm.Failure);
         Assert.False(vm.IsDirty);
     }
 
     [Fact]
-    public void ASavedMessage_GoesByItself_AFailureStaysUntilClosed()
+    public void AFailedSave_StaysUntilTheNextEdit()
     {
         var vm = Vm(DiyBlob);
-        vm.ResultTimeout = TimeSpan.FromMilliseconds(50);
         GreetInSync(DiyBlob);
-        vm.Sliders[0].Pin = 39;
+        vm.SetSliderPin(0, 6);
         vm.SaveCommand.Execute(null);
-        ConfirmLastWrite(ControllerConfigCodec.Encode(vm.Draft));
-        Until(() => vm.ProgressText == "Saved. The controller restarted with the new setup.");
-        Until(() => vm.ProgressText is null);
-        Assert.False(vm.ShowFooter);
+        Assert.Equal("Fix the problem marked in red first.", vm.Failure);
 
-        vm.Sliders[0].Pin = 6;
-        vm.SaveCommand.Execute(null);
-        Thread.Sleep(150);
-        _ui.RunAll();
-        Assert.Equal("Fix the problem marked in red first.", vm.ProgressText);
-        vm.DismissFooterCommand.Execute(null);
+        vm.SetSliderPin(0, 39);
         Assert.Null(vm.ProgressText);
-        Assert.Equal("Unsaved changes", vm.FooterText);   // the draft is still unsaved
-        Assert.True(vm.ShowFooter);
+        Assert.Null(vm.Failure);
+        Assert.True(vm.IsDirty);
     }
 
     [Fact]
-    public void AnEdit_SaysUnsavedChanges()
+    public void APinConflict_IsAProblemOfBothEnds()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        Assert.Null(vm.FooterText);
-        vm.Sliders[0].Pin = 39;
-        Assert.Equal("Unsaved changes", vm.FooterText);
-        Assert.False(vm.CanDismissFooter);
-    }
+        vm.SetSliderPin(0, 39);
+        vm.SetSliderPin(1, 39);
 
-    [Fact]
-    public void APinConflict_MarksBothRows()
-    {
-        var vm = Vm(DiyBlob);
-        GreetInSync(DiyBlob);
-        vm.Sliders[0].Pin = 39;
-        vm.Sliders[1].Pin = 39;
-
-        Assert.Equal("Pin 39 is also used by Slider 2. Each pin can only do one thing.", vm.Sliders[0].ErrorText);
-        Assert.Equal("Pin 39 is also used by Slider 1. Each pin can only do one thing.", vm.Sliders[1].ErrorText);
-        Assert.True(vm.Sliders[0].PinInvalid);
-        Assert.True(vm.Sliders[1].PinInvalid);
-        Assert.All(vm.Sliders.Skip(2), r => Assert.False(r.HasError));
-        Assert.All(vm.Buttons, r => Assert.False(r.HasError));
+        Assert.Equal(new[]
+        {
+            (0, "Pin 39 is also used by Slider 2. Each pin can only do one thing."),
+            (1, "Pin 39 is also used by Slider 1. Each pin can only do one thing."),
+        }, vm.Problems.Select(p => ((int)p.Item, p.Message)).OrderBy(p => p.Item1).ToArray());
+        Assert.All(vm.Problems, p => Assert.Equal(ConfigField.SliderPin, p.Field));
     }
 
     [Fact]
@@ -443,7 +391,7 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.Sliders[0].Pin = 39;
+        vm.SetSliderPin(0, 39);
         Assert.True(vm.CanSave);
 
         vm.StartTestCommand.Execute(null);
@@ -478,6 +426,7 @@ public sealed class ControllerViewModelTests : IDisposable
         EnableWifi(vm);
         vm.SaveCommand.Execute(null);
         Assert.StartsWith("Changing the Wi-Fi settings may disconnect the controller.", vm.Confirmation!.Message);
+        Assert.False(vm.Confirmation.IsDestructive);   // a warning, not in red
         Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
         vm.Confirmation.ConfirmCommand.Execute(null);
         Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
@@ -517,11 +466,11 @@ public sealed class ControllerViewModelTests : IDisposable
         var mirror = ControllerConfigCodec.Encode(broken);
         var vm = Vm(mirror);
         Greet(Hello(ControllerConfigState.Damaged, ControllerConfigCodec.Crc32(mirror)));
-        Assert.True(vm.ShowFixIt);
+        Assert.True(vm.Banner.Actions.HasFlag(BannerActions.FixIt));
         vm.FixItCommand.Execute(null);
         Assert.True(vm.CanEdit);
         Assert.True(vm.IsDirty);
-        Assert.NotNull(vm.Sliders[0].ErrorText);
+        Assert.Contains(vm.Problems, p => p.Field == ConfigField.SliderPin && p.Item == 0);
     }
 
     [Fact]
@@ -531,14 +480,14 @@ public sealed class ControllerViewModelTests : IDisposable
         GreetInSync(DiyBlob);
         vm.AddSliderCommand.Execute(null);
         vm.PcIp = "192.168.1.5";
-        vm.Sliders[4].RemoveCommand.Execute(null);   // later rows exist: asks
+        vm.AskRemoveSlider(4);                       // asks
         var stale = vm.Confirmation!;
 
         vm.RevertCommand.Execute(null);
         Assert.Null(vm.Confirmation);
         Assert.Equal("", vm.PcIp);
         stale.ConfirmCommand.Execute(null);          // a stale button does nothing
-        Assert.Equal(5, vm.Sliders.Count);
+        Assert.Equal(5, vm.Draft.Sliders.Count);
     }
 
     [Fact]
@@ -546,7 +495,7 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.Sliders[0].RemoveCommand.Execute(null);
+        vm.AskRemoveSlider(0);
         Assert.NotNull(vm.Confirmation);
         Conn.RaiseMessage(Hello(ControllerConfigState.Stored, 0x9999));   // a different setup now
         _ui.RunAll();
@@ -568,52 +517,40 @@ public sealed class ControllerViewModelTests : IDisposable
     }
 
     [Fact]
-    public void AnInputTuningError_OpensAdvanced()
+    public void AnInputTuningError_IsAProblem()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        Assert.False(vm.IsAdvancedOpen);
         vm.DebounceMs = 0;               // below 1
-        Assert.NotNull(vm.InputError);
-        Assert.True(vm.IsAdvancedOpen);
+        Assert.Contains(vm.Problems, p => p.Field == ConfigField.InputValue);
     }
 
     // ── Test mode ──────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void TestMode_LiveInput_Indicators_AndLeavingThePage()
+    public void TestMode_Indicators_AndLeavingThePage()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
         vm.StartTestCommand.Execute(null);
         Assert.True(vm.IsTesting);
         Assert.True(_rig.Runtime.InTestMode);
-        Assert.Equal(5, vm.TestSliders.Count);
+        Assert.False(vm.CanEdit);                      // editing is paused
 
-        Conn.RaiseMessage(new SliderMessage(1, 2000));
         Conn.RaiseMessage(new ButtonMessage(2, ButtonState.Pressed));
-        _ui.RunAll();
-        Assert.Equal(2000, vm.TestSliders[1].Value);
-        Assert.True(vm.TestButtons[2].IsPressed);
-
-        Assert.Equal("LED A", vm.TestButtons[2].StateText);   // a press moved the pair to A
-        Assert.True(vm.HasDialog);
-
         Conn.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
         _ui.RunAll();
-        Assert.Equal(1, vm.TestButtons[0].Presses);
-        Assert.Equal("LED on", vm.TestButtons[0].StateText);
+        Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(2, 1)));   // the pair moved to A
         Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(0, 1)));
         Conn.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
         Conn.RaiseMessage(new ButtonMessage(2, ButtonState.Released));
         Conn.RaiseMessage(new ButtonMessage(2, ButtonState.Pressed));
         _ui.RunAll();
-        Assert.Equal("LED B", vm.TestButtons[2].StateText);
         Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeLed(2, 2)));
 
-        vm.CloseDialogCommand.Execute(null);   // Escape or a click outside the dialog
+        vm.StopTestCommand.Execute(null);
         Assert.False(_rig.Runtime.InTestMode);
-        Assert.Equal(0, vm.TestButtons[0].Presses);
+        Assert.True(vm.CanEdit);
         vm.StartTestCommand.Execute(null);
 
         vm.OnPageLeft();

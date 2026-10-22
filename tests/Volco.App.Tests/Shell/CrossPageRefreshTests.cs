@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Tests.Audio;
@@ -46,7 +47,7 @@ public class CrossPageRefreshTests
         => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void NicknameSetInTheDeviceDialog_ReachesTheControlsPage()
+    public void NicknameSetInTheDeviceDialog_ReachesTheStagePage()
     {
         var (window, rig, vm) = Open(c =>
         {
@@ -70,7 +71,7 @@ public class CrossPageRefreshTests
 
         Assert.Equal("Toggle Speakers / Arctis", vm.Buttons.Items[0].MainLabel);
         Assert.Equal("Arctis", vm.Buttons.Items[1].Screen.Main);   // the screen preview
-        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        var page = Assert.IsType<StagePage>(window.CurrentPage);
         var row = In<ContentControl>(page, "ActionRow_Press");
         Assert.Equal("Mute Arctis", In<TextBlock>(row, "ActionText").Text);
     }
@@ -85,7 +86,7 @@ public class CrossPageRefreshTests
         });
         using var _ = rig; using var __ = vm;
         Show(window, "controls");
-        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        var page = Assert.IsType<StagePage>(window.CurrentPage);
         Assert.Equal("Headphones", In<TextBlock>(page, "TargetText").Text);   // slider 1 is selected
 
         vm.Devices.ItemFor("dev-2", AudioFlow.Render)!.Nickname = "Arctis";   // the device dialog's field
@@ -133,7 +134,7 @@ public class CrossPageRefreshTests
         });
         using var _ = rig; using var __ = vm;
         Show(window, "controls");
-        var page = Assert.IsType<ControlsPage>(window.CurrentPage);
+        var page = Assert.IsType<StagePage>(window.CurrentPage);
         Assert.Equal("Headphones", In<TextBlock>(page, "TargetText").Text);   // slider 1 is selected
 
         // Both are renamed in Windows' Sound settings while Volco runs.

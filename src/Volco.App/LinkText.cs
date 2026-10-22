@@ -3,12 +3,13 @@ using Volco.Core.Runtime;
 
 namespace Volco.App;
 
-/// <summary>How a status reads: the dot's and the explanation's colour.</summary>
-public enum LinkTone { Neutral, Good, Warning, Danger }
+/// <summary>How a status reads: the dot's and the explanation's colour. Accent marks a next step
+/// that is no problem (a controller not set up yet).</summary>
+public enum LinkTone { Neutral, Good, Warning, Danger, Accent }
 
 /// <summary>
 /// Every word the UI says about the link (spec: 2026-10-06 link state), so the tray, the sidebar
-/// footer and both pages agree. "Connected" is only ever said of <see cref="LinkState.Connected"/>
+/// card and the Controller page agree. "Connected" is only ever said of <see cref="LinkState.Connected"/>
 /// and "Disconnected" only of the user's Disconnect; the physical layer is described with
 /// "plugged in", "port", "listening" and "answering", on the detail lines.
 /// </summary>
@@ -45,17 +46,13 @@ public static class LinkText
         _ => $"WebSocket · port {c.WebSocket.Port}",
     };
 
-    /// <summary>The footer's short form of the transport: "COM3", "Wi-Fi", "WebSocket".</summary>
+    /// <summary>The tray's short form of the transport: "COM3", "Wi-Fi", "WebSocket".</summary>
     public static string TransportShort(ConnectionConfig c) => c.Type switch
     {
         ConnectionType.Serial => string.IsNullOrEmpty(c.Serial.ComPort) ? "USB" : c.Serial.ComPort,
         ConnectionType.Udp => "Wi-Fi",
         _ => "WebSocket",
     };
-
-    /// <summary>The sidebar footer: "Connected · COM3", or the headline.</summary>
-    public static string Footer(LinkStatus link, ConnectionConfig c)
-        => link.IsConnected ? $"Connected · {TransportShort(c)}" : Headline(link, c);
 
     /// <summary>What a status that isn't Connected means, and what to do; "" when connected.</summary>
     public static string Explanation(LinkStatus link, ConnectionConfig c)
@@ -75,10 +72,10 @@ public static class LinkText
                     : $"Another app is using {port} (a serial monitor?). Close it and Volco carries on by itself."
                 : $"Another app is using port {Port(c)}. Choose another one, here and on the controller.",
             LinkState.NoAnswer => $"Something is plugged in on {port}, but it isn't answering as a Volco controller. " +
-                                  "It may not have Volco's firmware yet: check it on the Hardware page.",
+                                  "It may not have Volco's firmware yet: check it on the Controller page.",
             LinkState.Incompatible => serial
-                ? "The controller's firmware is from another version of Volco. Update it on the Hardware page."
-                : "The controller's firmware is from another version of Volco. Plug it in with USB to update it on the Hardware page.",
+                ? "The controller's firmware is from another version of Volco. Update it on the Controller page."
+                : "The controller's firmware is from another version of Volco. Plug it in with USB to update it on the Controller page.",
             LinkState.Waiting => link.Activity switch
             {
                 LinkActivity.CheckingFirmware or LinkActivity.InstallingFirmware or LinkActivity.UpdatingFirmware

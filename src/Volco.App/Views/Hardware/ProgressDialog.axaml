@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:conv="using:Volco.App.Converters"
+             x:Class="Volco.App.Views.Hardware.ProgressDialog"
+             x:DataType="hw:ProgressDialogViewModel">
+  <UserControl.Resources>
+    <conv:LinkToneToBrushConverter x:Key="ToneToBrush"/>
+  </UserControl.Resources>
+  <!-- A firmware install, update or check, or a save, runs (controller-page spec §5): its name,
+       its step and progress, and the warning; then its result and next step. Close waits for the end. -->
+  <StackPanel Spacing="14" Margin="16,12,16,16">
+    <TextBlock Name="ProgressTitle" Classes="DialogTitle" Text="{Binding Title}"/>
+    <StackPanel Spacing="8" IsVisible="{Binding IsRunning}">
+      <TextBlock Name="ProgressStep" Text="{Binding Step}" TextWrapping="Wrap"/>
+      <ProgressBar Name="ProgressBar" Minimum="0" Maximum="1" Height="4" MinHeight="4" MinWidth="0"
+                   Value="{Binding Progress, TargetNullValue=0, FallbackValue=0}"
+                   IsIndeterminate="{Binding !HasMeasure}"/>
+      <TextBlock Name="ProgressWarning" Classes="Secondary" Text="{Binding Warning}" TextWrapping="Wrap"/>
+    </StackPanel>
+    <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding IsDone}">
+      <Ellipse Width="8" Height="8" Margin="0,5,10,0" VerticalAlignment="Top"
+               Fill="{Binding ResultTone, Converter={StaticResource ToneToBrush}}"/>
+      <TextBlock Name="ProgressResult" Grid.Column="1" Text="{Binding ResultText}" TextWrapping="Wrap"/>
+    </Grid>
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Name="ProgressCloseButton" Content="Close" Command="{Binding CloseCommand}"/>
+      <Button Name="ProgressNextButton" Classes="Primary" Content="{Binding NextLabel}"
+              Command="{Binding NextCommand}" IsVisible="{Binding HasNext}"/>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

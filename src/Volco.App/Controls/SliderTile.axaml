@@ -4,14 +4,14 @@
              xmlns:conv="using:Volco.App.Converters"
              x:Class="Volco.App.Controls.SliderTile"
              x:DataType="vm:SliderItemViewModel"
-             Focusable="True" ToolTip.Tip="{Binding Heading}">
-  <!-- The page fills "Swap with" when the menu opens (ControlsPage.OnTileContextRequested) -->
+             Focusable="True" ToolTip.Tip="{Binding DisplayHeading}">
+  <!-- The page fills "Swap with" when the menu opens (StagePage.OnTileContextRequested) -->
   <UserControl.ContextMenu>
     <ContextMenu>
       <MenuItem Header="Swap with"/>
     </ContextMenu>
   </UserControl.ContextMenu>
-  <!-- One slider on the Controls page's drawing (spec §4.2): the live level, a grip beside the
+  <!-- One slider on the Controller page's drawing (spec §4.2): the live level, a grip beside the
        track, and the name, else what it controls. -->
   <!-- TileFlash adds "flash" when the controller reports the control -->
   <Panel Name="TileRoot" Classes="TileRoot">
@@ -19,18 +19,25 @@
       <StackPanel Spacing="7" Margin="4,8,4,6">
         <Grid ColumnDefinitions="*,Auto,*">
           <!-- A drag swaps what the slider controls, and its name, with another (spec §2.10) -->
-          <Border Name="Grip" Classes="TileGrip" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,4,0"
-                  IsVisible="{Binding !IsMissing}" ToolTip.Tip="Drag onto another slider to swap">
-            <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
-          </Border>
+          <Panel Classes="ControlsLayer">
+            <Border Name="Grip" Classes="TileGrip" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,4,0"
+                    IsVisible="{Binding CanSwap}" ToolTip.Tip="Drag onto another slider to swap">
+              <PathIcon Data="{StaticResource Icon.Grip}" Width="10" Height="10"/>
+            </Border>
+          </Panel>
           <Panel Name="Fader" Grid.Column="1" Classes="Fader" Width="32">
             <Border Classes="Track" Width="12" HorizontalAlignment="Center"/>
+            <!-- One fader: the live level, and during a hardware test the raw level (hardware-page
+                 spec §5.2, §8). It is not a layer, so it never fades (§3.3): the knob moves to the
+                 other level at once. -->
             <Border Name="LevelFill" Classes="LevelFill" Width="6" HorizontalAlignment="Center"
                     VerticalAlignment="Bottom" Margin="0,0,0,3">
               <Border.Height>
                 <MultiBinding Converter="{x:Static conv:FaderConverter.Fill}">
                   <Binding Path="LiveLevel"/>
                   <Binding ElementName="Fader" Path="Bounds.Height"/>
+                  <Binding Path="Wiring.RawLevel" FallbackValue="0"/>
+                  <Binding Path="Wiring.IsTesting" FallbackValue="False"/>
                 </MultiBinding>
               </Border.Height>
             </Border>
@@ -39,33 +46,59 @@
                 <MultiBinding Converter="{x:Static conv:FaderConverter.Knob}">
                   <Binding Path="LiveLevel"/>
                   <Binding ElementName="Fader" Path="Bounds.Height"/>
+                  <Binding Path="Wiring.RawLevel" FallbackValue="0"/>
+                  <Binding Path="Wiring.IsTesting" FallbackValue="False"/>
                 </MultiBinding>
               </Border.Margin>
               <Border Classes="KnobLine"/>
             </Border>
           </Panel>
         </Grid>
-        <!-- The label, after the app's icon on an apps slider; a drag carries this row -->
-        <Grid Name="LabelRow" ColumnDefinitions="Auto,*" HorizontalAlignment="Center">
-          <Image Name="AppIconImage" Width="16" Height="16" Margin="0,1,5,0" VerticalAlignment="Top"
-                 Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
-          <TextBlock Name="Label" Grid.Column="1" Classes="TileLabel" Classes.unset="{Binding IsUnset}" Text="{Binding Label}"
-                     TextWrapping="Wrap"
-                     TextAlignment="Center">
-            <ToolTip.Tip>
-              <MultiBinding StringFormat="{}{0}: {1}">
-                <Binding Path="Heading"/>
-                <Binding Path="Label"/>
-              </MultiBinding>
-            </ToolTip.Tip>
-          </TextBlock>
-        </Grid>
+        <!-- The captions: the label (a new control's "New · Save to controller to set it up"),
+             and during a hardware test the raw value in its place. Both are always measured, so
+             the tile keeps its size when a test starts. Pins stay in the inspector
+             (controller-page spec §4.1). -->
+        <Panel>
+          <!-- The label, after the app's icon on an apps slider; a drag carries this row -->
+          <Grid Name="LabelRow" Classes="ControlsLayer" ColumnDefinitions="Auto,*" HorizontalAlignment="Center">
+            <Image Name="AppIconImage" Width="16" Height="16" Margin="0,1,5,0" VerticalAlignment="Top"
+                   Source="{Binding AppIcon}" IsVisible="{Binding HasAppIcon}"/>
+            <TextBlock Name="Label" Grid.Column="1" Classes="TileLabel" Classes.unset="{Binding IsUnset}" Text="{Binding Label}"
+                       IsVisible="{Binding !IsNew}" TextWrapping="Wrap"
+                       TextAlignment="Center">
+              <ToolTip.Tip>
+                <MultiBinding StringFormat="{}{0}: {1}">
+                  <Binding Path="DisplayHeading"/>
+                  <Binding Path="Label"/>
+                </MultiBinding>
+              </ToolTip.Tip>
+            </TextBlock>
+            <!-- A control the draft adds: in the label's place, in the same row -->
+            <TextBlock Name="NewText" Grid.ColumnSpan="2" Classes="TileNew" Text="New · Save to controller to set it up"
+                       IsVisible="{Binding IsNew}"/>
+          </Grid>
+          <StackPanel Name="WiringRow" Classes="WiringLayer WiringCaptions"
+                      IsVisible="{Binding Wiring, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Name="WiringTest" Classes="TestValue" Text="{Binding Wiring.TestText}"
+                       IsVisible="{Binding Wiring.IsTesting, FallbackValue=False}"/>
+          </StackPanel>
+        </Panel>
         <TextBlock Name="MissingText" Classes="TileMissing" Text="Not on this controller"
                    IsVisible="{Binding IsMissing}"/>
       </StackPanel>
     </Border>
     <Rectangle Classes="MissingOutline" IsVisible="{Binding IsMissing}"/>
     <Rectangle Classes="DropOutline"/>
+    <Rectangle Classes="NewOutline" IsVisible="{Binding IsNew}"/>
+    <!-- A new control's problem (its missing pin) shows only in the mark: the dashed outline stays -->
+    <Panel IsVisible="{Binding !IsNew}">
+      <Rectangle Classes="ProblemOutline" IsVisible="{Binding Wiring.HasProblem, FallbackValue=False}"/>
+    </Panel>
+    <!-- A wiring problem (controller-page spec §4.1): the danger outline and this mark, with the problem as its tooltip -->
+    <Border Name="ProblemMark" Classes="ProblemMark" IsVisible="{Binding Wiring.HasProblem, FallbackValue=False}"
+            ToolTip.Tip="{Binding Wiring.Problem, FallbackValue={x:Null}}">
+      <PathIcon Data="{StaticResource Icon.Status.Warning}"/>
+    </Border>
     <Border Classes="TileActive"/>
   </Panel>
 </UserControl>

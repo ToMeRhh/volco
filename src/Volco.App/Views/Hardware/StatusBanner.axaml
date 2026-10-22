@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:conv="using:Volco.App.Converters"
+             x:Class="Volco.App.Views.Hardware.StatusBanner"
+             x:DataType="hw:ControllerStatusViewModel"
+             IsVisible="{Binding ShowsBanner}">
+  <UserControl.Resources>
+    <conv:LinkToneToBrushConverter x:Key="ToneToBrush"/>
+  </UserControl.Resources>
+  <!-- The controller's status when it needs the user (controller-page spec §5): across the top of
+       the content area on every page, the state's dot, its status and detail on one line (the
+       whole line as the tooltip when it is cut off), and its one button. It stays until the state
+       clears. -->
+  <Border Name="Banner" Classes="StatusBanner">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <Ellipse Name="BannerDot" Width="8" Height="8" Margin="0,0,10,0" VerticalAlignment="Center"
+               Fill="{Binding State.Tone, Converter={StaticResource ToneToBrush}}"/>
+      <TextBlock Name="BannerText" Grid.Column="1" VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" MaxLines="1" TextWrapping="NoWrap"
+                 Text="{Binding FullText}" ToolTip.Tip="{Binding FullText}"/>
+      <Button Name="BannerAction" Grid.Column="2" Classes="Primary" Margin="12,0,0,0" VerticalAlignment="Center"
+              Content="{Binding ActionLabel}" Command="{Binding ActionCommand}" IsVisible="{Binding HasAction}"/>
+    </Grid>
+  </Border>
+</UserControl>

@@ -17,6 +17,12 @@ public class TestApp : Application
     public override void Initialize()
     {
         RequestedThemeVariant = ThemeVariant.Dark;
+        // Headless tests don't run animations to their end, so the settings window's crossfades
+        // swap at once (as with Windows animations off); a test of a crossfade turns them on.
+        Volco.App.Views.Stage.StageTransitions.Enabled = false;
+        // Likewise a confirmed save's progress dialog closes at once, so a test can go on clicking
+        // the page; a test of the "Saved." hold sets its own.
+        Volco.App.ViewModels.Hardware.ProgressDialogViewModel.SavedHold = TimeSpan.Zero;
         Resources["ScreenIconToGeometry"] = new Volco.App.Converters.ScreenIconToGeometryConverter();
         Styles.Add(new FluentTheme());
         Styles.Add(new StyleInclude(new Uri("avares://Volco.App/"))

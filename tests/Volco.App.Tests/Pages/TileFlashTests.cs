@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.Controls;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Tests.Audio;
 using Xunit;
@@ -44,7 +45,7 @@ public class TileFlashTests
         var speakers = new AudioDevice("dev-1", "Speakers", AudioFlow.Render, true);
         using var rig = new TestRig(new FakeAudioEngine { Devices = { speakers }, DefaultRender = speakers });
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Settle(window);

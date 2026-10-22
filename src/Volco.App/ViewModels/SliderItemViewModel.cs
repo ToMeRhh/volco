@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.App.ViewModels.Hardware;
 using Volco.Core.Audio;
 using Volco.Core.Config;
 using Volco.Core.Programs;
@@ -8,7 +9,7 @@ using Volco.Core.Programs;
 namespace Volco.App.ViewModels;
 
 /// <summary>
-/// One slider of the Controls page. Its position in <see cref="SlidersViewModel.Items"/>
+/// One slider of the Controller page. Its position in <see cref="SlidersViewModel.Items"/>
 /// (= <see cref="Index"/>) is the hardware input number. Edits write straight through to the
 /// wrapped <see cref="SliderConfig"/> and request a save.
 /// </summary>
@@ -27,13 +28,23 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     /// <summary>The hardware input number (= list position). Relabelled live while dragging.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Heading))]
+    [NotifyPropertyChangedFor(nameof(Heading), nameof(DisplayHeading))]
     private int _index;
 
     /// <summary>The slider's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Slider {Index + 1}";
 
-    /// <summary>The Controls page's selected tile.</summary>
+    /// <summary>"Slider N" at its place in the controller draft while the draft draws it (set by
+    /// the Hardware view model; an unsaved removal moves the later ones up), else null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayHeading))]
+    private string? _draftHeading;
+
+    /// <summary>The name the Controller page shows (the inspector header, the tile's tooltip):
+    /// the draft's number while the draft draws it (hardware-page spec §6.5), else <see cref="Heading"/>.</summary>
+    public string DisplayHeading => DraftHeading ?? Heading;
+
+    /// <summary>The Controller page's selected tile.</summary>
     [ObservableProperty]
     private bool _isSelected;
 
@@ -76,7 +87,15 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
 
     /// <summary>The config has this slider but the controller's last Hello doesn't (spec §4.1).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSwap))]
     private bool _isMissing;
+
+    /// <summary>A control only the controller draft has (added with + Add, made by
+    /// <c>CreateDetached</c>): its tile says to save first (controller-page spec §4.1).</summary>
+    public bool IsNew { get; init; }
+
+    /// <summary>The tile's grip is there: the slider is in Volco's settings and on the controller.</summary>
+    public bool CanSwap => !IsMissing && !IsNew;
 
     // ── What it controls ──────────────────────────────────────────────────────
 
@@ -176,6 +195,10 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     }
 
     // ── View state ────────────────────────────────────────────────────────────
+
+    /// <summary>The tile's captions on Hardware; null until the Controller page fills them.</summary>
+    [ObservableProperty]
+    private TileWiring? _wiring;
 
     /// <summary>Live volume 0..1 from the controller; display only, never saved.</summary>
     [ObservableProperty]

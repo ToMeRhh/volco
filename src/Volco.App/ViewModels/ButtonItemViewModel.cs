@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.App.ViewModels.Hardware;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -14,7 +15,7 @@ namespace Volco.App.ViewModels;
 public sealed record GestureLine(PressType Gesture, string Label, string IconKey);
 
 /// <summary>
-/// One button of the Controls page. Its position (= <see cref="Index"/>) is the hardware input
+/// One button of the Controller page. Its position (= <see cref="Index"/>) is the hardware input
 /// number. Timing is shared by every mode; the action rows and the light and screen previews show
 /// the mode being edited (when it is live, exactly what the controller shows).
 /// </summary>
@@ -26,7 +27,7 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     internal ButtonConfig Config { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Heading))]
+    [NotifyPropertyChangedFor(nameof(Heading), nameof(DisplayHeading))]
     private int _index;
 
     // Only what depends on the input number changes here.
@@ -44,7 +45,21 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     /// <summary>The button's name everywhere it is shown (the inspector, toasts), numbered from 1.</summary>
     public string Heading => $"Button {Index + 1}";
 
-    /// <summary>The Controls page's selected tile.</summary>
+    /// <summary>"Button N" at its place in the controller draft while the draft draws it (set by
+    /// the Hardware view model; an unsaved removal moves the later ones up), else null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayHeading))]
+    private string? _draftHeading;
+
+    /// <summary>The name the Controller page shows (the inspector header, the tile's tooltip):
+    /// the draft's number while the draft draws it (hardware-page spec §6.5), else <see cref="Heading"/>.</summary>
+    public string DisplayHeading => DraftHeading ?? Heading;
+
+    /// <summary>The tile's captions on Hardware; null until the Controller page fills them.</summary>
+    [ObservableProperty]
+    private TileWiring? _wiring;
+
+    /// <summary>The Controller page's selected tile.</summary>
     [ObservableProperty]
     private bool _isSelected;
 
@@ -85,11 +100,24 @@ public sealed partial class ButtonItemViewModel : ObservableObject
 
     /// <summary>The edited mode has an action, so Clear is offered.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanClear))]
     private bool _hasEditedActions;
+
+    /// <summary>Clear is enabled: the edited mode has an action, and the button is in Volco's
+    /// settings (a new one's config is thrown away until the controller has it).</summary>
+    public bool CanClear => HasEditedActions && !IsNew;
 
     /// <summary>The config has this button but the controller's last Hello doesn't (spec §4.1).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSwap))]
     private bool _isMissing;
+
+    /// <summary>A control only the controller draft has (added with + Add, made by
+    /// <c>CreateDetached</c>): its tile says to save first (controller-page spec §4.1).</summary>
+    public bool IsNew { get; init; }
+
+    /// <summary>The tile's grip is there: the button is in Volco's settings and on the controller.</summary>
+    public bool CanSwap => !IsMissing && !IsNew;
 
     [ObservableProperty]
     private string _lightDescription = "";
@@ -113,13 +141,30 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         _ => "No light",
     };
 
-    /// <summary>The inspector's Light or Screen row; a button without a light has none.</summary>
-    public bool HasLightRow => Indicator is IndicatorKind.Led or IndicatorKind.LedPair or IndicatorKind.Screen;
+    /// <summary>The inspector's Light or Screen row; a button without a light has none, unless the
+    /// controller draft gives it one.</summary>
+    public bool HasLightRow => Indicator is IndicatorKind.Led or IndicatorKind.LedPair or IndicatorKind.Screen || IsLightChanged;
 
     public string LightRowLabel => IsScreen ? "Screen" : "Light";
 
-    /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited mode.</summary>
-    public string LightRowText => MainGesture is { } gesture ? $"Follows {GestureName(gesture)}" : "Off";
+    /// <summary>"Follows Press" (the main action's gesture), or "Off" with no action in the edited
+    /// mode; while the draft changes its light, "Follows the new light after saving", or "No light
+    /// after saving" when the draft takes the light away.</summary>
+    public string LightRowText => IsLightChanged ? (IsLightRemoved ? "No light after saving" : "Follows the new light after saving")
+        : MainGesture is { } gesture ? $"Follows {GestureName(gesture)}" : "Off";
+
+    /// <summary>The draft takes this button's light away (the Hello has one, the draft none). Set
+    /// by the Hardware view model with <see cref="IsLightChanged"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LightRowText))]
+    private bool _isLightRemoved;
+
+    /// <summary>The controller draft gives this button another kind of light than the controller
+    /// has (its Hello): until it is saved, the light row says so (controller-page spec §4.3). Set by
+    /// the Hardware view model.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLightRow), nameof(LightRowText))]
+    private bool _isLightChanged;
 
     public static string GestureName(PressType gesture) => gesture switch
     {

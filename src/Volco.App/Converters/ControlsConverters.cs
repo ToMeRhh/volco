@@ -8,7 +8,7 @@ using Volco.Core.Input;
 
 namespace Volco.App.Converters;
 
-/// <summary>Icons on the Controls page, from the vector art in Styles/Icons.axaml.</summary>
+/// <summary>Icons on the Controller page, from the vector art in Styles/Icons.axaml.</summary>
 public static class IconConverters
 {
     /// <summary>A resource key ("Icon.Speaker") → its geometry.</summary>
@@ -57,8 +57,10 @@ public static class LayoutConverters
     public static readonly IValueConverter IsCompact = new FuncValueConverter<double, bool>(w => w > 0 && w < CompactBelow);
 }
 
-/// <summary>A slider tile's fader: values are the live level (0..1) and the track's height.
-/// The parameter is what the moving part leaves free: the knob's height, or the fill's inset.</summary>
+/// <summary>A slider tile's fader: values are the live level (0..1) and the track's height, then
+/// optionally the raw level (0..1) and whether a hardware test runs: during a test the fader shows
+/// the raw level (hardware-page spec §5.2, §8). The parameter is what the moving part leaves free: the knob's height,
+/// or the fill's inset.</summary>
 public sealed class FaderConverter : IMultiValueConverter
 {
     /// <summary>The knob's bottom margin.</summary>
@@ -78,7 +80,9 @@ public sealed class FaderConverter : IMultiValueConverter
 
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        var level = values.Count > 0 && values[0] is double l ? Math.Clamp(l, 0, 1) : 0;
+        var raw = values.Count > 3 && values[3] is true;
+        var source = raw ? values[2] : values.Count > 0 ? values[0] : null;
+        var level = source is double l ? Math.Clamp(l, 0, 1) : 0;
         var height = values.Count > 1 && values[1] is double h ? h : 0;
         var travel = Math.Max(0, height - _reserve) * level;
         return _asMargin ? new Thickness(0, 0, 0, travel) : travel;

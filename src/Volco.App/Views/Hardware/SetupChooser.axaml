@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:views="using:Volco.App.Views.Hardware"
+             x:Class="Volco.App.Views.Hardware.SetupChooser"
+             x:DataType="hw:SetupChooserViewModel">
+  <!-- The setup chooser (hardware-page spec §7.1), in the case's place: the question, then a card
+       for Volco's saved copy (with a mirror), each preset and Start empty, each with a small picture of its controls. Volco's saved copy is outlined, Start
+       empty is dashed. -->
+  <StackPanel Spacing="16" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <StackPanel Spacing="4" HorizontalAlignment="Center">
+      <TextBlock Name="ChooserTitle" Classes="Subtitle" HorizontalAlignment="Center" Text="{Binding Title}"/>
+      <TextBlock Name="ChooserSubtitle" Classes="Secondary" HorizontalAlignment="Center" Text="{Binding Subtitle}"/>
+    </StackPanel>
+    <ItemsControl Name="ChooserCards" ItemsSource="{Binding Cards}" HorizontalAlignment="Center">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <WrapPanel HorizontalAlignment="Center"/>
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="hw:ChooserCard">
+          <Button Name="ChooserCard" Classes="ChooserCard" Classes.primary="{Binding IsPrimary}"
+                  Classes.dashed="{Binding IsDashed}"
+                  Command="{Binding PickCommand}" IsEnabled="{Binding IsEnabled}"
+                  ToolTip.Tip="{Binding ToolTip}" ToolTip.ShowOnDisabled="True">
+            <Panel>
+              <Rectangle Classes="ChooserDash" IsVisible="{Binding IsDashed}"/>
+              <StackPanel Spacing="8" Margin="14,12">
+                <Panel Height="40">
+                  <views:MiniDrawing Name="CardPicture" Config="{Binding Picture}" HorizontalAlignment="Left"
+                                     VerticalAlignment="Center" Stroke="{DynamicResource TextSecondaryBrush}"/>
+                </Panel>
+                <TextBlock Name="CardTitle" FontWeight="SemiBold" Text="{Binding Title}"/>
+                <TextBlock Name="CardSummary" Classes="Secondary" Text="{Binding Summary}" IsVisible="{Binding HasSummary}"/>
+                <TextBlock Name="CardDescription" Classes="Secondary" TextWrapping="Wrap"
+                           Text="{Binding Description}" IsVisible="{Binding HasDescription}"/>
+              </StackPanel>
+            </Panel>
+          </Button>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <!-- After Start over: back to the drawing, the draft unchanged (Escape does the same). -->
+    <Button Name="ChooserBack" Classes="Ghost" HorizontalAlignment="Center" Content="Back"
+            Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}"/>
+  </StackPanel>
+</UserControl>

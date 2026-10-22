@@ -263,7 +263,7 @@
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
-  <!-- ── Controls page: the drawing (spec §4) ────────────────────────────
+  <!-- ── Controller page: the drawing (spec §4) ────────────────────────────
        The case holds the slider grid and the buttons' frame. Each tile is a SliderTile or a
        ButtonTile: transparent until hovered, the accent outline when selected, dashed when the
        controller doesn't have it, and the activity flash when the controller reports it.
@@ -599,6 +599,10 @@
   <Style Selector="Border.Case.dense TextBlock.MainAction, Border.Case.dense Panel.SecondaryRow">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
+  <!-- A new button (controller-page spec §4.1): its "New · Save…" text in place of the actions -->
+  <Style Selector="Grid.new TextBlock.MainAction, Grid.new StackPanel.ActionIcons, Grid.new Panel.SecondaryRow">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
   <Style Selector="Border.GestureIcon">
     <Setter Property="Width" Value="18"/>
     <Setter Property="Height" Value="18"/>
@@ -620,8 +624,157 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
   </Style>
 
-  <!-- ── Controls page: the inspector (spec §5) ──────────────────────────
-       A fixed column: a header, then one-line rows of 44 px, and the collapsed sections. -->
+  <!-- ── The tiles' two layers (controller-page spec §4.1, hardware-page spec §8) ─────────
+       Each tile, the mode frame and its tabs hold a ControlsLayer and a WiringLayer in the same
+       cells, both always measured. The drawing shows the ControlsLayer; while a hardware test runs
+       (the stage puts "testing" on Border.Case) the WiringLayer with the test state shows instead,
+       so no tile moves (Views/Stage/StageTransitions crossfades it). -->
+  <Style Selector=":is(Control).WiringLayer">
+    <Setter Property="Opacity" Value="0"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <!-- Disabled too, so the faded mode tabs and buttons are out of keyboard reach (layout is kept) -->
+  <Style Selector="Border.Case.testing :is(Control).ControlsLayer">
+    <Setter Property="Opacity" Value="0"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+    <Setter Property="IsEnabled" Value="False"/>
+  </Style>
+  <Style Selector="Border.Case.testing :is(Control).WiringLayer">
+    <Setter Property="Opacity" Value="1"/>
+    <Setter Property="IsHitTestVisible" Value="True"/>
+  </Style>
+  <!-- The pill-shaped chip in the title row (Controller settings) -->
+  <Style Selector="Button.Chip">
+    <Setter Property="Margin" Value="0,0,8,0"/>
+    <Setter Property="Padding" Value="10,3"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="CornerRadius" Value="{StaticResource PillCornerRadius}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style Selector="Button.Chip.selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="1.5"/>
+  </Style>
+  <!-- Hardware inspector rows (hardware-page spec §6): a 44 px Grid.InspectorRow, the label left
+       and the control right; a pin field's problem and fix go in the RowFooter under it -->
+  <Style Selector="Grid.InspectorRow :is(Control).RowControl">
+    <Setter Property="Width" Value="160"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Grid.InspectorRow Border.SegmentTrack">
+    <Setter Property="Padding" Value="2"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Grid.InspectorRow RadioButton.Segment /template/ Border#PART_Segment">
+    <Setter Property="Padding" Value="7,3"/>
+  </Style>
+  <Style Selector="StackPanel.RowFooter">
+    <Setter Property="Margin" Value="12,0,8,10"/>
+    <Setter Property="Spacing" Value="6"/>
+  </Style>
+  <Style Selector="StackPanel.ModeFrameContent">
+    <!-- The tint's border (1.5) plus the frame's padding (8,0,8,8) -->
+    <Setter Property="Margin" Value="9.5,1.5,9.5,9.5"/>
+  </Style>
+  <Style Selector="Grid.StageTitleRow">
+    <Setter Property="Height" Value="32"/>
+  </Style>
+  <!-- Hardware's title-row buttons fit the row's 32 px -->
+  <Style Selector="Grid.StageTitleRow Button.TitleAction">
+    <Setter Property="Padding" Value="10,4"/>
+    <Setter Property="Margin" Value="0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="StackPanel.WiringCaptions">
+    <Setter Property="Spacing" Value="3"/>
+  </Style>
+  <Style Selector="controls|ButtonTile StackPanel.WiringCaptions">
+    <Setter Property="Margin" Value="0,6,0,0"/>
+  </Style>
+  <!-- A problem with the draft's control: the danger outline and the warning mark at the top
+       right, whose tooltip is the problem (controller-page spec §4.1) -->
+  <Style Selector="Rectangle.ProblemOutline">
+    <Setter Property="Stroke" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="RadiusX" Value="11"/>
+    <Setter Property="RadiusY" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <Style Selector="Border.ProblemMark">
+    <Setter Property="HorizontalAlignment" Value="Right"/>
+    <Setter Property="VerticalAlignment" Value="Top"/>
+    <Setter Property="Margin" Value="0,2,2,0"/>
+    <Setter Property="Padding" Value="3"/>
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="Border.ProblemMark PathIcon">
+    <Setter Property="Width" Value="12"/>
+    <Setter Property="Height" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+  </Style>
+  <!-- A control the draft adds (controller-page spec §4.1): dashed in the accent colour until
+       the controller has it -->
+  <Style Selector="Rectangle.NewOutline">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="StrokeDashArray" Value="4,3"/>
+    <Setter Property="RadiusX" Value="11"/>
+    <Setter Property="RadiusY" Value="11"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+  <!-- Where a button's main action starts -->
+  <Style Selector="controls|ButtonTile TextBlock.TileNew">
+    <Setter Property="Margin" Value="0,6,0,0"/>
+  </Style>
+  <Style Selector="TextBlock.TileNew">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="TextAlignment" Value="Center"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+
+  <!-- The hardware test on the drawing (hardware-page spec §8): the case's accent outline (the
+       padding gives back the thicker border, so no tile moves), the band under it, a held
+       button's cap, the clickable test light and the test value in the label's place -->
+  <Style Selector="Border.Case.testing">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="Padding" Value="13"/>
+  </Style>
+  <Style Selector="Border.TestBand">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="12,7"/>
+  </Style>
+  <Style Selector="Border.Case.testing Ellipse.Cap.pressed">
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Button.TestLight">
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+  <Style Selector="Button.TestLight:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="TextBlock.TestValue">
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="Margin" Value="0,1,0,2"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
+  <!-- ── Controller page: the inspector (spec §5) ──────────────────────────
+       A fixed column: a header, then one-line rows of 44 px, in two fixed sections. -->
   <Style Selector="Border.Inspector">
     <Setter Property="Width" Value="380"/>
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
@@ -656,6 +809,31 @@
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <!-- The combined inspector's two fixed sections (controller-page spec §4.3): Controls or
+       Actions, then Hardware; each a fixed one-line header (36 px, HardwareSection.HeaderHeight)
+       over its own scrolling body -->
+  <Style Selector="StackPanel.InspectorGroupBody, StackPanel.WiringBody">
+    <Setter Property="Spacing" Value="12"/>
+  </Style>
+  <Style Selector="Border.GroupHeader">
+    <Setter Property="Height" Value="36"/>
+    <Setter Property="Padding" Value="16,0"/>
+  </Style>
+  <Style Selector="Border.GroupHeader.Divided">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,1,0,0"/>
+  </Style>
+  <Style Selector="Panel.GroupBody">
+    <Setter Property="Margin" Value="16,2,16,16"/>
+  </Style>
+  <Style Selector="PathIcon.GroupProblem">
+    <Setter Property="Width" Value="12"/>
+    <Setter Property="Height" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+  </Style>
+  <Style Selector="Border.SaveFirst">
+    <Setter Property="Padding" Value="12"/>
   </Style>
   <Style Selector="Border.ModePill">
     <Setter Property="Background" Value="{DynamicResource ModeEdge}"/>
@@ -726,6 +904,9 @@
     <Setter Property="Width" Value="10"/>
     <Setter Property="Height" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="Button.InspectorRow.open PathIcon.RowChevron">
+    <Setter Property="RenderTransform" Value="rotate(90deg)"/>
   </Style>
   <Style Selector="Border.UsbTag">
     <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
@@ -840,35 +1021,69 @@
   <Style Selector=":is(Window).compact DockPanel.NavPane">
     <Setter Property="Width" Value="36"/>
   </Style>
-  <Style Selector=":is(Window).compact TextBlock.NavLabel, :is(Window).compact TextBlock.Brand, :is(Window).compact StackPanel.AboutFooter, :is(Window).compact TextBlock.FooterLabel">
+  <Style Selector=":is(Window).compact TextBlock.NavLabel, :is(Window).compact TextBlock.Brand, :is(Window).compact StackPanel.AboutFooter">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
   <Style Selector=":is(Window).compact ListBox.Nav ListBoxItem">
     <Setter Property="Padding" Value="9,9"/>
   </Style>
-  <Style Selector=":is(Window).compact StackPanel.ConnectionFooter">
-    <Setter Property="Margin" Value="4,8"/>
-  </Style>
   <!-- The sidebar lies over the page, and its room in the layout (SidebarSpacer) keeps the page
        beside it. In the compact layout, the mouse on the sidebar opens it to full width, over
-       the page; the icons keep their place. These come after the compact styles above, so they win. -->
+       the page; the icons keep their place, and it stays open while the status line's menu is ("pinned").
+       These come after the compact styles above, so they win. -->
   <Style Selector="Grid.SidebarHost">
     <Setter Property="Width" Value="168"/>
   </Style>
   <Style Selector=":is(Window).compact Grid.SidebarHost">
     <Setter Property="Width" Value="56"/>
   </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover, :is(Window).compact Grid.SidebarHost.pinned">
     <Setter Property="Width" Value="168"/>
   </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Border.Sidebar">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Border.Sidebar, :is(Window).compact Grid.SidebarHost.pinned Border.Sidebar">
     <Setter Property="BoxShadow" Value="4 0 16 0 #33000000"/>
   </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover DockPanel.NavPane">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover DockPanel.NavPane, :is(Window).compact Grid.SidebarHost.pinned DockPanel.NavPane">
     <Setter Property="Width" Value="148"/>
   </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.FooterLabel">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost.pinned TextBlock.NavLabel, :is(Window).compact Grid.SidebarHost:pointerover TextBlock.Brand, :is(Window).compact Grid.SidebarHost.pinned TextBlock.Brand, :is(Window).compact Grid.SidebarHost:pointerover StackPanel.AboutFooter, :is(Window).compact Grid.SidebarHost.pinned StackPanel.AboutFooter">
     <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <!-- The controller's status line in the sidebar (controller-page spec §5): a quiet row, its dot
+       under the nav icons; only the dot in the compact layout, the whole line while the sidebar
+       opens over the page. -->
+  <Style Selector="Button.SidebarStatus">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="17,7,8,7"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/>
+  </Style>
+  <Style Selector="Button.SidebarStatus:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  </Style>
+  <Style Selector=":is(Window).compact Button.SidebarStatus">
+    <Setter Property="Padding" Value="0,7"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector=":is(Window).compact TextBlock.SidebarStatusText">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Button.SidebarStatus, :is(Window).compact Grid.SidebarHost.pinned Button.SidebarStatus">
+    <Setter Property="Padding" Value="17,7,8,7"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.SidebarStatusText, :is(Window).compact Grid.SidebarHost.pinned TextBlock.SidebarStatusText">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <!-- The status banner across the top of the content area, while the controller needs the user -->
+  <Style Selector="Border.StatusBanner">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    <Setter Property="Padding" Value="20,8"/>
+    <Setter Property="MinHeight" Value="48"/>
   </Style>
 
   <!-- ── Settings window chrome ────────────────────────────────────────── -->
@@ -894,7 +1109,42 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
   </Style>
 
-  <!-- ── Controls page dialogs (spec §6) ───────────────────────────────── -->
+  <!-- The setup chooser's cards (hardware-page spec §7.1): Volco's saved copy outlined in the
+       accent, Start empty dashed -->
+  <Style Selector="Button.ChooserCard">
+    <Setter Property="Width" Value="200"/>
+    <Setter Property="Margin" Value="6"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Top"/>
+  </Style>
+  <Style Selector="Button.ChooserCard.primary">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="2"/>
+  </Style>
+  <Style Selector="Button.ChooserCard.dashed">
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="Button.ChooserCard:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
+  </Style>
+  <Style Selector="Rectangle.ChooserDash">
+    <Setter Property="Stroke" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.5"/>
+    <Setter Property="StrokeDashArray" Value="4,3"/>
+    <Setter Property="RadiusX" Value="12"/>
+    <Setter Property="RadiusY" Value="12"/>
+    <Setter Property="Margin" Value="-1"/>
+    <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
+
+  <!-- ── Controller page dialogs (spec §6) ───────────────────────────────── -->
   <!-- Up to 640 × 560, smaller in a small window, centred over the page. -->
   <Style Selector="Border.DialogCard">
     <Setter Property="Padding" Value="0"/>

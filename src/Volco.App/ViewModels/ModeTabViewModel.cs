@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>One mode tab on the Controls page.</summary>
+/// <summary>One mode tab on the Controller page.</summary>
 public sealed partial class ModeTabViewModel : ObservableObject
 {
     private readonly Action<ModeTabViewModel> _select;

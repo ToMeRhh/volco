@@ -8,11 +8,16 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Volco.App.Controls;
 using Volco.App.ViewModels;
+using Volco.App.ViewModels.Hardware;
+using Volco.App.Views;
 using Volco.App.Views.Dialogs;
+using Volco.App.Views.Hardware;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Controller;
 using Volco.Core.Media;
 using Volco.Core.Runtime;
 using Volco.Core.Tests.Audio;
@@ -24,7 +29,8 @@ namespace Volco.App.Tests;
 /// <summary>
 /// Every setting the earlier pages edited (the UX spec's §1 inventory) is still
 /// editable through the redesigned UI (sliders and buttons through the Controls page, its
-/// inspector and dialogs), and what the UI writes survives a save and a fresh load.
+/// inspector and dialogs; the controller's config and the connection through the Hardware page),
+/// and what the UI writes survives a save and a fresh load.
 /// Each test edits through the controls, saves, reloads config.json with a new ConfigManager and
 /// checks the property.
 /// </summary>
@@ -59,30 +65,215 @@ public class SettingsCoverageTests
         return reloaded.Config;
     }
 
+    // ── The Hardware page ─────────────────────────────────────────────────────
+
+    private static readonly byte[] DiyBlob = ControllerConfigCodec.Encode(ControllerPresets.ApplyTo(new Volco.Core.Controller.Proto.ControllerConfig(),
+        ControllerPresets.All.Single(p => p.Id == ControllerPresets.DiyReferenceId)));
+
+    /// <summary>The stage on Hardware over the DIY setup, in sync with the controller.</summary>
+    /// <remarks>The page is the whole settings window, since the Connection dialog opens over it.</remarks>
+    private static (Control Page, HardwareInspectorHost Host, Window Window) HardwareStage(TestRig rig, SettingsViewModel vm)
+    {
+        var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 900, AllowClose = true };
+        window.Show();
+        window.ShowPage("controller");
+        var host = (HardwareInspectorHost)((StagePage)window.CurrentPage!).HardwareSidePanel!;
+        rig.Connection!.SetStatus(TransportStatus.Open);
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
+            ControllerConfigCodec.Crc32(DiyBlob), 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
+        Until(window, () => vm.Controller.CanEdit);
+        return (window, host, window);
+    }
+
+    private static void Until(Window window, Func<bool> condition, int ms = 5000)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            Settle(window);
+            if (condition()) return;
+            if (sw.ElapsedMilliseconds > ms) throw new TimeoutException("condition not met");
+            Thread.Sleep(5);
+        }
+    }
+
+    /// <summary>Opens a pin field and clicks GPIO <paramref name="pin"/>'s row.</summary>
+    private static void PickPin(Window window, PinField field, uint pin)
+    {
+        Click(Named<Button>(field, "ValueButton"));
+        Settle(window);
+        Click(Named<Popup>(field, "ListPopup").Child!.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "PinRowButton" && ((PinRowViewModel)b.DataContext!).Pin == pin));
+        Settle(window);
+    }
+
+    /// <summary>Opens a collapsed section by its header.</summary>
+    private static void Open(Window window, Control root, string header, string body)
+    {
+        if (!Named<StackPanel>(root, body).IsVisible) Click(Named<Button>(root, header));
+        Settle(window);
+    }
+
+    private static void OtherChoice(ComboBox box) => box.SelectedIndex = box.SelectedIndex == 0 ? 1 : 0;
+
     [AvaloniaFact]
     public void Connection_TypePortUdpWebSocket()
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControllerPage(vm.Controller);   // the Controller page's Connection section
-        Host(page);
+        rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
+        var (page, _, window) = HardwareStage(rig, vm);
+        vm.Hardware.OpenConnection(false);                                     // the card's status line
+        Settle(window);
 
         vm.Connection.ComPort = "COM9";                                        // Connection.Serial.ComPort (no real ports on CI)
-        Named<RadioButton>(page, "UdpOption").IsChecked = true;                // Connection.Type
+        Named<RadioButton>(page, "WifiOption").IsChecked = true;
+        Settle(window);
         Named<NumericUpDown>(page, "UdpPortBox").Value = 23456;                // Connection.Udp.ListenPort
-        Named<RadioButton>(page, "WebSocketOption").IsChecked = true;
+        Click(Named<Button>(page, "UseButton"));                               // Connection.Type
+        Settle(window);
+        Assert.Equal(ConnectionType.Udp, rig.Config.Config.Connection.Type);
+        Named<RadioButton>(page, "SimulatorOption").IsChecked = true;
+        Settle(window);
         Named<NumericUpDown>(page, "WebSocketPortBox").Value = 9876;           // Connection.WebSocket.Port
+        Click(Named<Button>(page, "UseButton"));
+        Settle(window);
 
         var c = SaveAndReload(rig).Connection;
         Assert.Equal(ConnectionType.WebSocket, c.Type);
         Assert.Equal("COM9", c.Serial.ComPort);
         Assert.Equal(23456, c.Udp.ListenPort);
         Assert.Equal(9876, c.WebSocket.Port);
+        window.Close();
+    }
+
+    /// <summary>Every field of the controller's config is edited through the Hardware page (the pin
+    /// fields, the button and bus inspectors, Controller settings and the Connection dialog's Wi-Fi
+    /// tab), saved to the controller, and survives in Volco's copy (controllerConfigBlob) after a reload.</summary>
+    [AvaloniaFact]
+    public void Controller_EverySettingSurvivesSaveAndReload()
+    {
+        using var rig = new TestRig(Engine());
+        rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var (page, host, window) = HardwareStage(rig, vm);
+        var diy = ControllerConfigCodec.Decode(DiyBlob);
+
+        vm.Controls.Select(vm.Sliders.Items[0]);
+        Settle(window);
+        PickPin(window, Named<PinField>(page, "PinField"), 39);                // sliders[0].pin
+
+        vm.Controls.Select(vm.Buttons.Items[0]);
+        Settle(window);
+        PickPin(window, Named<PinField>(page, "PinField"), 15);                // buttons[0].pin
+        PickPin(window, Named<PinField>(page, "LightPinField"), 22);           // buttons[0].led.pin
+        Named<RadioButton>(page, "LitHigh").IsChecked = true;                  // buttons[0].led.active_low
+        Settle(window);
+
+        vm.Controls.Select(vm.Buttons.Items[2]);
+        Settle(window);
+        PickPin(window, Named<PinField>(page, "LightAPinField"), 23);          // buttons[2].led_pair.pin_a
+        PickPin(window, Named<PinField>(page, "LightBPinField"), 16);          // buttons[2].led_pair.pin_b
+        Named<RadioButton>(page, "LitLow").IsChecked = true;                   // buttons[2].led_pair.active_low
+        Settle(window);
+
+        vm.Controls.Select(vm.Buttons.Items[1]);
+        Settle(window);
+        Named<RadioButton>(page, "LightScreen").IsChecked = true;              // buttons[1].screen
+        Settle(window);
+        Named<ComboBox>(page, "BusBox").SelectedIndex = 1;                     // buttons[1].screen.bus
+        Named<ComboBox>(page, "AddressBox").SelectedIndex = 1;                 // buttons[1].screen.address
+        Settle(window);
+
+        vm.Hardware.ShowBus(1);                                                // the button's bus link
+        Settle(window);
+        PickPin(window, Named<PinField>(host, "SdaField"), 17);                // i2c1.sda
+        PickPin(window, Named<PinField>(host, "SclField"), 2);                 // i2c1.scl
+        OtherChoice(Named<ComboBox>(host, "ClockBox"));                        // i2c1.clock_hz
+        Settle(window);
+
+        Click(Named<Button>(page, "ControllerSettingsChip"));
+        Settle(window);
+        Open(window, host, "ScreensHeader", "ScreensBody");
+        Named<Slider>(host, "BrightnessSlider").Value = 50;                    // screens.brightness
+        OtherChoice(Named<ComboBox>(host, "DimAfterBox"));                     // screens.dim_enabled / dim_after_s
+        OtherChoice(Named<ComboBox>(host, "DimmedToBox"));                     // screens.dim_brightness
+        OtherChoice(Named<ComboBox>(host, "OffAfterBox"));                     // screens.off_enabled / off_after_s
+        Named<ToggleSwitch>(host, "WakeToggle").IsChecked = false;             // screens.wake_swallows_press
+        Settle(window);
+        Open(window, host, "ScreensFineHeader", "ScreensFineBody");
+        Named<NumericUpDown>(host, "ScrollHoldBox").Value = 900;               // screens.scroll_hold_ms
+        Named<NumericUpDown>(host, "ScrollSpeedBox").Value = 40;               // screens.scroll_speed_px_s
+        Named<NumericUpDown>(host, "ScrollEndHoldBox").Value = 700;            // screens.scroll_end_hold_ms
+        Named<NumericUpDown>(host, "TransitionBox").Value = 300;               // screens.transition_ms
+        Named<NumericUpDown>(host, "PixelShiftBox").Value = 120;               // screens.pixel_shift_every_s
+        Named<ToggleSwitch>(host, "BurnInToggle").IsChecked = false;           // screens.pixel_shift_enabled
+        Settle(window);
+
+        Open(window, host, "InputHeader", "InputBody");
+        Open(window, host, "InputFineHeader", "InputFineBody");
+        Named<NumericUpDown>(host, "DebounceBox").Value = 25;                  // input.debounce_ms
+        Named<NumericUpDown>(host, "SliderIntervalBox").Value = 15;            // input.slider_interval_ms
+        Named<NumericUpDown>(host, "SmoothingBox").Value = 40;                 // input.filter_weight_pct
+        Named<NumericUpDown>(host, "DeadbandBox").Value = 30;                  // input.slider_deadband
+        Settle(window);
+
+        vm.Hardware.OpenConnection(true);                                      // Controller settings › Wi-Fi
+        Settle(window);
+        Named<ToggleSwitch>(page, "UdpToggle").IsChecked = true;               // udp.enabled
+        Settle(window);
+        Named<TextBox>(page, "SsidBox").Text = "home";                         // udp.ssid
+        Named<TextBox>(page, "PasswordBox").Text = "password1";                // udp.password
+        Named<TextBox>(page, "PcIpBox").Text = "192.168.1.10";                 // udp.pc_ip
+        Named<NumericUpDown>(page, "PcPortBox").Value = 23456;                 // udp.pc_port
+        Named<NumericUpDown>(page, "LocalPortBox").Value = 23457;              // udp.local_port
+        Click(Named<Button>(page, "ConnectionDone"));
+        Settle(window);
+
+        Assert.Empty(vm.Controller.Problems.Select(p => p.Message));
+        var expected = ControllerConfigCodec.Encode(vm.Controller.Draft);
+        Click(Named<Button>(page, "SaveButton"));                              // the save bar
+        Until(window, () => rig.Connection!.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        var burst = rig.Connection!.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
+        rig.Connection.RaiseMessage(new ConfigResultMessage(burst[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
+            ControllerConfigCodec.Crc32(expected), 5, new[] { IndicatorKind.Led, IndicatorKind.Screen, IndicatorKind.LedPair }));
+        Until(window, () => !vm.Controller.IsSaving && !vm.Controller.IsDirty);
+
+        var saved = ControllerConfigCodec.Decode(Convert.FromBase64String(SaveAndReload(rig).ControllerConfigBlob!));
+        Assert.Equal(ControllerConfigCodec.Decode(expected), saved);
+        Assert.Equal(39u, saved.Sliders[0].Pin);
+        Assert.Equal(15u, saved.Buttons[0].Pin);
+        Assert.Equal(22u, saved.Buttons[0].Led.Pin);
+        Assert.NotEqual(diy.Buttons[0].Led.ActiveLow, saved.Buttons[0].Led.ActiveLow);
+        Assert.Equal((23u, 16u), (saved.Buttons[2].LedPair.PinA, saved.Buttons[2].LedPair.PinB));
+        Assert.NotEqual(diy.Buttons[2].LedPair.ActiveLow, saved.Buttons[2].LedPair.ActiveLow);
+        Assert.Equal(1u, saved.Buttons[1].Screen.Bus);
+        Assert.NotEqual(0x3Cu, saved.Buttons[1].Screen.Address);
+        var bus = ControllerDraft.Bus(saved, 1)!;
+        Assert.Equal((17u, 2u), (bus.Sda, bus.Scl));
+        Assert.NotEqual(ControllerDraft.Bus(diy, 1)!.ClockHz, bus.ClockHz);
+        var screens = saved.Screens;
+        var defaults = new Volco.Core.Controller.Proto.ScreenBehaviour();
+        Assert.Equal(128u, screens.Brightness);
+        Assert.False(screens.DimEnabled == defaults.DimEnabled && screens.DimAfterS == defaults.DimAfterS);
+        Assert.NotEqual(defaults.DimBrightness, screens.DimBrightness);
+        Assert.False(screens.OffEnabled == defaults.OffEnabled && screens.OffAfterS == defaults.OffAfterS);
+        Assert.False(screens.WakeSwallowsPress);
+        Assert.False(screens.PixelShiftEnabled);
+        Assert.Equal((900u, 40u, 700u, 300u, 120u),
+                     (screens.ScrollHoldMs, screens.ScrollSpeedPxS, screens.ScrollEndHoldMs, screens.TransitionMs, screens.PixelShiftEveryS));
+        Assert.Equal((25u, 15u, 40u, 30u),
+                     (saved.Input.DebounceMs, saved.Input.SliderIntervalMs, saved.Input.FilterWeightPct, saved.Input.SliderDeadband));
+        Assert.True(saved.Udp.Enabled);
+        Assert.Equal(("home", "password1", 0xC0A8010Au, 23456u, 23457u),
+                     (saved.Udp.Ssid, saved.Udp.Password, saved.Udp.PcIp, saved.Udp.PcPort, saved.Udp.LocalPort));
+        window.Close();
     }
 
     // ── The Controls page ─────────────────────────────────────────────────────
 
-    private static Border Inspector(ControlsPage page) => page.FindControl<Border>("Inspector")!;
+    private static Border Inspector(StagePage page) => page.FindControl<Border>("Inspector")!;
 
     private static void Settle(Window window)
     {
@@ -91,10 +282,15 @@ public class SettingsCoverageTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    /// <summary>A click: the button's Click handlers, then its command (as Button.OnClick does).</summary>
+    private static void Click(Button button)
+    {
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        if (button.Command is { } command && command.CanExecute(button.CommandParameter)) command.Execute(button.CommandParameter);
+    }
 
     /// <summary>Selects the slider and opens its target dialog from the inspector's Controls row.</summary>
-    private static TargetDialog OpenTarget(ControlsPage page, Window window, SettingsViewModel vm, int slider)
+    private static TargetDialog OpenTarget(StagePage page, Window window, SettingsViewModel vm, int slider)
     {
         vm.Controls.Select(vm.Sliders.Items[slider]);
         Settle(window);
@@ -116,7 +312,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = Host(page);
 
         // Slider 0: apps, one playing and one picked as an .exe.
@@ -172,7 +368,7 @@ public class SettingsCoverageTests
 
     /// <summary>Selects the button and opens the action dialog of one row ("Press", "Double", "Hold"),
     /// then picks <paramref name="action"/> from its list.</summary>
-    private static ActionDialog OpenAction(ControlsPage page, Window window, SettingsViewModel vm, int button, string row, string action)
+    private static ActionDialog OpenAction(StagePage page, Window window, SettingsViewModel vm, int button, string row, string action)
     {
         vm.Controls.Select(vm.Buttons.Items[button]);
         Settle(window);
@@ -206,7 +402,7 @@ public class SettingsCoverageTests
             using var rig = new TestRig(Engine(), custom: custom);
             rig.Config.Config.Modes.Add(new ModeConfig { Id = "gaming", Name = "Gaming" });
             using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-            var page = new ControlsPage(vm.Controls);
+            var page = new StagePage(vm.Controls);
             var window = Host(page);
 
             // Button 0: a device action on each gesture's own settings.
@@ -304,7 +500,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         Host(page);
 
         Named<Button>(page, "AddModeButton").Command!.Execute(null);           // Modes[] (added)
@@ -324,7 +520,7 @@ public class SettingsCoverageTests
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = Host(page);
 
         // From a device row of the target dialog: ⋯ > Rename opens the device dialog.

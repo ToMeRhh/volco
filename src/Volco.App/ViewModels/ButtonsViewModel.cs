@@ -14,7 +14,7 @@ using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>What the Controls page knows about media, program and script actions: which this
+/// <summary>What the Controller page knows about media, program and script actions: which this
 /// platform runs, their live state for the previews, and the media sessions for the app picker.
 /// <paramref name="Feedback"/> is what a button shows for a moment after a press or a mode change
 /// (null: nothing), so the previews show it as the controller does.</summary>
@@ -29,7 +29,7 @@ public sealed record ActionCapabilities(ActionAvailability Availability, IAction
 }
 
 /// <summary>
-/// The buttons of the Controls page: modes (only button actions change per mode) and the
+/// The buttons of the Controller page: modes (only button actions change per mode) and the
 /// buttons in hardware-input order. Position is identity, as for sliders; moving a button moves
 /// its actions in every mode.
 /// </summary>
@@ -399,6 +399,22 @@ public sealed partial class ButtonsViewModel : ObservableObject, IButtonCardOwne
         Renumber();
         RefreshController();
         Save();
+    }
+
+    /// <summary>An empty button for a control the Controller page's draft adds: not in
+    /// <see cref="Items"/> and never saved (Volco's settings get it once the controller confirms).</summary>
+    public ButtonItemViewModel CreateDetached(int index)
+        => new(new ButtonConfig { Index = index }, index, _devices, this) { IsNew = true };
+
+    /// <summary>Rebuilds <see cref="Items"/> from <c>config.json</c> after its list was rewritten
+    /// (a confirmed save removed or added controls).</summary>
+    public void Reload()
+    {
+        Items.Clear();
+        for (int i = 0; i < Buttons.Count; i++)
+            Items.Add(new ButtonItemViewModel(Buttons[i], i, _devices, this));
+        Renumber();
+        RefreshController();
     }
 
     public void RemoveLast()

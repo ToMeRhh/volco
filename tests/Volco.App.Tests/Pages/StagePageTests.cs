@@ -10,6 +10,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.Views;
 using Volco.App.Views.Pages;
+using Volco.App.Views.Stage;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -24,7 +25,7 @@ namespace Volco.App.Tests.Pages;
 
 /// <summary>Spec docs/design/controls-page.md §3–§5: the Controls page's navigation, window,
 /// drawing and inspector.</summary>
-public class ControlsPageTests
+public class StagePageTests
 {
     private static FakeAudioEngine EngineWithAudio()
     {
@@ -41,7 +42,7 @@ public class ControlsPageTests
     private static void Hardware(AppConfig c, int sliders, params IndicatorKind[] buttons)
         => c.Controller = new ControllerInfoConfig { ProtocolVersion = 1, Sliders = sliders, Buttons = buttons.ToList() };
 
-    private sealed record Shown(ControlsPage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
+    private sealed record Shown(StagePage Page, Window Window, TestRig Rig, SettingsViewModel Vm) : IDisposable
     {
         public ControlsViewModel Controls => Vm.Controls;
         public AppConfig Config => Rig.Config.Config;
@@ -59,7 +60,7 @@ public class ControlsPageTests
         var rig = new TestRig(EngineWithAudio());
         configure?.Invoke(rig.Config.Config);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-        var page = new ControlsPage(vm.Controls);
+        var page = new StagePage(vm.Controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         Settle(window);
@@ -90,10 +91,10 @@ public class ControlsPageTests
     private static List<T> Tiles<T>(Visual root) where T : Control
         => root.GetVisualDescendants().OfType<T>().ToList();
 
-    private static Border Inspector(ControlsPage page) => page.FindControl<Border>("Inspector")!;
+    private static Border Inspector(StagePage page) => page.FindControl<Border>("Inspector")!;
 
     /// <summary>A control in one of the inspector's action rows ("Press", "Double", "Hold").</summary>
-    private static T InRow<T>(ControlsPage page, string row, string name) where T : Control
+    private static T InRow<T>(StagePage page, string row, string name) where T : Control
         => In<T>(In<ContentControl>(Inspector(page), $"ActionRow_{row}"), name);
 
     private static double TopIn(Visual part, Visual tile) => part.TranslatePoint(new Point(0, 0), tile)!.Value.Y;
@@ -101,7 +102,7 @@ public class ControlsPageTests
     // ── Navigation and window ─────────────────────────────────────────────────
 
     [AvaloniaFact]
-    public void Nav_HasGeneralControlsHardware()
+    public void Nav_HasGeneralAndController()
     {
         using var rig = new TestRig(EngineWithAudio());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -109,25 +110,25 @@ public class ControlsPageTests
         var nav = window.FindControl<ListBox>("NavList")!;
 
         var items = nav.Items.Cast<NavItem>().ToList();
-        Assert.Equal(new[] { "General", "Controls", "Hardware" }, items.Select(n => n.Label));
-        Assert.Equal(new[] { "general", "controls", "controller" }, items.Select(n => n.Tag));
+        Assert.Equal(new[] { "General", "Controller" }, items.Select(n => n.Label));
+        Assert.Equal(new[] { "general", "controller" }, items.Select(n => n.Tag));
         Assert.True(Application.Current!.TryFindResource("Icon.Sliders", out var sliders));
         Assert.Same(sliders, items[1].Icon);
 
         window.ShowPage("controls");
-        Assert.IsType<ControlsPage>(window.CurrentPage);
+        Assert.IsType<StagePage>(window.CurrentPage);
         window.Close();
     }
 
     [AvaloniaFact]
-    public void Window_DefaultSize_1100x720_Min_820x520()
+    public void Window_DefaultSize_1540x900_Min_820x520()
     {
         using var rig = new TestRig(EngineWithAudio());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var window = new SettingsWindow(vm, rig.Runtime);
 
-        Assert.Equal(1100, window.Width);
-        Assert.Equal(720, window.Height);
+        Assert.Equal(1540, window.Width);
+        Assert.Equal(900, window.Height);
         Assert.Equal(820, window.MinWidth);
         Assert.Equal(520, window.MinHeight);
     }
@@ -144,7 +145,7 @@ public class ControlsPageTests
         Assert.DoesNotContain("compact", wide.Classes);
         Assert.Equal(168, wide.FindControl<Border>("Sidebar")!.Bounds.Width);
         Assert.All(Tiles<TextBlock>(wide).Where(t => t.Classes.Contains("NavLabel")), t => Assert.True(t.IsEffectivelyVisible));
-        Assert.Equal(380, Inspector((ControlsPage)wide.CurrentPage!).Bounds.Width);
+        Assert.Equal(380, Inspector((StagePage)wide.CurrentPage!).Bounds.Width);
         wide.Close();
 
         using var vm2 = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -154,9 +155,9 @@ public class ControlsPageTests
         Assert.Contains("compact", narrow.Classes);
         Assert.Equal(56, narrow.FindControl<Border>("Sidebar")!.Bounds.Width);
         var labels = Tiles<TextBlock>(narrow).Where(t => t.Classes.Contains("NavLabel")).ToList();
-        Assert.Equal(3, labels.Count);
+        Assert.Equal(2, labels.Count);
         Assert.All(labels, t => Assert.False(t.IsEffectivelyVisible));
-        var page = (ControlsPage)narrow.CurrentPage!;
+        var page = (StagePage)narrow.CurrentPage!;
         Assert.Equal(300, Inspector(page).Bounds.Width);
         // The drawing still sits beside the inspector.
         var drawing = page.FindControl<ScrollViewer>("DrawingScroll")!;
@@ -461,7 +462,7 @@ public class ControlsPageTests
         var sliders = new SlidersViewModel(rig.Config, rig.Engine, toast);
         var buttons = new ButtonsViewModel(rig.Config, rig.Engine, rig.Runtime, (a, o) => runs.Add((a, o)), toast);
         var controls = new ControlsViewModel(sliders, buttons, rig.Config, toast);
-        var page = new ControlsPage(controls);
+        var page = new StagePage(controls);
         var window = new Window { Content = page, Width = 932, Height = 680 };
         window.Show();
         controls.Select(buttons.Items[0]);
@@ -536,13 +537,14 @@ public class ControlsPageTests
         // Slider 4 is missing but not last: no Remove (input number is position).
         s.Controls.Select(s.Vm.Sliders.Items[3]);
         Settle(s.Window);
-        Assert.True(In<Border>(Inspector(s.Page), "MissingPanel").IsEffectivelyVisible);
-        Assert.False(In<Button>(Inspector(s.Page), "RemoveButton").IsEffectivelyVisible);
+        // The Hardware section says so (collapsed here: no draft), with Remove only for the last.
+        Assert.True(In<TextBlock>(Inspector(s.Page), "NotOnControllerText").IsVisible);
+        Assert.False(In<Button>(Inspector(s.Page), "RemoveButton").IsVisible);
 
         s.Controls.Select(s.Vm.Sliders.Items[4]);
         Settle(s.Window);
         var remove = In<Button>(Inspector(s.Page), "RemoveButton");
-        Assert.True(remove.IsEffectivelyVisible);
+        Assert.True(remove.IsVisible);
         remove.Command!.Execute(null);
         Settle(s.Window);
 
@@ -568,7 +570,7 @@ public class ControlsPageTests
         // The inspector itself fills its column, so measure what it holds: the body's own height
         // and where the rows below the actions start.
         var inspector = Inspector(s.Page);
-        StackPanel Body() => inspector.GetVisualDescendants().OfType<StackPanel>().First(p => p.Classes.Contains("InspectorBody"));
+        StackPanel Body() => In<StackPanel>(inspector, "ActionsContent");
         double LightTop() => In<Border>(inspector, "LightRow").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
         double TimingTop() => In<Border>(inspector, "TimingSection").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
         var bodyBefore = Body().DesiredSize.Height;
@@ -698,7 +700,7 @@ public class ControlsPageTests
                 Action = ButtonActionType.RunScript, Command = new CommandConfig { Path = script, Name = "Lights" },
             };
             using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
-            var page = new ControlsPage(vm.Controls);
+            var page = new StagePage(vm.Controls);
             var window = new Window { Content = page, Width = 932, Height = 680 };
             window.Show();
             vm.Controls.Select(vm.Buttons.Items[0]);

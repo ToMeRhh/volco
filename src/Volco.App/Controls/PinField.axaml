@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Controls.PinField"
+             x:DataType="hw:PinFieldViewModel">
+  <!-- The pin field (hardware-page spec §6.3): closed, "GPIO 5 ▾"; open, a text box over the list of
+       every GPIO with its note on the right (unusable rows greyed). A problem shows under the field
+       with its fix. The page adds "invalid" to the control while it has a problem. -->
+  <UserControl.Styles>
+    <Style Selector="Button.PinValue">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Padding" Value="10,5"/>
+    </Style>
+    <Style Selector="Button.PinValue.invalid /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+    </Style>
+    <Style Selector="TextBox.invalid /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+    </Style>
+    <Style Selector="Border.PinList">
+      <Setter Property="Background" Value="{DynamicResource SurfaceCardBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="4"/>
+    </Style>
+    <Style Selector="Button.PinRow">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Focusable" Value="False"/>
+    </Style>
+    <Style Selector="Button.PinRow:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.PinRow.highlighted /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+    </Style>
+    <Style Selector="Button.PinRow:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.PinRow:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+    <Style Selector="Button.PinRow TextBlock.PinNote">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+  </UserControl.Styles>
+
+  <!-- One inspector row (44 px): the label on the left, the value on the right; the list drops
+       below the row, and a problem and its fix sit under it -->
+  <StackPanel>
+    <Grid Name="PinRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+      <TextBlock Name="LabelText" Classes="RowLabel" Text="{Binding Label}"/>
+      <Panel Grid.Column="1" Classes="RowControl" VerticalAlignment="Center">
+        <Button Name="ValueButton" Classes="PinValue" Classes.invalid="{Binding HasError}"
+                IsVisible="{Binding !IsOpen}" IsEnabled="{Binding IsEditable}" Click="ValueButton_Click">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Name="ValueText" Text="{Binding ValueText}" VerticalAlignment="Center"/>
+            <PathIcon Grid.Column="1" Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                      Foreground="{DynamicResource TextSecondaryBrush}"/>
+          </Grid>
+        </Button>
+        <TextBox Name="QueryBox" Classes.invalid="{Binding HasError}" IsVisible="{Binding IsOpen}"
+                 Text="{Binding Query, Mode=TwoWay}" PlaceholderText="{Binding ValueText}"/>
+        <Popup Name="ListPopup" IsOpen="{Binding IsOpen}" PlacementTarget="{Binding #QueryBox}"
+               Placement="BottomEdgeAlignedRight" ShouldUseOverlayLayer="True" IsLightDismissEnabled="False"
+               MinWidth="{Binding #QueryBox.Bounds.Width}">
+          <Border Classes="PinList">
+            <ScrollViewer Name="ListScroll" MaxHeight="280" VerticalScrollBarVisibility="Auto">
+              <ItemsControl Name="RowList" ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="hw:PinRowViewModel">
+                    <Button Name="PinRowButton" Classes="PinRow" Classes.highlighted="{Binding IsHighlighted}"
+                            Classes.current="{Binding IsCurrent}" IsEnabled="{Binding IsPickable}" Click="Row_Click">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <controls:HighlightText Name="RowText" Source="{Binding Text}" Highlight="{Binding Matches}"/>
+                        <controls:HighlightText Grid.Column="1" Name="RowNote" Classes="PinNote" Source="{Binding Note}"
+                                                Highlight="{Binding NoteMatches}" HorizontalAlignment="Right"/>
+                      </Grid>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+        </Popup>
+      </Panel>
+    </Grid>
+    <StackPanel Classes="RowFooter" IsVisible="{Binding HasError}">
+      <TextBlock Name="ErrorText" Classes="FieldError" Text="{Binding Error}" IsVisible="{Binding HasError}"/>
+      <Button Name="FixButton" Content="{Binding FixLabel}" Command="{Binding FixCommand}" IsVisible="{Binding HasFix}"
+              HorizontalAlignment="Left"/>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

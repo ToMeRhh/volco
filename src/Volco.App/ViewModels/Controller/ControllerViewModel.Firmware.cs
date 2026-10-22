@@ -4,12 +4,11 @@ using Volco.Core.Config;
 using Volco.Core.Controller;
 using Volco.Core.Firmware;
 using Volco.Core.Runtime;
-using Volco.Core.Updates;
 
 namespace Volco.App.ViewModels;
 
-/// <summary>The Controller page's firmware part (spec §8.6): Install, Update, Check firmware, the
-/// inline firmware panel, and the hint shown when the serial port gets no Hello.</summary>
+/// <summary>The firmware part (spec §8.6; hardware-page spec §4): Reinstall (today's Install),
+/// Update and Check firmware, whose progress and result the status shows.</summary>
 public sealed partial class ControllerViewModel
 {
     private FirmwareService? _firmware;
@@ -43,15 +42,16 @@ public sealed partial class ControllerViewModel
 
     private bool _wasSerial = true;
 
-    /// <summary>The panel's last result ("Installed…", "Test your controller now", the Install offer)
-    /// belongs to the moment it happened: it goes when the page is left, the controller goes away or
-    /// the connection changes.</summary>
+    /// <summary>The last result ("Installed…", "Test your controller now") belongs to the moment it
+    /// happened: it goes when the window is hidden, the controller goes away, the connection
+    /// changes or the next operation starts.</summary>
     internal void ClearFirmwareResult()
     {
         if (IsFirmwareRunning) return;
         FirmwareMessage = null;
-        OfferInstall = false;
         OfferTest = false;
+        OfferInstall = false;
+        OfferFreshInstall = false;
         ConfirmInstallPending = false;
     }
 
@@ -65,50 +65,55 @@ public sealed partial class ControllerViewModel
 
     private bool IsSerialConnection => _config.Config.Connection.Type == ConnectionType.Serial;
 
-    /// <summary>The firmware buttons apply: the connection is USB (Serial).</summary>
-    public bool IsSerial => IsSerialConnection;
-
     /// <summary>Install/Update/Check can run now.</summary>
     public bool CanUseFirmware => _firmware is { IsAvailable: true, IsBusy: false } && IsSerialConnection
                                   && !_runtime.IsUserDisconnected && !IsTesting && _service.Operation == ConfigOperation.Idle;
 
-    /// <summary>Why the firmware buttons are disabled, or null.</summary>
-    public string? FirmwareHint => _firmware is not { IsAvailable: true }
-        ? "This build of Volco has no firmware."
-        : !IsSerialConnection ? FirmwareService.SerialOnlyMessage
-        : _runtime.IsUserDisconnected ? FirmwareService.DisconnectedMessage : null;
-
-    /// <summary>Update is offered: a newer bundled build, or firmware this app can't talk to.</summary>
-    public bool ShowUpdateFirmware => Banner.FirmwareUpdateAvailable || Banner.Actions.HasFlag(BannerActions.Update);
-
-    /// <summary>"Firmware 3f9c2a1b5d07 (from Volco 1.2.0)" when it is the bundled build.</summary>
-    private string FirmwareVersionText(string fw)
-        => _firmware?.Catalog.BundledVersion == fw ? $"Firmware {fw} (from Volco {BuildInfo.DisplayVersion})" : $"Firmware {fw}";
-
-    // ── The panel ──
-
-    /// <summary>Install, Update and Check use the port the Connection section picked.</summary>
+    /// <summary>Install, Update and Check use the port the Connection dialog picked.</summary>
     private string FirmwarePort => _config.Config.Connection.Serial.ComPort;
     [ObservableProperty] private bool _isFirmwareRunning;
-    [ObservableProperty] private string? _firmwareStage;
     [ObservableProperty] private double _firmwareProgress;
     [ObservableProperty] private string? _firmwareMessage;
-    [ObservableProperty] private bool _offerInstall;
+
+    /// <summary>The running write's stage, as the flasher last reported it; null before the first
+    /// report and when nothing runs.</summary>
+    [ObservableProperty] private FlashStage? _firmwareStep;
+
+    /// <summary>A firmware operation ended and its result, tone and offers are set (the progress
+    /// dialog shows them). UI thread.</summary>
+    internal event EventHandler? FirmwareFinished;
+
+    /// <summary>The card offers "Test your controller now": after an Update or a first save.</summary>
     [ObservableProperty] private bool _offerTest;
-    [ObservableProperty] private bool _canCancelFirmware;
 
-    public bool HasFirmwareMessage => FirmwareMessage is not null;
+    /// <summary>The last Check firmware offers an install (no Volco firmware, a different build, or
+    /// Volco's firmware that didn't answer): the status's button installs, until the result goes.</summary>
+    [ObservableProperty] private bool _offerInstall;
 
-    /// <summary>The result's icon: Volco's firmware found or written is good, other firmware a
+    /// <summary>The offered install is a first one: the board never answered as a Volco controller
+    /// this run ("doesn't have Volco's firmware yet"). The status's button is Install firmware and
+    /// the confirmation isn't a warning; otherwise it is Reinstall firmware…, which erases the
+    /// stored setup.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InstallQuestion), nameof(InstallConfirmLabel))]
+    private bool _offerFreshInstall;
+
+    /// <summary>The install confirmation's question: on a board without Volco's firmware, installing
+    /// replaces what is on it; otherwise it is a reinstall, which erases the stored setup.</summary>
+    public string InstallQuestion => OfferFreshInstall
+        ? "Install Volco's firmware on this ESP32? Anything else on it is replaced."
+        : "Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.";
+
+    /// <summary>The install confirmation's button: Install, or Reinstall.</summary>
+    public string InstallConfirmLabel => OfferFreshInstall ? "Install" : "Reinstall";
+
+    /// <summary>The result's tone: Volco's firmware found or written is good, other firmware a
     /// warning, a failure a danger.</summary>
     [ObservableProperty] private LinkTone _firmwareMessageTone;
-    partial void OnFirmwareMessageChanged(string? value) => OnPropertyChanged(nameof(HasFirmwareMessage));
 
-    /// <summary>Install wipes the controller's setup, so it asks first in a dialog (Volco keeps its
-    /// copy). Nothing on the page changes until it is confirmed: Cancel leaves the page as it was.</summary>
+    /// <summary>Install wipes the controller's setup, so it asks first on the card (Volco keeps its
+    /// copy). Nothing changes until it is confirmed: Cancel leaves the page as it was.</summary>
     [ObservableProperty] private bool _confirmInstallPending;
-
-    partial void OnConfirmInstallPendingChanged(bool value) => OnPropertyChanged(nameof(HasDialog));
 
     [RelayCommand]
     private void InstallFirmware()
@@ -134,13 +139,25 @@ public sealed partial class ControllerViewModel
     private void CheckFirmware() => _ = RunProbe();
 
     [RelayCommand]
-    private void CancelFirmware() => _firmwareCts?.Cancel();
-
-    [RelayCommand]
     private void TestNow()
     {
         OfferTest = false;
         StartTest();
+    }
+
+    /// <summary>The progress dialog was closed without taking the test it offered: the offer goes.</summary>
+    internal void DeclineTest() => OfferTest = false;
+
+    /// <summary>The progress dialog's Try again: the operation that just failed, once more (an
+    /// Install was confirmed already).</summary>
+    internal void RetryFirmware(LinkActivity activity)
+    {
+        switch (activity)
+        {
+            case LinkActivity.InstallingFirmware: _ = RunFlash(FlashMode.Install); break;
+            case LinkActivity.UpdatingFirmware: _ = RunFlash(FlashMode.Update); break;
+            case LinkActivity.CheckingFirmware: _ = RunProbe(); break;
+        }
     }
 
     private IProgress<FlashProgress> FirmwareProgressReporter() => new UiProgress(this);
@@ -153,40 +170,36 @@ public sealed partial class ControllerViewModel
         {
             if (vm._disposed || !vm.IsFirmwareRunning || p.Stage < _latest) return;   // late or after the end
             _latest = p.Stage;
-            vm.FirmwareStage = p.Stage switch
-            {
-                FlashStage.Connecting => "Starting the board's bootloader…",
-                FlashStage.Erasing => "Clearing the old settings…",
-                FlashStage.Writing => "Writing the firmware…",
-                FlashStage.Verifying => "Checking what was written…",
-                _ => "Restarting the controller…",
-            };
+            vm.FirmwareStep = p.Stage;
             vm.FirmwareProgress = p.Stage == FlashStage.Writing ? p.Fraction : vm.FirmwareProgress;
-            // Spec §8.6: cancellation only before the first write.
-            vm.CanCancelFirmware = p.Stage == FlashStage.Connecting;
         });
     }
 
-    private bool BeginFirmware()
+    /// <summary>Which firmware operation runs (checking, installing or updating); None when none does.</summary>
+    internal LinkActivity FirmwareActivity { get; private set; }
+
+    private bool BeginFirmware(LinkActivity activity)
     {
         if (!CanUseFirmware || string.IsNullOrEmpty(FirmwarePort)) return false;
         StopTest();
+        FirmwareActivity = activity;
+        if (!IsSaving) SetProgress(null);   // a save's result belongs to the operation before
         _firmwareCts = new CancellationTokenSource();
         IsFirmwareRunning = true;
-        CanCancelFirmware = true;
         FirmwareMessage = null;
-        OfferInstall = false;
         OfferTest = false;
+        OfferInstall = false;
+        OfferFreshInstall = false;
         FirmwareProgress = 0;
-        FirmwareStage = "Starting the board's bootloader…";
+        FirmwareStep = null;
         return true;
     }
 
     private void EndFirmware(string message, LinkTone tone)
     {
         IsFirmwareRunning = false;
-        CanCancelFirmware = false;
-        FirmwareStage = null;
+        FirmwareActivity = LinkActivity.None;
+        FirmwareStep = null;
         FirmwareMessageTone = tone;
         FirmwareMessage = message;
         RefreshAll();
@@ -194,7 +207,7 @@ public sealed partial class ControllerViewModel
 
     private async Task RunProbe()
     {
-        if (!BeginFirmware()) return;
+        if (!BeginFirmware(LinkActivity.CheckingFirmware)) return;
         var outcome = await _firmware!.ProbeAsync(FirmwarePort, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {
@@ -206,21 +219,22 @@ public sealed partial class ControllerViewModel
                 _ => LinkTone.Danger,
             });
             OfferInstall = outcome.OfferInstall;
+            OfferFreshInstall = outcome.OfferInstall && outcome.OfferFreshInstall;
+            FirmwareFinished?.Invoke(this, EventArgs.Empty);
         });
     }
 
     private async Task RunFlash(FlashMode mode)
     {
         ConfirmInstallPending = false;
-        if (!BeginFirmware()) return;
+        if (!BeginFirmware(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware)) return;
         var outcome = await _firmware!.FlashAsync(FirmwarePort, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {
             if (_disposed) return;
-            // After an Install the controller has no setup yet: the setup dialog comes next.
-            if (outcome.Succeeded && mode == FlashMode.Install) OnInstalled();
             EndFirmware(outcome.Message, outcome.Succeeded ? LinkTone.Good : LinkTone.Danger);
             OfferTest = outcome.Succeeded && mode == FlashMode.Update;
+            FirmwareFinished?.Invoke(this, EventArgs.Empty);
         });
     }
 
@@ -229,19 +243,9 @@ public sealed partial class ControllerViewModel
         if (!_disposed) RefreshAll();
     });
 
-    /// <summary>The NoAnswer banner's button: probe the configured port.</summary>
-    [RelayCommand]
-    private void CheckWhatsConnected()
-    {
-        CheckFirmware();
-    }
-
     private void RefreshFirmware()
     {
         OnPropertyChanged(nameof(CanUseFirmware));
-        OnPropertyChanged(nameof(IsSerial));
-        OnPropertyChanged(nameof(FirmwareHint));
-        OnPropertyChanged(nameof(ShowUpdateFirmware));
         InstallFirmwareCommand.NotifyCanExecuteChanged();
     }
 }

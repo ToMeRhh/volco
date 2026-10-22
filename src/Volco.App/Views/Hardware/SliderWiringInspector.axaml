@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Hardware.SliderWiringInspector"
+             x:DataType="hw:SliderWiringViewModel">
+  <!-- The body of a slider's Hardware section (controller-page spec §4.3, hardware-page spec §6.1):
+       its pin, then Remove Slider N -->
+  <StackPanel Classes="WiringBody">
+    <Border Classes="InspectorRows">
+      <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
+    </Border>
+    <Button Name="HardwareRemoveButton" Classes="Danger" HorizontalAlignment="Left"
+            Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" IsEnabled="{Binding IsEditable}"/>
+  </StackPanel>
+</UserControl>

@@ -7,7 +7,7 @@ namespace Volco.App.Converters;
 
 /// <summary>
 /// Maps a <see cref="LinkTone"/> to a theme brush: Good → SuccessBrush, Warning → WarningBrush,
-/// Danger → DangerBrush, Neutral → TextTertiaryBrush (a dot) or, with the parameter "Text",
+/// Danger → DangerBrush, Accent → AccentBrush, Neutral → TextTertiaryBrush (a dot) or, with the parameter "Text",
 /// TextSecondaryBrush (an explanation line). A dot always sits next to a text label, so state is
 /// never shown by colour alone.
 /// </summary>
@@ -22,6 +22,7 @@ public sealed class LinkToneToBrushConverter : IValueConverter
             LinkTone.Good => "SuccessBrush",
             LinkTone.Warning => "WarningBrush",
             LinkTone.Danger => "DangerBrush",
+            LinkTone.Accent => "AccentBrush",
             _ => parameter as string == "Text" ? "TextSecondaryBrush" : "TextTertiaryBrush",
         };
         var app = Application.Current;

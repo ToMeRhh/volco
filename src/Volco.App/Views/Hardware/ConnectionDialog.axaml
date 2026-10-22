@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
+             xmlns:hwviews="using:Volco.App.Views.Hardware"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:conv="using:Volco.App.Converters"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Hardware.ConnectionDialog"
+             x:DataType="hw:ConnectionDialogViewModel">
+  <!-- Connection (hardware-page spec §10): how Volco reaches the controller. The segment, the
+       port and Volco's listen port are stored at once; the controller's Wi-Fi edits the draft. -->
+  <UserControl.Resources>
+    <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
+  </UserControl.Resources>
+  <StackPanel Spacing="14" Margin="16,12,16,16">
+    <TextBlock Name="ConnectionTitle" Classes="DialogTitle" Text="Connection"/>
+    <TextBlock Classes="Secondary" Text="Stored in Volco on this PC; applies at once."/>
+
+    <Border Name="ConnectionSegment" Classes="SegmentTrack" HorizontalAlignment="Left">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <RadioButton Name="UsbOption" Classes="Segment" Content="USB"
+                     IsChecked="{Binding IsUsbTab, Mode=TwoWay}"/>
+        <RadioButton Name="WifiOption" Classes="Segment" Content="Wi-Fi"
+                     IsChecked="{Binding IsWifiTab, Mode=TwoWay}"/>
+        <RadioButton Name="SimulatorOption" Classes="Segment" Content="Simulator"
+                     IsChecked="{Binding IsSimulatorTab, Mode=TwoWay}"/>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Name="UsbSection" Spacing="12" IsVisible="{Binding IsUsbTab}">
+      <Grid ColumnDefinitions="150,Auto,Auto">
+        <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
+        <ComboBox Name="PortCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
+                  PlaceholderText="Select port…"
+                  ItemsSource="{Binding Connection.ComPorts}"
+                  SelectedItem="{Binding Connection.ComPort, Mode=TwoWay}"/>
+        <Button Name="RefreshPortsButton" Grid.Column="2" Classes="Icon" Margin="4,0,0,0"
+                Command="{Binding Connection.RefreshComPortsCommand}" ToolTip.Tip="Refresh the port list">
+          <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
+        </Button>
+      </Grid>
+    </StackPanel>
+
+    <StackPanel Name="WifiSection" Spacing="12" IsVisible="{Binding IsWifiTab}">
+      <Grid ColumnDefinitions="150,Auto">
+        <TextBlock Text="Listen port" Classes="Secondary" VerticalAlignment="Center"/>
+        <NumericUpDown Name="UdpPortBox" Grid.Column="1" Width="160"
+                       Minimum="1024" Maximum="65535" FormatString="0"
+                       Value="{Binding Connection.UdpListenPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+      </Grid>
+
+      <TextBlock Name="ControllerWifiTitle" Classes="Subtitle" Text="The controller's Wi-Fi" Margin="0,6,0,0"/>
+      <StackPanel DataContext="{Binding Controller}" x:DataType="vm:ControllerViewModel" Spacing="10">
+        <Grid ColumnDefinitions="150,Auto">
+          <TextBlock Text="Wi-Fi on the controller" VerticalAlignment="Center"/>
+          <ToggleSwitch Name="UdpToggle" Grid.Column="1" IsChecked="{Binding UdpEnabled, Mode=TwoWay}"/>
+        </Grid>
+        <StackPanel Spacing="10" IsVisible="{Binding UdpEnabled}">
+          <Grid ColumnDefinitions="150,Auto">
+            <TextBlock Text="Network name (SSID)" VerticalAlignment="Center"/>
+            <TextBox Name="SsidBox" Classes.Invalid="{Binding SsidInvalid}" Grid.Column="1" Width="220" MaxLength="32"
+                     Text="{Binding Ssid, Mode=TwoWay}"/>
+          </Grid>
+          <Grid ColumnDefinitions="150,Auto,Auto">
+            <TextBlock Text="Password" VerticalAlignment="Center"/>
+            <TextBox Name="PasswordBox" Classes.Invalid="{Binding PasswordInvalid}" Grid.Column="1" Width="220" MaxLength="64"
+                     PasswordChar="{Binding PasswordChar}" Text="{Binding Password, Mode=TwoWay}"/>
+            <CheckBox Name="ShowPasswordBox" Grid.Column="2" Content="Show" Margin="8,0,0,0"
+                      IsChecked="{Binding ShowPassword, Mode=TwoWay}"/>
+          </Grid>
+          <Grid ColumnDefinitions="150,Auto">
+            <TextBlock Text="PC IP address" VerticalAlignment="Center"/>
+            <TextBox Name="PcIpBox" Classes.Invalid="{Binding PcIpInvalid}" Grid.Column="1" Width="220"
+                     PlaceholderText="192.168.1.10" Text="{Binding PcIp, Mode=TwoWay}"/>
+          </Grid>
+          <Grid ColumnDefinitions="150,Auto">
+            <TextBlock Text="PC port" VerticalAlignment="Center"/>
+            <NumericUpDown Name="PcPortBox" Classes.Invalid="{Binding PortsInvalid}" Grid.Column="1" Width="140"
+                           Minimum="1" Maximum="65535" FormatString="0" Value="{Binding PcPort, Mode=TwoWay}"/>
+          </Grid>
+          <Grid ColumnDefinitions="150,Auto">
+            <TextBlock Text="Controller port" VerticalAlignment="Center"/>
+            <NumericUpDown Name="LocalPortBox" Classes.Invalid="{Binding PortsInvalid}" Grid.Column="1" Width="140"
+                           Minimum="1" Maximum="65535" FormatString="0" Value="{Binding LocalPort, Mode=TwoWay}"/>
+          </Grid>
+        </StackPanel>
+        <controls:StatusLine Name="WifiErrorText" Classes="Caption" Tone="Danger" Text="{Binding WifiError}"
+                             IsVisible="{Binding WifiError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+      </StackPanel>
+    </StackPanel>
+
+    <StackPanel Name="SimulatorSection" Spacing="12" IsVisible="{Binding IsSimulatorTab}">
+      <Grid ColumnDefinitions="150,Auto">
+        <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
+        <NumericUpDown Name="WebSocketPortBox" Grid.Column="1" Width="160"
+                       Minimum="1024" Maximum="65535" FormatString="0"
+                       Value="{Binding Connection.WebSocketPort, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
+      </Grid>
+    </StackPanel>
+
+    <TextBlock Name="InUseNote" Classes="Caption" Text="In use" IsVisible="{Binding TabInUse}"/>
+    <Button Name="UseButton" HorizontalAlignment="Left" Click="OnUse" IsVisible="{Binding CanUseTab}"
+            Content="{Binding Tab, Converter={x:Static hwviews:ConnectionDialog.UseText}}"/>
+
+    <Button Name="ConnectionDone" Classes="Primary" Content="Done" HorizontalAlignment="Right" Click="OnDone"/>
+  </StackPanel>
+</UserControl>
