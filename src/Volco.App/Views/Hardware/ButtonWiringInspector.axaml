@@ -9,7 +9,7 @@
        Remove Button N -->
   <StackPanel Classes="WiringBody">
     <Border Classes="InspectorRows">
-      <StackPanel Name="Rows">
+      <controls:CardRows Name="Rows">
         <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
 
         <Grid Name="LightRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -44,25 +44,29 @@
           </Border>
         </Grid>
 
-        <Button Name="BusLink" Classes="InspectorRow" IsVisible="{Binding IsScreen}" Command="{Binding OpenBusCommand}">
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <TextBlock Name="BusLinkText" Classes="RowLabel" VerticalAlignment="Center" Text="{Binding BusLinkText}"/>
-            <PathIcon Grid.Column="1" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
-          </Grid>
-        </Button>
         <Grid Name="BusRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding IsScreen}">
           <TextBlock Name="BusLabel" Classes="RowLabel" Text="Bus"/>
           <ComboBox Name="BusBox" Grid.Column="1" Classes="RowControl"
                     ItemsSource="{x:Static hw:ButtonWiringViewModel.BusChoices}"
                     SelectedIndex="{Binding BusIndex, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
         </Grid>
+        <!-- The bus's pins and clock are the bus's, shared by its screens: they are set in the I2C
+             buses dialog, which this opens at the bus -->
+        <Button Name="BusLink" Classes="InspectorRow" IsVisible="{Binding IsScreen}" Command="{Binding OpenBusCommand}">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+            <TextBlock Name="BusLinkLabel" Classes="RowLabel" VerticalAlignment="Center" Text="{Binding BusLinkLabel}"/>
+            <TextBlock Name="BusLinkText" Grid.Column="1" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
+                       TextWrapping="Wrap" Text="{Binding BusLinkText}"/>
+            <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+          </Grid>
+        </Button>
         <Grid Name="AddressRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding IsScreen}">
           <TextBlock Name="AddressLabel" Classes="RowLabel" Text="Address"/>
           <ComboBox Name="AddressBox" Grid.Column="1" Classes="RowControl"
                     ItemsSource="{x:Static hw:ButtonWiringViewModel.AddressChoices}"
                     SelectedIndex="{Binding AddressIndex, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
         </Grid>
-      </StackPanel>
+      </controls:CardRows>
     </Border>
     <Button Name="HardwareRemoveButton" Classes="Danger" HorizontalAlignment="Left"
             Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" IsEnabled="{Binding IsEditable}"/>

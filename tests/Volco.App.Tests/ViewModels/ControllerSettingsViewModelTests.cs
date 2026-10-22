@@ -52,7 +52,7 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
             Controller.Draft.Buttons[0].Screen = new Screen();
             Controller.OnDraftEdited();
         }
-        return _vm = new ControllerSettingsViewModel(Controller, () => { }, _settings!.Hardware.PinField);
+        return _vm = new ControllerSettingsViewModel(Controller, () => { }, () => { });
     }
 
     [Fact]
@@ -77,6 +77,25 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         vm.DimAfterIndex = 3;   // 5 minutes
         Assert.True(Controller.DimEnabled);
         Assert.Equal(300m, Controller.DimAfterS);
+    }
+
+    /// <summary>"When off, the first press only wakes it" is Turn off after's sub-option: it can
+    /// be set only while the screens turn off, and Never keeps its value.</summary>
+    [Fact]
+    public void FirstPressOnlyWakesNeedsTurnOff()
+    {
+        var vm = SetUp();
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        Controller.OffEnabled = true;
+        Assert.True(vm.CanSetFirstPressOnlyWakes);
+        var wakes = vm.FirstPressOnlyWakes;
+
+        vm.OffAfterIndex = 0;   // Never
+        Assert.False(Controller.OffEnabled);
+        Assert.False(vm.CanSetFirstPressOnlyWakes);
+        Assert.Contains(nameof(ControllerSettingsViewModel.CanSetFirstPressOnlyWakes), changed);
+        Assert.Equal(wakes, vm.FirstPressOnlyWakes);   // kept for when the screens turn off again
     }
 
     [Fact]
@@ -114,19 +133,24 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         var vm = SetUp(screen: false);
         Assert.False(vm.ShowScreens);
         Assert.False(vm.IsScreensOpen);
-        Assert.Equal(ControllerSettingsViewModel.InputSection, vm.OpenSection);
+        Assert.True(vm.IsInputOpen);
     }
 
+    /// <summary>Screens and Input feel open and close on their own (user, 2026-10-22).</summary>
     [Fact]
-    public void OneSectionOpenAtATime()
+    public void SectionsOpenIndependently()
     {
         var vm = SetUp();
-        Assert.Equal(ControllerSettingsViewModel.ScreensSection, vm.OpenSection);
-        vm.ToggleSection(ControllerSettingsViewModel.InputSection);
-        Assert.True(vm.IsInputOpen);
-        Assert.False(vm.IsScreensOpen);
-        vm.ToggleSection(ControllerSettingsViewModel.InputSection);
+        Assert.True(vm.IsScreensOpen);
         Assert.False(vm.IsInputOpen);
+        vm.ToggleInputCommand.Execute(null);
+        Assert.True(vm.IsInputOpen);
+        Assert.True(vm.IsScreensOpen);   // both open
+        vm.ToggleScreensCommand.Execute(null);
+        Assert.False(vm.IsScreensOpen);
+        Assert.True(vm.IsInputOpen);
+        vm.ToggleInputCommand.Execute(null);
+        Assert.False(vm.IsInputOpen);   // both closed
     }
 
     [Fact]

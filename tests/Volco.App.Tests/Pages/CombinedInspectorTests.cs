@@ -115,9 +115,9 @@ public sealed class CombinedInspectorTests : IDisposable
         Settle(s.Window);
     }
 
-    private static SliderInspector SliderInspector(Shown s) => s.Page.GetVisualDescendants().OfType<SliderInspector>().Single();
+    private static SliderInspector SliderInspector(Shown s) => s.Page.GetVisualDescendants().OfType<SliderInspector>().Single(i => !i.IsProbe);
 
-    private static ButtonInspector ButtonInspector(Shown s) => s.Page.GetVisualDescendants().OfType<ButtonInspector>().Single();
+    private static ButtonInspector ButtonInspector(Shown s) => s.Page.GetVisualDescendants().OfType<ButtonInspector>().Single(i => !i.IsProbe);
 
     private static HardwareSection Section(Control inspector) => In<HardwareSection>(inspector, "HardwareSection");
 
@@ -134,7 +134,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(In<Border>(inspector, "ControlsHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(inspector, "ControlsBody").IsEffectivelyVisible);
         Assert.True(In<Button>(inspector, "ControlsRow").IsEffectivelyVisible);
-        Assert.True(In<Border>(inspector, "ResponseSection").IsEffectivelyVisible);
+        Assert.True(In<ToggleButton>(inspector, "ResponseToggle").IsEffectivelyVisible);
         var section = Section(inspector);
         Assert.True(In<Border>(section, "HardwareHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(section, "HardwareBody").IsEffectivelyVisible);
@@ -146,7 +146,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.DoesNotContain(inspector.GetVisualDescendants().OfType<ToggleButton>(), t => t.Name is "ControlsHeader" or "HardwareHeader");
         Assert.DoesNotContain(inspector.GetVisualDescendants(), v => v is Control { Name: "HardwareSummaryText" });
         // Hardware sits under Controls.
-        var controls = In<DockPanel>(inspector, "ControlsSection");
+        var controls = In<StackPanel>(inspector, "ControlsSection");
         double Top(Visual v) => v.TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
         Assert.True(Top(section) >= Top(controls) + controls.Bounds.Height - 1);
 
@@ -161,39 +161,118 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.DoesNotContain(button.GetVisualDescendants().OfType<ToggleButton>(), t => t.Name is "ActionsHeader" or "HardwareHeader");
     }
 
-    [AvaloniaFact]
-    public void HardwareTakesABottomThird()
-    {
-        using var s = Show(width: 1100, height: 720);
-        Select(s, s.Vm.Sliders.Items[0]);
-        var inspector = SliderInspector(s);
-        var third = In<Grid>(inspector, "Sections").Bounds.Height / 3;
-        Assert.InRange(Section(inspector).Bounds.Height, third - 8, third + 8);
-        Assert.InRange(In<DockPanel>(inspector, "ControlsSection").Bounds.Height, 2 * third - 8, 2 * third + 8);
+    /// <summary>Where the Hardware section starts, from the top of the side panel's card.</summary>
+    private static double HardwareTop(Shown s, Control inspector)
+        => Section(inspector).TranslatePoint(new Point(0, 0), In<Border>(s.Page, "Inspector"))!.Value.Y;
 
-        Select(s, s.Vm.Buttons.Items[0]);
-        var button = ButtonInspector(s);
-        third = In<Grid>(button, "Sections").Bounds.Height / 3;
-        Assert.InRange(Section(button).Bounds.Height, third - 8, third + 8);
+    /// <summary>The bottom of the header and the Controls or Actions section, from the top of the card.</summary>
+    private static double ContentBottom(Shown s, Control inspector)
+    {
+        var top = In<StackPanel>(inspector, "TopContent");
+        return top.TranslatePoint(new Point(0, top.Bounds.Height), In<Border>(s.Page, "Inspector"))!.Value.Y;
     }
 
     [AvaloniaFact]
-    public void HardwareKeepsItsMinimumWhenShort()
+    public void HardwareStartsAtOneHeightForEveryTile()
+    {
+        using var s = Show(width: 1100, height: 900);
+        var items = new object[] { s.Vm.Sliders.Items[0], s.Vm.Buttons.Items[0], s.Vm.Buttons.Items[2], s.Vm.Sliders.Items[4] };
+        var tops = new List<double>();
+        var gaps = new List<double>();
+        foreach (var open in new[] { false, true })
+            foreach (var item in items)
+            {
+                // Response or Timing closed, then open
+                if (item is SliderItemViewModel slider) slider.IsAdvancedOpen = open;
+                else ((ButtonItemViewModel)item).IsAdvancedOpen = open;
+                Select(s, item);
+                Control inspector = item is SliderItemViewModel ? SliderInspector(s) : ButtonInspector(s);
+                var top = HardwareTop(s, inspector);
+                tops.Add(top);
+                if (open) gaps.Add(top - ContentBottom(s, inspector));
+            }
+
+        // The same height for sliders and buttons, their sub-sections open or closed…
+        Assert.All(tops, t => Assert.InRange(t, tops[0] - 0.5, tops[0] + 0.5));
+        // …under every tile's content with its sub-section open, and no lower than the tallest one needs.
+        Assert.All(gaps, g => Assert.True(g >= -0.5, $"gap {g}"));
+        Assert.InRange(gaps.Min(), -0.5, 0.5);
+        Assert.True(gaps.Max() > 1, "a slider's Controls section is shorter than a button's Actions");
+    }
+
+    /// <summary>Opening Response or Timing doesn't move the Hardware section: the probes measure
+    /// every tile with its sub-section open (user, 2026-10-22).</summary>
+    [AvaloniaFact]
+    public void OpeningASubSectionDoesNotMoveHardware()
+    {
+        using var s = Show(width: 1100, height: 900);
+        var item = s.Vm.Buttons.Items[0];
+        Select(s, item);
+        var inspector = ButtonInspector(s);
+        Assert.False(In<Border>(inspector, "TimingBody").IsEffectivelyVisible);
+        var closed = HardwareTop(s, inspector);
+        var height = s.Page.InspectorTopHeight;
+
+        In<ToggleButton>(inspector, "TimingToggle").IsChecked = true;   // no click: it would scroll the card
+        Settle(s.Window);
+        Assert.True(item.IsAdvancedOpen);
+        Assert.True(In<Border>(inspector, "TimingBody").IsEffectivelyVisible);
+        Assert.Equal(height, s.Page.InspectorTopHeight, 1);
+        Assert.Equal(closed, HardwareTop(s, inspector), 1);
+        Assert.True(HardwareTop(s, inspector) >= ContentBottom(s, inspector) - 0.5, "Timing's rows fit above Hardware");
+
+    }
+
+    /// <summary>The page keeps no copy of an inspector once the tiles are measured: one per tile
+    /// made showing the page again several times slower (every control is styled anew on return).
+    /// A change that can move a tile's height measures it again.</summary>
+    [AvaloniaFact]
+    public void ThePageKeepsNoProbe()
+    {
+        using var s = Show(width: 1100, height: 900);
+        Select(s, s.Vm.Buttons.Items[0]);
+        Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<TileInspector>(), i => i.IsProbe);
+        Assert.Single(s.Page.GetVisualDescendants().OfType<TileInspector>());   // the real one
+        var height = s.Page.InspectorTopHeight;
+        Assert.True(height > 0);
+
+        // A much longer action name wraps onto more lines: the height follows, and the probe goes again
+        var slot = s.Vm.Buttons.Items[1].Press;
+        slot.SelectedChoice = ActionCatalog.For(ButtonActionType.RunScript);
+        slot.CommandPath = @"C:\Users\someone\Documents\Scripts\a very long script name that wraps over several lines in the inspector.ps1";
+        Settle(s.Window);
+        Assert.True(s.Page.InspectorTopHeight >= height - 0.5);
+        Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<TileInspector>(), i => i.IsProbe);
+    }
+
+    [AvaloniaFact]
+    public void TheInspectorScrollsAsOne()
     {
         using var s = Show(width: 820, height: 520);
         var item = s.Vm.Buttons.Items[0];
-        item.IsAdvancedOpen = true;   // Timing open: the Actions section is taller than its room
+        item.IsAdvancedOpen = true;   // Timing open: more than the card's room
         Select(s, item);
         var inspector = ButtonInspector(s);
-        var third = In<Grid>(inspector, "Sections").Bounds.Height / 3;
-        Assert.True(third < HardwareSection.HeaderHeight + HardwareSection.MinRowsHeight, $"third {third}");
-        var rows = In<ScrollViewer>(Section(inspector), "HardwareScroll");
-        Assert.True(rows.Bounds.Height >= HardwareSection.MinRowsHeight - 0.5, $"rows {rows.Bounds.Height}");
 
-        // The top section gives way and scrolls on its own.
-        var top = In<ScrollViewer>(inspector, "ActionsScroll");
-        Assert.True(top.Extent.Height > top.Viewport.Height + 1, $"extent {top.Extent.Height}, viewport {top.Viewport.Height}");
+        // No section scrolls on its own: the card does.
+        Assert.DoesNotContain(inspector.GetVisualDescendants().OfType<ScrollViewer>(),
+                              v => v.Name is "ActionsScroll" or "ControlsScroll" or "HardwareScroll");
+        Assert.Same(In<ScrollViewer>(s.Page, "InspectorScroll"), inspector.FindAncestorOfType<ScrollViewer>());
+        var scroll = In<ScrollViewer>(s.Page, "InspectorScroll");
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height + 1, $"extent {scroll.Extent.Height}, viewport {scroll.Viewport.Height}");
         Assert.True(In<Border>(inspector, "ActionsHeader").IsEffectivelyVisible);
+        Assert.True(In<Border>(Section(inspector), "HardwareHeader").IsEffectivelyVisible);
+    }
+
+    /// <summary>The side panel is a card with all four edges, not a column cut off by the window.</summary>
+    [AvaloniaFact]
+    public void TheSidePanelIsACard()
+    {
+        using var s = Show();
+        var card = In<Border>(s.Page, "Inspector");
+        Assert.Equal(new Thickness(1), card.BorderThickness);
+        Assert.True(card.CornerRadius.TopLeft > 0);
+        Assert.True(card.Margin.Top > 0 && card.Margin.Right > 0 && card.Margin.Bottom > 0);
     }
 
     [AvaloniaFact]
@@ -357,7 +436,7 @@ public sealed class CombinedInspectorTests : IDisposable
         var settings = s.Host.GetVisualDescendants().OfType<ControllerSettingsInspector>().Single();
         Assert.True(settings.IsEffectivelyVisible);
         Assert.False(In<ContentControl>(s.Page, "InspectorContent").IsVisible);
-        Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<SliderInspector>(), i => i.IsEffectivelyVisible);
+        Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<SliderInspector>(), i => !i.IsProbe && i.IsEffectivelyVisible);
 
         Select(s, s.Vm.Sliders.Items[0]);   // a tile brings its inspector back
         Assert.True(SliderInspector(s).IsEffectivelyVisible);

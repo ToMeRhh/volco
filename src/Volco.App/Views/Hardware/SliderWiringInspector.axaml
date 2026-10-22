@@ -9,17 +9,19 @@
        Remove Slider N -->
   <StackPanel Classes="WiringBody">
     <Border Classes="InspectorRows">
-      <StackPanel Name="Rows">
+      <controls:CardRows Name="Rows">
         <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
 
         <!-- A draft field: until saved, the caption says that saving forgets the calibration -->
         <Grid Name="AutoCalibrateRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Name="AutoCalibrateLabel" Classes="RowLabel" Text="Auto-calibrate"/>
-            <TextBlock Name="AutoCalibrateNote" Classes="Caption" FontSize="11" TextTrimming="CharacterEllipsis"
+          <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+            <controls:HelpTip Name="AutoCalibrateHelp"
+                              Text="Some sliders never reach their ends' readings, so the volume never gets to 0 or 100%. With this on, the controller learns where this slider's travel really ends, all the time, and stretches the reading between those ends; it only ever widens what it learned. Off, it learns only during Re-calibrate."/>
+            <TextBlock Name="AutoCalibrateLabel" Grid.Column="1" Classes="RowLabel" Text="Auto-calibrate"/>
+            <TextBlock Name="AutoCalibrateNote" Grid.Column="1" Grid.Row="1" Classes="Caption" FontSize="11" TextTrimming="CharacterEllipsis"
                        Text="{Binding AutoCalibrateNote}" ToolTip.Tip="{Binding AutoCalibrateNote}"
                        IsVisible="{Binding AutoCalibrateNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-          </StackPanel>
+          </Grid>
           <ToggleSwitch Name="AutoCalibrateToggle" Grid.Column="1" OnContent="" OffContent=""
                         IsChecked="{Binding AutoCalibrate, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
         </Grid>
@@ -34,7 +36,7 @@
             <Button Name="RecalibrateButton" Content="Re-calibrate" Command="{Binding RecalibrateCommand}"/>
           </Panel>
         </Grid>
-      </StackPanel>
+      </controls:CardRows>
     </Border>
     <Button Name="HardwareRemoveButton" Classes="Danger" HorizontalAlignment="Left"
             Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" IsEnabled="{Binding IsEditable}"/>

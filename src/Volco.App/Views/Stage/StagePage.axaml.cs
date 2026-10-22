@@ -58,6 +58,9 @@ public partial class StagePage : UserControl
     public static readonly StyledProperty<Control?> HardwareSidePanelProperty =
         AvaloniaProperty.Register<StagePage, Control?>(nameof(HardwareSidePanel));
 
+    public static readonly StyledProperty<double> InspectorTopHeightProperty =
+        AvaloniaProperty.Register<StagePage, double>(nameof(InspectorTopHeight));
+
     public static readonly StyledProperty<HardwareViewModel?> HardwareProperty =
         AvaloniaProperty.Register<StagePage, HardwareViewModel?>(nameof(Hardware));
 
@@ -68,6 +71,16 @@ public partial class StagePage : UserControl
     {
         get => GetValue(HardwareProperty);
         set => SetValue(HardwareProperty, value);
+    }
+
+    /// <summary>How far down a tile's inspector its Hardware section starts (controller-page spec
+    /// §4.3): the tallest header and Controls or Actions section of the drawn tiles, with their
+    /// sub-sections (Response, Timing) open, measured on an unseen copy. A tile's inspector is at
+    /// least this tall above its Hardware section, so that section never moves.</summary>
+    public double InspectorTopHeight
+    {
+        get => GetValue(InspectorTopHeightProperty);
+        private set => SetValue(InspectorTopHeightProperty, value);
     }
 
     /// <summary>The controller's part of the side panel (the preset chooser, Controller settings and
@@ -103,6 +116,7 @@ public partial class StagePage : UserControl
         _inspector = this.FindControl<ContentControl>("InspectorContent")!;
         _sliderList = this.FindControl<ItemsControl>("SliderList")!;
         _buttonList = this.FindControl<ItemsControl>("ButtonList")!;
+        InitInspectorProbe();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -251,6 +265,7 @@ public partial class StagePage : UserControl
              : hw is not null && !hw.Sliders.SequenceEqual(vm.Sliders.Items) ? hw.Sliders : vm.Sliders.Items);
         Show(_buttonList, vm is null ? null
              : hw is not null && !hw.Buttons.SequenceEqual(vm.Buttons.Items) ? hw.Buttons : vm.Buttons.Items);
+        ProbeTiles();
 
         static void Show(ItemsControl list, IEnumerable? items)
         {

@@ -492,14 +492,31 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// while a tile (or nothing) is selected.</summary>
     public object? InspectedPanel => Inspected as ControllerSettingsViewModel;
 
-    /// <summary>A button's bus link: Controller settings, with Screens and bus <paramref name="bus"/>'s
-    /// row open.</summary>
-    public void ShowBus(int bus)
+    /// <summary>A button's bus link: the I2C buses dialog, bus <paramref name="bus"/>'s card marked.</summary>
+    public void ShowBus(int bus) => OpenBuses(bus);
+
+    // ── The I2C buses dialog (controller-page spec §4.3) ─────────────────────────────────────
+
+    /// <summary>The open I2C buses dialog's view model, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusesOpen))]
+    private I2cBusesViewModel? _buses;
+
+    /// <summary>The I2C buses dialog is open.</summary>
+    public bool IsBusesOpen => Buses is not null;
+
+    /// <summary>Opens the I2C buses dialog (Controller settings › Screens, a button's bus link),
+    /// with <paramref name="bus"/>'s card marked; not during the hardware test.</summary>
+    public void OpenBuses(int? bus = null)
     {
-        if (_disposed || IsTesting) return;
-        SelectControllerSettings();
-        (Inspected as ControllerSettingsViewModel)?.OpenBus(bus);
+        if (_disposed || IsTesting || Buses is not null) return;
+        I2cBusesViewModel? dialog = null;
+        dialog = new I2cBusesViewModel(_controller, PinField, () => { if (ReferenceEquals(Buses, dialog)) CloseBuses(); }, bus);
+        Buses = dialog;
     }
+
+    /// <summary>Closes the I2C buses dialog; its edits stay in the draft.</summary>
+    public void CloseBuses() => Buses = null;
 
     private void OnControlsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -515,7 +532,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         object? next = Inspected;
         if (_settingsSelected)
         {
-            if (Inspected is not ControllerSettingsViewModel) next = new ControllerSettingsViewModel(_controller, () => OpenConnection(true), PinField);
+            if (Inspected is not ControllerSettingsViewModel) next = new ControllerSettingsViewModel(_controller, () => OpenConnection(true), () => OpenBuses());
         }
         else if (_controls.Selected is SliderItemViewModel slider && Sliders.IndexOf(slider) is >= 0 and var si)
         {
@@ -556,6 +573,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
                 break;
             case ControllerSettingsViewModel settings: settings.RefreshBuses(); break;
         }
+        Buses?.Refresh();
     }
 
     /// <summary>"Remove Slider N?"; once removed, the tile now at its place (else the one before)
@@ -721,6 +739,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private void OnTestingChanged()
     {
         if (_disposed) return;
+        if (IsTesting) CloseBuses();   // the test runs on the drawing, under no dialog
         _testPresses.Clear();
         _testHeld.Clear();
         OnPropertyChanged(nameof(IsTesting));
@@ -825,6 +844,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _runtime.CalibrationChanged -= OnCalibrationChanged;
         Status.Dispose();
         CloseCalibration();
+        CloseBuses();
         Compare?.Dispose();
         ConnectionDialog?.Dispose();
         LeavePrompt?.Dispose();

@@ -15,16 +15,12 @@ public sealed record DurationChoice(string Label, uint? Seconds, bool IsCustom =
 
 /// <summary>
 /// The Hardware inspector of the controller's settings (hardware-page spec §6.6): Screens, Input feel
-/// and Wi-Fi, one open at a time, in plain words over the draft's raw fields (which stay under
+/// and Wi-Fi, each opened and closed on its own, in plain words over the draft's raw fields (which stay under
 /// Fine tune). A value off a list shows as "Custom (90 s)" and is kept. Every edit goes through
 /// <see cref="ControllerViewModel"/>, which checks <see cref="ControllerViewModel.CanEdit"/>.
 /// </summary>
 public sealed partial class ControllerSettingsViewModel : ObservableObject, IDisposable
 {
-    public const int ScreensSection = 0;
-    public const int InputSection = 1;
-    public const int WifiSection = 2;
-
     // Dimmed to: Low and Medium (the firmware's default is Low).
     private const uint Low = 8;
     private const uint Medium = 48;
@@ -40,17 +36,17 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     private readonly ControllerViewModel _controller;
     private readonly Action _openWifi;
-    private readonly Func<PinOwner, PinFieldViewModel> _pin;
 
-    /// <param name="pin">The pin field of a use (a bus's SDA or SCL), shared with the rest of the page.</param>
-    public ControllerSettingsViewModel(ControllerViewModel controller, Action openWifi, Func<PinOwner, PinFieldViewModel> pin)
+    /// <param name="openBuses">Opens the I2C buses dialog.</param>
+    public ControllerSettingsViewModel(ControllerViewModel controller, Action openWifi, Action openBuses)
     {
         _controller = controller;
         _openWifi = openWifi;
-        _pin = pin;
-        _openSection = ShowScreens ? ScreensSection : InputSection;
-        RefreshBuses();
+        _screensOpen = ShowScreens;
+        _isInputOpen = !ShowScreens;
         OpenWifiCommand = new RelayCommand(_openWifi);
+        OpenBusesCommand = new RelayCommand(openBuses);
+        RefreshBuses();
         _controller.PropertyChanged += OnControllerChanged;
     }
 
@@ -59,38 +55,32 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     public string Title => "Controller";
 
-    /// <summary>"ESP32 · 5 sliders, 4 buttons".</summary>
-    public string Subtitle
-    {
-        get
-        {
-            var draft = _controller.Draft;
-            var counts = $"{Count(draft.Sliders.Count, "slider")}, {Count(draft.Buttons.Count, "button")}";
-            return _controller.ChipText is { Length: > 0 } chip ? $"{chip} · {counts}" : counts;
-        }
-    }
-
-    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
-
     /// <summary>The draft can be edited: the rows are enabled.</summary>
     public bool IsEditable => _controller.CanEdit;
 
     // ── Sections ─────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The open section (<see cref="ScreensSection"/>, <see cref="InputSection"/>,
-    /// <see cref="WifiSection"/>), or -1 for none; opening one closes the others.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsScreensOpen), nameof(IsInputOpen))]
-    private int _openSection;
+    // Each section opens and closes on its own (user, 2026-10-22): Screens and Input feel can be
+    // open together. Screens starts open, Input feel only when there is no Screens section.
+    private bool _screensOpen;
 
-    public bool IsScreensOpen => ShowScreens && OpenSection == ScreensSection;
-    public bool IsInputOpen => OpenSection == InputSection;
+    /// <summary>Screens is open (never while no button has a screen).</summary>
+    public bool IsScreensOpen
+    {
+        get => ShowScreens && _screensOpen;
+        set
+        {
+            if (_screensOpen == value) return;
+            _screensOpen = value;
+            OnPropertyChanged();
+        }
+    }
 
-    /// <summary>A header's click: opens its section, or closes it when it is the open one.</summary>
-    public void ToggleSection(int section) => OpenSection = OpenSection == section ? -1 : section;
+    /// <summary>Input feel is open.</summary>
+    [ObservableProperty] private bool _isInputOpen;
 
-    [RelayCommand] private void ToggleScreens() => ToggleSection(ScreensSection);
-    [RelayCommand] private void ToggleInput() => ToggleSection(InputSection);
+    [RelayCommand] private void ToggleScreens() => IsScreensOpen = !IsScreensOpen;
+    [RelayCommand] private void ToggleInput() => IsInputOpen = !IsInputOpen;
     [RelayCommand] private void ToggleScreensFine() => IsScreensFineOpen = !IsScreensFineOpen;
     [RelayCommand] private void ToggleInputFine() => IsInputFineOpen = !IsInputFineOpen;
 
@@ -202,12 +192,17 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         set => _controller.PixelShiftEnabled = value;
     }
 
-    /// <summary>The first press after the screen sleeps only wakes it.</summary>
+    /// <summary>The first press after the screen turned off only wakes it (a sub-option of
+    /// Turn off after; a dimmed screen passes the press on).</summary>
     public bool FirstPressOnlyWakes
     {
         get => _controller.WakeSwallowsPress;
         set => _controller.WakeSwallowsPress = value;
     }
+
+    /// <summary>The screens turn off (Turn off after isn't Never): only then does
+    /// <see cref="FirstPressOnlyWakes"/> apply.</summary>
+    public bool CanSetFirstPressOnlyWakes => _controller.OffEnabled;
 
     private static uint Seconds(decimal? value) => (uint)(value ?? 0);
 
@@ -233,41 +228,33 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     // ── I2C buses (controller-page spec §4.3) ────────────────────────────────────────────────
 
-    private IReadOnlyList<BusWiringViewModel> _buses = [];
     private readonly HashSet<int> _problemBuses = new();
 
-    /// <summary>One row per I2C bus a screen uses, in bus order, in the Screens section.</summary>
-    public IReadOnlyList<BusWiringViewModel> Buses => _buses;
+    /// <summary>"Buses 0 and 2", "Bus 0", "None"; or, while one has a problem, "Bus 0 needs
+    /// attention" (<see cref="BusesHaveProblem"/>).</summary>
+    [ObservableProperty] private string _busesSummary = "";
 
-    /// <summary>Opens Screens and bus <paramref name="bus"/>'s row (the button's bus link).</summary>
-    public void OpenBus(int bus)
-    {
-        if (!ShowScreens) return;
-        OpenSection = ScreensSection;
-        if (_buses.FirstOrDefault(b => b.Bus == bus) is { } row) row.IsOpen = true;
-    }
+    /// <summary>The draft has a problem with a bus: the summary is red.</summary>
+    [ObservableProperty] private bool _busesHaveProblem;
 
-    /// <summary>Follows the draft: a row per bus a screen uses, each re-read; a bus that gains a
-    /// problem opens its row (once per problem) and the Screens section.</summary>
+    /// <summary>The I2C buses row's Edit: opens the I2C buses dialog.</summary>
+    public IRelayCommand OpenBusesCommand { get; }
+
+    /// <summary>Follows the draft: the buses row's summary; a bus that gains a problem opens the
+    /// Screens section (once per problem), where the row is.</summary>
     internal void RefreshBuses()
     {
-        var used = _controller.Draft.Buttons.Where(b => b.IndicatorCase == Button.IndicatorOneofCase.Screen)
-                              .Select(b => (int)b.Screen.Bus).Where(b => b <= 3).Distinct().Order().ToList();
-        if (!_buses.Select(b => b.Bus).SequenceEqual(used))
-        {
-            var old = _buses.ToDictionary(b => b.Bus);
-            _buses = used.Select(bus => old.TryGetValue(bus, out var row) ? row
-                : new BusWiringViewModel(bus, _controller, _pin(new PinOwner(PinOwnerKind.BusSda, bus)),
-                                         _pin(new PinOwner(PinOwnerKind.BusScl, bus)))).ToList();
-            OnPropertyChanged(nameof(Buses));
-        }
-        foreach (var row in _buses)
-        {
-            row.Refresh();
-            if (!row.HasProblem) _problemBuses.Remove(row.Bus);
-            else if (_problemBuses.Add(row.Bus)) { row.IsOpen = true; OpenSection = ScreensSection; }
-        }
-        _problemBuses.IntersectWith(used);
+        var listed = I2cBusesViewModel.Listed(_controller.Draft);
+        var problems = listed.Where(bus => _controller.Problems.Any(p => p.Item == bus
+            && p.Field is ConfigField.I2cMissing or ConfigField.I2cPins or ConfigField.I2cClock)).ToList();
+        BusesHaveProblem = problems.Count > 0;
+        BusesSummary = problems.Count > 0 ? $"Bus {problems[0]} needs attention"
+            : listed.Count == 0 ? "None"
+            : listed.Count == 1 ? $"Bus {listed[0]}"
+            : $"Buses {BusWiringViewModel.Join(listed.Select(b => $"{b}").ToList())}";
+        foreach (var bus in problems)
+            if (_problemBuses.Add(bus)) IsScreensOpen = true;
+        _problemBuses.IntersectWith(problems);
     }
 
     // ── Input feel ───────────────────────────────────────────────────────────────────────────
@@ -320,9 +307,10 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     private static readonly string[] Watched =
     {
-        nameof(Subtitle), nameof(IsEditable), nameof(ShowScreens), nameof(IsScreensOpen), nameof(ScreensSummary),
+        nameof(IsEditable), nameof(ShowScreens), nameof(IsScreensOpen), nameof(ScreensSummary),
         nameof(BrightnessPct), nameof(BrightnessSlider), nameof(DimAfter), nameof(DimAfterIndex), nameof(OffAfter),
         nameof(OffAfterIndex), nameof(DimmedTo), nameof(DimmedToIndex), nameof(PreventBurnIn), nameof(FirstPressOnlyWakes),
+        nameof(CanSetFirstPressOnlyWakes),
         nameof(InputSummary), nameof(InputFeel), nameof(IsFeelLow), nameof(IsFeelNormal), nameof(IsFeelHigh),
         nameof(IsFeelCustom), nameof(WifiSummary),
     };
@@ -332,7 +320,12 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         // Any draft or state change can move a summary, a list's custom entry or the feel.
         RefreshBuses();
         foreach (var name in Watched) OnPropertyChanged(name);
-        if (!ShowScreens && OpenSection == ScreensSection) OpenSection = InputSection;
+        // The last screen went while Screens was open: Input feel opens, so something stays open
+        if (!ShowScreens && _screensOpen)
+        {
+            _screensOpen = false;
+            IsInputOpen = true;
+        }
     }
 
     public void Dispose() => _controller.PropertyChanged -= OnControllerChanged;

@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             xmlns:controls="using:Volco.App.Controls"
+             x:Class="Volco.App.Views.Hardware.I2cBusesDialog"
+             x:DataType="hw:I2cBusesViewModel">
+  <!-- The I2C buses dialog (controller-page spec §4.3): a card per bus, its header (number, kind,
+       which screens use it, Remove), its SDA and SCL pins and its clock; Add bus, then Done. The
+       edits go to the draft as they are made (the save bar), so Escape and the scrim are Done too. -->
+  <UserControl.Styles>
+    <Style Selector="Border.BusCard.focused">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+  </UserControl.Styles>
+  <DockPanel Margin="16,12,16,16">
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,14">
+      <TextBlock Name="BusesTitle" Classes="DialogTitle" Text="{Binding Title}"/>
+      <TextBlock Classes="Secondary" TextWrapping="Wrap"
+                 Text="A screen connects to an I2C bus: two wires, SDA for the data and SCL for the clock, that the screens on the bus share. Changes go to the controller when you save."/>
+    </StackPanel>
+    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
+      <Button Name="AddBusButton" Content="{Binding AddText}" Command="{Binding AddCommand}"/>
+      <Button Name="BusesDoneButton" Grid.Column="2" Classes="Primary" Content="Done" Command="{Binding DoneCommand}"/>
+    </Grid>
+    <Panel>
+      <TextBlock Name="NoBusesText" Classes="Secondary" TextWrapping="Wrap" IsVisible="{Binding HasNoBuses}"
+                 Text="No buses yet. Add one, then put a button's screen on it."/>
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <ItemsControl Name="BusCards" ItemsSource="{Binding Buses}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="10"/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="hw:BusWiringViewModel">
+              <Border Name="BusCard" Classes="InspectorRows BusCard" Classes.focused="{Binding IsFocused}">
+                <controls:CardRows>
+                  <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Name="BusTitle" Classes="SectionLabel" Text="{Binding Title}"/>
+                        <TextBlock Name="BusKind" Classes="Caption" VerticalAlignment="Center" Text="{Binding KindText}"/>
+                        <PathIcon Name="BusProblemMark" Classes="GroupProblem" Data="{StaticResource Icon.Status.Warning}"
+                                  IsVisible="{Binding HasProblem}" ToolTip.Tip="This bus's wiring has a problem"/>
+                      </StackPanel>
+                      <TextBlock Name="BusUsedBy" Classes="Caption" FontSize="11" TextWrapping="Wrap" Text="{Binding UsedByText}"/>
+                    </StackPanel>
+                    <!-- A disabled button gets no tooltip, so the tooltip is on a panel around it -->
+                    <Panel Grid.Column="1" VerticalAlignment="Center" Background="Transparent"
+                           ToolTip.Tip="{Binding RemoveTooltip}" ToolTip.ShowOnDisabled="True">
+                      <Button Name="BusRemoveButton" Content="Remove" Command="{Binding RemoveCommand}"/>
+                    </Panel>
+                  </Grid>
+                  <controls:PinField Name="SdaField" DataContext="{Binding Sda}"/>
+                  <controls:PinField Name="SclField" DataContext="{Binding Scl}"/>
+                  <Grid Name="ClockRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
+                      <controls:HelpTip Text="How fast the controller talks to the screens on this bus. 400 kHz suits most screens and draws faster; try 100 kHz if a screen flickers, shows garbage or stays blank, for example over long wires."/>
+                      <TextBlock Grid.Column="1" Classes="RowLabel" Text="Clock"/>
+                    </Grid>
+                    <ComboBox Name="ClockBox" Grid.Column="1" Classes="RowControl"
+                              ItemsSource="{x:Static hw:BusWiringViewModel.ClockChoices}"
+                              SelectedIndex="{Binding ClockIndex, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
+                  </Grid>
+                </controls:CardRows>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Panel>
+  </DockPanel>
+</UserControl>

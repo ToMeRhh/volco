@@ -60,7 +60,7 @@ The experiment's "hold button 1 at boot" reset is removed; Re-calibrate replaces
 
 ### What the Hardware section shows
 
-The slider's Hardware section (bottom third of the inspector) gets two rows between Pin and Remove, each one line:
+The slider's Hardware section (under Controls in the inspector) gets two rows between Pin and Remove, each one line:
 
 - **Auto-calibrate**: a toggle; a draft field, sent with Save like the pin. Changing it marks the Hardware section changed and, until saved, the row's caption says "Saving forgets this slider's calibration" (on → off and off → on alike).
 - **Calibration**: the state the controller reports, and the **Re-calibrate** button on the right:
