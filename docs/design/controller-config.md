@@ -103,6 +103,7 @@ The frame format is unchanged: `0xAA | length | type | body | XOR checksum`, `le
 | `0x04` | Button | C→PC | `index` u8, `pressed` u8 (1/0) |
 | `0x05` | ConfigData | C→PC | §5.3 |
 | `0x06` | ConfigResult | C→PC | §5.4 |
+| `0x09` | Calibration | C→PC | `index` u8, `flags` u8, `low` u16, `high` u16; `slider-calibration.md` |
 | `0x81` | HelloRequest | PC→C | none |
 | `0x82` | Heartbeat | PC→C | none |
 | `0x83` | Led | PC→C | `button` u8, `value` u8 |
@@ -114,7 +115,6 @@ The frame format is unchanged: `0xAA | length | type | body | XOR checksum`, `le
 | `0x89` | ConfigWriteChunk | PC→C | `seq` u8, `offset` u16, `data` (1–240 bytes) |
 | `0x8A` | ConfigWriteEnd | PC→C | `seq` u8 |
 | `0x8E` | Calibrate | PC→C | `index` u8, `action` u8 (0 query, 1 start, 2 done, 3 cancel); `slider-calibration.md` |
-| `0x09` | Calibration | C→PC | `index` u8, `flags` u8, `low` u16, `high` u16; `slider-calibration.md` |
 
 - **Sizes:** the largest payloads are ConfigData at 1 + 9 + 240 = 250 bytes and ConfigWriteChunk at 1 + 3 + 240 = 244 bytes. Both are within 255.
 - **Proof of life:** every PC→C frame, including the config frames, counts toward the host timeout, as every valid frame does today.

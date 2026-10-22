@@ -27,7 +27,7 @@ Some boards keep each slider's wiper away from the ADC rails (a resistor at each
 
 ### The learned ends
 
-As in the experiment: the controller keeps a low and a high end per slider, learned from the smoothed reading. Learning only ever **widens** the ends (an end moves out when the reading passes it, never back in). Until the span reaches 1000 codes the slider sends its raw reading; after that it sends the reading stretched between the ends, with 1.5 % of the span at each stop mapped to exactly 0 / 4095. These constants and the mapping are the experiment's `SliderEnds`, unchanged.
+As in the experiment: the controller keeps a low and a high end per slider, learned from the smoothed reading. Learning only ever **widens** the ends (an end moves out when the reading passes it, never back in). Until the span reaches 1000 codes the slider sends its raw reading; after that it sends the reading stretched between the ends, with 1.5 % of the span at each stop mapped to exactly 0 / 4095. The moment auto-calibration first learns a span, the stretched position goes out at once, whatever the deadband says. These constants and the mapping are the experiment's `SliderEnds`, unchanged.
 
 ### Auto-calibrate on (the default)
 
@@ -51,12 +51,12 @@ The experiment's "hold button 1 at boot" reset is removed; Re-calibrate replaces
 1. The user clicks **Re-calibrate** in the slider's Hardware section. A modal dialog opens over the window, like Connection and Compare: "Calibrate Slider 3", "Move the slider all the way to both ends, then click Done", a bar of 0-4095 showing the learned range with its two numbers, and Done / Cancel. It is interactive, so it is not the progress dialog (which is for work the user can't interrupt).
 2. The app tells the controller to start a sweep for that slider. The controller remembers the current ends (for Cancel), forgets them, and learns from every smoothed reading, whatever Auto-calibrate says. The controller reports the ends each time they widen (below), so the bar grows live.
 3. While the dialog is open, that slider's input does not reach audio (anti-goal above).
-4. **Done** is enabled only once the reported span is learned (1000 codes); until then the dialog says "Keep moving: the travel is too short so far". Done ends the sweep and stores the ends; the dialog closes and the Hardware section says "Calibrated: 170-2550". So a finished sweep is always a learned one (my call: a short Done would otherwise throw away a good calibration). No restart: the ends are not part of the controller config.
+4. **Done** is enabled only once the reported span is learned (1000 codes); until then the dialog says "Keep moving: the travel is too short so far". Done ends the sweep and stores the ends; the dialog closes on the ending report (or after 2 s without one, cancelling a sweep the controller didn't end) and the Hardware section says "Calibrated: 170-2550". So a finished sweep is always a learned one (my call: a short Done would otherwise throw away a good calibration). No restart: the ends are not part of the controller config.
 5. **Cancel**, Escape, a click on the scrim, hiding the window: the controller ends the sweep and restores the ends it had before it started. (The dialog is window-level, so the sidebar and the other page can't be reached while it is open.)
-6. The controller ends a sweep by itself, as a Cancel, when the host is lost or 60 s pass without Done (the app is gone). The dialog closes and the status banner says why if the link dropped.
+6. The controller ends a sweep by itself, as a Cancel, when the host is lost or 60 s pass without Done (the app is gone). The dialog closes and the status banner says why if the link dropped. A report that says a slider is sweeping while the app holds no sweep for it (the app restarted mid-sweep) gets a Cancel at once.
 7. When a sweep ends (any way), the controller sends the slider's Calibration report and then a fresh Slider frame with its position stretched by the final ends, whatever the deadband says. The app releases the input hold when that report arrives, so the fresh position reaches audio (my call: the app's last position is from before the sweep and stretched by the old ends, so `ReapplySlider` would set a stale value).
 
-**Re-calibrate is enabled only when** the controller is connected (Ready), that slider has no unsaved Hardware changes (its pin and Auto-calibrate as saved are what the controller runs; the button's tooltip says "Save to controller first"), it is not a new slider, and no hardware test, save or firmware operation is running.
+**Re-calibrate is enabled only when** the controller is connected (Ready), that slider has no unsaved Hardware changes (its pin and Auto-calibrate as saved are what the controller runs; the button's tooltip says "Save to controller first"), the controller runs Volco's saved setup (else the tooltip says "Volco's setup differs from the controller's"), it is not a new slider, and no hardware test, save or firmware operation is running.
 
 ### What the Hardware section shows
 
@@ -67,7 +67,9 @@ The slider's Hardware section (bottom third of the inspector) gets two rows betw
   - "Calibrated: 170-2550" (learned).
   - "Not calibrated yet: move the slider end to end" (auto on, not learned).
   - "Not calibrated: uses the raw reading" (auto off, not learned).
-  - "—" while not connected or not yet reported.
+  - "—" while not connected or not yet reported (each Hello forgets the last reports until the answers).
+
+The caption is one line, trimmed with an ellipsis; its tooltip has the full text.
 
 Four rows (Pin, Auto-calibrate, Calibration, Remove) fit the Hardware section's minimum height. The tile is unchanged.
 
@@ -86,13 +88,13 @@ Two new messages; `kProtocolVersion` stays 1 (app and firmware ship together; th
 | `0x8E` | Calibrate | PC→controller | slider index, action (0 query, 1 start sweep, 2 done, 3 cancel) |
 | `0x09` | Calibration | controller→PC | slider index, flags (bit 0 learned, bit 1 sweeping, bit 2 auto-calibrate), low end (u16), high end (u16) |
 
-The controller answers every Calibrate with a Calibration for that slider. It also sends one whenever a slider's ends widen, in a sweep or by auto-calibration (at most every 100 ms per slider), and when it ends a sweep by itself, so the Hardware section and the sweep's bar stay live (my call). An index past the slider count is ignored. The app queries every slider after each Hello (the Controller page is the main page, so there is no "page open" condition).
+The controller answers every Calibrate with a Calibration for that slider. It also sends one whenever a slider's ends widen, in a sweep or by auto-calibration (at most every 100 ms per slider), and when it ends a sweep by itself, so the Hardware section and the sweep's bar stay live (my call). An index past the slider count is ignored. The app forgets every slider's last report and queries every slider after each Hello (the Controller page is the main page, so there is no "page open" condition).
 
 ### Firmware
 
 - Bring over `lib/volco_slider_ends` (pure, with its native tests) and `src/slider_ends_store.*` from `d52f641`, onto current `main` (re-apply its `main.cpp` hunks by hand; the file has moved on).
 - Add a pure piece in `lib/` (name left to the builder) that owns one slider's calibration: the `SliderEnds`, the Auto-calibrate setting, the sweep (start, done, cancel with the saved ends, the 60 s timeout, the host-lost cancel) and when a Calibration report is due. `main.cpp` and `Link` only feed it readings and frames. Native tests cover each rule in this document.
-- The NVS entry per slider becomes {pin, auto-calibrate, low, high}, looked up by pin (not by position) when the config loads; an entry whose auto-calibrate differs from the slider's setting, or whose pin no slider uses, is ignored (that is the "forgotten" rule). Stored at most every 5 s while learning, and once at the end of a sweep.
+- The NVS entry per slider becomes {pin, auto-calibrate, low, high}, all in one blob under a new key, `ends2`, in namespace `volco_ends` (the experiment's 5-byte entries under `ends` are removed at load, never read), looked up by pin (not by position) when the config loads; an entry whose auto-calibrate differs from the slider's setting, or whose pin no slider uses, is ignored (that is the "forgotten" rule). Stored at most every 5 s while learning, and once at the end of a sweep.
 - Remove the button-1-at-boot clear.
 - Golden frames for both messages in `firmware/test/golden/frames.txt`, checked by the firmware, the C# and the simulator tests.
 
