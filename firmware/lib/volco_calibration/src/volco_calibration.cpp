@@ -5,8 +5,10 @@ namespace volco {
 void SliderCalibration::reading(uint16_t smoothed, uint32_t) {
   if (!auto_ && !sweeping_) return;
   const uint16_t lo = ends_.lo(), hi = ends_.hi();
+  const bool was = ends_.learned();
   ends_.learn(smoothed);
   if (ends_.lo() != lo || ends_.hi() != hi) widened_ = true;
+  if (!was && ends_.learned() && !sweeping_) becameLearned_ = true;
 }
 
 bool SliderCalibration::startSweep(uint32_t now) {

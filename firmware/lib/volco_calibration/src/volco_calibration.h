@@ -48,6 +48,14 @@ class SliderCalibration {
     return e;
   }
 
+  // True once after Auto-calibrate first learned the span (not in a sweep, which ends with its own
+  // Slider frame): send the stretched position at once, whatever the deadband says.
+  bool becameLearned() {
+    bool b = becameLearned_;
+    becameLearned_ = false;
+    return b;
+  }
+
   bool learned() const { return ends_.learned(); }
   bool sweeping() const { return sweeping_; }
   bool autoCalibrate() const { return auto_; }
@@ -75,6 +83,7 @@ class SliderCalibration {
   bool reported_ = false;    // lastReport_ is set
   uint32_t lastReport_ = 0;
   bool sweepEnded_ = false;
+  bool becameLearned_ = false;
 };
 
 }  // namespace volco

@@ -1,6 +1,6 @@
 #pragma once
-// The sliders' learned travel ends in NVS: namespace "volco_ends", key "ends", one
-// {pin, auto-calibrate, low, high} entry per slider (lib/volco_calibration's entry codec). Kept
+// The sliders' learned travel ends in NVS: namespace "volco_ends", key "ends2" (a load removes the
+// experiment's old "ends"), one {pin, auto-calibrate, low, high} entry per slider (lib/volco_calibration's entry codec). Kept
 // apart from the controller config ("volco"/"cfg"), so a config save never touches them.
 #include <stdint.h>
 

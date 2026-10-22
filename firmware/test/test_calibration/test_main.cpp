@@ -194,9 +194,25 @@ void test_flags() {
   TEST_ASSERT_FALSE(c.autoCalibrate());
 }
 
+void test_became_learned_once_under_auto_and_never_in_a_sweep() {
+  SliderCalibration c;
+  c.configure(true);
+  c.reading(170, 0);
+  TEST_ASSERT_FALSE(c.becameLearned());
+  c.reading(2550, 10);
+  TEST_ASSERT_TRUE(c.becameLearned());
+  TEST_ASSERT_FALSE(c.becameLearned());  // consumed
+  c.reading(2600, 20);                   // widening is not learning
+  TEST_ASSERT_FALSE(c.becameLearned());
+  TEST_ASSERT_TRUE(c.startSweep(30));
+  sweepEnds(c, 40);
+  TEST_ASSERT_FALSE(c.becameLearned());  // a sweep ends with its own Slider frame
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_auto_on_learns_from_readings);
+  RUN_TEST(test_became_learned_once_under_auto_and_never_in_a_sweep);
   RUN_TEST(test_auto_off_learns_only_in_a_sweep);
   RUN_TEST(test_start_forgets_and_done_keeps);
   RUN_TEST(test_auto_on_keeps_learning_after_done);

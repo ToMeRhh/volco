@@ -179,7 +179,8 @@ void loop() {
       uint16_t filtered = (uint16_t)smoothedValues[i];
       calibrations[i].reading(filtered, now);
       int16_t delta = (int16_t)filtered - (int16_t)lastSliderValues[i];
-      if (abs(delta) > rc.input.sliderDeadband) {
+      // Auto-calibrate just learned the span: the stretched position goes out at once.
+      if (calibrations[i].becameLearned() || abs(delta) > rc.input.sliderDeadband) {
         lastSliderValues[i] = filtered;
         screens_activity(now);
         pcLink->sendSlider(i, calibrations[i].map(filtered), now);

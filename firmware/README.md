@@ -22,7 +22,7 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `src/config_session.*` | The config session: read replies, chunked writes, validate, store, reboot (spec §5.3, §5.4, §6.7). |
 | `src/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
 | `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
-| `src/slider_ends_store.*` | The sliders' learned ends in NVS (namespace `volco_ends`, key `ends`), apart from the controller config. |
+| `src/slider_ends_store.*` | The sliders' learned ends in NVS (namespace `volco_ends`, key `ends2`: one blob of pin-keyed entries), apart from the controller config. |
 | `src/indicators.*` | LED rendering. |
 | `src/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
 | `src/debug_log.h` | The `DEBUG_LOG` macro. |

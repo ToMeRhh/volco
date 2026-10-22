@@ -305,9 +305,8 @@ void Link::sendButton(uint8_t index, bool pressed, uint32_t now) {
 }
 
 void Link::sendCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi, uint32_t now) {
-  uint8_t f[10];
-  sink_.send(f, encodeCalibration(index, flags, lo, hi, f));
-  lastTx_ = now;
+  const uint8_t p[] = {MSG_CALIBRATION, index, flags, (uint8_t)(lo >> 8), (uint8_t)lo, (uint8_t)(hi >> 8), (uint8_t)hi};
+  sendFrame(p, sizeof p, now);
 }
 
 }  // namespace volco
