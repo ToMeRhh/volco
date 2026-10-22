@@ -26,7 +26,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
 - Choosing what a button's light or screen shows. It keeps today's rule (§7).
 - An arrangeable drawing that matches the physical case.
 - Per-mode sliders. Modes change buttons only, as presets do today.
-- Controller-wide button timing (#109) and the smoothing question (#108). Until they are decided, the inspector keeps today's settings (§5).
+- Controller-wide button timing (#109). Until it is decided, the inspector keeps today's settings (§5). (#108 removed the per-slider Smoothing.)
 
 ## 2. Decisions (from the pitch review)
 
@@ -41,7 +41,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
 7. **Edit modes:** a pencil at the right end of the tabs. While editing, tabs can be dragged to reorder, clicked to rename, and deleted with × (except the first). The pencil becomes a check mark that ends editing.
 8. **Buttons have no names.** A button's label is its main action, with its other actions listed below.
 9. **Swapping a button moves only its actions.** One grip, beside a button's action rows, drags all its actions onto another button in the edited mode only. The drag image is the action rows, not the cap or light. There are no per-action drag handles.
-10. **Sliders keep optional names. Swapping a slider moves only what it controls and its name**, by a grip beside the track. The response settings (curve, dead zone, smoothing, reverse) and the live level stay with the physical slider, and each slider's new target is set to its last reported position at once (`VolcoRuntime.ReapplySlider`, no OSD); so is a target picked in the target dialog. The drag image is the label row.
+10. **Sliders keep optional names. Swapping a slider moves only what it controls and its name**, by a grip beside the track. The response settings (curve, dead zone, reverse) and the live level stay with the physical slider, and each slider's new target is set to its last reported position at once (`VolcoRuntime.ReapplySlider`, no OSD); so is a target picked in the target dialog. The drag image is the label row.
 11. **Inspector "Clear"** removes all of a button's actions in the edited mode, with Undo.
 12. **The light or screen follows the main action** (§7), as today.
 13. **The controller works normally while the window is open.**
@@ -132,8 +132,8 @@ The header shows the control's kind and number. Its body is a fixed set of rows:
 - **Controls row:** the target's icon or app icons and its label, e.g. "Speakers", "Spotify, Discord", "Main output" or "Everything else". It opens the target dialog (§6.2).
 - **Response (collapsed):**
   - the curve as four small graphs: Linear, Log, Exp, S-curve;
-  - Dead zone (0–45 %), Smoothing (0–95 %) and Reverse.
-  - These are today's per-slider settings, unchanged. #108 may remove Smoothing.
+  - Dead zone (0–45 %) and Reverse.
+  - These are today's per-slider settings. Smoothing is gone (#108): the firmware smooths every sample, controller-wide.
   - The summary reads "Linear" or "Custom".
 
 ### 5.2 Button

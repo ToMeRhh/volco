@@ -299,7 +299,7 @@ The tray's "Update controller firmware…" and the sidebar's attention dot keep 
   - `ScanI2cAsync(sda, scl)`, `DrivePin(pin, level, duration)`.
   - **Raw input outside test mode** (decision 5): `RawInput` is raised always, not only in test mode (the page subscribes only while shown); test mode still blocks audio and actions as today.
   - Automatic port: the connection layer tries ports in order (§10.1); `LinkStatus` stays the one source for the card.
-- **Config:** `connection.serial.comPort` empty = Automatic, `connection.serial.lastPort` (new, optional; no schema bump needed beyond the usual rules if the field is additive). **#108:** `sliders[i].smoothingFactor` is dropped (schema bump with the usual `.bak`), and `SliderProcessor` loses its smoothing.
+- **Config:** `connection.serial.comPort` empty = Automatic, `connection.serial.lastPort` (new, optional; no schema bump needed beyond the usual rules if the field is additive). **#108:** `sliders[i].smoothingFactor` is dropped (no schema bump: an old file's field is ignored on load and gone on the next save), and `SliderProcessor` loses its smoothing.
 - **Settings follow removed controls:** the draft records which inputs were removed; on a confirmed save (`ControllerConfigService`'s success), one `ConfigManager` change deletes those entries from `sliders` and `buttons` and shifts the later ones down, `Index` rewritten as on every save. Added controls get empty entries as today (`AddMissing`).
 - **Pin rows:** a Core helper lists every pin for a role with its state (free, owner, unusable reason) from `ChipInfo` and the draft, so the dropdown and tests share it.
 - **Tray tooltip:** "Volco controller" in its controller lines.
@@ -337,7 +337,7 @@ Separate PRs, in this order, each green on CI:
 
 1. **The shared stage.** Controls' drawing moves into the window's stage; Controls looks and behaves the same; Hardware still shows today's page beside it.
 2. **The Hardware page on the stage:** card and ⋯ menu, tile captions, inspector with the pin dropdown (no Detect yet), bus chips, save bar, Controller settings, the chooser and Compare, test on the drawing, live input, the crossfade. Today's page goes. The Connection section moves into the dialog with today's fields (port list without Automatic).
-3. **#108:** Controls › Response loses Smoothing; schema bump.
+3. **#108:** Controls › Response loses Smoothing (no schema bump).
 4. **Connection dialog proper:** Automatic port, port descriptions (Windows seam), the Wi-Fi flow.
 5. **Firmware helpers:** PinWatch (Detect), I2cScan (Find screens), PinDrive (Try on unsaved pins); app wiring; simulator.
 6. **Docs:** CLAUDE.md (Hardware page paragraph, wire table, firmware), `firmware/README.md`, controller-config §8.7 points here, README screenshots.

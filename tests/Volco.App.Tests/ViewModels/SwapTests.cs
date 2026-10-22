@@ -113,7 +113,7 @@ public sealed class SwapTests : IDisposable
         b.Name = "";
         b.Type = SliderMappingType.Device;
         b.Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
-        b.SmoothingFactor = 0.5;
+        b.DeadZonePercent = 0.1;
         var sliders = Vm().Sliders;
         var item0 = sliders.Items[0];
         var item1 = sliders.Items[1];
@@ -137,7 +137,7 @@ public sealed class SwapTests : IDisposable
         Assert.Equal(ResponseCurve.Logarithmic, a.Curve);
         Assert.Equal(0.05, a.DeadZonePercent);
         Assert.True(a.Invert);
-        Assert.Equal(0.5, b.SmoothingFactor);
+        Assert.Equal(0.1, b.DeadZonePercent);
         Assert.Same(a, Config.Sliders[0]);
         Assert.Same(item0, sliders.Items[0]);
         Assert.Equal(0.2, item0.LiveLevel, 3);

@@ -106,13 +106,6 @@
                       <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
                                  Text="{Binding DeadZonePercent, StringFormat={}{0:P0}}"/>
                     </Grid>
-                    <Grid ColumnDefinitions="90,*,44">
-                      <TextBlock Text="Smoothing" Classes="Secondary" VerticalAlignment="Center"/>
-                      <Slider Name="SmoothingSlider" Grid.Column="1" Minimum="0" Maximum="0.95"
-                              Value="{Binding SmoothingFactor, Mode=TwoWay}"/>
-                      <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
-                                 Text="{Binding SmoothingFactor, StringFormat={}{0:P0}}"/>
-                    </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                       <TextBlock Text="Reverse" Classes="Secondary" VerticalAlignment="Center"/>
                       <ToggleSwitch Name="InvertSwitch" Grid.Column="1" OnContent="" OffContent=""

@@ -24,8 +24,7 @@ public class SliderProcessorTests
             Device = null,
             Invert = false,
             Curve = ResponseCurve.Linear,
-            DeadZonePercent = 0,
-            SmoothingFactor = 0
+            DeadZonePercent = 0
         });
 
         using var audio = new FakeAudioEngine();
@@ -277,7 +276,7 @@ public class SliderProcessorTests
 
     // ── Sync: the firmware reports every slider after each Hello ──────────────────────────
 
-    private static ConfigManager PresentDeviceSliderConfig(double smoothing = 0)
+    private static ConfigManager PresentDeviceSliderConfig()
     {
         var configManager = NewConfigManager();
         configManager.Config.Sliders.Clear();
@@ -286,7 +285,6 @@ public class SliderProcessorTests
             Index = 0,
             Type = SliderMappingType.Device,
             Device = new DeviceRefConfig { Id = "present-dev", FriendlyName = "Headphones" },
-            SmoothingFactor = smoothing,
         });
         return configManager;
     }
@@ -314,24 +312,6 @@ public class SliderProcessorTests
 
         await Task.Delay(100);
         Assert.Equal(0, Volatile.Read(ref volumeChangedFired));
-    }
-
-    [Fact]
-    public async Task SyncValue_IgnoresSmoothing()
-    {
-        using var audio = new FakeAudioEngine();
-        audio.DeviceStates["present-dev"] = (0.5f, false);
-        using var processor = new SliderProcessor(audio, PresentDeviceSliderConfig(smoothing: 0.9));
-
-        processor.HandleSliderEvent(0, 0);
-        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 1);
-
-        // A reconnect: one frame only, so a smoothed step would never reach the slider's position.
-        processor.BeginSync();
-        processor.HandleSliderEvent(0, 4095);
-        await WaitForAsync(() => audio.Snapshot(audio.DeviceVolumeCalls).Count >= 2);
-
-        Assert.Equal(1f, audio.Snapshot(audio.DeviceVolumeCalls)[1].Level, 2);
     }
 
     [Fact]
@@ -679,11 +659,11 @@ public class SliderProcessorTests
     }
 
     [Fact]
-    public async Task Reapply_SetsTheNewTargetToTheLastPosition_NoOsdNoSmoothing()
+    public async Task Reapply_SetsTheNewTargetToTheLastPosition_NoOsd()
     {
         var configManager = NewConfigManager();
         configManager.Config.Sliders.Clear();
-        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Device, SmoothingFactor = 0.9 });
+        configManager.Config.Sliders.Add(new SliderConfig { Index = 0, Type = SliderMappingType.Device });
         using var audio = new FakeAudioEngine();
         using var processor = new SliderProcessor(audio, configManager);
         processor.HandleSliderEvent(0, 4095);
@@ -861,16 +841,5 @@ public class SliderProcessorTests
             Assert.Equal(0f, SliderProcessor.MapAdcToVolume(0, false, c, 0), 3);
             Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095, false, c, 0), 3);
         }
-    }
-
-    [Fact]
-    public void ApplySmoothing_Zero_ReturnsTarget()
-        => Assert.Equal(0.8f, SliderProcessor.ApplySmoothing(0.2f, 0.8f, 0), 3);
-
-    [Fact]
-    public void ApplySmoothing_MovesPartwayTowardTarget()
-    {
-        var r = SliderProcessor.ApplySmoothing(0f, 1f, 0.5);
-        Assert.True(r > 0f && r < 1f);
     }
 }

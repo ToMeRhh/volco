@@ -8,7 +8,7 @@ namespace Volco.Core.Input;
 
 /// <summary>
 /// Event args for <see cref="SliderProcessor.SliderLevelChanged"/>.
-/// Carries the slider index and the final (post-curve, post-smoothing) volume in [0,1].
+/// Carries the slider index and the final (post-curve) volume in [0,1].
 /// </summary>
 public sealed class SliderLevelEventArgs : EventArgs
 {
@@ -44,7 +44,7 @@ public class SliderProcessor : IDisposable
     public event EventHandler<VolumeChangeNotification>? VolumeChanged;
 
     /// <summary>
-    /// Raised after each slider's final (post-curve, post-smoothing) volume is computed.
+    /// Raised after each slider's final (post-curve) volume is computed.
     /// Carries the slider index and level in [0,1]. Additive — does not replace VolumeChanged.
     /// The app wires this to SlidersViewModel.UpdateLiveLevel on the UI thread.
     /// </summary>
@@ -66,8 +66,8 @@ public class SliderProcessor : IDisposable
 
     /// <summary>
     /// A Hello arrived: the firmware follows it with every slider's position. Each slider's first
-    /// value within the sync window sets the volume as usual, but skips smoothing (it is a single
-    /// frame, not a movement) and raises no OSD. The window keeps a sync frame lost over UDP from
+    /// value within the sync window sets the volume as usual, but raises no OSD (it is a single
+    /// frame, not a movement). The window keeps a sync frame lost over UDP from
     /// silencing a real movement later.
     /// </summary>
     public void BeginSync()
@@ -92,12 +92,6 @@ public class SliderProcessor : IDisposable
             raw = raw <= dz ? 0f : (raw - dz) / (1f - dz);
 
         return ApplyCurve(raw, curve);
-    }
-
-    public static float ApplySmoothing(float previous, float target, double smoothingFactor)
-    {
-        var a = (float)Math.Clamp(smoothingFactor, 0, 0.95);
-        return previous + (target - previous) * (1f - a);
     }
 
     private static float ApplyCurve(float x, ResponseCurve curve) => curve switch
@@ -198,7 +192,7 @@ public class SliderProcessor : IDisposable
 
     /// <summary>
     /// Applies a slider's last reported position again, to whatever it controls now (its target
-    /// changed: a swap or the target dialog). Like a sync frame: no smoothing and no OSD. Nothing
+    /// changed: a swap or the target dialog). Like a sync frame: no OSD. Nothing
     /// happens for a slider that has not reported a position yet.
     /// </summary>
     public void Reapply(int sliderIndex)
@@ -223,7 +217,7 @@ public class SliderProcessor : IDisposable
     }
 
     /// <summary>
-    /// Fix D: the most recently processed (post-curve, post-smoothing) volume in [0,1] for a
+    /// Fix D: the most recently processed (post-curve) volume in [0,1] for a
     /// slider index, or null when the index is out of range or that slider has never reported a
     /// value yet. The firmware reports every slider right after its Hello, so this is null only
     /// until the handshake (or for a slider the controller doesn't have) - callers (a settings
@@ -264,16 +258,6 @@ public class SliderProcessor : IDisposable
 
             var sliderConfig = config.Sliders[sliderIndex];
             var volume = MapAdcToVolume(value.Value, sliderConfig.Invert, sliderConfig.Curve, sliderConfig.DeadZonePercent);
-
-            float? prevVolume;
-            lock (_lock)
-            {
-                prevVolume = _lastVolume.TryGetValue(sliderIndex, out var p) ? p : null;
-            }
-
-            // A sync is one frame, not a stream: a smoothed step would never reach the slider.
-            if (!isSync && sliderConfig.SmoothingFactor > 0 && prevVolume is { } prev)
-                volume = ApplySmoothing(prev, volume, sliderConfig.SmoothingFactor);
 
             lock (_lock)
             {

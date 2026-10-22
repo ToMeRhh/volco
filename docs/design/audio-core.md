@@ -386,7 +386,7 @@ The engine itself needs Windows and real audio hardware, so the split is:
 - `ConfigMigrator`: v1 → v2 for every field, exact-name match, `Contains`
   fallback, unresolvable entries, backup written, idempotent re-run.
 - `SliderProcessor` against `FakeAudioEngine`: verify **exactly one** engine call
-  per coalesce tick per slider, that curve / dead-zone / smoothing still apply,
+  per coalesce tick per slider, that curve / dead-zone still apply,
   and that a `SessionsChanged` "created" event for a mapped image name triggers an
   immediate level apply.
 - `SessionFilter.Unmapped` evaluation.

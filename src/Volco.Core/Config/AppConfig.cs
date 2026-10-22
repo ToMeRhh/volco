@@ -136,7 +136,6 @@ public partial class SliderConfig
     public bool Invert { get; set; }
     public ResponseCurve Curve { get; set; } = ResponseCurve.Linear;
     public double DeadZonePercent { get; set; } = 0;   // 0..0.2
-    public double SmoothingFactor { get; set; } = 0;    // 0..1 (0 = off)
 
     /// <summary>Display name for the configured device; "" means the current default output.</summary>
     [JsonIgnore]

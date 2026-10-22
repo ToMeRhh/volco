@@ -31,7 +31,6 @@ Every setting the Step 2 UI edits, mapped to the `AppConfig` property and to whe
 | Sliders | Invert | `Sliders[i].Invert` | Slider card, Advanced |
 | Sliders | Response curve | `Sliders[i].Curve` | Slider card, Advanced |
 | Sliders | Dead zone | `Sliders[i].DeadZonePercent` | Slider card, Advanced |
-| Sliders | Smoothing | `Sliders[i].SmoothingFactor` | Slider card, Advanced |
 | Sliders | Live level | (runtime `SliderLevelChanged`) | Level bar in the closed card header |
 | Buttons | Single / double / long press action | `Buttons[i].SinglePress/DoublePress/LongPress.Action` | Button card: Press / Double press / Hold, **per preset** |
 | Buttons | Action device | `Buttons[i].*.Device` | Inline under the action picker |
@@ -54,7 +53,7 @@ Not edited by any page today and still not edited: `SchemaVersion`, `Sliders[i].
 2. **The toggle pair is global and detached from the action that uses it.** Nothing on the Buttons page tells you where the two devices come from.
 3. **Fixed lists.** The pages show exactly the entries in `config.json` (5 sliders, 3 buttons by default). You can't add, remove or reorder controls.
 4. **Generic labels.** "Slider 0", "Mapping Type", "Unmapped", "Processes (comma-separated)". "Unmapped" in particular doesn't say that it means "every app no other slider lists".
-5. **Tuning shown at the same level as the essentials.** Curve, dead zone and smoothing sit next to the mapping itself.
+5. **Tuning shown at the same level as the essentials.** Curve and dead zone sit next to the mapping itself.
 6. **Connection status is only on the Connection page.**
 7. **Update settings live in a separate window** with a required token that isn't discoverable from Settings.
 8. **No high-contrast theme**, and `Icon.Volume` and `Icon.Speaker` are the same glyph.
@@ -100,7 +99,7 @@ Four pages in a 200 px navigation column: **Sliders, Buttons, Connection, Genera
     - All other apps: a hint listing what is excluded ("everything except spotify.exe, chrome.exe").
     - A device: device picker, first entry "Current default output".
     - Not set up (no segment selected): hint "Not set up. Choose what this slider controls."
-  - **Advanced** (collapsed): Invert direction, Response curve, Dead zone, Smoothing.
+  - **Advanced** (collapsed): Invert direction, Response curve, Dead zone.
 - **Activity:** when the controller sends a value for a slider, its card's level bar moves and the card gets a brief accent outline. This is how a user finds which card is which physical slider.
 
 ### 3.4 Buttons page
@@ -210,7 +209,7 @@ The direction: quiet and neutral, letting the content carry the screen. Flat sur
   "schemaVersion": 3,
   "sliders": [            // position == hardware slider input
     { "type": "Processes", "processes": ["spotify.exe"], "device": null,
-      "invert": false, "curve": "Linear", "deadZonePercent": 0, "smoothingFactor": 0 }
+      "invert": false, "curve": "Linear", "deadZonePercent": 0 }
     // type: Processes | Device | Unmapped | None   (None = "Not set up", new)
   ],
   "presets": [ { "id": "default", "name": "Default" } ],   // order = tab order; first = startup preset

@@ -163,13 +163,9 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     [NotifyPropertyChangedFor(nameof(ResponseSummary))]
     private double _deadZonePercent;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ResponseSummary))]
-    private double _smoothingFactor;
-
     /// <summary>The inspector's Response summary: "Linear" with every setting at its default.</summary>
     public string ResponseSummary
-        => Curve == ResponseCurve.Linear && DeadZonePercent == 0 && SmoothingFactor == 0 && !Invert ? "Linear" : "Custom";
+        => Curve == ResponseCurve.Linear && DeadZonePercent == 0 && !Invert ? "Linear" : "Custom";
 
     /// <summary>Order matches the curve picker: Linear, Logarithmic, Exponential, S-Curve.</summary>
     public int CurveIndex
@@ -244,7 +240,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
             Invert = Config.Invert;
             Curve = Config.Curve;
             DeadZonePercent = Config.DeadZonePercent;
-            SmoothingFactor = Config.SmoothingFactor;
         }
         finally { _loading = false; }
         OnPropertyChanged(nameof(Summary));
@@ -306,15 +301,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         if (rounded != value) { DeadZonePercent = rounded; return; }
         if (_loading) return;
         Config.DeadZonePercent = value;
-        Persist();
-    }
-
-    partial void OnSmoothingFactorChanged(double value)
-    {
-        var rounded = Quantise(value);
-        if (rounded != value) { SmoothingFactor = rounded; return; }
-        if (_loading) return;
-        Config.SmoothingFactor = value;
         Persist();
     }
 

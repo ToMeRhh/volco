@@ -81,7 +81,7 @@ public class ConfigManagerTests
         config.Sliders[0] = new SliderConfig
         {
             Type = SliderMappingType.Device, Device = new DeviceRefConfig { Id = "{0.0.0}.{a}", FriendlyName = "Speakers" },
-            Curve = ResponseCurve.SCurve, DeadZonePercent = 0.05, SmoothingFactor = 0.5, Invert = true,
+            Curve = ResponseCurve.SCurve, DeadZonePercent = 0.05, Invert = true,
         };
         config.Sliders[1] = new SliderConfig { Type = SliderMappingType.Processes, Processes = { "spotify.exe" } };
         config.Buttons[0].Actions[AppConfig.DefaultModeId] = new ButtonBindingConfig
@@ -125,7 +125,6 @@ public class ConfigManagerTests
 
         Assert.Equal(ResponseCurve.Linear, cfg.Sliders[0].Curve);
         Assert.Equal(0d, cfg.Sliders[0].DeadZonePercent);
-        Assert.Equal(0d, cfg.Sliders[0].SmoothingFactor);
         Assert.Equal(500, cfg.Buttons[0].LongPressMs);
         Assert.Equal(300, cfg.Buttons[0].DoublePressWindowMs);
     }
@@ -562,7 +561,6 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(SliderMappingType.Unmapped, c.Sliders[2].Type);
         Assert.Equal("dev-2", c.Sliders[3].Device!.Id);
         Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
-        Assert.Equal(0.2, c.Sliders[1].SmoothingFactor);
 
         var mode = Assert.Single(c.Modes);
         Assert.Equal(AppConfig.DefaultModeId, mode.Id);

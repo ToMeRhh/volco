@@ -19,7 +19,7 @@ The usual journey is: set the controller up once, then now and then change what 
 
 - No change to what each setting does, how Controls settings save (at once), or how the controller config saves (a draft, Save to controller, restart).
 - The later Hardware plans (Detect, Find screens, Try the lights, Automatic port, the Wi-Fi switch flow) are unaffected and plug into this page the same way.
-- #108 (app smoothing vs the firmware's Input feel) is not decided here; the slider's Response section is today's.
+- #108 is decided in hardware-page.md (decision 7): the firmware's Input feel is the only smoothing, and Response has no Smoothing.
 
 ## 4. The page
 
@@ -42,7 +42,7 @@ The usual journey is: set the controller up once, then now and then change what 
 The header is today's Controls header ("Slider N" with its name field; "Button N" with Clear). Below it, **two fixed sections, both always shown** (user, 2026-10-21, revised): the Controls/Actions section takes the top two thirds of the side panel and the Hardware section the bottom third, each with a fixed header and its own scrolling; Hardware never gets less than about four rows (176 px of rows plus its header), the top section gives way first. One line per row.
 
 **Slider**
-1. **Controls**: Controls row (target), Response (curve, dead zone, smoothing, reverse; today's collapsed sub-section).
+1. **Controls**: Controls row (target), Response (curve, dead zone, reverse; today's collapsed sub-section).
 2. **Hardware**: Pin; Auto-calibrate (a switch, a draft field saved with the controller config); Calibration (the learned ends or "Not calibrated", and Re-calibrate, which opens the sweep dialog; spec `slider-calibration.md`); Remove Slider N.
 
 **Button**
