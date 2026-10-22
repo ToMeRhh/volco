@@ -56,16 +56,24 @@
     return { ...c, config, layout, sliders: layout.sliders.length, kinds: L.kinds(layout), size: stored ? stored.length : 0 };
   }
 
+  // Each slider's calibration: ends learned from the fader positions, reported over the wire.
+  const cal = root.VolcoCalibration.createCalibrations({
+    send: (p, t) => link.sendPayload(p, t),
+    sendSlider: (i, v, t) => link.sendSlider(i, v, t),
+    raw: i => Math.round((device ? device.faderValue(i) : 0.5) * 4095),
+  });
+
   const link = root.VolcoLink.createLink({
     sendFrame(bytes, payload, bad) {
       connection.send(bytes);
       devtools.frame('→', payload, bad);
       if (payload[0] === P.MSG.CONFIG_RESULT) devtools.resetForcedResult();
     },
-    sliderValue: i => Math.round((device ? device.faderValue(i) : 0.5) * 4095),
+    sliderValue: i => cal.map(i, Math.round((device ? device.faderValue(i) : 0.5) * 4095)),
     onLed: (b, v) => show({ button: b, led: v }),
     onScreen: (b, transition, content, t) => show({ button: b, transition, content }, t),
-    onHostLost: t => blankDisplays(t),
+    onHostLost: t => { cal.hostLost(); blankDisplays(t); },
+    onCalibrate: (i, action, t) => cal.calibrate(i, action, t),
     onConfigFrame: (p, t) => (session ? session.onFrame(p, t) : false),
   });
   const parser = P.createParser(
@@ -114,6 +122,7 @@
   function boot({ drop = false } = {}) {
     hw = current();
     beh = O.behaviour(hw.config.screens);
+    cal.configure(hw.config.sliders.slice(0, hw.sliders).map(s => s.autoCalibrate !== false));
     link.setHardware({ sliders: hw.sliders, kinds: hw.kinds, configState: hw.state, configCrc: hw.crc });
     slots = []; leds = [];
     hw.kinds.forEach((k, i) => {
@@ -165,7 +174,9 @@
     panels.activity(now());
     room?.showOverlay(mode === 'demo' ? SLIDER_NAMES[i % SLIDER_NAMES.length] : `Slider ${i + 1}`, value);
     if (mode !== 'live' || rebooting || i >= hw.sliders) return;
-    const send = () => { lastSlider[i] = now(); link.sendSlider(i, Math.round(value * 4095), now()); };
+    const raw = Math.round(value * 4095);
+    cal.reading(i, raw);
+    const send = () => { lastSlider[i] = now(); link.sendSlider(i, cal.map(i, raw), now()); };
     clearTimeout(pendingSlider[i]);
     if (now() - (lastSlider[i] || 0) >= SLIDER_MS) send();
     else pendingSlider[i] = setTimeout(send, SLIDER_MS);   // the last position always goes out
@@ -248,7 +259,7 @@
   setInterval(() => {
     const t = now();
     session?.tick(t);
-    if (mode === 'live' && !rebooting) link.tick(t);
+    if (mode === 'live' && !rebooting) { link.tick(t); cal.tick(t); }
   }, TICK_MS);
   if (prefs.autoConnect) connection.connect();
 

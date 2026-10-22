@@ -8,11 +8,15 @@
     HELLO: 0x01, ALIVE: 0x02, SLIDER: 0x03, BUTTON: 0x04, CONFIG_DATA: 0x05, CONFIG_RESULT: 0x06,
     HELLO_REQUEST: 0x81, HEARTBEAT: 0x82, LED: 0x83, SCREEN: 0x84, BEGIN: 0x85, COMMIT: 0x86,
     CONFIG_READ: 0x87, CONFIG_BEGIN: 0x88, CONFIG_CHUNK: 0x89, CONFIG_END: 0x8A,
+    CALIBRATE: 0x8E, CALIBRATION: 0x09,
   };
+  const CALIBRATE = { QUERY: 0, START: 1, DONE: 2, CANCEL: 3 };
+  const CAL_FLAG = { LEARNED: 1, SWEEPING: 2, AUTO: 4 };
   const NAMES = {
     0x01: 'Hello', 0x02: 'Alive', 0x03: 'Slider', 0x04: 'Button', 0x05: 'ConfigData', 0x06: 'ConfigResult',
     0x81: 'HelloRequest', 0x82: 'Heartbeat', 0x83: 'Led', 0x84: 'Screen', 0x85: 'Begin', 0x86: 'Commit',
     0x87: 'ConfigRead', 0x88: 'ConfigWriteBegin', 0x89: 'ConfigWriteChunk', 0x8A: 'ConfigWriteEnd',
+    0x09: 'Calibration', 0x8E: 'Calibrate',
   };
   const KIND = { NONE: 0, LED: 1, LED_PAIR: 2, SCREEN: 3 };
   const TRANSITION = { NONE: 0, SLIDE_LEFT: 1, SLIDE_RIGHT: 2 };
@@ -60,6 +64,14 @@
   const alive = () => [MSG.ALIVE];
   const slider = (index, value) => [MSG.SLIDER, index, (value >> 8) & 255, value & 255];
   const button = (index, pressed) => [MSG.BUTTON, index, pressed ? 1 : 0];
+  /** Calibration report (slider calibration spec): a slider's flags (CAL_FLAG) and learned ends. */
+  const calibration = (index, flags, lo, hi) =>
+    [MSG.CALIBRATION, index, flags, (lo >> 8) & 255, lo & 255, (hi >> 8) & 255, hi & 255];
+  /** Decodes a Calibrate payload: { index, action }, or null when it is short or the action unknown. */
+  function decodeCalibrate(p) {
+    if (p.length < 3 || p[0] !== MSG.CALIBRATE || p[2] > CALIBRATE.CANCEL) return null;
+    return { index: p[1], action: p[2] };
+  }
 
   /** Layout-1 screen content, as the firmware's screenText builds it. */
   function screenText(top, icon, main) {
@@ -102,8 +114,8 @@
   const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join(' ');
   const nameOf = type => NAMES[type] || '0x' + type.toString(16).padStart(2, '0');
 
-  const api = { MSG, NAMES, KIND, TRANSITION, TOP, NO_ICON, MAX_TEXT, MAX_BUTTONS,
-    frame, createParser, hello, alive, slider, button, screenText, screen, decodeScreen, hex, nameOf };
+  const api = { MSG, NAMES, CALIBRATE, CAL_FLAG, KIND, TRANSITION, TOP, NO_ICON, MAX_TEXT, MAX_BUTTONS,
+    frame, createParser, hello, alive, slider, button, calibration, decodeCalibrate, screenText, screen, decodeScreen, hex, nameOf };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.VolcoProtocol = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
