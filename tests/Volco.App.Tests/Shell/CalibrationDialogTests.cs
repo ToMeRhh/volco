@@ -204,6 +204,21 @@ public sealed class CalibrationDialogTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void DoneClosesWithoutAnAnswer()
+    {
+        using var s = Show();
+        var overlay = Recalibrate(s);
+        Report(s, sweeping: true, learned: true);
+        In<Button>(overlay, "CalibrationDoneButton").Command!.Execute(null);
+        Settle(s.Window);
+        Assert.True(Sent(s, CalibrateAction.Done));
+        Until(s.Window, () => !overlay.IsVisible, ms: 5000);   // after the 2 s wait
+        Assert.False(s.Rig.Runtime.IsSliderHeld(0));
+        Assert.Null(s.Vm.Hardware.Calibration);
+        Assert.True(Sent(s, CalibrateAction.Cancel));   // a sweep the controller didn't end is cancelled
+    }
+
+    [AvaloniaFact]
     public void EscapeCancels()
     {
         using var s = Show();

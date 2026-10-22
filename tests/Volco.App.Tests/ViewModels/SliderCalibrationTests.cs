@@ -47,6 +47,12 @@ public sealed class SliderCalibrationTests : IDisposable
         Assert.True(Controller.CanEdit);
     }
 
+    private void Greet(uint crc)
+    {
+        Conn.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored, crc, 5, DiyKinds));
+        _ui.RunAll();
+    }
+
     private SliderWiringViewModel Select(int slider)
     {
         _settings!.Controls.Select(Hardware.Sliders[slider]);
@@ -107,6 +113,11 @@ public sealed class SliderCalibrationTests : IDisposable
         Report(3, learned: true, auto: true);   // another slider's
         Assert.Equal("Not calibrated: uses the raw reading", s.CalibrationText);
 
+        Greet(ControllerConfigCodec.Crc32(DiyBlob));   // a Hello forgets the reports until the answers
+        Assert.Equal("—", s.CalibrationText);
+        Report(2, learned: true, auto: true);
+        Assert.Equal("Calibrated: 170-2550", s.CalibrationText);
+
         Conn.SetStatus(TransportStatus.Closed);   // not connected: no caption
         _ui.RunAll();
         Assert.Equal("—", s.CalibrationText);
@@ -161,6 +172,18 @@ public sealed class SliderCalibrationTests : IDisposable
         Conn.SetStatus(TransportStatus.Closed);
         _ui.RunAll();
         Assert.False(s.CanRecalibrate);
+    }
+
+    [Fact]
+    public void RecalibrateIsOffWhileTheControllerHoldsAnotherSetup()
+    {
+        SetUpInSync();
+        Greet(ControllerConfigCodec.Crc32(DiyBlob) ^ 1);   // the controller's setup isn't Volco's copy
+        Assert.False(Controller.InSync);
+        var s = Select(1);
+        Assert.False(s.CanRecalibrate);
+        Assert.False(s.RecalibrateCommand.CanExecute(null));
+        Assert.Equal("Volco's setup differs from the controller's", s.RecalibrateTooltip);
     }
 
     [Fact]

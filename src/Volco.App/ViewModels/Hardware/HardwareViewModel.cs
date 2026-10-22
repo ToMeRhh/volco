@@ -191,15 +191,26 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     /// <summary>Re-calibrate is enabled for draft slider <paramref name="index"/> (spec, "The sweep"): the
     /// controller is ready and runs Volco's saved setup, the slider is saved and unchanged, and no
-    /// test, save or firmware operation runs. <paramref name="unsaved"/>: its unsaved changes hold it off.</summary>
-    private bool CanRecalibrate(int index, out bool unsaved)
+    /// test, save or firmware operation runs. <paramref name="why"/>: the button's tooltip when the
+    /// slider's unsaved changes or a controller that holds another setup hold it off.</summary>
+    private bool CanRecalibrate(int index, out string? why)
     {
-        unsaved = false;
+        why = null;
         if (index < 0 || index >= Sliders.Count) return false;
         var tile = Sliders[index];
-        unsaved = !tile.IsNew && tile.Wiring is { HasChange: true };
-        return !tile.IsNew && !unsaved && Source(_controller.Layout.Sliders, index) is not null
-               && _controller.IsControllerReady && _controller.InSync && _controller.CanEdit && !_controller.Busy;
+        if (tile.IsNew) return false;
+        if (tile.Wiring is { HasChange: true })
+        {
+            why = "Save to controller first";
+            return false;
+        }
+        if (_controller.IsControllerReady && !_controller.InSync)
+        {
+            why = "Volco's setup differs from the controller's";
+            return false;
+        }
+        return Source(_controller.Layout.Sliders, index) is not null
+               && _controller.IsControllerReady && _controller.CanEdit && !_controller.Busy;
     }
 
     /// <summary>The inspected slider's calibration rows: the controller's last report for its input
@@ -210,11 +221,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         var source = Source(_controller.Layout.Sliders, s.Index);
         var saved = Saved(_controller.BaselineConfig().Sliders, source);
         var state = source is int input && _controller.IsControllerReady ? _runtime.GetCalibration(input) : null;
-        var can = CanRecalibrate(s.Index, out var unsaved);
-        s.UpdateCalibration(Sliders[s.Index].IsNew ? null : saved, state, can, unsaved);
+        var can = CanRecalibrate(s.Index, out var why);
+        s.UpdateCalibration(Sliders[s.Index].IsNew ? null : saved, state, can, why);
     }
 
-    private void OnCalibrationChanged(object? sender, (int Slider, SliderCalibrationState State) e) => _ui.Post(UpdateCalibrationRows);
+    private void OnCalibrationChanged(object? sender, (int Slider, SliderCalibrationState? State) e) => _ui.Post(UpdateCalibrationRows);
 
     // ── Leaving with unsaved changes (spec §3.3) ─────────────────────────────────────────────
 

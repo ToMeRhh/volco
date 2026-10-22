@@ -9,7 +9,7 @@ namespace Volco.App.ViewModels.Hardware;
 /// The Re-calibrate sweep (slider-calibration spec, "The sweep"): made when the dialog opens, it
 /// holds the slider's input away from audio and starts a sweep on the controller; the bar follows
 /// the reported ends. Done (once the span is learned) and Cancel end the sweep; the dialog closes
-/// on the controller's ending report (Cancel also after <see cref="CancelTimeout"/>), and when the
+/// on the controller's ending report (else after <see cref="CancelTimeout"/>), and when the
 /// controller is no longer ready. Disposing it cancels a sweep that hasn't ended and always
 /// releases the hold. Runtime events are posted to the UI thread; everything else runs there.
 /// </summary>
@@ -17,7 +17,7 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
 {
     private const double MaxRaw = 4095.0;
 
-    /// <summary>How long Cancel waits for the controller's ending report before the dialog closes anyway.</summary>
+    /// <summary>How long Done or Cancel waits for the controller's ending report before the dialog closes anyway.</summary>
     internal static TimeSpan CancelTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
     private readonly int _slider;
@@ -84,7 +84,8 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
     /// <summary>Done or Cancel was sent: waiting for the controller's ending report.</summary>
     public bool IsEnding => _ending;
 
-    /// <summary>Ends the sweep and stores the ends; the dialog closes on the ending report.</summary>
+    /// <summary>Ends the sweep and stores the ends; the dialog closes on the ending report, else
+    /// after <see cref="CancelTimeout"/> (closing then cancels a sweep the controller didn't end).</summary>
     public IRelayCommand DoneCommand { get; }
 
     /// <summary>Cancel, Escape, the scrim: the controller restores the ends it had; the dialog closes
@@ -103,7 +104,12 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
     {
         if (_disposed || !CanDone) return;
         SetEnding();
-        if (!_runtime.SendCalibrate(_slider, CalibrateAction.Done)) Close();
+        if (!_runtime.SendCalibrate(_slider, CalibrateAction.Done))
+        {
+            Close();
+            return;
+        }
+        CloseAfterTimeout();
     }
 
     private void Cancel()
@@ -116,8 +122,10 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
             return;
         }
         _ended = true;   // the controller was told: disposing needn't cancel again
-        _ = Task.Delay(CancelTimeout).ContinueWith(_ => _ui.Post(Close), TaskScheduler.Default);
+        CloseAfterTimeout();
     }
+
+    private void CloseAfterTimeout() => _ = Task.Delay(CancelTimeout).ContinueWith(_ => _ui.Post(Close), TaskScheduler.Default);
 
     private void SetEnding()
     {
@@ -126,10 +134,11 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
         RaiseDone();
     }
 
-    private void OnCalibrationChanged(object? sender, (int Slider, SliderCalibrationState State) e)
+    private void OnCalibrationChanged(object? sender, (int Slider, SliderCalibrationState? State) e)
     {
-        if (e.Slider != _slider) return;
-        _ui.Post(() => OnReport(e.State));
+        // A null state is a Hello forgetting the last report: not news about this sweep.
+        if (e.Slider != _slider || e.State is not { } state) return;
+        _ui.Post(() => OnReport(state));
     }
 
     private void OnReport(SliderCalibrationState state)

@@ -87,7 +87,8 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     /// saved (no unsaved change of it, not new), and no test, save or firmware operation runs.</summary>
     [ObservableProperty] private bool _canRecalibrate;
 
-    /// <summary>"Save to controller first" while the slider's unsaved changes hold Re-calibrate off.</summary>
+    /// <summary>Why Re-calibrate is off: "Save to controller first" while the slider's unsaved changes
+    /// hold it off, "Volco's setup differs from the controller's" while the controller holds another setup.</summary>
     [ObservableProperty] private string? _recalibrateTooltip;
 
     /// <summary>Re-calibrate: the sweep dialog.</summary>
@@ -99,15 +100,15 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     /// <param name="saved">The slider in Volco's saved copy, or null for a new one.</param>
     /// <param name="state">The controller's last report for this slider while it is connected, else null.</param>
     /// <param name="canRecalibrate">Re-calibrate is enabled.</param>
-    /// <param name="unsaved">The slider has unsaved Hardware changes.</param>
-    internal void UpdateCalibration(Slider? saved, SliderCalibrationState? state, bool canRecalibrate, bool unsaved)
+    /// <param name="why">Why Re-calibrate is off, for its tooltip; null for no tooltip.</param>
+    internal void UpdateCalibration(Slider? saved, SliderCalibrationState? state, bool canRecalibrate, string? why)
     {
         _saved = saved;
         OnPropertyChanged(nameof(AutoCalibrate));
         OnPropertyChanged(nameof(AutoCalibrateNote));
         CalibrationText = CaptionFor(state);
         CanRecalibrate = canRecalibrate;
-        RecalibrateTooltip = unsaved ? "Save to controller first" : null;
+        RecalibrateTooltip = why;
     }
 
     /// <summary>The spec's words for a report; "—" for none.</summary>

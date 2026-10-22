@@ -26,7 +26,7 @@
 
         <!-- What the controller reports, and the sweep -->
         <Grid Name="CalibrationRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-          <TextBlock Name="CalibrationText" Classes="RowLabel" TextWrapping="Wrap" MaxLines="2"
+          <TextBlock Name="CalibrationText" Classes="RowLabel" TextWrapping="NoWrap" MaxLines="1"
                      TextTrimming="CharacterEllipsis" Text="{Binding CalibrationText}" ToolTip.Tip="{Binding CalibrationText}"/>
           <!-- A disabled button gets no tooltip, so the tooltip is on a panel around it -->
           <Panel Grid.Column="1" VerticalAlignment="Center" Background="Transparent"
