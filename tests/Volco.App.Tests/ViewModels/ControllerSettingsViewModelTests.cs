@@ -79,6 +79,25 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         Assert.Equal(300m, Controller.DimAfterS);
     }
 
+    /// <summary>"When off, the first press only wakes it" is Turn off after's sub-option: it can
+    /// be set only while the screens turn off, and Never keeps its value.</summary>
+    [Fact]
+    public void FirstPressOnlyWakesNeedsTurnOff()
+    {
+        var vm = SetUp();
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        Controller.OffEnabled = true;
+        Assert.True(vm.CanSetFirstPressOnlyWakes);
+        var wakes = vm.FirstPressOnlyWakes;
+
+        vm.OffAfterIndex = 0;   // Never
+        Assert.False(Controller.OffEnabled);
+        Assert.False(vm.CanSetFirstPressOnlyWakes);
+        Assert.Contains(nameof(ControllerSettingsViewModel.CanSetFirstPressOnlyWakes), changed);
+        Assert.Equal(wakes, vm.FirstPressOnlyWakes);   // kept for when the screens turn off again
+    }
+
     [Fact]
     public void OffListValueIsCustomAndKept()
     {

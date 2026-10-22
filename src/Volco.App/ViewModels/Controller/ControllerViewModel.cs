@@ -79,6 +79,14 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     public string ChipText => _service.LastHello?.Chip == ChipFamily.Esp32 ? "ESP32" : _service.LastHello is null ? "" : "Unknown";
 
+    /// <summary>"ESP32 · 5 sliders, 4 buttons": the connected controller's hardware, from its Hello
+    /// (under the sidebar's status line); "" while not connected.</summary>
+    public string HardwareText => Connection.IsConnected && _service.LastHello is { } h
+        ? $"{ChipText} · {Count(h.SliderCount, "slider")}, {Count(h.Buttons.Count, "button")}"
+        : "";
+
+    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+
     public ControllerBanner Banner => _service.Banner;
 
     /// <summary>Drives the sidebar dot and the tray.</summary>
@@ -800,6 +808,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private void RefreshStatus()
     {
         OnPropertyChanged(nameof(ChipText));
+        OnPropertyChanged(nameof(HardwareText));
         OnPropertyChanged(nameof(Banner));
         OnPropertyChanged(nameof(FirmwareUpdateAvailable));
         OnPropertyChanged(nameof(IsNotSetUp));

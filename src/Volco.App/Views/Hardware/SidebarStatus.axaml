@@ -9,16 +9,21 @@
   </UserControl.Resources>
   <!-- The controller's status at the bottom of the sidebar (controller-page spec §5): a dot and one
        short line ("Connected", "Connecting…", or what needs the user), with the whole line as the
-       tooltip; a click opens the menu of the rare actions (hardware-page spec §4.2). The compact
+       tooltip, and under it the connected controller's hardware ("ESP32 · 5 sliders, 4 buttons"); a click opens the menu of the rare actions (hardware-page spec §4.2). The compact
        (56 px) sidebar shows only the dot, and the whole line while the sidebar opens over the page. -->
   <Button Name="StatusLineButton" Classes="SidebarStatus" HorizontalAlignment="Stretch"
           ToolTip.Tip="{Binding FullText}" AutomationProperties.Name="{Binding FullText}">
     <Grid ColumnDefinitions="Auto,*">
-      <Ellipse Name="StatusDot" Width="8" Height="8" VerticalAlignment="Center"
+      <!-- The dot sits beside the status's first line; the controller's hardware is under it -->
+      <Ellipse Name="StatusDot" Width="8" Height="8" VerticalAlignment="Top" Margin="0,5,0,0"
                Fill="{Binding State.Tone, Converter={StaticResource ToneToBrush}}"/>
-      <TextBlock Name="StatusText" Grid.Column="1" Classes="SidebarStatusText" Margin="10,0,0,0"
-                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxLines="1"
-                 Text="{Binding ShortText}"/>
+      <StackPanel Grid.Column="1" Classes="SidebarStatusText" Margin="10,0,0,0" Spacing="1">
+        <TextBlock Name="StatusText" TextTrimming="CharacterEllipsis" MaxLines="1"
+                   Text="{Binding ShortText}"/>
+        <TextBlock Name="HardwareText" Classes="Caption" TextTrimming="CharacterEllipsis" MaxLines="1"
+                   Text="{Binding HardwareText}"
+                   IsVisible="{Binding HardwareText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      </StackPanel>
     </Grid>
     <Button.Flyout>
       <MenuFlyout Placement="TopEdgeAlignedLeft">

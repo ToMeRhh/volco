@@ -48,36 +48,35 @@
   </UserControl.Resources>
 
   <!-- The selected button (controller-page spec §4.3): the Actions section (its actions in the
-       edited mode, its light, its timing) over the Hardware section (its wiring, Remove). -->
-  <DockPanel>
-    <Grid DockPanel.Dock="Top" Classes="InspectorHeader" ColumnDefinitions="*,Auto">
-      <StackPanel Spacing="2">
-        <TextBlock Name="KindText" Classes="InspectorKind" Text="{Binding KindText}"
-                   IsVisible="{Binding KindText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-        <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding DisplayHeading}"/>
-      </StackPanel>
-      <Button Name="ClearButton" Grid.Column="1" VerticalAlignment="Center" Content="Clear"
-              Command="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).ClearCommand}"
-              CommandParameter="{Binding}" IsEnabled="{Binding CanClear}"/>
-    </Grid>
+       edited mode, its light, its timing) over the Hardware section (its wiring, Remove),
+       scrolling as one (TileInspector). -->
+  <StackPanel>
+    <!-- At least the page's InspectorTopHeight, so Hardware starts where it does for every tile -->
+    <Panel Name="Top" MinHeight="{Binding $parent[stage:StagePage].InspectorTopHeight, FallbackValue=0}">
+      <StackPanel Name="TopContent" VerticalAlignment="Top">
+        <Grid Classes="InspectorHeader" ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="2">
+            <TextBlock Name="KindText" Classes="InspectorKind" Text="{Binding KindText}"
+                       IsVisible="{Binding KindText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+            <TextBlock Name="HeadingText" Classes="InspectorHeading" Text="{Binding DisplayHeading}"/>
+          </StackPanel>
+          <Button Name="ClearButton" Grid.Column="1" VerticalAlignment="Center" Content="Clear"
+                  Command="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).ClearCommand}"
+                  CommandParameter="{Binding}" IsEnabled="{Binding CanClear}"/>
+        </Grid>
 
-    <!-- Two fixed sections (spec §4.3): Actions in the top two thirds, Hardware in the bottom
-         third (never less than about four rows; Actions gives way first), each with a fixed
-         header and its own scrolling -->
-    <Grid Name="Sections" RowDefinitions="2*,*">
-      <!-- Actions, labelled with the edited mode as a coloured pill: the gestures, the light or
-           screen and the timing; a button only the draft has is set up once the controller has it -->
-      <DockPanel Name="ActionsSection">
-        <Border Name="ActionsHeader" DockPanel.Dock="Top" Classes="GroupHeader">
-          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-            <TextBlock Classes="GroupLabel" Text="Actions"/>
-            <Border Name="ModePill" Grid.Column="1" Classes="ModePill" HorizontalAlignment="Left"
-                    controls:ModeTint.Index="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).Buttons.EditingTintIndex}">
-              <TextBlock Text="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).Buttons.EditingName}"/>
-            </Border>
-          </Grid>
-        </Border>
-        <ScrollViewer Name="ActionsScroll" VerticalScrollBarVisibility="Auto">
+        <!-- Actions, labelled with the edited mode as a coloured pill: the gestures, the light or
+             screen and the timing; a button only the draft has is set up once the controller has it -->
+        <StackPanel Name="ActionsSection">
+          <Border Name="ActionsHeader" Classes="GroupHeader">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+              <TextBlock Classes="GroupLabel" Text="Actions"/>
+              <Border Name="ModePill" Grid.Column="1" Classes="ModePill" HorizontalAlignment="Left"
+                      controls:ModeTint.Index="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).Buttons.EditingTintIndex}">
+                <TextBlock Text="{Binding $parent[stage:StagePage].((vm:ControlsViewModel)DataContext).Buttons.EditingName}"/>
+              </Border>
+            </Grid>
+          </Border>
           <Panel Name="ActionsBody" Classes="GroupBody">
             <Border Name="SaveFirstPanel" Classes="InspectorRows SaveFirst" IsVisible="{Binding IsNew}">
               <StackPanel Spacing="10">
@@ -148,29 +147,29 @@
               </Border>
             </StackPanel>
           </Panel>
-        </ScrollViewer>
-      </DockPanel>
+        </StackPanel>
+      </StackPanel>
+    </Panel>
 
-      <!-- Hardware: its pin, its light's wiring and Remove, from the controller draft -->
-      <inspector:HardwareSection Name="HardwareSection" Grid.Row="1"
-                                 Wiring="{Binding $parent[stage:StagePage].Hardware.InspectedButton, FallbackValue={x:Null}}"
-                                 HasProblem="{Binding $parent[stage:StagePage].Hardware.InspectedButton.HasProblem, FallbackValue=False}"
-                                 IsMissing="{Binding IsMissing}"
-                                 RemoveMissingCommand="{Binding RemoveLastCommand}">
-        <inspector:HardwareSection.IsVisible>
-          <!-- A control the controller lacks says so even on a stage without the draft -->
-          <MultiBinding Converter="{x:Static BoolConverters.Or}">
-            <Binding Path="IsMissing"/>
-            <Binding Path="$parent[stage:StagePage].Hardware" Converter="{x:Static ObjectConverters.IsNotNull}"/>
-          </MultiBinding>
-        </inspector:HardwareSection.IsVisible>
-        <inspector:HardwareSection.CanRemoveMissing>
-          <MultiBinding Converter="{x:Static BoolConverters.And}">
-            <Binding Path="IsMissing"/>
-            <Binding Path="IsLast"/>
-          </MultiBinding>
-        </inspector:HardwareSection.CanRemoveMissing>
-      </inspector:HardwareSection>
-    </Grid>
-  </DockPanel>
+    <!-- Hardware: its pin, its light's wiring and Remove, from the controller draft -->
+    <inspector:HardwareSection Name="HardwareSection"
+                               Wiring="{Binding $parent[stage:StagePage].Hardware.InspectedButton, FallbackValue={x:Null}}"
+                               HasProblem="{Binding $parent[stage:StagePage].Hardware.InspectedButton.HasProblem, FallbackValue=False}"
+                               IsMissing="{Binding IsMissing}"
+                               RemoveMissingCommand="{Binding RemoveLastCommand}">
+      <inspector:HardwareSection.IsVisible>
+        <!-- A control the controller lacks says so even on a stage without the draft -->
+        <MultiBinding Converter="{x:Static BoolConverters.Or}">
+          <Binding Path="IsMissing"/>
+          <Binding Path="$parent[stage:StagePage].Hardware" Converter="{x:Static ObjectConverters.IsNotNull}"/>
+        </MultiBinding>
+      </inspector:HardwareSection.IsVisible>
+      <inspector:HardwareSection.CanRemoveMissing>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="IsMissing"/>
+          <Binding Path="IsLast"/>
+        </MultiBinding>
+      </inspector:HardwareSection.CanRemoveMissing>
+    </inspector:HardwareSection>
+  </StackPanel>
 </UserControl>

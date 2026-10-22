@@ -59,19 +59,6 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     public string Title => "Controller";
 
-    /// <summary>"ESP32 · 5 sliders, 4 buttons".</summary>
-    public string Subtitle
-    {
-        get
-        {
-            var draft = _controller.Draft;
-            var counts = $"{Count(draft.Sliders.Count, "slider")}, {Count(draft.Buttons.Count, "button")}";
-            return _controller.ChipText is { Length: > 0 } chip ? $"{chip} · {counts}" : counts;
-        }
-    }
-
-    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
-
     /// <summary>The draft can be edited: the rows are enabled.</summary>
     public bool IsEditable => _controller.CanEdit;
 
@@ -202,12 +189,17 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         set => _controller.PixelShiftEnabled = value;
     }
 
-    /// <summary>The first press after the screen sleeps only wakes it.</summary>
+    /// <summary>The first press after the screen turned off only wakes it (a sub-option of
+    /// Turn off after; a dimmed screen passes the press on).</summary>
     public bool FirstPressOnlyWakes
     {
         get => _controller.WakeSwallowsPress;
         set => _controller.WakeSwallowsPress = value;
     }
+
+    /// <summary>The screens turn off (Turn off after isn't Never): only then does
+    /// <see cref="FirstPressOnlyWakes"/> apply.</summary>
+    public bool CanSetFirstPressOnlyWakes => _controller.OffEnabled;
 
     private static uint Seconds(decimal? value) => (uint)(value ?? 0);
 
@@ -320,9 +312,10 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     private static readonly string[] Watched =
     {
-        nameof(Subtitle), nameof(IsEditable), nameof(ShowScreens), nameof(IsScreensOpen), nameof(ScreensSummary),
+        nameof(IsEditable), nameof(ShowScreens), nameof(IsScreensOpen), nameof(ScreensSummary),
         nameof(BrightnessPct), nameof(BrightnessSlider), nameof(DimAfter), nameof(DimAfterIndex), nameof(OffAfter),
         nameof(OffAfterIndex), nameof(DimmedTo), nameof(DimmedToIndex), nameof(PreventBurnIn), nameof(FirstPressOnlyWakes),
+        nameof(CanSetFirstPressOnlyWakes),
         nameof(InputSummary), nameof(InputFeel), nameof(IsFeelLow), nameof(IsFeelNormal), nameof(IsFeelHigh),
         nameof(IsFeelCustom), nameof(WifiSummary),
     };

@@ -156,24 +156,26 @@
       <hwviews:SaveBar Name="SaveBarHost" Grid.Row="1" IsVisible="False"/>
       </Grid>
 
-      <!-- The side panel (controller-page spec §4.3). The controller's panel (HardwareSidePanel:
-           the preset chooser and, when selected, Controller settings; the status is in the
-           sidebar and the banner) sits over the selected tile's inspector, whose two fixed
-           sections, Controls or Actions over Hardware, each scroll on their own; the draft's
-           inline questions are at the bottom, under both. -->
+      <!-- The side panel (controller-page spec §4.3), a card. The controller's panel
+           (HardwareSidePanel: the preset chooser and, when selected, Controller settings; the
+           status is in the sidebar and the banner) sits over the selected tile's inspector, which
+           scrolls as one: Controls or Actions, then Hardware, which starts at the same height for
+           every tile (InspectorTopHeight); the draft's inline questions are at the bottom, under both. -->
       <Border Name="Inspector" Grid.Column="1" Classes="Inspector">
         <Grid Name="SidePanel" RowDefinitions="Auto,*,Auto">
           <ContentControl Name="SidePanelHost"/>
-          <ContentControl Name="InspectorContent" Grid.Row="1" Content="{Binding Selected}">
-            <ContentControl.DataTemplates>
-              <DataTemplate DataType="{x:Type vm:SliderItemViewModel}" x:DataType="vm:SliderItemViewModel">
-                <inspector:SliderInspector/>
-              </DataTemplate>
-              <DataTemplate DataType="{x:Type vm:ButtonItemViewModel}" x:DataType="vm:ButtonItemViewModel">
-                <inspector:ButtonInspector/>
-              </DataTemplate>
-            </ContentControl.DataTemplates>
-          </ContentControl>
+          <ScrollViewer Name="InspectorScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <ContentControl Name="InspectorContent" Content="{Binding Selected}">
+              <ContentControl.DataTemplates>
+                <DataTemplate DataType="{x:Type vm:SliderItemViewModel}" x:DataType="vm:SliderItemViewModel">
+                  <inspector:SliderInspector/>
+                </DataTemplate>
+                <DataTemplate DataType="{x:Type vm:ButtonItemViewModel}" x:DataType="vm:ButtonItemViewModel">
+                  <inspector:ButtonInspector/>
+                </DataTemplate>
+              </ContentControl.DataTemplates>
+            </ContentControl>
+          </ScrollViewer>
           <!-- The draft's inline question, at the bottom near the Remove that asked -->
           <hwviews:InlineConfirmation Name="ConfirmHost" Grid.Row="2" IsVisible="False"/>
         </Grid>
@@ -210,5 +212,29 @@
         </ContentControl>
       </Border>
     </Border>
+
+    <!-- Unseen copies of every drawn tile's inspector, without their Hardware sections, at the
+         inspector's width: the tallest Controls or Actions section (its sub-section closed) sets
+         InspectorTopHeight, so the Hardware section starts at the highest point that clears every
+         tile's and doesn't move between tiles. Last, so lookups by name find the real inspector. -->
+    <Canvas Name="ProbeHost" IsHitTestVisible="False" IsEnabled="False" Opacity="0"
+            KeyboardNavigation.TabNavigation="None">
+      <StackPanel Name="InspectorProbes" Width="{Binding #SidePanel.Bounds.Width}">
+        <ItemsControl Name="SliderProbes">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SliderItemViewModel">
+              <inspector:SliderInspector IsProbe="True"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <ItemsControl Name="ButtonProbes">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ButtonItemViewModel">
+              <inspector:ButtonInspector IsProbe="True"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Canvas>
   </Panel>
 </UserControl>

@@ -166,9 +166,9 @@ Selected from its chip: **SDA** and **SCL** (pin fields), **Clock** (100 / 400 k
 
 ### 6.6 Controller settings (the chip)
 
-Header "Controller", with "ESP32 · 5 sliders, 4 buttons" in secondary text. Three sections, one open at a time:
+Header "Controller" (the controller's chip and counts moved under the sidebar's status line, controller-page spec §5). Three sections, one open at a time. A section's rows are nested under its header (indented behind a guide line, the header in bold), and again for a sub-option or a sub-section (Fine tune, a bus). A setting whose label doesn't say enough has a "?" whose tooltip (on hover) explains it; the plain ones (Brightness, Dim after, Dimmed to, Turn off after, Wi-Fi) don't (user, 2026-10-22).
 
-- **Screens** (only when a button has a screen; summary "80%, off after 30 min"): Brightness (a % slider over 0–255), Dim after (Never, 1, 2, 5, 10, 30 minutes, 1 hour), Dimmed to (Low, Medium), Turn off after (same list), Prevent burn-in (pixel shift on/off), First press only wakes the screen. **Fine tune** holds the scroll, slide and pixel-shift timings as today's numeric fields.
+- **Screens** (only when a button has a screen; summary "80%, off after 30 min"): Brightness (a % slider over 0–255), Dim after (Never, 1, 2, 5, 10, 30 minutes, 1 hour), Dimmed to (Low, Medium), Turn off after (same list) with its sub-option **When off, the first press only wakes it** (the firmware swallows the press only while the screens are off, not dimmed; disabled while Turn off after is Never, and its value is kept), Prevent burn-in (pixel shift on/off). **Fine tune** holds the scroll, slide and pixel-shift timings as today's numeric fields.
 - **Input feel** (summary "Normal"): Slider smoothing Low / Normal / High, mapped onto the firmware's smoothing weight and deadband (the builder picks the three pairs; Normal = today's defaults). **Fine tune** shows today's four raw fields (debounce, read sliders every, smoothing weight, ignore changes below); a raw value off the three pairs shows the segment as Custom.
 - **Wi-Fi** (summary "Off" or "On · HomeNet"): opens the Connection dialog on Wi-Fi (§10.2).
 

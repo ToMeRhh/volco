@@ -662,7 +662,7 @@ public sealed class HardwareFixesTests : IDisposable
         Pump(s.Window);
 
         ViaGeneral(s, "controller");
-        var inspector = s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single();
+        var inspector = s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single(i => !i.IsProbe);
         Assert.Same(s.Vm.Sliders.Items[2], inspector.DataContext);
         AssertDrawn(inspector);
         AssertDrawn(In<Volco.App.Views.Hardware.SidebarStatus>(s.Window, "StatusLine"));
@@ -673,12 +673,12 @@ public sealed class HardwareFixesTests : IDisposable
         AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
 
         Click(s, s.Stage.Tiles().OfType<SliderTile>().ElementAt(3));   // a new selection shows too
-        inspector = s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single();
+        inspector = s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single(i => !i.IsProbe);
         Assert.Same(s.Vm.Sliders.Items[3], inspector.DataContext);
         AssertDrawn(inspector);
 
         ViaGeneral(s, "controller");   // again
-        AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single());
+        AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single(i => !i.IsProbe));
         AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderWiringInspector>().Single());
         AssertDrawn(In<Button>(s.Stage, "ControllerSettingsChip"));
 
@@ -691,6 +691,6 @@ public sealed class HardwareFixesTests : IDisposable
         Pump(s.Window);
         s.Window.ShowPage("controller");
         Pump(s.Window);
-        AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single());
+        AssertDrawn(s.Stage.GetVisualDescendants().OfType<SliderInspector>().Single(i => !i.IsProbe));
     }
 }

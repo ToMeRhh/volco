@@ -670,6 +670,48 @@
   <Style Selector="Grid.InspectorRow RadioButton.Segment /template/ Border#PART_Segment">
     <Setter Property="Padding" Value="7,3"/>
   </Style>
+  <!-- A settings section's header (Screens, Input feel), and its rows nested under it: indented
+       behind a guide line, again for a sub-option or a sub-section (Fine tune, a bus) -->
+  <Style Selector="TextBlock.SectionLabel">
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.Nested">
+    <Setter Property="Margin" Value="14,0,0,8"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="BorderThickness" Value="2,0,0,0"/>
+  </Style>
+  <Style Selector="Border.Nested TextBlock.RowLabel">
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+  <!-- The narrow inspector leaves a nested row's label some room -->
+  <Style Selector=":is(Window).compact Border.Nested Grid.InspectorRow :is(Control).RowControl">
+    <Setter Property="Width" Value="128"/>
+  </Style>
+  <!-- The "?" beside a non-trivial setting's label; its tooltip explains the setting -->
+  <Style Selector="controls|HelpTip">
+    <Setter Property="Width" Value="15"/>
+    <Setter Property="Height" Value="15"/>
+    <Setter Property="CornerRadius" Value="7.5"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Help"/>
+  </Style>
+  <Style Selector="controls|HelpTip > TextBlock">
+    <Setter Property="FontSize" Value="10"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+  </Style>
+  <Style Selector="controls|HelpTip:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="controls|HelpTip:pointerover > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
   <Style Selector="StackPanel.RowFooter">
     <Setter Property="Margin" Value="12,0,8,10"/>
     <Setter Property="Spacing" Value="6"/>
@@ -774,12 +816,16 @@
   </Style>
 
   <!-- ── Controller page: the inspector (spec §5) ──────────────────────────
-       A fixed column: a header, then one-line rows of 44 px, in two fixed sections. -->
+       A card beside the drawing: a header, then one-line rows of 44 px, in two sections that
+       scroll as one. -->
   <Style Selector="Border.Inspector">
     <Setter Property="Width" Value="380"/>
+    <Setter Property="Margin" Value="0,8,16,16"/>
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-    <Setter Property="BorderThickness" Value="1,0,0,0"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="ClipToBounds" Value="True"/>
   </Style>
   <Style Selector=":is(Window).compact Border.Inspector">
     <Setter Property="Width" Value="300"/>
@@ -810,9 +856,8 @@
     <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
-  <!-- The combined inspector's two fixed sections (controller-page spec §4.3): Controls or
-       Actions, then Hardware; each a fixed one-line header (36 px, HardwareSection.HeaderHeight)
-       over its own scrolling body -->
+  <!-- The combined inspector's two sections (controller-page spec §4.3): Controls or Actions,
+       then Hardware; each a one-line header (36 px) over its body -->
   <Style Selector="StackPanel.InspectorGroupBody, StackPanel.WiringBody">
     <Setter Property="Spacing" Value="12"/>
   </Style>
@@ -1067,14 +1112,14 @@
     <Setter Property="Padding" Value="0,7"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
   </Style>
-  <Style Selector=":is(Window).compact TextBlock.SidebarStatusText">
+  <Style Selector=":is(Window).compact StackPanel.SidebarStatusText">
     <Setter Property="IsVisible" Value="False"/>
   </Style>
   <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover Button.SidebarStatus, :is(Window).compact Grid.SidebarHost.pinned Button.SidebarStatus">
     <Setter Property="Padding" Value="17,7,8,7"/>
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
   </Style>
-  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover TextBlock.SidebarStatusText, :is(Window).compact Grid.SidebarHost.pinned TextBlock.SidebarStatusText">
+  <Style Selector=":is(Window).compact Grid.SidebarHost:pointerover StackPanel.SidebarStatusText, :is(Window).compact Grid.SidebarHost.pinned StackPanel.SidebarStatusText">
     <Setter Property="IsVisible" Value="True"/>
   </Style>
   <!-- The status banner across the top of the content area, while the controller needs the user -->

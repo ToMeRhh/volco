@@ -148,6 +148,24 @@ public sealed class StatusLevelsTests : IDisposable
 
     // ── The three levels ─────────────────────────────────────────────────────────────────────
 
+    /// <summary>The connected controller's hardware sits under the status line, on every page, and
+    /// goes with the connection.</summary>
+    [AvaloniaFact]
+    public void TheStatusLineNamesTheControllersHardware()
+    {
+        using var s = Show();
+        Until(s.Window, () => s.Vm.Controller.InSync);
+        var hardware = In<TextBlock>(s.Line, "HardwareText");
+        Assert.Equal("ESP32 · 5 sliders, 3 buttons", hardware.Text);
+        Assert.True(hardware.IsEffectivelyVisible);
+        double Top(Visual v) => v.TranslatePoint(new Point(0, 0), s.Line)!.Value.Y;
+        Assert.True(Top(hardware) > Top(In<TextBlock>(s.Line, "StatusText")));
+
+        s.Rig.Connection!.SetStatus(TransportStatus.Closed);   // unplugged
+        Until(s.Window, () => !s.Vm.Controller.Connection.IsConnected);
+        Assert.False(In<TextBlock>(s.Line, "HardwareText").IsVisible);
+    }
+
     [AvaloniaFact]
     public void FineShowsOnlyTheStatusLine()
     {

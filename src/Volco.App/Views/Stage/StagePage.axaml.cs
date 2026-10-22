@@ -12,6 +12,7 @@ using Volco.App.Controls;
 using Volco.App.ViewModels;
 using Volco.App.ViewModels.Hardware;
 using Volco.App.Views.Hardware;
+using Volco.App.Views.Inspector;
 using Volco.Core.Input;
 
 namespace Volco.App.Views.Stage;
@@ -58,6 +59,9 @@ public partial class StagePage : UserControl
     public static readonly StyledProperty<Control?> HardwareSidePanelProperty =
         AvaloniaProperty.Register<StagePage, Control?>(nameof(HardwareSidePanel));
 
+    public static readonly StyledProperty<double> InspectorTopHeightProperty =
+        AvaloniaProperty.Register<StagePage, double>(nameof(InspectorTopHeight));
+
     public static readonly StyledProperty<HardwareViewModel?> HardwareProperty =
         AvaloniaProperty.Register<StagePage, HardwareViewModel?>(nameof(Hardware));
 
@@ -68,6 +72,16 @@ public partial class StagePage : UserControl
     {
         get => GetValue(HardwareProperty);
         set => SetValue(HardwareProperty, value);
+    }
+
+    /// <summary>How far down a tile's inspector its Hardware section starts (controller-page spec
+    /// §4.3): the tallest header and Controls or Actions section of the drawn tiles, with their
+    /// sub-sections (Response, Timing) closed, measured on unseen copies. A tile's inspector is at
+    /// least this tall above its Hardware section, so that section stays put between tiles.</summary>
+    public double InspectorTopHeight
+    {
+        get => GetValue(InspectorTopHeightProperty);
+        private set => SetValue(InspectorTopHeightProperty, value);
     }
 
     /// <summary>The controller's part of the side panel (the preset chooser, Controller settings and
@@ -89,6 +103,8 @@ public partial class StagePage : UserControl
     private Control _inspector = null!;
     private ItemsControl _sliderList = null!;
     private ItemsControl _buttonList = null!;
+    private ItemsControl _sliderProbes = null!;
+    private ItemsControl _buttonProbes = null!;
 
     private void InitStage()
     {
@@ -103,6 +119,20 @@ public partial class StagePage : UserControl
         _inspector = this.FindControl<ContentControl>("InspectorContent")!;
         _sliderList = this.FindControl<ItemsControl>("SliderList")!;
         _buttonList = this.FindControl<ItemsControl>("ButtonList")!;
+        _sliderProbes = this.FindControl<ItemsControl>("SliderProbes")!;
+        _buttonProbes = this.FindControl<ItemsControl>("ButtonProbes")!;
+        this.FindControl<Control>("InspectorProbes")!.LayoutUpdated += (_, _) => MeasureInspectorTop();
+    }
+
+    /// <summary>Sets <see cref="InspectorTopHeight"/> from the probes once they are laid out.</summary>
+    private void MeasureInspectorTop()
+    {
+        var top = 0.0;
+        foreach (var list in new[] { _sliderProbes, _buttonProbes })
+            foreach (var container in list.GetRealizedContainers())
+                if (container is ContentPresenter { Child: TileInspector probe })
+                    top = Math.Max(top, probe.ClosedTopHeight);
+        if (Math.Abs(top - InspectorTopHeight) > 0.5) InspectorTopHeight = top;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -251,6 +281,8 @@ public partial class StagePage : UserControl
              : hw is not null && !hw.Sliders.SequenceEqual(vm.Sliders.Items) ? hw.Sliders : vm.Sliders.Items);
         Show(_buttonList, vm is null ? null
              : hw is not null && !hw.Buttons.SequenceEqual(vm.Buttons.Items) ? hw.Buttons : vm.Buttons.Items);
+        Show(_sliderProbes, _sliderList.ItemsSource);
+        Show(_buttonProbes, _buttonList.ItemsSource);
 
         static void Show(ItemsControl list, IEnumerable? items)
         {

@@ -111,6 +111,10 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
     /// operation runs. <see cref="FullText"/> is its tooltip.</summary>
     [ObservableProperty] private string _shortText;
 
+    /// <summary>The connected controller's hardware ("ESP32 · 5 sliders, 4 buttons"), under the
+    /// sidebar's status line; "" while not connected.</summary>
+    public string HardwareText => _controller.HardwareText;
+
     /// <summary>The status and its detail on one line: the banner's text and the sidebar line's tooltip.</summary>
     public string FullText => State.Detail is { } detail ? $"{State.Status} · {detail}" : State.Status;
 
@@ -154,6 +158,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         State = DeviceCard.From(inputs);
         Level = DeviceCard.LevelOf(inputs, State);
         ShortText = DeviceCard.ShortStatus(inputs, State, Level);
+        OnPropertyChanged(nameof(HardwareText));
         UpdateAttention(inputs);
         ActionCommand.NotifyCanExecuteChanged();
         AttentionActCommand.NotifyCanExecuteChanged();
