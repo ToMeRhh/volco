@@ -12,7 +12,10 @@ public enum ProbeKind { NoDevice, UnsupportedChip, VolcoMatches, DifferentFirmwa
 
 /// <param name="ChipName">For UnsupportedChip, e.g. "ESP32-S3".</param>
 /// <param name="Message">For NoDevice, the flasher's own reason (e.g. the port is in use).</param>
-public sealed record ProbeResult(ProbeKind Kind, string? ChipName = null, string? Message = null);
+/// <param name="AppMd5">For VolcoMatches and DifferentFirmware, the MD5 of the board's app region
+/// (the bundled app's offset and size), lower-case hex; <see cref="ErasedFlash"/> tells an erased
+/// board from one running other firmware.</param>
+public sealed record ProbeResult(ProbeKind Kind, string? ChipName = null, string? Message = null, string? AppMd5 = null);
 
 public enum FlashStage { Connecting, Erasing, Writing, Verifying, Restarting }
 

@@ -62,6 +62,35 @@ public class FirmwareManifestTests
     }
 }
 
+public class ErasedFlashTests
+{
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(1u)]
+    [InlineData(4096u)]
+    [InlineData(65536u)]
+    [InlineData(65537u)]
+    [InlineData(200000u)]
+    public void Md5_IsThatOfAnAll0xFFRegion(uint size)
+    {
+        var bytes = new byte[size];
+        Array.Fill(bytes, (byte)0xFF);
+        Assert.Equal(Convert.ToHexString(MD5.HashData(bytes)).ToLowerInvariant(), ErasedFlash.Md5(size));
+        Assert.True(ErasedFlash.Is(ErasedFlash.Md5(size).ToUpperInvariant(), size));
+        Assert.False(ErasedFlash.Is(null, size));
+    }
+
+    /// <summary>The user's erased board (2026-10-22 log): the probe's MD5 is that of the bundled
+    /// DIY app's 1,015,648 bytes, all 0xFF.</summary>
+    [Fact]
+    public void TheErasedBoardFromTheLog_IsErased()
+    {
+        Assert.Equal("83b1d29d4f83e2c6906f9a9cc7aea308", ErasedFlash.Md5(1_015_648));
+        Assert.True(ErasedFlash.Is("83b1d29d4f83e2c6906f9a9cc7aea308", 1_015_648));
+        Assert.False(ErasedFlash.Is("9b7e772cd52696ee7474ec78254b3478", 1_015_648));
+    }
+}
+
 public sealed class FirmwareServiceTests : IDisposable
 {
     private readonly FakeAudioEngine _engine = new();
@@ -137,6 +166,65 @@ public sealed class FirmwareServiceTests : IDisposable
         Assert.Equal("This ESP32 runs a different build of Volco's firmware.", outcome.Message);
         Assert.True(outcome.OfferInstall);
         Assert.False(outcome.OfferFreshInstall);
+    }
+
+    private string ErasedMd5 => ErasedFlash.Md5(_catalog.Esp32!.App.Info.Size);
+    private const string OtherMd5 = "0123456789abcdef0123456789abcdef";
+
+    /// <summary>An erased board (all 0xFF where the app goes) has nothing of Volco's on it, even
+    /// when a Volco controller said Hello on this port before (the user erased it).</summary>
+    [Fact]
+    public async Task AnErasedBoard_IsAFreshInstall_EvenAfterAVolcoHello()
+    {
+        Last.SetStatus(TransportStatus.Open);
+        Last.RaiseMessage(Hello("0000aaaa1111"));
+        await Until(() => _service.SeenVolcoHello);
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware, AppMd5: ErasedMd5);
+        var outcome = await _service.ProbeAsync("COM3", NoProgress);
+        Assert.Equal(FirmwareService.NoVolcoFirmwareMessage, outcome.Message);
+        Assert.True(outcome.OfferInstall);
+        Assert.True(outcome.OfferFreshInstall);
+    }
+
+    [Fact]
+    public async Task OtherFirmware_WithoutAHello_IsAFreshInstall()
+    {
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware, AppMd5: OtherMd5);
+        var outcome = await _service.ProbeAsync("COM3", NoProgress);
+        Assert.False(_service.SeenVolcoHello);
+        Assert.Equal(FirmwareService.NoVolcoFirmwareMessage, outcome.Message);
+        Assert.True(outcome.OfferFreshInstall);
+    }
+
+    [Fact]
+    public async Task OtherFirmware_AfterAHello_IsADifferentBuild()
+    {
+        Last.SetStatus(TransportStatus.Open);
+        Last.RaiseMessage(Hello("0000aaaa1111"));
+        await Until(() => _service.SeenVolcoHello);
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware, AppMd5: OtherMd5);
+        var outcome = await _service.ProbeAsync("COM3", NoProgress);
+        Assert.Equal(FirmwareService.DifferentBuildMessage, outcome.Message);
+        Assert.True(outcome.OfferInstall);
+        Assert.False(outcome.OfferFreshInstall);
+    }
+
+    /// <summary>The 2026-10-22 bug: a Hello earlier in the run marked the board as Volco's for good.
+    /// Once the port closes (the board unplugged, or another app such as esptool took it) without a
+    /// Hello since, that Hello no longer says what the board runs.</summary>
+    [Fact]
+    public async Task AHello_IsForgotten_WhenThePortClosesWithoutAnother()
+    {
+        Last.SetStatus(TransportStatus.Open);
+        Last.RaiseMessage(Hello("0000aaaa1111"));
+        await Until(() => _service.SeenVolcoHello);
+        Last.SetStatus(TransportStatus.Closed);
+        await Until(() => !_service.SeenVolcoHello);
+        Last.SetStatus(TransportStatus.Open);   // back, and nothing answers
+        _flasher.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware, AppMd5: OtherMd5);
+        var outcome = await _service.ProbeAsync("COM3", NoProgress);
+        Assert.Equal(FirmwareService.NoVolcoFirmwareMessage, outcome.Message);
+        Assert.True(outcome.OfferFreshInstall);
     }
 
     [Theory]

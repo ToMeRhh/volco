@@ -6,8 +6,8 @@ using Volco.Core.Runtime;
 namespace Volco.Core.Firmware;
 
 /// <param name="OfferInstall">The page offers Install next to the message.</param>
-/// <param name="OfferFreshInstall">The offer is a first install: the board has never answered as a
-/// Volco controller this run, so nothing of Volco's is on it to erase. Otherwise it is a reinstall,
+/// <param name="OfferFreshInstall">The offer is a first install: the board is erased, or hasn't
+/// answered as a Volco controller since the port opened, so nothing of Volco's is on it to erase. Otherwise it is a reinstall,
 /// which erases the setup stored on the controller.</param>
 public sealed record ProbeOutcome(ProbeResult? Result, string Message, bool OfferInstall, bool OfferFreshInstall = false);
 
@@ -47,11 +47,23 @@ public sealed class FirmwareService
         _configThread = configThread ?? (a => { a(); return Task.CompletedTask; });
         if (_runtime.ControllerConfig.LastHello is not null) _seenHello = 1;
         _runtime.HelloReceived += (_, _) => Volatile.Write(ref _seenHello, 1);
+        _runtime.LinkStatusChanged += OnLinkStatusChanged;
     }
 
-    /// <summary>A controller has said Hello this run: a board the probe finds without the bundled
-    /// build runs another build of Volco's firmware, not none.</summary>
+    /// <summary>The board on the port has said Hello (any protocol version) since the port last
+    /// opened: a board the probe then finds without the bundled build runs another build of Volco's
+    /// firmware, not none. Volco's own gaps (a probe or flash holding the port) keep it.</summary>
     public bool SeenVolcoHello => Volatile.Read(ref _seenHello) != 0;
+
+    /// <summary>The port closed or reopened outside a firmware operation, and no Hello has come on
+    /// it since: whatever said Hello before may have been unplugged, erased or rewritten (esptool
+    /// can only reach the board while Volco doesn't hold the port), so it no longer tells what the
+    /// board runs.</summary>
+    private void OnLinkStatusChanged(object? sender, LinkStatus status)
+    {
+        if (IsBusy || status.State is LinkState.Connected or LinkState.Incompatible) return;
+        if (_runtime.ControllerConfig.LastHello is null) Volatile.Write(ref _seenHello, 0);
+    }
 
     /// <summary>This build can flash: it has a flasher and bundled firmware.</summary>
     public bool IsAvailable => _flasher is not null && _catalog.HasFirmware;
@@ -112,8 +124,10 @@ public sealed class FirmwareService
             {
                 ProbeKind.NoDevice => new(result, result.Message ?? $"No ESP32 found on {port}.", false),
                 ProbeKind.UnsupportedChip => new(result, new UnsupportedChipException(result.ChipName ?? "unknown chip").Message, false),
-                // Another build of Volco's (a Hello came this run) loses its stored setup to a
-                // reinstall; a board that never answered as Volco has nothing of Volco's on it.
+                // An erased board has nothing on it; another build of Volco's (the board said
+                // Hello since the port opened) loses its stored setup to a reinstall; a board that
+                // never answered as Volco has nothing of Volco's on it.
+                _ when IsErased(result) => new(result, NoVolcoFirmwareMessage, true, OfferFreshInstall: true),
                 _ when SeenVolcoHello => new(result, DifferentBuildMessage, true),
                 _ => new(result, NoVolcoFirmwareMessage, true, OfferFreshInstall: true),
             };
@@ -180,6 +194,14 @@ public sealed class FirmwareService
             finally { _runtime.HelloReceived -= OnHello; }
         }
         finally { Exit(); }
+    }
+
+    /// <summary>The probe read an all-0xFF app region: the board's flash is erased.</summary>
+    private bool IsErased(ProbeResult result)
+    {
+        if (result.Kind != ProbeKind.DifferentFirmware || !ErasedFlash.Is(result.AppMd5, _catalog.Esp32!.App.Info.Size)) return false;
+        AppLog.Info("Firmware probe: the app region is erased");
+        return true;
     }
 
     /// <summary>The dialog's port becomes the configured one (spec §8.6 step 3), saved while the

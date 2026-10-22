@@ -45,7 +45,7 @@ public sealed class EspDotNetFirmwareFlasher : IFirmwareFlasher
             var md5 = Convert.ToHexString(await session.Soft!.SpiFlashMd5Async(app.Offset, app.Size, watchdog.Token).ConfigureAwait(false)).ToLowerInvariant();
             await session.ResetAsync().ConfigureAwait(false);
             AppLog.Info($"Probe: app region MD5 {md5}, bundled {app.Md5}");
-            return new ProbeResult(md5 == app.Md5 ? ProbeKind.VolcoMatches : ProbeKind.DifferentFirmware);
+            return new ProbeResult(md5 == app.Md5 ? ProbeKind.VolcoMatches : ProbeKind.DifferentFirmware, AppMd5: md5);
         }
     }
 
