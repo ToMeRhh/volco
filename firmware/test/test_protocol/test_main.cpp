@@ -444,6 +444,18 @@ void test_short_calibrate_is_ignored() {
   TEST_ASSERT_EQUAL(0, sink.calibrations.size());
 }
 
+void test_send_calibration_is_traffic() {
+  FakeSink sink;
+  Link link(config(), sink);
+  link.begin(0);
+  sink.sent.clear();
+  link.sendCalibration(1, 0x05, 170, 2550, 900);
+  TEST_ASSERT_EQUAL(1, sink.sent.size());
+  TEST_ASSERT_TRUE(sink.sent[0] == golden("calibration_1_learned_auto"));
+  link.tick(1800);  // 900 ms since the last frame: no Alive yet
+  TEST_ASSERT_EQUAL(1, sink.sent.size());
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_parser_resyncs_after_garbage_and_bad_checksum);
@@ -475,5 +487,6 @@ int main(int, char**) {
   RUN_TEST(test_calibration_frames_encode_to_golden_bytes);
   RUN_TEST(test_calibrate_reaches_the_sink);
   RUN_TEST(test_short_calibrate_is_ignored);
+  RUN_TEST(test_send_calibration_is_traffic);
   return UNITY_END();
 }

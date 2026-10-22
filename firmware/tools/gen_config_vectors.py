@@ -136,6 +136,9 @@ decode_ok("screen_default", bytes.fromhex("12022200"), buttons=1, buttons__0__ki
 decode_ok("brightness_only", bytes.fromhex("32020864"), screens__brightness=100,
           screens__dim_enabled=1, screens__transition_ms=360)
 decode_ok("unknown_field", bytes.fromhex("98060132020864"), screens__brightness=100)
+ac = diy()
+ac.sliders[1].auto_calibrate = False
+decode_ok("auto_calibrate_off", blob(ac), sliders=5, sliders__0__auto_calibrate=1, sliders__1__auto_calibrate=0)
 mx = blob(maximal())
 assert len(mx) == 683, len(mx)  # 663 bytes with two buses; buses 2 and 3 add 20
 decode_ok("maximal", mx, size=683, sliders=16, buttons=32)

@@ -137,6 +137,7 @@ class Link {
   void tick(uint32_t now);                                        // every loop pass
   void sendSlider(uint8_t index, uint16_t value, uint32_t now);
   void sendButton(uint8_t index, bool pressed, uint32_t now);
+  void sendCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi, uint32_t now);
   bool hostAlive() const { return hostAlive_; }
   bool holding() const { return holding_; }
 

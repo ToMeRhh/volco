@@ -49,6 +49,7 @@ struct RuntimeInput {
 struct RuntimeConfig {
   uint8_t sliderCount;
   uint8_t sliderPins[kMaxSliders];
+  bool sliderAutoCalibrate[kMaxSliders];  // learn the ends while in use (default on)
   uint8_t buttonCount;
   RuntimeButton buttons[kMaxButtons];
   RuntimeBus i2c[kI2cBuses];  // 0, 1 hardware; 2, 3 software

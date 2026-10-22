@@ -22,11 +22,14 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `src/config_session.*` | The config session: read replies, chunked writes, validate, store, reboot (spec §5.3, §5.4, §6.7). |
 | `src/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
 | `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
+| `src/slider_ends_store.*` | The sliders' learned ends in NVS (namespace `volco_ends`, key `ends`), apart from the controller config. |
 | `src/indicators.*` | LED rendering. |
 | `src/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
 | `src/debug_log.h` | The `DEBUG_LOG` macro. |
 | `lib/volco_protocol/` | Frame parser and encoder, message decoding, Hello, Begin/Commit holding, keepalive and host timeout, the active-transport rule. |
 | `lib/volco_config/` | The controller config: decode, validation, chip table, CRC, chunked receiver, `RuntimeConfig`. |
+| `lib/volco_slider_ends/` | One slider's learned travel ends, and the mapping of its readings onto 0-4095. |
+| `lib/volco_calibration/` | One slider's calibration: Auto-calibrate, the Re-calibrate sweep (Done, Cancel, the 60 s timeout, host lost), when a Calibration report is due; and the stored entries, `{pin, auto-calibrate, low, high}`, looked up by pin. |
 | `lib/volco_bidi/` | Logical to visual reordering of UTF-8 text, for Hebrew. |
 | `lib/volco_screen_state/` | The state machine of each screen: current, previous and pending content, slide progress, dim, off, pixel shift, wake handling. |
 | `lib/volco_render/` | Volco's own 1-bit canvas and layout 1 renderer, with the generated fonts and icons. U8g2 is only the SSD1306 driver underneath. |
@@ -88,6 +91,7 @@ The high bit of `type` is the direction: `0x0_` comes from the controller, `0x8_
 | `0x04` | Button | `index`, `pressed` (1 or 0) | A button changed. |
 | `0x05` | ConfigData | `seq`, total u16, offset u16, crc32 u32, data (0-240 bytes) | One chunk of a config read reply. |
 | `0x06` | ConfigResult | `seq`, `code`, `item`, `field` | The answer to a config write. |
+| `0x09` | Calibration | `index`, `flags` (bit 0 learned, bit 1 sweeping, bit 2 auto-calibrate), low u16, high u16 | A slider's calibration: the answer to every Calibrate, when its ends widen (at most every 100 ms), and when a sweep ends. |
 | `0x81` | HelloRequest | none | The PC asks for Hello. |
 | `0x82` | Heartbeat | none | Keepalive from the PC. |
 | `0x83` | Led | `button`, `value` | LED: lit when the value is not 0. LED pair: 1 lights A, 2 lights B, anything else neither. |
@@ -98,6 +102,7 @@ The high bit of `type` is the direction: `0x0_` comes from the controller, `0x8_
 | `0x88` | ConfigWriteBegin | `seq`, total u16, crc32 u32 | Starts a config write. |
 | `0x89` | ConfigWriteChunk | `seq`, offset u16, data (1-240 bytes) | Part of a config write. |
 | `0x8A` | ConfigWriteEnd | `seq` | Ends a config write. |
+| `0x8E` | Calibrate | `index`, `action` (0 query, 1 start sweep, 2 done, 3 cancel) | The PC asks for a slider's calibration, or runs a Re-calibrate sweep. |
 
 ### Hello body
 
@@ -157,6 +162,7 @@ The config is the protobuf blob of `proto/volco_config.proto`, at most 1024 byte
 - **Hello** is sent at boot (which also covers the ESP32 resetting when the serial port is opened), in reply to every HelloRequest, and on the first valid frame from the PC while the PC is not considered alive (the first frame ever, or the first after a host timeout), unless that frame is itself a HelloRequest, whose reply covers it. Hello is always followed by one Slider frame per slider carrying its current smoothed value; the app sets the volumes from these without showing the volume OSD. The PC sends no Led or Screen on a connection until it has seen a Hello, then pushes every button's state.
 - **Keepalive.** The controller sends Alive whenever it has sent nothing for 1 s. The PC sends Heartbeat the same way, but only once its session is Ready. Any valid frame from the PC counts as proof of life; after `HOST_TIMEOUT_MS` without one the LEDs go off and the screens show "not connected".
 - **Begin / Commit.** After Begin the firmware holds every Led and Screen instead of applying it; on Commit it applies them all in the same pass, so every screen starts its slide at the same moment. A newer message for the same button replaces the held one, a second Begin restarts the timer, Commit with nothing held does nothing, and Commit without a Begin is ignored. If no Commit arrives within `COMMIT_FALLBACK_MS` of the Begin, the firmware applies what it holds.
+- **Slider calibration** (`docs/design/slider-calibration.md`). Each slider learns its travel's ends from the smoothed reading, always with Auto-calibrate on (the default) and only during a sweep with it off. Until the span reaches 1000 codes a slider sends its raw reading, then the reading stretched between the ends. A sweep (Calibrate 1) forgets the ends and learns from scratch; Done (2) keeps them once learned, Cancel (3), a host timeout or 60 s without Done restore the ones before it. When a sweep ends the controller sends the Calibration, then a Slider frame with the position stretched by the final ends, whatever the deadband. Ends are stored at most every 5 s while learning, at once when a sweep ends, never during one; an entry is used only by the slider with its pin and Auto-calibrate setting, so changing either forgets them. A Calibrate for a slider past the slider count is ignored.
 - **Kind mismatches are ignored.** A Led for a button that is not an LED or LED pair, a Screen for a button that is not a screen, and any out-of-range index are dropped.
 
 ## Rendering
@@ -199,7 +205,7 @@ Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to USB serial only
 
 `loop()` never blocks for long and runs these steps on every pass, in this order:
 
-1. **Sliders** (every `slider_interval_ms`): read each pin, smooth it with the moving average, and send a slider message when the smoothed value has moved more than `slider_deadband` since the last one sent.
+1. **Sliders** (every `slider_interval_ms`): read each pin, smooth it with the moving average, let its calibration learn from it, and send a slider message (the value stretched between the learned ends) when the smoothed value has moved more than `slider_deadband` since the last one sent. Then each slider's calibration: the sweep timeout, the report and fresh position when a sweep ended, a report when the ends widened, and storing the ends when due.
 2. **Buttons**: debounce each pin and send a button message on every confirmed press or release. The debounce is timestamp-based, so a press is still seen when a screen redraw delayed the pass.
 3. **Receive**: drain each transport, feeding each byte to its parser; each valid frame latches its transport, then goes to the link.
 4. **Link tick**: keepalive, host timeout and the Commit fallback.
@@ -208,7 +214,7 @@ Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to USB serial only
 
 ## Tests
 
-`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
+`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_slider_ends`, `volco_calibration`, `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
 
 ## Developing the firmware
 
