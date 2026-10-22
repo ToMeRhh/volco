@@ -221,9 +221,28 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.Equal(closed, HardwareTop(s, inspector), 1);
         Assert.True(HardwareTop(s, inspector) >= ContentBottom(s, inspector) - 0.5, "Timing's rows fit above Hardware");
 
-        // The probes never show what the real inspector's toggle does
-        Assert.All(s.Page.GetVisualDescendants().OfType<ButtonInspector>().Where(i => i.IsProbe),
-                   probe => Assert.True(In<Border>(probe, "TimingBody").IsVisible));
+    }
+
+    /// <summary>The page keeps no copy of an inspector once the tiles are measured: one per tile
+    /// made showing the page again several times slower (every control is styled anew on return).
+    /// A change that can move a tile's height measures it again.</summary>
+    [AvaloniaFact]
+    public void ThePageKeepsNoProbe()
+    {
+        using var s = Show(width: 1100, height: 900);
+        Select(s, s.Vm.Buttons.Items[0]);
+        Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<TileInspector>(), i => i.IsProbe);
+        Assert.Single(s.Page.GetVisualDescendants().OfType<TileInspector>());   // the real one
+        var height = s.Page.InspectorTopHeight;
+        Assert.True(height > 0);
+
+        // A much longer action name wraps onto more lines: the height follows, and the probe goes again
+        var slot = s.Vm.Buttons.Items[1].Press;
+        slot.SelectedChoice = ActionCatalog.For(ButtonActionType.RunScript);
+        slot.CommandPath = @"C:\Users\someone\Documents\Scripts\a very long script name that wraps over several lines in the inspector.ps1";
+        Settle(s.Window);
+        Assert.True(s.Page.InspectorTopHeight >= height - 0.5);
+        Assert.DoesNotContain(s.Page.GetVisualDescendants().OfType<TileInspector>(), i => i.IsProbe);
     }
 
     [AvaloniaFact]

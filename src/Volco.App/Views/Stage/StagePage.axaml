@@ -213,28 +213,23 @@
       </Border>
     </Border>
 
-    <!-- Unseen copies of every drawn tile's inspector, without their Hardware sections, at the
-         inspector's width, with their sub-sections open: the tallest Controls or Actions section sets
-         InspectorTopHeight, so the Hardware section starts below every tile's, open or closed, and
-         never moves. Last, so lookups by name find the real inspector. -->
+    <!-- An unseen copy of a tile's inspector, without its Hardware section and with its
+         sub-section open, at the inspector's width: StagePage.InspectorProbe.cs measures each drawn
+         tile on it in turn (the tallest Controls or Actions section sets InspectorTopHeight, so the
+         Hardware section starts below every tile's and never moves), then empties it, so the page
+         carries no copy while it is shown or hidden. Last, so lookups by name find the real inspector. -->
     <Canvas Name="ProbeHost" IsHitTestVisible="False" IsEnabled="False" Opacity="0"
             KeyboardNavigation.TabNavigation="None">
-      <StackPanel Name="InspectorProbes" Width="{Binding #SidePanel.Bounds.Width}">
-        <ItemsControl Name="SliderProbes">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:SliderItemViewModel">
-              <inspector:SliderInspector IsProbe="True"/>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <ItemsControl Name="ButtonProbes">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:ButtonItemViewModel">
-              <inspector:ButtonInspector IsProbe="True"/>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
+      <ContentControl Name="InspectorProbe">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="{x:Type vm:SliderItemViewModel}" x:DataType="vm:SliderItemViewModel">
+            <inspector:SliderInspector IsProbe="True"/>
+          </DataTemplate>
+          <DataTemplate DataType="{x:Type vm:ButtonItemViewModel}" x:DataType="vm:ButtonItemViewModel">
+            <inspector:ButtonInspector IsProbe="True"/>
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
     </Canvas>
   </Panel>
 </UserControl>
