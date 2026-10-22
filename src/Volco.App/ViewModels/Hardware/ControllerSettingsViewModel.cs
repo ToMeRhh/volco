@@ -15,16 +15,12 @@ public sealed record DurationChoice(string Label, uint? Seconds, bool IsCustom =
 
 /// <summary>
 /// The Hardware inspector of the controller's settings (hardware-page spec §6.6): Screens, Input feel
-/// and Wi-Fi, one open at a time, in plain words over the draft's raw fields (which stay under
+/// and Wi-Fi, each opened and closed on its own, in plain words over the draft's raw fields (which stay under
 /// Fine tune). A value off a list shows as "Custom (90 s)" and is kept. Every edit goes through
 /// <see cref="ControllerViewModel"/>, which checks <see cref="ControllerViewModel.CanEdit"/>.
 /// </summary>
 public sealed partial class ControllerSettingsViewModel : ObservableObject, IDisposable
 {
-    public const int ScreensSection = 0;
-    public const int InputSection = 1;
-    public const int WifiSection = 2;
-
     // Dimmed to: Low and Medium (the firmware's default is Low).
     private const uint Low = 8;
     private const uint Medium = 48;
@@ -46,7 +42,8 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
     {
         _controller = controller;
         _openWifi = openWifi;
-        _openSection = ShowScreens ? ScreensSection : InputSection;
+        _screensOpen = ShowScreens;
+        _isInputOpen = !ShowScreens;
         OpenWifiCommand = new RelayCommand(_openWifi);
         OpenBusesCommand = new RelayCommand(openBuses);
         RefreshBuses();
@@ -63,20 +60,27 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     // ── Sections ─────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The open section (<see cref="ScreensSection"/>, <see cref="InputSection"/>,
-    /// <see cref="WifiSection"/>), or -1 for none; opening one closes the others.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsScreensOpen), nameof(IsInputOpen))]
-    private int _openSection;
+    // Each section opens and closes on its own (user, 2026-10-22): Screens and Input feel can be
+    // open together. Screens starts open, Input feel only when there is no Screens section.
+    private bool _screensOpen;
 
-    public bool IsScreensOpen => ShowScreens && OpenSection == ScreensSection;
-    public bool IsInputOpen => OpenSection == InputSection;
+    /// <summary>Screens is open (never while no button has a screen).</summary>
+    public bool IsScreensOpen
+    {
+        get => ShowScreens && _screensOpen;
+        set
+        {
+            if (_screensOpen == value) return;
+            _screensOpen = value;
+            OnPropertyChanged();
+        }
+    }
 
-    /// <summary>A header's click: opens its section, or closes it when it is the open one.</summary>
-    public void ToggleSection(int section) => OpenSection = OpenSection == section ? -1 : section;
+    /// <summary>Input feel is open.</summary>
+    [ObservableProperty] private bool _isInputOpen;
 
-    [RelayCommand] private void ToggleScreens() => ToggleSection(ScreensSection);
-    [RelayCommand] private void ToggleInput() => ToggleSection(InputSection);
+    [RelayCommand] private void ToggleScreens() => IsScreensOpen = !IsScreensOpen;
+    [RelayCommand] private void ToggleInput() => IsInputOpen = !IsInputOpen;
     [RelayCommand] private void ToggleScreensFine() => IsScreensFineOpen = !IsScreensFineOpen;
     [RelayCommand] private void ToggleInputFine() => IsInputFineOpen = !IsInputFineOpen;
 
@@ -249,7 +253,7 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
             : listed.Count == 1 ? $"Bus {listed[0]}"
             : $"Buses {BusWiringViewModel.Join(listed.Select(b => $"{b}").ToList())}";
         foreach (var bus in problems)
-            if (_problemBuses.Add(bus) && ShowScreens) OpenSection = ScreensSection;
+            if (_problemBuses.Add(bus)) IsScreensOpen = true;
         _problemBuses.IntersectWith(problems);
     }
 
@@ -316,7 +320,12 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         // Any draft or state change can move a summary, a list's custom entry or the feel.
         RefreshBuses();
         foreach (var name in Watched) OnPropertyChanged(name);
-        if (!ShowScreens && OpenSection == ScreensSection) OpenSection = InputSection;
+        // The last screen went while Screens was open: Input feel opens, so something stays open
+        if (!ShowScreens && _screensOpen)
+        {
+            _screensOpen = false;
+            IsInputOpen = true;
+        }
     }
 
     public void Dispose() => _controller.PropertyChanged -= OnControllerChanged;

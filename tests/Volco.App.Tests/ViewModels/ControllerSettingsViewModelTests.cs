@@ -133,19 +133,24 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         var vm = SetUp(screen: false);
         Assert.False(vm.ShowScreens);
         Assert.False(vm.IsScreensOpen);
-        Assert.Equal(ControllerSettingsViewModel.InputSection, vm.OpenSection);
+        Assert.True(vm.IsInputOpen);
     }
 
+    /// <summary>Screens and Input feel open and close on their own (user, 2026-10-22).</summary>
     [Fact]
-    public void OneSectionOpenAtATime()
+    public void SectionsOpenIndependently()
     {
         var vm = SetUp();
-        Assert.Equal(ControllerSettingsViewModel.ScreensSection, vm.OpenSection);
-        vm.ToggleSection(ControllerSettingsViewModel.InputSection);
-        Assert.True(vm.IsInputOpen);
-        Assert.False(vm.IsScreensOpen);
-        vm.ToggleSection(ControllerSettingsViewModel.InputSection);
+        Assert.True(vm.IsScreensOpen);
         Assert.False(vm.IsInputOpen);
+        vm.ToggleInputCommand.Execute(null);
+        Assert.True(vm.IsInputOpen);
+        Assert.True(vm.IsScreensOpen);   // both open
+        vm.ToggleScreensCommand.Execute(null);
+        Assert.False(vm.IsScreensOpen);
+        Assert.True(vm.IsInputOpen);
+        vm.ToggleInputCommand.Execute(null);
+        Assert.False(vm.IsInputOpen);   // both closed
     }
 
     [Fact]

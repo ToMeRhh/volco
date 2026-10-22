@@ -160,7 +160,7 @@ public sealed class ControllerSettingsBusTests : IDisposable
     {
         SetUp(screen: true);
         var settings = Settings();
-        settings.OpenSection = ControllerSettingsViewModel.InputSection;
+        settings.IsScreensOpen = false;
         var row = Dialog().Buses.Single(b => b.Bus == 0);
 
         DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.BusScl, 0), 25);   // SDA = SCL

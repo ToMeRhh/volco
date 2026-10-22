@@ -5,8 +5,8 @@
              xmlns:controls="using:Volco.App.Controls"
              x:Class="Volco.App.Views.Hardware.ControllerSettingsInspector"
              x:DataType="hw:ControllerSettingsViewModel">
-  <!-- The controller's settings (hardware-page spec §6.6): Screens, Input feel and Wi-Fi, one open at
-       a time, each a card; the raw numbers are under Fine tune. A section's rows sit under its header
+  <!-- The controller's settings (hardware-page spec §6.6): Screens, Input feel and Wi-Fi, each
+       opened on its own, each a card; the raw numbers are under Fine tune. A section's rows sit under its header
        in its card, indented, and a sub-option or a sub-section (Fine tune) indented and tinted again;
        a setting whose label doesn't say enough has a "?" in front of it whose tooltip explains it.
        The I2C buses are edited in their own dialog. -->
