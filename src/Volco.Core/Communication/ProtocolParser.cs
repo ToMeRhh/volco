@@ -129,6 +129,9 @@ public class ProtocolParser
                     payload[10..].ToArray());
             case MessageType.ConfigResult when payload.Length >= 5:
                 return new ConfigResultMessage(payload[1], (Volco.Core.Controller.ConfigResultCode)payload[2], payload[3], payload[4]);
+            case MessageType.Calibration when payload.Length >= 7:
+                return new CalibrationMessage(payload[1], (payload[2] & 1) != 0, (payload[2] & 2) != 0, (payload[2] & 4) != 0,
+                    (ushort)(payload[3] << 8 | payload[4]), (ushort)(payload[5] << 8 | payload[6]));
             default:
                 return null;   // PC to controller types, unknown types, or a body too short for its type
         }
