@@ -5,10 +5,36 @@
              x:Class="Volco.App.Views.Hardware.SliderWiringInspector"
              x:DataType="hw:SliderWiringViewModel">
   <!-- The body of a slider's Hardware section (controller-page spec §4.3, hardware-page spec §6.1):
-       its pin, then Remove Slider N -->
+       its pin, Auto-calibrate and its calibration with Re-calibrate (slider-calibration spec), then
+       Remove Slider N -->
   <StackPanel Classes="WiringBody">
     <Border Classes="InspectorRows">
-      <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
+      <StackPanel Name="Rows">
+        <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
+
+        <!-- A draft field: until saved, the caption says that saving forgets the calibration -->
+        <Grid Name="AutoCalibrateRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Name="AutoCalibrateLabel" Classes="RowLabel" Text="Auto-calibrate"/>
+            <TextBlock Name="AutoCalibrateNote" Classes="Caption" FontSize="11" TextTrimming="CharacterEllipsis"
+                       Text="{Binding AutoCalibrateNote}" ToolTip.Tip="{Binding AutoCalibrateNote}"
+                       IsVisible="{Binding AutoCalibrateNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          </StackPanel>
+          <ToggleSwitch Name="AutoCalibrateToggle" Grid.Column="1" OnContent="" OffContent=""
+                        IsChecked="{Binding AutoCalibrate, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
+        </Grid>
+
+        <!-- What the controller reports, and the sweep -->
+        <Grid Name="CalibrationRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <TextBlock Name="CalibrationText" Classes="RowLabel" TextWrapping="Wrap" MaxLines="2"
+                     TextTrimming="CharacterEllipsis" Text="{Binding CalibrationText}" ToolTip.Tip="{Binding CalibrationText}"/>
+          <!-- A disabled button gets no tooltip, so the tooltip is on a panel around it -->
+          <Panel Grid.Column="1" VerticalAlignment="Center" Background="Transparent"
+                 ToolTip.Tip="{Binding RecalibrateTooltip}" ToolTip.ShowOnDisabled="True">
+            <Button Name="RecalibrateButton" Content="Re-calibrate" Command="{Binding RecalibrateCommand}"/>
+          </Panel>
+        </Grid>
+      </StackPanel>
     </Border>
     <Button Name="HardwareRemoveButton" Classes="Danger" HorizontalAlignment="Left"
             Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" IsEnabled="{Binding IsEditable}"/>
