@@ -18,7 +18,7 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 </div>
 
 > [!TIP]
-> **Coming from [deej](https://github.com/omriharel/deej)?** Here's [what changes when you move to Volco](#-coming-from-deej).
+> **Coming from [deej](https://github.com/omriharel/deej)?** Here's [how to move your controller to Volco](#-coming-from-deej).
 
 ---
 
@@ -34,18 +34,13 @@ This is my first open-source project, so issues, ideas and feedback are very wel
 
 ## 🔁 Coming from deej?
 
-| | deej | Volco |
-|---|---|---|
-| Board | Arduino Nano, Uno or Pro Micro | ESP32 (Arduino Uno and Nano support is on the roadmap) |
-| Firmware & setup | Uploaded from the Arduino IDE, configured in `config.yaml` | Installed and set up directly from the Volco app |
-| Sliders | Apps, master, mic, unmapped apps | Apps, groups of apps, everything else, any output or input device |
-| Buttons | None | Mute, output switching, media keys, programs, scripts, modes |
-| Feedback | None | LEDs and OLED screens on the buttons |
-| Wi-Fi | Community forks | Built in (UDP) |
+Volco runs on deej controllers built on an **ESP32**. **Arduino Nano and Uno** support is in progress: ⭐ star or 👀 watch this repo to hear when it lands.
 
-- **Your deej runs on an ESP32?** Keep your hardware as it is: install Volco's firmware from the app, add your sliders and their pins on the Controller page, and save it to the controller.
-- **Your deej runs on an Arduino Nano or Uno?** Volco's firmware doesn't run on them yet. Support is in progress: ⭐ star or 👀 watch this repo to hear when it lands.
-- There's no `config.yaml` to bring over. You choose what each slider does in the app.
+On an ESP32 you keep your sliders, wiring and case. Only the firmware changes:
+
+1. Plug the board in over USB and install Volco's firmware from the app. It replaces the deej firmware, with no Arduino IDE needed.
+2. Add your sliders and their pins on the **Controller** page, and **Save to controller**.
+3. Choose what each slider does. There's no `config.yaml` to bring over.
 
 ## 📸 The hardware
 
