@@ -34,6 +34,8 @@
         <MenuItem Name="DisconnectMenuItem" Header="Disconnect" Command="{Binding DisconnectCommand}"/>
         <Separator/>
         <MenuItem Name="CheckFirmwareMenuItem" Header="Check firmware" Command="{Binding CheckFirmwareCommand}"/>
+        <MenuItem Name="UpdateMenuItem" Header="Update firmware" Command="{Binding UpdateFirmwareCommand}"
+                  IsVisible="{Binding OffersUpdate}"/>
         <MenuItem Name="ReinstallMenuItem" Header="Reinstall firmware…" Foreground="{DynamicResource DangerBrush}"
                   Command="{Binding ReinstallFirmwareCommand}"/>
         <Separator/>

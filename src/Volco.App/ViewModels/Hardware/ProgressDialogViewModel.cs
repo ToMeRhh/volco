@@ -16,7 +16,7 @@ public enum ProgressNextStep { None, TestNow, TryAgain, InstallFirmware, Reinsta
 /// It shows the operation's name, its step and progress and "Don't unplug the controller.", and
 /// can't be closed while it writes. At the end it shows the result and its next step (Test your
 /// controller now after an update or a first save, Try again after a failure, Install firmware
-/// after a check that found none of Volco's) and stays until
+/// after a check that found none of Volco's, Choose how to start after an install) and stays until
 /// Close; a plain confirmed save shows "Saved." briefly and closes itself. Closing leaves what
 /// still needs the user to the banner. UI thread.
 /// </summary>
@@ -144,7 +144,7 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
             Operation.Install => "Installing firmware",
             Operation.Update => "Updating firmware",
             Operation.Check => "Checking firmware",
-            _ => "Saving to the controller",
+            _ => _controller.IsRestoreSave ? "Restoring your setup" : "Saving to the controller",
         };
         if (now == Operation.Save)
         {
@@ -187,8 +187,9 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
         else if (c.OfferInstall)   // a check offers an install: it asks first, as from the banner
             SetNext(c.OfferFreshInstall ? ProgressNextStep.InstallFirmware : ProgressNextStep.ReinstallFirmware,
                     () => c.InstallFirmwareCommand.Execute(null), () => c.CanUseFirmware);
-        else if (operation == Operation.Install && c.FirmwareMessageTone == LinkTone.Good && c.IsNotSetUp)
+        else if (operation == Operation.Install && c.FirmwareMessageTone == LinkTone.Good && c.IsNotSetUp && !c.RestoringSetup)
             // The install left the controller without a setup: the chooser, on the Controller page.
+            // A reinstall over Volco's saved copy puts it back instead, and that save takes over.
             SetNext(ProgressNextStep.ChooseHowToStart, _toController, null);
         else if (c.FirmwareMessageTone == LinkTone.Danger)
             SetNext(ProgressNextStep.TryAgain, () => c.RetryFirmware(activity), () => c.CanUseFirmware);
@@ -205,7 +206,7 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
             ResultTone = LinkTone.Good;
             if (c.OfferTest)
             {
-                ResultText = "Saved. The controller is set up.";
+                ResultText = c.IsRestoreSave ? ControllerViewModel.RestoredText : "Saved. The controller is set up.";
                 OfferTest();
                 return;
             }

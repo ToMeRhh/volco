@@ -78,7 +78,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private bool _showChooser;
 
     /// <summary>The setup chooser (spec §7.1) fills the case: the controller isn't set up or its
-    /// setup can't be used and no new draft was started, or the user chose Start over.</summary>
+    /// setup can't be used and no new draft was started (nor is a Reinstall about to put Volco's copy
+    /// back), or the user chose Start over.</summary>
     public bool ShowChooser
     {
         get => _showChooser;
@@ -94,7 +95,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private void UpdateChooser()
     {
         var needsSetup = _controller.Banner.Kind is BannerKind.NotSetUp or BannerKind.NotSetUpHasMirror or BannerKind.Unusable;
-        ShowChooser = _startingOver || (needsSetup && !_controller.HasNewDraft);
+        ShowChooser = _startingOver || (needsSetup && !_controller.HasNewDraft && !_controller.RestoringSetup);
         Chooser.CanGoBack = _startingOver;
         if (ShowChooser) Chooser.Refresh();
     }

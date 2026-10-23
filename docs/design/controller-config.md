@@ -1164,7 +1164,7 @@ All answered, and the spec above includes the approved amendments. The list belo
 8. Unplug during a save → the old config, or the new one, is reported correctly after reconnecting.
 9. Unplug during a flash → Install again succeeds.
 10. Probe: a blank board → "doesn't have this version of Volco's firmware"; another Volco build → the same; a board with no ESP32 on the port → "No ESP32 found".
-11. Install over a configured board (NVS wiped) → the setup dialog (mirror kept) → Apply my saved setup.
+11. Install over a configured board (NVS wiped): in sync before → Volco's copy is saved back at once; otherwise → the setup chooser (mirror kept) → Apply my saved setup.
 12. Screens: a layout with screens from the form → screens render; behaviour settings take effect after save.
 13. Reboot with the COM port open (save over serial) → no "Connection lost"; confirmed.
 

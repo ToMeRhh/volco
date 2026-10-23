@@ -62,9 +62,10 @@ public sealed class ProgressDialogTests : IDisposable
     }
 
     /// <summary>The settings window on General over Volco's DIY copy on COM3, with Volco's firmware
-    /// bundled, greeted by a controller running <paramref name="firmwareId"/> that holds the copy.
-    /// Without <paramref name="greet"/> the port opens and nothing answers.</summary>
-    private static Shown Show(string firmwareId = "dev", bool greet = true)
+    /// bundled, greeted by a controller running <paramref name="firmwareId"/> that holds the copy
+    /// (or, without <paramref name="holdsCopy"/>, no setup at all). Without <paramref name="greet"/>
+    /// the port opens and nothing answers.</summary>
+    private static Shown Show(string firmwareId = "dev", bool greet = true, bool holdsCopy = true)
     {
         var rig = new TestRig(options: TestRig.NoGrace with { Firmware = Catalog, SilentAfter = TimeSpan.FromSeconds(5) });
         var c = rig.Config.Config;
@@ -78,8 +79,10 @@ public sealed class ProgressDialogTests : IDisposable
         var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 720 };
         window.Show();
         rig.Connection!.SetStatus(TransportStatus.Open);
-        if (greet) rig.Connection.RaiseMessage(Hello(firmwareId, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob)));
-        Until(window, () => (!greet || vm.Controller.InSync) && vm.Controller.CanUseFirmware);
+        if (greet)
+            rig.Connection.RaiseMessage(holdsCopy ? Hello(firmwareId, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob))
+                                                  : Hello(firmwareId, ControllerConfigState.None, 0));
+        Until(window, () => (!greet || (holdsCopy ? vm.Controller.InSync : vm.Controller.IsNotSetUp)) && vm.Controller.CanUseFirmware);
         return new Shown(window, rig, vm, flasher);
     }
 
@@ -152,7 +155,7 @@ public sealed class ProgressDialogTests : IDisposable
     [AvaloniaFact]
     public void InstallShowsTheProgressDialogAndBlocks()
     {
-        using var s = Show();
+        using var s = Show(holdsCopy: false);
         var release = new TaskCompletionSource();
         s.Flasher.DuringFlash = () => release.Task;
         var before = s.Rig.Connection!;
@@ -312,8 +315,7 @@ public sealed class ProgressDialogTests : IDisposable
 
         var confirm = s.Window.FindControl<Border>("ReinstallOverlay")!;
         Assert.True(confirm.IsEffectivelyVisible);
-        Assert.Equal("Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.",
-                     In<TextBlock>(confirm, "ReinstallQuestion").Text);
+        Assert.StartsWith("Reinstalling erases the setup stored on the controller.", In<TextBlock>(confirm, "ReinstallQuestion").Text);
         Assert.Equal("Reinstall", In<Button>(confirm, "ConfirmReinstallButton").Content);
         Assert.Contains("Danger", In<Button>(confirm, "ConfirmReinstallButton").Classes);
     }
@@ -328,7 +330,7 @@ public sealed class ProgressDialogTests : IDisposable
         Settle(s.Window);
         var confirm = s.Window.FindControl<Border>("ReinstallOverlay")!;
         Assert.True(confirm.IsEffectivelyVisible);
-        Assert.Equal("Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.",
+        Assert.Equal("Reinstalling erases the setup stored on the controller. Volco puts its copy back afterwards.",
                      In<TextBlock>(confirm, "ReinstallQuestion").Text);
         Assert.Equal("Reinstall", In<Button>(confirm, "ConfirmReinstallButton").Content);
         Assert.Contains("Danger", In<Button>(confirm, "ConfirmReinstallButton").Classes);
@@ -377,12 +379,13 @@ public sealed class ProgressDialogTests : IDisposable
         Assert.IsType<StagePage>(s.Window.CurrentPage);
     }
 
-    /// <summary>An install erases the setup: the dialog says it's done, offers to choose how to
-    /// start, and once closed the banner asks how to start.</summary>
+    /// <summary>An install leaves a controller that didn't hold Volco's copy without a setup: the
+    /// dialog says it's done, offers to choose how to start, and once closed the banner asks how to
+    /// start.</summary>
     [AvaloniaFact]
     public void CloseLeavesTheBannerForWhatRemains()
     {
-        using var s = Show();
+        using var s = Show(holdsCopy: false);
         var before = s.Rig.Connection!;
         Install(s);
         Reboot(s, before, ControllerConfigState.None, 0);
@@ -406,7 +409,7 @@ public sealed class ProgressDialogTests : IDisposable
     [AvaloniaFact]
     public void AnInstallOffersChooseHowToStart()
     {
-        using var s = Show();
+        using var s = Show(holdsCopy: false);
         var before = s.Rig.Connection!;
         Install(s);
         Reboot(s, before, ControllerConfigState.None, 0);
@@ -423,6 +426,63 @@ public sealed class ProgressDialogTests : IDisposable
         Assert.False(s.Progress.IsOpen);
         Assert.Equal("controller", s.NavTag);
         Until(s.Window, () => s.Vm.Hardware.ShowChooser);
+    }
+
+    /// <summary>A reinstall over a controller that held Volco's copy puts the copy back at once (the
+    /// same controller, so the same wiring): no chooser, and the next step is the test.</summary>
+    [AvaloniaFact]
+    public void AReinstallPutsTheSetupBack()
+    {
+        using var s = Show();
+        var before = s.Rig.Connection!;
+        Install(s);
+        Reboot(s, before, ControllerConfigState.None, 0);
+
+        Until(s.Window, () => s.Rig.Connection!.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        Until(s.Window, () => s.Progress is { IsOpen: true, IsRunning: true, Title: "Restoring your setup" });
+        Assert.Equal("Restoring your setup", In<TextBlock>(s.Overlay, "ProgressTitle").Text);
+        Assert.False(s.Vm.Hardware.ShowChooser);
+
+        var burst = s.Rig.Connection!.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
+        s.Rig.Connection.RaiseMessage(new ConfigResultMessage(burst[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        s.Rig.Connection.RaiseMessage(Hello(Catalog.BundledVersion!, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob)));
+
+        Until(s.Window, () => s.Progress.IsDone);
+        Assert.Equal("Your setup is back on the controller.", s.Progress.ResultText);
+        Assert.Equal(LinkTone.Good, s.Progress.ResultTone);
+        Assert.Equal(ProgressNextStep.TestNow, s.Progress.NextStep);
+        Assert.True(s.Vm.Controller.InSync);
+        Assert.Equal(new[] { "flash COM3 Install" }, s.Flasher.Calls);
+    }
+
+    /// <summary>Development firmware is never offered an update on its own, but the status menu's
+    /// Update firmware puts Volco's bundled build on it and keeps the stored setup.</summary>
+    [AvaloniaFact]
+    public void TheMenuUpdatesDevelopmentFirmware()
+    {
+        using var s = Show(firmwareId: "dev");
+        var status = s.Vm.Hardware.Status;
+        Assert.True(status.OffersUpdate);
+        Assert.False(s.Vm.Controller.FirmwareUpdateAvailable);
+        var before = s.Rig.Connection!;
+        Assert.True(status.UpdateFirmwareCommand.CanExecute(null));
+        status.UpdateFirmwareCommand.Execute(null);
+        Reboot(s, before, ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob));
+
+        Until(s.Window, () => s.Progress.IsDone);
+        Assert.Equal(new[] { "flash COM3 Update" }, s.Flasher.Calls);
+        Assert.Equal($"Updated. The controller is running firmware {Catalog.BundledVersion}.", s.Progress.ResultText);
+        Assert.Equal(ProgressNextStep.TestNow, s.Progress.NextStep);
+        Assert.True(s.Vm.Controller.InSync);
+        Assert.False(status.OffersUpdate);   // the bundled build now: the menu has no Update
+    }
+
+    /// <summary>A release build gets its update from the card, not the menu.</summary>
+    [AvaloniaFact]
+    public void TheMenuHasNoUpdateForReleaseFirmware()
+    {
+        using var s = Show(firmwareId: "0000aaaa1111");
+        Assert.False(s.Vm.Hardware.Status.OffersUpdate);
     }
 
     [AvaloniaFact]

@@ -164,6 +164,8 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         AttentionActCommand.NotifyCanExecuteChanged();
         CheckFirmwareCommand.NotifyCanExecuteChanged();
         ReinstallFirmwareCommand.NotifyCanExecuteChanged();
+        UpdateFirmwareCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(OffersUpdate));
         LoadPresetCommand.NotifyCanExecuteChanged();
         StartOverCommand.NotifyCanExecuteChanged();
         if (IsPresetChooserOpen && !CanLoadPreset) IsPresetChooserOpen = false;
@@ -229,6 +231,17 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
     private void ReinstallFirmware()
     {
         if (CanUseFirmware) _controller.InstallFirmwareCommand.Execute(null);
+    }
+
+    /// <summary>The menu's Update firmware: on a controller running development firmware, which is
+    /// never offered an update on its own, Volco's bundled build can still replace it and keep the
+    /// setup stored on the controller (Reinstall would erase it).</summary>
+    public bool OffersUpdate => _controller.Banner.DevelopmentFirmware;
+
+    [RelayCommand(CanExecute = nameof(CanUseFirmware))]
+    private void UpdateFirmware()
+    {
+        if (CanUseFirmware && OffersUpdate) _controller.UpdateFirmwareCommand.Execute(null);
     }
 
     private bool CanLoadPreset => _controller.CanEdit && !_controller.Busy;

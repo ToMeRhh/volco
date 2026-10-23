@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Config;
 using Volco.Core.Controller;
+using Volco.Core.Diagnostics;
 using Volco.Core.Firmware;
 using Volco.Core.Runtime;
 
@@ -99,10 +100,13 @@ public sealed partial class ControllerViewModel
     private bool _offerFreshInstall;
 
     /// <summary>The install confirmation's question: on a board without Volco's firmware, installing
-    /// replaces what is on it; otherwise it is a reinstall, which erases the stored setup.</summary>
+    /// replaces what is on it; otherwise it is a reinstall, which erases the stored setup (and puts
+    /// Volco's copy back when the controller held it).</summary>
     public string InstallQuestion => OfferFreshInstall
         ? "Install Volco's firmware on this ESP32? Anything else on it is replaced."
-        : "Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.";
+        : InSync
+            ? "Reinstalling erases the setup stored on the controller. Volco puts its copy back afterwards."
+            : "Reinstalling erases the setup stored on the controller. Volco keeps a copy you can apply afterwards.";
 
     /// <summary>The install confirmation's button: Install, or Reinstall.</summary>
     public string InstallConfirmLabel => OfferFreshInstall ? "Install" : "Reinstall";
@@ -227,6 +231,9 @@ public sealed partial class ControllerViewModel
     private async Task RunFlash(FlashMode mode)
     {
         ConfirmInstallPending = false;
+        // A controller that holds Volco's saved copy is the one the copy was made for: a Reinstall
+        // erases it, and the copy goes back once the controller answers.
+        var restore = mode == FlashMode.Install && InSync;
         if (!BeginFirmware(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware)) return;
         var outcome = await _firmware!.FlashAsync(FirmwarePort, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
@@ -234,8 +241,35 @@ public sealed partial class ControllerViewModel
             if (_disposed) return;
             EndFirmware(outcome.Message, outcome.Succeeded ? LinkTone.Good : LinkTone.Danger);
             OfferTest = outcome.Succeeded && mode == FlashMode.Update;
+            RestoringSetup = outcome.Succeeded && restore;
             FirmwareFinished?.Invoke(this, EventArgs.Empty);
+            TryRestoreSetup();
         });
+    }
+
+    /// <summary>The progress dialog's result after a save that put the setup back.</summary>
+    internal const string RestoredText = "Your setup is back on the controller.";
+
+    /// <summary>A Reinstall erased the setup of a controller that held Volco's saved copy: the copy
+    /// goes back to it as soon as it answers, not set up, on the same connection. True from the
+    /// install's end until that save starts or no longer applies.</summary>
+    [ObservableProperty] private bool _restoringSetup;
+
+    /// <summary>The running (or just finished) save puts the setup back after a Reinstall.</summary>
+    internal bool IsRestoreSave { get; private set; }
+
+    private void TryRestoreSetup()
+    {
+        if (!RestoringSetup || Busy) return;
+        var state = _runtime.ControllerState;
+        if (state == ControllerState.AwaitingHello) return;   // the Hello is on its way to the session
+        if (state == ControllerState.Ready && Banner.Kind == BannerKind.NotSetUpHasMirror && _service.Mirror is { Length: > 0 } mirror)
+        {
+            AppLog.Info("Reinstall: restoring Volco's saved setup on the controller");
+            IsRestoreSave = true;
+            SaveBytes(mirror, udpChanged: false, layout: null);
+        }
+        RestoringSetup = false;   // started, or the controller went away or doesn't need it
     }
 
     private void OnFirmwareBusyChanged(object? sender, EventArgs e) => _ui.Post(() =>
@@ -246,6 +280,7 @@ public sealed partial class ControllerViewModel
     private void RefreshFirmware()
     {
         OnPropertyChanged(nameof(CanUseFirmware));
+        OnPropertyChanged(nameof(InstallQuestion));
         InstallFirmwareCommand.NotifyCanExecuteChanged();
     }
 }

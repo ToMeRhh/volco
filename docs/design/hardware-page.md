@@ -92,7 +92,7 @@ The card reads `VolcoRuntime.LinkStatus`, the §8.3 banner (`ControllerBannerLog
 
 ### 4.2 The ⋯ menu
 
-Connection… · Reconnect · Disconnect · ― · Check firmware · **Reinstall firmware…** (red; today's Install, still confirmed first, still erases the setup) · ― · Load a preset… · Start over…
+Connection… · Reconnect · Disconnect · ― · Check firmware · Update firmware (development firmware only; keeps the setup) · **Reinstall firmware…** (red; today's Install, still confirmed first, still erases the setup, which Volco puts back when the controller held its copy) · ― · Load a preset… · Start over…
 
 - **Load a preset…** opens a small chooser of `ControllerPresets` (today's "Start from" picker). It replaces the wiring in the draft, asking first when the draft has controls; nothing is sent until Save.
 - **Start over…** returns the drawing to the setup chooser (§7.1), keeping the draft until a choice is made; Escape or the chooser's Back cancels it, and so do Discard and leaving Hardware. The save bar hides while the chooser shows, and Start over is offered only while the controller is ready.

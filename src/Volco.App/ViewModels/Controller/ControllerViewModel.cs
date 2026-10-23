@@ -519,6 +519,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         IsSaving = false;
         var text = r.Status switch
         {
+            SaveStatus.Confirmed when IsRestoreSave => RestoredText,
             SaveStatus.Confirmed when _savingSetup => "Saved. The controller is set up: press Test controller to try it.",
             SaveStatus.Confirmed => "Saved. The controller restarted with the new setup.",
             SaveStatus.Rejected when r.Code == ConfigResultCode.Invalid
@@ -553,6 +554,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (r.Status == SaveStatus.Confirmed && layout is not null) ApplyLayout(layout, saved);
         RefreshAll();
         SaveFinished?.Invoke(this, r.Status);
+        IsRestoreSave = false;
     }
 
     /// <summary>Spec §6.5: the controller has the saved draft, so Volco's sliders and buttons follow
@@ -827,6 +829,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         Recompute();
         RefreshFirmware();
         StartTestCommand.NotifyCanExecuteChanged();
+        TryRestoreSetup();
     }
 
     public void Dispose()
