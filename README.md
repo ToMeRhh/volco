@@ -75,14 +75,21 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 
 ## 🖼️ The app
 
+<p align="center">
+<a href="docs/images/app-controller.png"><img src="docs/images/app-controller.png" alt="Volco's Controller page: six sliders (Speakers, Headphones, a game, Spotify and Discord with their icons, All other apps) above four screen buttons in the Default mode, with the Media&amp;Apps and Home Control mode tabs; the inspector shows Button 1's actions (Mute output, Play/pause Spotify on a double press), its screen and its hardware wiring" width="100%"></a><br>
+<sub><b>Controller:</b> your sliders and buttons as a drawing of the controller, with live levels and screen previews; pick one to set what it does and how it's wired</sub>
+</p>
+
 <table>
 <tr>
-<td width="50%" align="center"><a href="docs/images/app-controls.png"><img src="docs/images/app-controls.png" alt="Volco's Controls page: five sliders (Main output, Headphones, Wardogs, Spotify with its icon, All other apps) above four buttons in the Default mode, one with a screen showing Spotify playing; the inspector shows the selected slider, Wardogs"></a><br><sub><b>Controls:</b> your sliders and buttons as a drawing of the controller; pick one to set what it does</sub></td>
+<td width="50%" align="center"><a href="docs/images/app-action-dialog.png"><img src="docs/images/app-action-dialog.png" alt="The dialog that picks a button's action: a searchable list of Sound, Media, Modes and Programs actions, with Play / pause for Spotify selected"></a><br><sub><b>Action dialog:</b> pick what a press, double press or hold does</sub></td>
 <td width="50%" align="center"><a href="docs/images/app-controls-dialog.png"><img src="docs/images/app-controls-dialog.png" alt="The dialog that picks what a slider controls: output and input devices, the apps playing now with their icons and live levels, and a saved app that is not running"></a><br><sub><b>Slider dialog:</b> devices, microphones and apps, with their icons and live levels</sub></td>
 </tr>
+<tr>
+<td width="50%" align="center"><a href="docs/images/app-osd.png"><img src="docs/images/app-osd.png" alt="The volume overlay on the desktop: Speakers at 64%"></a><br><sub><b>Volume overlay:</b> shows what a slider just changed</sub></td>
+<td width="50%" align="center"><a href="docs/images/app-firmware-install.png"><img src="docs/images/app-firmware-install.png" alt="The Installing firmware dialog: Connecting to the board, with a progress bar and Don't unplug the controller"></a><br><sub><b>Firmware install:</b> straight from the app, over USB</sub></td>
+</tr>
 </table>
-
-<!-- TODO(Tomer): a screenshot of the volume OSD would go well here. -->
 
 ## 🚀 Getting started
 
