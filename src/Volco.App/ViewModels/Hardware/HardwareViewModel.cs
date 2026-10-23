@@ -616,14 +616,33 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (_pinFields.TryGetValue(owner, out var field)) return field;
         field = new PinFieldViewModel(DraftPins.LabelOf(owner.Kind), DraftPins.RoleOf(owner.Kind), owner,
                                       () => _controller.Draft, () => DraftPins.Get(_controller.Draft, owner),
-                                      pin => SetPin(owner, pin), SwapPins, _runtime.StartPinWatch);
+                                      pin => SetPin(owner, pin), SwapPins, _runtime.StartPinWatch, ui: _ui);
+        field.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PinFieldViewModel.IsOpen)) OnPinFieldOpenChanged(field);
+        };
         _pinFields[owner] = field;
         UpdatePinField(field);
         return field;
     }
 
+    /// <summary>The pin field whose pin dialog is open (a window-level overlay), or null. Opening
+    /// one closes any other.</summary>
+    [ObservableProperty] private PinFieldViewModel? _pinDialog;
+
+    private void OnPinFieldOpenChanged(PinFieldViewModel field)
+    {
+        if (field.IsOpen)
+        {
+            foreach (var other in _pinFields.Values)
+                if (!ReferenceEquals(other, field) && other.IsOpen) other.Cancel();
+            PinDialog = field;
+        }
+        else if (ReferenceEquals(PinDialog, field)) PinDialog = null;
+    }
+
     /// <summary>Detect: the controller saw a pin move or be pressed (transport thread); the open
-    /// pin field, at most one, lights its row.</summary>
+    /// pin dialog, at most one, marks its pin.</summary>
     private void OnPinActivity(object? sender, int pin) => _ui.Post(() =>
     {
         if (_disposed || pin < 0) return;
@@ -631,9 +650,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             if (field.IsOpen) field.OnPinActivity((uint)pin);
     });
 
-    /// <summary>Closes every open pin list, which stops its pin watch: the window is hidden or the
+    /// <summary>Closes the open pin dialog, which stops its pin watch: the window is hidden or the
     /// page left, and the visual tree stays.</summary>
-    public void ClosePinLists()
+    public void ClosePinDialog()
     {
         foreach (var field in _pinFields.Values) field.Cancel();
     }
@@ -754,7 +773,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     public void OnPageLeft()
     {
         if (_disposed) return;
-        ClosePinLists();
+        ClosePinDialog();
         _controller.OnPageLeft();
         _controls.FixSelection();
     }
@@ -866,7 +885,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _runtime.RawInput -= OnRawInput;
         _runtime.CalibrationChanged -= OnCalibrationChanged;
         _runtime.PinActivity -= OnPinActivity;
-        ClosePinLists();
+        ClosePinDialog();
         Status.Dispose();
         CloseCalibration();
         CloseBuses();

@@ -1,0 +1,106 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hw="using:Volco.App.ViewModels.Hardware"
+             x:Class="Volco.App.Views.Hardware.PinDialog"
+             x:DataType="hw:PinFieldViewModel">
+  <!-- The pin dialog (hardware-page spec §6.3): every GPIO of the chip at once, eight to a row in
+       number order with a gap where the chip has no pin. A pin shows its number and its note (free,
+       its owner, why it can't be used); unusable pins are greyed, the field's pin has an accent
+       border. Detect marks pins by colour only: moving now is filled with the accent, moved before
+       is tinted with an accent dot. A click or Enter picks; Escape, Cancel or the scrim keep the value. -->
+  <UserControl.Styles>
+    <Style Selector="Button.PinTile">
+      <Setter Property="Background" Value="{DynamicResource SurfaceCardBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="Height" Value="52"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+      <Setter Property="Margin" Value="3"/>
+      <Setter Property="Focusable" Value="False"/>
+    </Style>
+    <Style Selector="Button.PinTile /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{Binding $parent[Button].Background}"/>
+      <Setter Property="BorderBrush" Value="{Binding $parent[Button].BorderBrush}"/>
+    </Style>
+    <Style Selector="Button.PinTile:pointerover, Button.PinTile.highlighted">
+      <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    </Style>
+    <Style Selector="Button.PinTile.current">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="BorderThickness" Value="2"/>
+    </Style>
+    <Style Selector="Button.PinTile.before">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    </Style>
+    <Style Selector="Button.PinTile.now">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="Button.PinTile:disabled">
+      <Setter Property="Opacity" Value="0.4"/>
+    </Style>
+    <Style Selector="Button.PinTile TextBlock.PinNumber">
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    </Style>
+    <Style Selector="Button.PinTile TextBlock.PinNote">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="Button.PinTile.now TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="16,12,16,16">
+    <StackPanel Spacing="6" Margin="0,0,0,14">
+      <TextBlock Name="PinDialogTitle" Classes="DialogTitle" Text="{Binding Title}"/>
+      <TextBlock Name="WatchHintText" Classes="Secondary" TextWrapping="Wrap" Text="{Binding WatchHint}"
+                 IsVisible="{Binding HasWatchHint}"/>
+    </StackPanel>
+
+    <!-- The grid takes the focus (the tiles don't), so the arrows move the selection -->
+    <Border Name="PinGrid" Grid.Row="1" Focusable="True" Background="Transparent">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <ItemsControl Name="PinCells" ItemsSource="{Binding Cells}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <!-- PinFieldViewModel.Columns -->
+              <UniformGrid Columns="8"/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:PinGap}">
+              <Panel/>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type hw:PinRowViewModel}" x:DataType="hw:PinRowViewModel">
+              <Button Name="PinTile" Classes="PinTile" Classes.current="{Binding IsCurrent}"
+                      Classes.highlighted="{Binding IsHighlighted}" Classes.now="{Binding IsMovingNow}"
+                      Classes.before="{Binding HasMoved}" IsEnabled="{Binding IsPickable}"
+                      ToolTip.Tip="{Binding Note}" ToolTip.ShowOnDisabled="True" Click="Tile_Click">
+                <Panel>
+                  <StackPanel Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Name="PinNumber" Classes="PinNumber" Text="{Binding Text}"/>
+                    <TextBlock Name="PinNote" Classes="PinNote" Text="{Binding Note}"/>
+                  </StackPanel>
+                  <Ellipse Name="MovedDot" Width="7" Height="7" Fill="{DynamicResource AccentBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding HasMoved}"/>
+                </Panel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.DataTemplates>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,14,0,0">
+      <Button Name="PinCancelButton" Content="Cancel" Click="Cancel_Click"/>
+    </StackPanel>
+  </Grid>
+</UserControl>

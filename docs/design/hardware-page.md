@@ -32,7 +32,7 @@ The page becomes the Controls page's pattern:
 7. **Smoothing (#108):** the firmware's smoothing stays here (Input feel); the app-side per-slider Smoothing is removed from Controls › Response.
 8. **The controller is called "Volco controller"** on the card and in the tray tooltip.
 9. **No jump between Controls and Hardware:** one shared drawing at identical geometry; only what is on and around it changes, with crossfades (§3.3).
-10. **Pins are a fuzzy-searchable dropdown in the inspector, no dialog.** Every GPIO the chip has, in number order, each row saying free, its owner, or why it can't be used. While the list is open, moving a slider or pressing a button lights up its pin's row (§6.3). No assumptions about the dev kit's pinout.
+10. **Pins are picked in a pin dialog showing every pin at once** (user, 2026-10-23; it replaced the fuzzy-searchable dropdown of the first build). Every GPIO the chip has, eight to a row by number, each saying free, its owner, or why it can't be used. While it is open, moving a slider or pressing a button marks its pin by colour, without picking it (§6.3). No assumptions about the dev kit's pinout.
 11. **Minimal UI,** as on Controls: no page subtitle, legends or explanatory captions beyond what the mocks show; tooltips carry detail.
 
 ## 3. Page structure
@@ -145,13 +145,13 @@ The header names the selection; rows are one line each (44 px) and keep their pl
 One control for every pin: button, slider, light, bus SDA/SCL.
 
 - **Closed:** the value ("GPIO 5 ▾"), or "Not set".
-- **Open:** a text box with the list under it, every GPIO the chip has (`ChipInfo.Exists`) in number order. Typing filters with `FuzzyMatcher` over the number and the row's note ("3" keeps 3, 13, 23, 30–39; "slider" keeps the pins sliders use). Up/Down move, Enter picks, Escape restores the old value, a click outside closes without change.
-- **Each row's note, on the right:**
+- **Open:** the pin dialog over the window (decision 2026-10-23, replacing the filtered dropdown): every GPIO the chip has (`ChipInfo.Exists`) at once, eight to a row in number order, with an empty place where the chip has no pin (20, 24, 28–31), so a pin's column never moves. The field's pin has an accent border; unusable pins are greyed. Arrows move the selection (Left/Right along a row, Up/Down along a column, over unusable pins), Enter or a click picks, Escape, Cancel or a click on the scrim keep the old value.
+- **Each pin's note, under its number:**
   - **free**;
-  - **its owner** ("Slider 1", "Button 2 light", "I2C bus 0 SDA"); taken rows can be picked;
+  - **its owner** ("Slider 1", "Button 2 light", "I2C bus 0 SDA"); taken pins can be picked;
   - **why it can't be used for this role**, greyed and not pickable: "USB serial" (1, 3), "flash" (6–11), "no analog input" (a slider on a non-ADC pin), "input only" (a light or bus on 34–39).
 - **Problems on the field** (from `DraftProblems`, which already lists both ends of a conflict): the field gets the danger outline and the message under it ("Slider 1 also uses GPIO 33."), with one fix where there is one: **Swap with Slider 1** (exchanges the two pins in the draft). The other control's tile and field are marked too. Save waits until every problem is fixed. Today's informational hints become notes on the row: "no pull-up" for a button on 34–39, "not with Wi-Fi" for a slider on ADC2 while Wi-Fi is on.
-- **Detect (the pin lights up):** while the list is open and the controller is connected with firmware that supports it, Volco asks the controller to watch its pins (§9.1). Moving a slider (for a slider's pin) or pressing a button (for a button's pin) lights up that pin's row ("moving now" / "pressed now"), scrolls to it, and makes it the keyboard selection, even when the typed text had hidden it; Enter or a click picks it. Light and bus pins have no detection. Without support, nothing lights up.
+- **Detect (the pin lights up):** while the dialog is open and the controller is connected with firmware that supports it, Volco asks the controller to watch its pins (§9.1), and the dialog says "Move a slider to see which pin it's on." (or "Press a button…"). Moving a slider (for a slider's pin) or pressing a button (for a button's pin) marks that pin, by colour only and never by words (user, 2026-10-23): **moving now**, filled with the accent, until 1 s passes without another report; then **moved before**, tinted with an accent dot, until the dialog closes. Several pins can be marked at once. Marking never picks a pin or moves the selection: the user picks. The watch stops when the dialog closes, the selection moves to another tile, the page is left or the window hides; it times out on the controller 30 s after the last renewal if Volco goes away. A pin's mark is the controller's report, not a guess: an older firmware simply marks nothing.
 
 ### 6.4 I2C bus
 
@@ -219,7 +219,7 @@ Three helpers need the firmware. Each ships behind the build id: an older firmwa
 - While a watch is on, the controller samples every usable pin for the role that is not an output (configured LEDs) and not a configured I2C pin: for analog, the ADC-capable pins (ADC2 skipped while Wi-Fi is up); for button, every usable pin with its pull-up on except free 34–39 (no pull-up, so they would float; a button configured there is still watched). Decision (2026-10-22): only the role's own kind of configured pin is included: an analog watch samples free ADC pins and configured slider pins, a button watch free pins and configured button pins, so a taken pin of that kind lights up too, and a pin of the other kind is never touched (no pull-up lands on a slider). Thresholds are `volco_pin_helpers.h` constants (an analog pin must get 300 codes from a slowly following baseline with little jitter, so a slow drift never reports; a button must be low 30 ms after 500 ms high).
 - It reports a pin that moved (analog) or went low (button), at most every 250 ms per pin. **A floating pin must not light up:** the builder picks the thresholds (for example a large, sustained change) and checks them on the hardware.
 - Normal input keeps working during a watch. Pins the watch changed go back to their previous mode when it stops.
-- It stops on role 0, on host loss, and 30 s after the last PinWatch (the app renews every 10 s while the list is open).
+- It stops on role 0, on host loss, and 30 s after the last PinWatch (the app renews every 10 s while the pin dialog is open).
 
 ### 9.2 Find screens
 

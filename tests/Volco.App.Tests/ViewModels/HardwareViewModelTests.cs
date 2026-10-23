@@ -85,12 +85,25 @@ public sealed class HardwareViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ClosePinLists_StopsTheWatchOfAnOpenList()
+    public void ClosePinDialog_StopsTheWatchOfAnOpenDialog()
     {
         var field = OpenSliderPinList();
-        Hardware.ClosePinLists();
+        Hardware.ClosePinDialog();
         Until(() => PinWatchFrames(PinWatchRole.Stop) == 1);
         Assert.False(field.IsOpen);
+    }
+
+    [Fact]
+    public void PinDialog_IsTheOpenField_AndOpeningAnotherClosesIt()
+    {
+        var field = OpenSliderPinList();
+        Assert.Same(field, Hardware.PinDialog);
+        var button = Hardware.PinField(new PinOwner(PinOwnerKind.Button, 0));
+        button.Open();
+        Assert.False(field.IsOpen);
+        Assert.Same(button, Hardware.PinDialog);
+        button.Cancel();
+        Assert.Null(Hardware.PinDialog);
     }
 
     [Fact]

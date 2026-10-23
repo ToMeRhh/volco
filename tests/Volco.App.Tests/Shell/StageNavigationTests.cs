@@ -271,8 +271,8 @@ public sealed class StageNavigationTests
         var field = In<PinField>(s.Stage, "PinField");   // in the inspector's Hardware section
         Press(In<Button>(field, "ValueButton"));
         Settle(s.Window);
-        Press(In<Popup>(field, "ListPopup").Child!.GetVisualDescendants().OfType<Button>()
-            .First(b => b.Name == "PinRowButton" && ((PinRowViewModel)b.DataContext!).Pin == 39));
+        Press(In<Border>(s.Window, "PinOverlay").GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "PinTile" && ((PinRowViewModel)b.DataContext!).Pin == 39));
         Settle(s.Window);
 
         Assert.Equal(39u, s.Vm.Controller.Draft.Sliders[0].Pin);

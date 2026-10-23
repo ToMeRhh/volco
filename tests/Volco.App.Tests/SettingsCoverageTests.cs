@@ -97,13 +97,13 @@ public class SettingsCoverageTests
         }
     }
 
-    /// <summary>Opens a pin field and clicks GPIO <paramref name="pin"/>'s row.</summary>
+    /// <summary>Opens a pin field's dialog and clicks GPIO <paramref name="pin"/>.</summary>
     private static void PickPin(Window window, PinField field, uint pin)
     {
         Click(Named<Button>(field, "ValueButton"));
         Settle(window);
-        Click(Named<Popup>(field, "ListPopup").Child!.GetVisualDescendants().OfType<Button>()
-            .First(b => b.Name == "PinRowButton" && ((PinRowViewModel)b.DataContext!).Pin == pin));
+        Click(Named<Border>(window, "PinOverlay").GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "PinTile" && ((PinRowViewModel)b.DataContext!).Pin == pin));
         Settle(window);
     }
 
