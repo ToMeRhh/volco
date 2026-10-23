@@ -17,7 +17,8 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 
 </div>
 
-> **The AI disclaimer you were looking for:** I have 10 years of experience as a software enginner at Google. Previous iterations of this project were written by hand, but with AI-augmentation - I was able to write this polished and high-performance version of the vision that I had in mind. I built Volco with [Claude Code](https://claude.com/claude-code) as my pair programmer - Claude wrote the code but I designed the architecture, and reviewed and tested every change on my real setup.
+> [!TIP]
+> **Coming from [deej](https://github.com/omriharel/deej)?** Here's [how to move your controller to Volco](#-coming-from-deej).
 
 ---
 
@@ -30,6 +31,16 @@ About two years ago I built a [**deej**](https://github.com/omriharel/deej), the
 Today it runs on **Windows**. The app is built so it can be ported to **macOS and Linux**: the UI is already cross-platform, and the OS-specific code sits behind a few small interfaces. Those ports haven't been written yet, and help is welcome.
 
 This is my first open-source project, so issues, ideas and feedback are very welcome. ❤️ If Volco is useful to you, you can support it through [GitHub Sponsors](https://github.com/sponsors/ToMeRhh).
+
+## 🔁 Coming from deej?
+
+Volco runs on deej controllers built on an **ESP32**. **Arduino Nano and Uno** support is in progress: ⭐ star or 👀 watch this repo to hear when it lands.
+
+On an ESP32 you keep your sliders, wiring and case. Only the firmware changes:
+
+1. Plug the board in over USB and install Volco's firmware from the app. It replaces the deej firmware, with no Arduino IDE needed.
+2. Add your sliders and their pins on the **Controller** page, and **Save to controller**.
+3. Choose what each slider does. There's no `config.yaml` to bring over.
 
 ## 📸 The hardware
 
@@ -48,9 +59,6 @@ Next up is a custom PCB and a new case with an OLED screen above each button. Bo
 </table>
 
 You don't need my board, though. Volco works with **any layout you wire up**: as many sliders and buttons as you have pins, and each button can have **no indicator, an LED, an LED pair, or a small OLED screen**. You describe the hardware in the app, and the controller stores it. There's nothing to change in the code.
-
-> [!NOTE]
-> **Coming from deej?** If your deej build runs on an **ESP32**, Volco can replace it in place: install the firmware from the app, enter your slider pins on the Hardware page, and keep your hardware as it is. (On an Arduino Uno or Nano, the firmware doesn't run yet.)
 
 > [!TIP]
 > **No hardware yet?** Open [`tools/simulator/index.html`](tools/simulator/) in a browser. It's a 3D simulated controller that connects to the app over WebSocket, so you can try everything first.
@@ -75,24 +83,31 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 
 ## 🖼️ The app
 
+<p align="center">
+<a href="docs/images/app-controller.png"><img src="docs/images/app-controller.png" alt="Volco's Controller page: six sliders (Speakers, Headphones, a game, Spotify and Discord with their icons, All other apps) above four screen buttons in the Default mode, with the Media&amp;Apps and Home Control mode tabs; the inspector shows Button 1's actions (Mute output, Play/pause Spotify on a double press), its screen and its hardware wiring" width="100%"></a><br>
+<sub><b>Controller:</b> your sliders and buttons as a drawing of the controller, with live levels and screen previews; pick one to set what it does and how it's wired</sub>
+</p>
+
 <table>
 <tr>
-<td width="50%" align="center"><a href="docs/images/app-controls.png"><img src="docs/images/app-controls.png" alt="Volco's Controls page: five sliders (Main output, Headphones, Wardogs, Spotify with its icon, All other apps) above four buttons in the Default mode, one with a screen showing Spotify playing; the inspector shows the selected slider, Wardogs"></a><br><sub><b>Controls:</b> your sliders and buttons as a drawing of the controller; pick one to set what it does</sub></td>
+<td width="50%" align="center"><a href="docs/images/app-action-dialog.png"><img src="docs/images/app-action-dialog.png" alt="The dialog that picks a button's action: a searchable list of Sound, Media, Modes and Programs actions, with Play / pause for Spotify selected"></a><br><sub><b>Action dialog:</b> pick what a press, double press or hold does</sub></td>
 <td width="50%" align="center"><a href="docs/images/app-controls-dialog.png"><img src="docs/images/app-controls-dialog.png" alt="The dialog that picks what a slider controls: output and input devices, the apps playing now with their icons and live levels, and a saved app that is not running"></a><br><sub><b>Slider dialog:</b> devices, microphones and apps, with their icons and live levels</sub></td>
 </tr>
+<tr>
+<td width="50%" align="center"><a href="docs/images/app-osd.png"><img src="docs/images/app-osd.png" alt="The volume overlay on the desktop: Speakers at 64%"></a><br><sub><b>Volume overlay:</b> shows what a slider just changed</sub></td>
+<td width="50%" align="center"><a href="docs/images/app-firmware-install.png"><img src="docs/images/app-firmware-install.png" alt="The Installing firmware dialog: Connecting to the board, with a progress bar and Don't unplug the controller"></a><br><sub><b>Firmware install:</b> straight from the app, over USB</sub></td>
+</tr>
 </table>
-
-<!-- TODO(Tomer): a screenshot of the volume OSD would go well here. -->
 
 ## 🚀 Getting started
 
 1. **Build a controller.** Wire sliders (one ADC pin each) and buttons (one GPIO to GND each) to an ESP32. The [firmware guide](firmware/README.md) has the wiring notes and pin choices.
 2. **Get the app.** Download `Volco.exe` from the [latest release](https://github.com/ToMeRhh/volco/releases/latest). It's a single file with nothing to install; run it and it appears in the system tray.
    > Volco isn't code-signed yet, so Windows SmartScreen may warn you the first time. Choose **More info → Run anyway**.
-3. **Flash the firmware.** Plug the ESP32 in over USB, open **Settings → Controller**, pick its COM port and choose **Install firmware…**. It takes under a minute.
-4. **Set it up.** On the same page, choose **Set up**, start from the **DIY reference** preset or your own layout, and **Save to controller**. Then map your sliders and buttons on the **Controls** page. Done! 🎉
+3. **Flash the firmware.** Plug the ESP32 in over USB, open **Settings → Controller**, pick its COM port and choose **Install firmware**. It takes under a minute.
+4. **Set it up.** When the install is done, select **Choose how to start** and start from the **DIY reference** preset or **Start empty**, add your sliders and buttons, and **Save to controller**. Then pick what each slider and button does on the same page. Done! 🎉
 
-Wi-Fi (UDP) is in the Hardware page's **Advanced** section. USB always stays on, so a wrong Wi-Fi setting can be fixed over the cable.
+Wi-Fi (UDP) is in the Controller page's **Controller settings**. USB always stays on, so a wrong Wi-Fi setting can be fixed over the cable.
 
 ## 🧩 How it works
 
@@ -148,13 +163,10 @@ cd firmware && pio test -e native         # firmware tests on your PC
 
 ## 🗺️ Roadmap
 
-- [x] Per-app and device volume, mute, output switching
-- [x] Modes with single, double and long press actions
-- [x] OLED button screens
-- [x] Media, program and script actions
 - [ ] 🔌 PCB files, BOM and case
 - [ ] 🍎 macOS and 🐧 Linux support
 - [ ] ✍️ A code-signed Windows build
+- [ ] 🧩 Arduino Nano and Uno support
 
 ## 🙏 Acknowledgements
 
