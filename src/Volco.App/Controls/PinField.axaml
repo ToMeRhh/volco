@@ -3,8 +3,8 @@
              xmlns:hw="using:Volco.App.ViewModels.Hardware"
              x:Class="Volco.App.Controls.PinField"
              x:DataType="hw:PinFieldViewModel">
-  <!-- The pin field (hardware-page spec §6.3): "GPIO 5 ▾", which opens the pin dialog over the
-       window (Views/Hardware/PinDialog). A problem shows under the field with its fix. The page adds
+  <!-- The pin field (hardware-page spec §6.3): a chip icon and "GPIO 5", a button (no dropdown
+       chevron) that opens the pin dialog over the window (Views/Hardware/PinDialog). A problem shows under the field with its fix. The page adds
        "invalid" to the control while it has a problem. -->
   <UserControl.Styles>
     <Style Selector="Button.PinValue">
@@ -25,11 +25,11 @@
       <Panel Grid.Column="1" Classes="RowControl" VerticalAlignment="Center">
         <Button Name="ValueButton" Classes="PinValue" Classes.invalid="{Binding HasError}"
                 IsEnabled="{Binding IsEditable}" Click="ValueButton_Click">
-          <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Name="PinIcon" Data="{StaticResource Icon.Chip}" Width="14" Height="14"
+                      Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
             <TextBlock Name="ValueText" Text="{Binding ValueText}" VerticalAlignment="Center"/>
-            <PathIcon Grid.Column="1" Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
-                      Foreground="{DynamicResource TextSecondaryBrush}"/>
-          </Grid>
+          </StackPanel>
         </Button>
       </Panel>
     </Grid>

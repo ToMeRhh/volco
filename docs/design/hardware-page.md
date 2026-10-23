@@ -144,7 +144,7 @@ The header names the selection; rows are one line each (44 px) and keep their pl
 
 One control for every pin: button, slider, light, bus SDA/SCL.
 
-- **Closed:** the value ("GPIO 5 ▾"), or "Not set".
+- **Closed:** a button with a chip icon and the value ("GPIO 5", or "Not set"); no dropdown chevron, since it opens a dialog.
 - **Open:** the pin dialog over the window (decision 2026-10-23, replacing the filtered dropdown): every GPIO the chip has (`ChipInfo.Exists`) at once, eight to a row in number order, with an empty place where the chip has no pin (20, 24, 28–31), so a pin's column never moves. The field's pin has an accent border; unusable pins are greyed. Arrows move the selection (Left/Right along a row, Up/Down along a column, over unusable pins), Enter or a click picks, Escape, Cancel or a click on the scrim keep the old value.
 - **Each pin's note, under its number:**
   - **free**;
@@ -301,7 +301,7 @@ The tray's "Update controller firmware…" and the sidebar's attention dot keep 
   - Automatic port: the connection layer tries ports in order (§10.1); `LinkStatus` stays the one source for the card.
 - **Config:** `connection.serial.comPort` empty = Automatic, `connection.serial.lastPort` (new, optional; no schema bump needed beyond the usual rules if the field is additive). **#108:** `sliders[i].smoothingFactor` is dropped (no schema bump: an old file's field is ignored on load and gone on the next save), and `SliderProcessor` loses its smoothing.
 - **Settings follow removed controls:** the draft records which inputs were removed; on a confirmed save (`ControllerConfigService`'s success), one `ConfigManager` change deletes those entries from `sliders` and `buttons` and shifts the later ones down, `Index` rewritten as on every save. Added controls get empty entries as today (`AddMissing`).
-- **Pin rows:** a Core helper lists every pin for a role with its state (free, owner, unusable reason) from `ChipInfo` and the draft, so the dropdown and tests share it.
+- **Pin rows:** a Core helper lists every pin for a role with its state (free, owner, unusable reason) from `ChipInfo` and the draft, so the pin dialog and tests share it.
 - **Tray tooltip:** "Volco controller" in its controller lines.
 
 ### 12.2 App
