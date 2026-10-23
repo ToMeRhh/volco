@@ -153,13 +153,10 @@ cd firmware && pio test -e native         # firmware tests on your PC
 
 ## 🗺️ Roadmap
 
-- [x] Per-app and device volume, mute, output switching
-- [x] Modes with single, double and long press actions
-- [x] OLED button screens
-- [x] Media, program and script actions
 - [ ] 🔌 PCB files, BOM and case
 - [ ] 🍎 macOS and 🐧 Linux support
 - [ ] ✍️ A code-signed Windows build
+- [ ] 🧩 Arduino Nano and Uno support
 
 ## 🙏 Acknowledgements
 
