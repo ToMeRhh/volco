@@ -4,8 +4,9 @@
              x:Class="Volco.App.Controls.PinField"
              x:DataType="hw:PinFieldViewModel">
   <!-- The pin field (hardware-page spec §6.3): a chip icon and "GPIO 5", a button (no dropdown
-       chevron) that opens the pin dialog over the window (Views/Hardware/PinDialog). A problem shows under the field with its fix. The page adds
-       "invalid" to the control while it has a problem. -->
+       chevron) that opens the pin dialog over the window (Views/Hardware/PinDialog). A problem
+       shows under the field with its fix. The page adds "invalid" to the control while it has a
+       problem. -->
   <UserControl.Styles>
     <Style Selector="Button.PinValue">
       <Setter Property="HorizontalAlignment" Value="Stretch"/>

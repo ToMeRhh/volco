@@ -238,7 +238,8 @@ public sealed class ControllerSettingsBusTests : IDisposable
 
         Assert.Equal(new[] { ("0x3C", "Button 2", false), ("0x3E", "", false), ("0x3D", "Button 3", true) },
                      row.Found.Select(f => (f.Address, f.UsedBy, f.IsMissing)));
-        Assert.Equal("Button 3 · Not found", row.Found[2].Text);
+        Assert.Equal(new[] { "Screen found, used by Button 2", "Screen found, no button uses it", "Button 3's screen didn't answer" },
+                     row.Found.Select(f => f.Text));
         Assert.Null(row.FindResult);
     }
 

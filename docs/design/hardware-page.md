@@ -136,7 +136,7 @@ The header names the selection; rows are one line each (44 px) and keep their pl
 - **Light:** a segment None / LED / 2 LEDs / Screen. It reshapes only the rows under it:
   - LED: **Light pin**, **Lit when pin is** High / Low.
   - 2 LEDs: **Light A pin**, **Light B pin**, **Lit when pin is** High / Low.
-  - Screen: **Bus** (0–3, 2 and 3 marked "software") and **Address** (0x3C / 0x3D). **Find screens** lists the addresses that answer on each bus card of the I2C buses dialog (§9.2); filling a button's Address from it is a follow-up.
+  - Screen: **Bus** (0–3, 2 and 3 marked "software") and **Address** (0x3C / 0x3D). **Find screens** lists the addresses that answer on each bus card of the I2C buses dialog (§9.2), one row each ("0x3C  Screen found, used by Button 1", "0x3D  Screen found, no button uses it"), then each configured screen that didn't ("0x3C  Button 1's screen didn't answer", in red); filling a button's Address from it is a follow-up.
 - **Try the lights** (LED and 2 LEDs): flashes them on the controller (a single LED lit, unlit, lit, 300 ms each; a pair A lit with B unlit for 600 ms, then B lit with A unlit; every step drives its level, so a lit LED still flashes), for saved and unsaved pins alike (§9.3). Decision (2026-10-22): Try always uses PinDrive, so a saved LED is driven like an unsaved one instead of through the test indicators.
 - **Remove Button N.**
 

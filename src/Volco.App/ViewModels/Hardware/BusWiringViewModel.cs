@@ -225,6 +225,9 @@ public sealed class ScreenFoundViewModel
     /// <summary>A screen of this bus is configured at this address and did not answer.</summary>
     public bool IsMissing { get; }
 
-    /// <summary>The row's second column: who uses it, "Not found" for a missing screen.</summary>
-    public string Text => IsMissing ? (UsedBy.Length > 0 ? $"{UsedBy} · Not found" : "Not found") : UsedBy;
+    /// <summary>The row's second column: "Screen found, used by Button 2", "Screen found, no button
+    /// uses it", or for a missing screen "Button 3's screen didn't answer".</summary>
+    public string Text => IsMissing
+        ? UsedBy.Contains(',') ? $"The screen of {UsedBy} didn't answer" : $"{UsedBy}'s screen didn't answer"
+        : UsedBy.Length > 0 ? $"Screen found, used by {UsedBy}" : "Screen found, no button uses it";
 }
