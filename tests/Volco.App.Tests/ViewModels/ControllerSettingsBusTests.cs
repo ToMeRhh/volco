@@ -214,13 +214,13 @@ public sealed class ControllerSettingsBusTests : IDisposable
     {
         SetUp(screen: true, saved);
         _found = new I2cBusesViewModel(Controller, Hardware.PinField, () => { }, null, scanner.Scan);
-        return Assert.Single(_found.Buses);
+        return _found.Buses.Single(b => b.Bus == 0);
     }
 
     /// <summary>The draft changed: the dialog follows it, as the Hardware page's does.</summary>
     private void Edited()
     {
-        Edited();
+        Controller.OnDraftEdited();
         _found!.Refresh();
     }
 
@@ -300,7 +300,7 @@ public sealed class ControllerSettingsBusTests : IDisposable
     {
         SetUp(screen: false, ScreenBlob, greet: false);
         Hardware.OpenBuses();
-        var row = Assert.Single(Assert.IsType<I2cBusesViewModel>(Hardware.Buses).Buses);
+        var row = Assert.IsType<I2cBusesViewModel>(Hardware.Buses).Buses.Single(b => b.Bus == 0);
         int changed = 0;
         row.FindScreensCommand.CanExecuteChanged += (_, _) => changed++;
         Assert.False(row.FindScreensCommand.CanExecute(null));
@@ -328,7 +328,7 @@ public sealed class ControllerSettingsBusTests : IDisposable
     {
         SetUp(screen: true);
         var dialog = new I2cBusesViewModel(Controller, Hardware.PinField, () => { }, null);
-        Assert.False(Assert.Single(dialog.Buses).FindScreensCommand.CanExecute(null));
+        Assert.False(dialog.Buses.Single(b => b.Bus == 0).FindScreensCommand.CanExecute(null));
     }
 
     [Fact]
