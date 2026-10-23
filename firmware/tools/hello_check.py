@@ -4,8 +4,8 @@
     ~/.platformio/penv/bin/python firmware/tools/hello_check.py --port /dev/ttyUSB1 --sliders 5 --kinds 1,1,2
     ~/.platformio/penv/bin/python firmware/tools/hello_check.py --port /dev/ttyUSB1 --guard-only
 
-Safety: on Linux it refuses any port whose USB ID isn't the DIY board's CH340 (1a86:7523); the dev
-host also has a Zigbee dongle that must never be touched. Exits 0 only when the expected Hello is seen.
+Safety: on Linux it refuses any port whose USB ID isn't the DIY board's CH340 (1a86:7523), so it never
+resets another USB serial device by mistake. Exits 0 only when the expected Hello is seen.
 """
 import argparse
 import os
