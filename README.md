@@ -17,6 +17,9 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 
 </div>
 
+> [!TIP]
+> **Coming from [deej](https://github.com/omriharel/deej)?** Here's [what changes when you move to Volco](#-coming-from-deej).
+
 ---
 
 ## 👋 Why I built this
@@ -28,6 +31,21 @@ About two years ago I built a [**deej**](https://github.com/omriharel/deej), the
 Today it runs on **Windows**. The app is built so it can be ported to **macOS and Linux**: the UI is already cross-platform, and the OS-specific code sits behind a few small interfaces. Those ports haven't been written yet, and help is welcome.
 
 This is my first open-source project, so issues, ideas and feedback are very welcome. ❤️ If Volco is useful to you, you can support it through [GitHub Sponsors](https://github.com/sponsors/ToMeRhh).
+
+## 🔁 Coming from deej?
+
+| | deej | Volco |
+|---|---|---|
+| Board | Arduino Nano, Uno or Pro Micro | ESP32 (Arduino Uno and Nano support is on the roadmap) |
+| Firmware & setup | Uploaded from the Arduino IDE, configured in `config.yaml` | Installed and set up directly from the Volco app |
+| Sliders | Apps, master, mic, unmapped apps | Apps, groups of apps, everything else, any output or input device |
+| Buttons | None | Mute, output switching, media keys, programs, scripts, modes |
+| Feedback | None | LEDs and OLED screens on the buttons |
+| Wi-Fi | Community forks | Built in (UDP) |
+
+- **Your deej runs on an ESP32?** Keep your hardware as it is: install Volco's firmware from the app, add your sliders and their pins on the Controller page, and save it to the controller.
+- **Your deej runs on an Arduino Nano or Uno?** Volco's firmware doesn't run on them yet. Support is in progress: ⭐ star or 👀 watch this repo to hear when it lands.
+- There's no `config.yaml` to bring over. You choose what each slider does in the app.
 
 ## 📸 The hardware
 
@@ -46,9 +64,6 @@ Next up is a custom PCB and a new case with an OLED screen above each button. Bo
 </table>
 
 You don't need my board, though. Volco works with **any layout you wire up**: as many sliders and buttons as you have pins, and each button can have **no indicator, an LED, an LED pair, or a small OLED screen**. You describe the hardware in the app, and the controller stores it. There's nothing to change in the code.
-
-> [!NOTE]
-> **Coming from deej?** If your deej build runs on an **ESP32**, Volco can replace it in place: install the firmware from the app, enter your slider pins on the Hardware page, and keep your hardware as it is. (On an Arduino Uno or Nano, the firmware doesn't run yet.)
 
 > [!TIP]
 > **No hardware yet?** Open [`tools/simulator/index.html`](tools/simulator/) in a browser. It's a 3D simulated controller that connects to the app over WebSocket, so you can try everything first.
@@ -94,10 +109,10 @@ You don't need my board, though. Volco works with **any layout you wire up**: as
 1. **Build a controller.** Wire sliders (one ADC pin each) and buttons (one GPIO to GND each) to an ESP32. The [firmware guide](firmware/README.md) has the wiring notes and pin choices.
 2. **Get the app.** Download `Volco.exe` from the [latest release](https://github.com/ToMeRhh/volco/releases/latest). It's a single file with nothing to install; run it and it appears in the system tray.
    > Volco isn't code-signed yet, so Windows SmartScreen may warn you the first time. Choose **More info → Run anyway**.
-3. **Flash the firmware.** Plug the ESP32 in over USB, open **Settings → Controller**, pick its COM port and choose **Install firmware…**. It takes under a minute.
-4. **Set it up.** On the same page, choose **Set up**, start from the **DIY reference** preset or your own layout, and **Save to controller**. Then map your sliders and buttons on the **Controls** page. Done! 🎉
+3. **Flash the firmware.** Plug the ESP32 in over USB, open **Settings → Controller**, pick its COM port and choose **Install firmware**. It takes under a minute.
+4. **Set it up.** When the install is done, select **Choose how to start** and start from the **DIY reference** preset or **Start empty**, add your sliders and buttons, and **Save to controller**. Then pick what each slider and button does on the same page. Done! 🎉
 
-Wi-Fi (UDP) is in the Hardware page's **Advanced** section. USB always stays on, so a wrong Wi-Fi setting can be fixed over the cable.
+Wi-Fi (UDP) is in the Controller page's **Controller settings**. USB always stays on, so a wrong Wi-Fi setting can be fixed over the cable.
 
 ## 🧩 How it works
 
