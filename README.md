@@ -17,8 +17,6 @@ Spotify on one fader, your game on another, Discord on a third. Mute the mic, sw
 
 </div>
 
-> **The AI disclaimer you were looking for:** I have 10 years of experience as a software enginner at Google. Previous iterations of this project were written by hand, but with AI-augmentation - I was able to write this polished and high-performance version of the vision that I had in mind. I built Volco with [Claude Code](https://claude.com/claude-code) as my pair programmer - Claude wrote the code but I designed the architecture, and reviewed and tested every change on my real setup.
-
 ---
 
 ## 👋 Why I built this
