@@ -1299,6 +1299,10 @@
   <Style Selector="Border.DialogCard.Narrow">
     <Setter Property="MaxWidth" Value="520"/>
   </Style>
+  <!-- The pin dialog: eight pins to a row. -->
+  <Style Selector="Border.DialogCard.Wide">
+    <Setter Property="MaxWidth" Value="800"/>
+  </Style>
   <!-- The device dialog: as tall as its fields. -->
   <Style Selector="Border.DialogCard.Small">
     <Setter Property="MaxWidth" Value="400"/>

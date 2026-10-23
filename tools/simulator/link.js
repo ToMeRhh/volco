@@ -16,6 +16,9 @@
    * @param {(now:number) => void} o.onHostLost            LEDs off, "not connected" screens
    * @param {(payload:number[], now:number) => boolean} [o.onConfigFrame]  true when it took the frame
    * @param {(index:number, action:number, now:number) => void} [o.onCalibrate]  a Calibrate frame
+   * @param {(role:number, now:number) => void} [o.onPinWatch]                  a PinWatch frame
+   * @param {(sda:number, scl:number, now:number) => void} [o.onI2cScan]         an I2cScan frame
+   * @param {(pin:number, level:number, ms:number, now:number) => void} [o.onPinDrive]  a PinDrive frame
    */
   function createLink(o) {
     let hw = { sliders: 0, kinds: [], configState: 0, configCrc: 0, firmware: 'sim' };
@@ -86,6 +89,21 @@
           case P.MSG.CALIBRATE: {
             const c = P.decodeCalibrate(p);
             if (c && o.onCalibrate) o.onCalibrate(c.index, c.action, now);
+            break;
+          }
+          case P.MSG.PIN_WATCH: {
+            const w = P.decodePinWatch(p);
+            if (w && o.onPinWatch) o.onPinWatch(w.role, now);
+            break;
+          }
+          case P.MSG.I2C_SCAN: {
+            const s = P.decodeI2cScan(p);
+            if (s && o.onI2cScan) o.onI2cScan(s.sda, s.scl, now);
+            break;
+          }
+          case P.MSG.PIN_DRIVE: {
+            const d = P.decodePinDrive(p);
+            if (d && o.onPinDrive) o.onPinDrive(d.pin, d.level, d.ms, now);
             break;
           }
           case P.MSG.BEGIN: holding = true; holdStart = now; break;

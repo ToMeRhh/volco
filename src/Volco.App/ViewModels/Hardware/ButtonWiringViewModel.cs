@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
+using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels.Hardware;
 
@@ -10,14 +11,19 @@ namespace Volco.App.ViewModels.Hardware;
 /// §6.2): its pin, its light (None / LED / 2 LEDs / Screen, which reshapes only the rows under it)
 /// and Remove, and the danger mark on the section's header. Every edit goes into the draft of one
 /// button; the Hardware view model refreshes it after every draft change and drops it when the selection moves.
+/// Try the lights (hardware-page spec §6.2) flashes the draft's LED pins, saved or not.
 /// </summary>
 public sealed partial class ButtonWiringViewModel : ObservableObject
 {
     private readonly ControllerViewModel _controller;
+    private readonly Action<IReadOnlyList<LightStep>>? _tryLights;
 
+    /// <param name="tryLights">Plays a light try on the controller; null for none.</param>
     internal ButtonWiringViewModel(int index, ButtonItemViewModel item, ControllerViewModel controller,
-                                   Func<PinOwnerKind, PinFieldViewModel> pin, Action remove, Action<int> showBus)
+                                   Func<PinOwnerKind, PinFieldViewModel> pin, Action remove, Action<int> showBus,
+                                   Action<IReadOnlyList<LightStep>>? tryLights = null)
     {
+        _tryLights = tryLights;
         Index = index;
         Item = item;
         _controller = controller;
@@ -27,6 +33,27 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
         LightBPin = pin(PinOwnerKind.LightB);
         RemoveCommand = new RelayCommand(remove);
         OpenBusCommand = new RelayCommand(() => showBus(BusIndex));
+        TryLightsCommand = new RelayCommand(TryLights, CanTryLights);
+    }
+
+    /// <summary>Flashes the light's pins from the draft (a single LED lit, unlit, lit; a pair A then B).
+    /// Enabled with a ready controller, no test and every pin of the light set.</summary>
+    public IRelayCommand TryLightsCommand { get; }
+
+    private (int A, int? B)? LightPins => Message switch
+    {
+        { IndicatorCase: Button.IndicatorOneofCase.Led } b when b.Led.HasPin => ((int)b.Led.Pin, null),
+        { IndicatorCase: Button.IndicatorOneofCase.LedPair } b when b.LedPair.HasPinA && b.LedPair.HasPinB
+            => ((int)b.LedPair.PinA, (int)b.LedPair.PinB),
+        _ => null,
+    };
+
+    private bool CanTryLights() => _tryLights is not null && _controller.IsControllerReady && !_controller.IsTesting && LightPins is not null;
+
+    private void TryLights()
+    {
+        if (_tryLights is null || !CanTryLights() || LightPins is not { } pins) return;
+        _tryLights(LightTry.Steps(pins.A, pins.B, !LitWhenHigh));
     }
 
     /// <summary>The draft button (0-based).</summary>
@@ -162,6 +189,7 @@ public sealed partial class ButtonWiringViewModel : ObservableObject
     internal void Refresh()
     {
         IsEditable = _controller.CanEdit;
+        TryLightsCommand.NotifyCanExecuteChanged();
         foreach (var name in new[] { nameof(LightIndex), nameof(IsNone), nameof(IsLed), nameof(IsPair), nameof(IsScreen),
                                      nameof(HasLeds), nameof(LitWhenHigh), nameof(LitWhenLow), nameof(BusIndex), nameof(AddressIndex), nameof(BusLinkLabel), nameof(BusLinkText) })
             OnPropertyChanged(name);

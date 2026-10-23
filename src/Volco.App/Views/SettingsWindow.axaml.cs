@@ -62,6 +62,8 @@ public partial class SettingsWindow : Window
     private readonly ContentControl _calibrationHost;
     private readonly Border _busesOverlay;
     private readonly ContentControl _busesHost;
+    private readonly Border _pinOverlay;
+    private readonly ContentControl _pinHost;
     private readonly Border _reinstallOverlay;
     private readonly Border _leaveOverlay;
     private readonly ContentControl _leaveHost;
@@ -128,6 +130,8 @@ public partial class SettingsWindow : Window
         _calibrationHost = this.FindControl<ContentControl>("CalibrationHost")!;
         _busesOverlay = this.FindControl<Border>("BusesOverlay")!;
         _busesHost = this.FindControl<ContentControl>("BusesHost")!;
+        _pinOverlay = this.FindControl<Border>("PinOverlay")!;
+        _pinHost = this.FindControl<ContentControl>("PinHost")!;
         _reinstallOverlay = this.FindControl<Border>("ReinstallOverlay")!;
         _leaveOverlay = this.FindControl<Border>("LeaveOverlay")!;
         _leaveHost = this.FindControl<ContentControl>("LeaveHost")!;
@@ -135,7 +139,7 @@ public partial class SettingsWindow : Window
         _attentionCard = this.FindControl<Border>("AttentionCard")!;
         _progressOverlay = this.FindControl<Border>("ProgressOverlay")!;
         _progressCard = this.FindControl<Border>("ProgressCard")!;
-        foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _calibrationOverlay, _busesOverlay, _reinstallOverlay, _leaveOverlay, _attentionOverlay, _progressOverlay })
+        foreach (var overlay in new[] { _compareOverlay, _connectionOverlay, _calibrationOverlay, _busesOverlay, _pinOverlay, _reinstallOverlay, _leaveOverlay, _attentionOverlay, _progressOverlay })
             overlay.PointerPressed += OnScrimPressed;
         // Compare is opened from the banner, which goes once the setups agree.
         TrackFocus(_compareOverlay, this.FindControl<Border>("CompareCard")!, StatusLineButton);
@@ -149,6 +153,9 @@ public partial class SettingsWindow : Window
         TrackFocus(_calibrationOverlay, this.FindControl<Border>("CalibrationCard")!, ControllerPageFocus);
         // So is the buses dialog's opener (Controller settings' Edit, a button's bus link).
         TrackFocus(_busesOverlay, this.FindControl<Border>("BusesCard")!, ControllerPageFocus);
+        // The pin dialog's field stays (in the inspector or the I2C buses dialog): the focus goes
+        // back to it.
+        TrackFocus(_pinOverlay, this.FindControl<Border>("PinCard")!, ControllerPageFocus);
         // The attention dialog opens by itself (a state began), so the focus goes back to where it
         // was, else to the status line.
         TrackFocus(_attentionOverlay, _attentionCard, StatusLineButton);
@@ -176,6 +183,7 @@ public partial class SettingsWindow : Window
         UpdateConnection();
         UpdateCalibration();
         UpdateBuses();
+        UpdatePinDialog();
         UpdateLeavePrompt();
 
         // The status line's menu is a popup of its own: the mouse on it is off the sidebar, which
@@ -238,6 +246,7 @@ public partial class SettingsWindow : Window
          : _leaveOverlay.IsVisible ? _leaveOverlay
          : _reinstallOverlay.IsVisible ? _reinstallOverlay
          : _calibrationOverlay.IsVisible ? _calibrationOverlay
+         : _pinOverlay.IsVisible ? _pinOverlay
          : _busesOverlay.IsVisible ? _busesOverlay
          : _connectionOverlay.IsVisible ? _connectionOverlay
          : _compareOverlay.IsVisible ? _compareOverlay
@@ -251,6 +260,7 @@ public partial class SettingsWindow : Window
         else if (ReferenceEquals(overlay, _reinstallOverlay)) _hardware.Status.Controller.CancelInstallCommand.Execute(null);
         else if (ReferenceEquals(overlay, _connectionOverlay)) _hardware.CloseConnection();
         else if (ReferenceEquals(overlay, _calibrationOverlay)) _hardware.Calibration?.CancelCommand.Execute(null);
+        else if (ReferenceEquals(overlay, _pinOverlay)) _hardware.ClosePinDialog();
         else if (ReferenceEquals(overlay, _busesOverlay)) _hardware.CloseBuses();
         else _hardware.CloseCompare();
     }
@@ -270,6 +280,7 @@ public partial class SettingsWindow : Window
         else if (e.PropertyName is nameof(HardwareViewModel.LeavePrompt)) UpdateLeavePrompt();
         else if (e.PropertyName is nameof(HardwareViewModel.Calibration)) UpdateCalibration();
         else if (e.PropertyName is nameof(HardwareViewModel.Buses)) UpdateBuses();
+        else if (e.PropertyName is nameof(HardwareViewModel.PinDialog)) UpdatePinDialog();
     }
 
     /// <summary>The attention dialog over the window while the status asks for it and the window shows.</summary>
@@ -325,6 +336,14 @@ public partial class SettingsWindow : Window
         var dialog = _hardware.Buses;
         _busesHost.Content = dialog;
         _busesOverlay.IsVisible = dialog is not null;
+    }
+
+    /// <summary>The pin dialog's card over the window while a pin field is open.</summary>
+    private void UpdatePinDialog()
+    {
+        var field = _hardware.PinDialog;
+        _pinHost.Content = field;
+        _pinOverlay.IsVisible = field is not null;
     }
 
     /// <summary>The Connection dialog's card over the window while it is open.</summary>
@@ -495,6 +514,7 @@ public partial class SettingsWindow : Window
         _stage?.Hardware?.CloseLeavePrompt();
         _hardware.CloseCalibration();   // a sweep that hadn't ended is cancelled
         _hardware.CloseBuses();
+        _hardware.ClosePinDialog();   // an open pin dialog stops its watch
         _hardware.Status.Progress.Close();   // a result goes with the window; a running operation stays
         _vm.ControllerIfCreated?.OnWindowHidden();   // and the last firmware result goes
         _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controller page's dialog

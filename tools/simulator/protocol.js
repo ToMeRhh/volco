@@ -9,14 +9,17 @@
     HELLO_REQUEST: 0x81, HEARTBEAT: 0x82, LED: 0x83, SCREEN: 0x84, BEGIN: 0x85, COMMIT: 0x86,
     CONFIG_READ: 0x87, CONFIG_BEGIN: 0x88, CONFIG_CHUNK: 0x89, CONFIG_END: 0x8A,
     CALIBRATE: 0x8E, CALIBRATION: 0x09,
+    PIN_WATCH: 0x8B, PIN_ACTIVITY: 0x07, I2C_SCAN: 0x8C, I2C_SCAN_RESULT: 0x08, PIN_DRIVE: 0x8D,
   };
   const CALIBRATE = { QUERY: 0, START: 1, DONE: 2, CANCEL: 3 };
   const CAL_FLAG = { LEARNED: 1, SWEEPING: 2, AUTO: 4 };
+  const WATCH = { STOP: 0, ANALOG: 1, BUTTON: 2 };
   const NAMES = {
     0x01: 'Hello', 0x02: 'Alive', 0x03: 'Slider', 0x04: 'Button', 0x05: 'ConfigData', 0x06: 'ConfigResult',
     0x81: 'HelloRequest', 0x82: 'Heartbeat', 0x83: 'Led', 0x84: 'Screen', 0x85: 'Begin', 0x86: 'Commit',
     0x87: 'ConfigRead', 0x88: 'ConfigWriteBegin', 0x89: 'ConfigWriteChunk', 0x8A: 'ConfigWriteEnd',
     0x09: 'Calibration', 0x8E: 'Calibrate',
+    0x8B: 'PinWatch', 0x07: 'PinActivity', 0x8C: 'I2cScan', 0x08: 'I2cScanResult', 0x8D: 'PinDrive',
   };
   const KIND = { NONE: 0, LED: 1, LED_PAIR: 2, SCREEN: 3 };
   const TRANSITION = { NONE: 0, SLIDE_LEFT: 1, SLIDE_RIGHT: 2 };
@@ -74,6 +77,26 @@
     return { index: p[1], action: p[2] > CALIBRATE.CANCEL ? CALIBRATE.QUERY : p[2] };
   }
 
+  /** PinActivity: the pin a watched slider or button just moved. */
+  const pinActivity = pin => [MSG.PIN_ACTIVITY, pin];
+  /** I2cScanResult: the bus's pins and the addresses answering on it (an empty list when none). */
+  const i2cScanResult = (sda, scl, addresses) => [MSG.I2C_SCAN_RESULT, sda, scl, addresses.length, ...addresses];
+  /** Decodes a PinWatch payload: { role }, or null unless it is exactly 2 bytes with a known role. */
+  function decodePinWatch(p) {
+    if (p.length !== 2 || p[0] !== MSG.PIN_WATCH || p[1] > WATCH.BUTTON) return null;
+    return { role: p[1] };
+  }
+  /** Decodes an I2cScan payload: { sda, scl }, or null unless it is exactly 3 bytes. */
+  function decodeI2cScan(p) {
+    if (p.length !== 3 || p[0] !== MSG.I2C_SCAN) return null;
+    return { sda: p[1], scl: p[2] };
+  }
+  /** Decodes a PinDrive payload: { pin, level, ms }, or null unless it is exactly 5 bytes with level 0 or 1. */
+  function decodePinDrive(p) {
+    if (p.length !== 5 || p[0] !== MSG.PIN_DRIVE || p[2] > 1) return null;
+    return { pin: p[1], level: p[2], ms: (p[3] << 8) | p[4] };
+  }
+
   /** Layout-1 screen content, as the firmware's screenText builds it. */
   function screenText(top, icon, main) {
     return { layout: 1, topKind: top ? TOP.TEXT : TOP.EMPTY, top, dotsSelected: 0, dotsCount: 0, icon, flags: 0, main };
@@ -115,8 +138,9 @@
   const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join(' ');
   const nameOf = type => NAMES[type] || '0x' + type.toString(16).padStart(2, '0');
 
-  const api = { MSG, NAMES, CALIBRATE, CAL_FLAG, KIND, TRANSITION, TOP, NO_ICON, MAX_TEXT, MAX_BUTTONS,
-    frame, createParser, hello, alive, slider, button, calibration, decodeCalibrate, screenText, screen, decodeScreen, hex, nameOf };
+  const api = { MSG, NAMES, CALIBRATE, CAL_FLAG, WATCH, KIND, TRANSITION, TOP, NO_ICON, MAX_TEXT, MAX_BUTTONS,
+    frame, createParser, hello, alive, slider, button, calibration, decodeCalibrate,
+    pinActivity, i2cScanResult, decodePinWatch, decodeI2cScan, decodePinDrive, screenText, screen, decodeScreen, hex, nameOf };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.VolcoProtocol = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

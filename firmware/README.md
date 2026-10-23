@@ -23,6 +23,7 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `src/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
 | `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
 | `src/slider_ends_store.*` | The sliders' learned ends in NVS (namespace `volco_ends`, key `ends2`: one blob of pin-keyed entries), apart from the controller config. |
+| `src/pin_helpers.*` | The wiring helpers on the hardware: samples a watch's pins, runs the I2C scan, drives pins and puts them back. |
 | `src/indicators.*` | LED rendering. |
 | `src/screens.*` | The SSD1306 drivers: owns the panels and pushes the rendered buffers to them. |
 | `src/debug_log.h` | The `DEBUG_LOG` macro. |
@@ -30,6 +31,7 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `lib/volco_config/` | The controller config: decode, validation, chip table, CRC, chunked receiver, `RuntimeConfig`. |
 | `lib/volco_slider_ends/` | One slider's learned travel ends, and the mapping of its readings onto 0-4095. |
 | `lib/volco_calibration/` | One slider's calibration: Auto-calibrate, the Re-calibrate sweep (Done, Cancel, the 60 s timeout, host lost), when a Calibration report is due; and the stored entries, `{pin, auto-calibrate, low, high}`, looked up by pin. |
+| `lib/volco_pin_helpers/` | The rules of the wiring helpers, pure: the pins in use, the pins a watch samples per role, when a pin is worth reporting (the thresholds), how an I2C scan reaches a pin pair, which pins may be driven. |
 | `lib/volco_bidi/` | Logical to visual reordering of UTF-8 text, for Hebrew. |
 | `lib/volco_screen_state/` | The state machine of each screen: current, previous and pending content, slide progress, dim, off, pixel shift, wake handling. |
 | `lib/volco_render/` | Volco's own 1-bit canvas and layout 1 renderer, with the generated fonts and icons. U8g2 is only the SSD1306 driver underneath. |
@@ -92,6 +94,8 @@ The high bit of `type` is the direction: `0x0_` comes from the controller, `0x8_
 | `0x05` | ConfigData | `seq`, total u16, offset u16, crc32 u32, data (0-240 bytes) | One chunk of a config read reply. |
 | `0x06` | ConfigResult | `seq`, `code`, `item`, `field` | The answer to a config write. |
 | `0x09` | Calibration | `index`, `flags` (bit 0 learned, bit 1 sweeping, bit 2 auto-calibrate), low u16, high u16 | A slider's calibration: the answer to every Calibrate, when its ends widen (at most every 100 ms), and when a sweep ends. |
+| `0x07` | PinActivity | `pin` | Detect: a watched pin moved (analog) or was pressed (button). |
+| `0x08` | I2cScanResult | `sda`, `scl`, `count`, `count` addresses | The answer to an I2cScan: the addresses that acknowledged, 0x08-0x77 ascending (at most 112); count 0 for a refused pair. |
 | `0x81` | HelloRequest | none | The PC asks for Hello. |
 | `0x82` | Heartbeat | none | Keepalive from the PC. |
 | `0x83` | Led | `button`, `value` | LED: lit when the value is not 0. LED pair: 1 lights A, 2 lights B, anything else neither. |
@@ -102,6 +106,9 @@ The high bit of `type` is the direction: `0x0_` comes from the controller, `0x8_
 | `0x88` | ConfigWriteBegin | `seq`, total u16, crc32 u32 | Starts a config write. |
 | `0x89` | ConfigWriteChunk | `seq`, offset u16, data (1-240 bytes) | Part of a config write. |
 | `0x8A` | ConfigWriteEnd | `seq` | Ends a config write. |
+| `0x8B` | PinWatch | `role` (0 stop, 1 analog, 2 button) | The PC starts, renews or stops Detect's pin watch. |
+| `0x8C` | I2cScan | `sda`, `scl` | The PC asks which I2C addresses answer on a pin pair (Find screens). |
+| `0x8D` | PinDrive | `pin`, `level` (0 or 1), duration u16 (ms) | The PC drives a pin for a while (Try the lights). |
 | `0x8E` | Calibrate | `index`, `action` (0 query, 1 start sweep, 2 done, 3 cancel) | The PC asks for a slider's calibration, or runs a Re-calibrate sweep. |
 
 ### Hello body
@@ -163,6 +170,10 @@ The config is the protobuf blob of `proto/volco_config.proto`, at most 1024 byte
 - **Keepalive.** The controller sends Alive whenever it has sent nothing for 1 s. The PC sends Heartbeat the same way, but only once its session is Ready. Any valid frame from the PC counts as proof of life; after `HOST_TIMEOUT_MS` without one the LEDs go off and the screens show "not connected".
 - **Begin / Commit.** After Begin the firmware holds every Led and Screen instead of applying it; on Commit it applies them all in the same pass, so every screen starts its slide at the same moment. A newer message for the same button replaces the held one, a second Begin restarts the timer, Commit with nothing held does nothing, and Commit without a Begin is ignored. If no Commit arrives within `COMMIT_FALLBACK_MS` of the Begin, the firmware applies what it holds.
 - **Slider calibration** (`docs/design/slider-calibration.md`). Each slider learns its travel's ends from the smoothed reading, always with Auto-calibrate on (the default) and only during a sweep with it off. Until the span reaches 1000 codes a slider sends its raw reading, then the reading stretched between the ends. A sweep (Calibrate 1) forgets the ends and learns from scratch; Done (2) keeps them once learned, Cancel (3), a host timeout or 60 s without Done restore the ones before it. When a sweep ends the controller sends the Calibration, then a Slider frame with the position stretched by the final ends, whatever the deadband. Ends are stored at most every 5 s while learning, at once when a sweep ends, never during one; an entry is used only by the slider with its pin and Auto-calibrate setting, so changing either forgets them. A Calibrate for a slider past the slider count is ignored.
+- **Wiring helpers** (`docs/design/hardware-page.md` §9; normal input and output keep working while one runs). Older firmware doesn't answer them, and the app copes.
+  - **Pin watch (PinWatch, PinActivity).** Role 1 (analog) samples the free ADC pins and the configured slider pins, role 2 (button) the free pins and the configured button pins, every 10 ms; pins of the other input kind are never touched, nor are LED pins or the pins of an I2C bus a screen uses. Analog skips ADC2 pins while Wi-Fi is enabled; button turns the pull-up on and leaves out free 34-39 (no pull-up, they would float; a button configured there is read as it is). A pin is free when no slider, button, LED or screen bus uses it. At most one PinActivity per pin per 250 ms. **A floating pin must not report:** an analog pin reports when its smoothed level is 300 codes from a baseline that follows it by 1/32 of the gap each sample, while the step between raw readings stays under 80 (a noisy pin never does, nor does a clean one drifting slowly), and the baseline then jumps to the level; a button pin reports after 30 ms low following 500 ms high, then again after it went high for 100 ms, and a pin that is low or chattering is never armed. The thresholds are constants in `volco_pin_helpers.h`, to be checked on hardware. The watch ends on role 0, on host loss, and 30 s after the last PinWatch (the app renews every 10 s and after each Hello); a PinWatch of the same role keeps each pin's state, another role starts clean. When it ends, the pins it changed go back to their mode.
+  - **I2C scan (I2cScan, I2cScanResult).** Probes 0x08-0x77. A pair that is a configured bus's uses that bus (the hardware buses 0 and 1 through their driver, the software buses 2 and 3 bit-banged); any other usable pair is bit-banged at 100 kHz on those pins alone, with no clock stretching, so a shorted or unpulled bus ends the scan in milliseconds instead of hanging the loop. The pins and the bus go back afterwards. A pair that is not usable, an input-only pin, SDA = SCL, or a pair sharing a pin with a configured bus without being that bus answers count 0.
+  - **PinDrive.** Drives an output-capable pin that is free or a configured LED pin to `level` for `duration` ms (up to four pins at once), else ignores it. A pin is restored when the drive ends: a free pin is released, an LED pin shows the PC's last value (a Led for a driven pin is held until the drive ends, and a mode change mid-flash is not shown until then).
 - **Kind mismatches are ignored.** A Led for a button that is not an LED or LED pair, a Screen for a button that is not a screen, and any out-of-range index are dropped.
 
 ## Rendering
@@ -214,7 +225,7 @@ Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to USB serial only
 
 ## Tests
 
-`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_slider_ends`, `volco_calibration`, `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
+`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_slider_ends`, `volco_calibration`, `volco_pin_helpers`, `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
 
 ## Developing the firmware
 

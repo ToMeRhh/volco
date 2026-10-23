@@ -173,6 +173,21 @@
       </Border>
     </Border>
 
+    <!-- A pin field's pin dialog (hardware-page spec §6.3), after the I2C buses dialog so it opens
+         over it (a bus's SDA and SCL): Escape and a click on the scrim are Cancel -->
+    <Border Name="PinOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" ZIndex="2" Background="#66000000" IsVisible="False">
+      <Border Name="PinCard" Classes="Panel DialogCard Wide" KeyboardNavigation.TabNavigation="Cycle"
+              VerticalAlignment="Center" Focusable="True">
+        <ContentControl Name="PinHost">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type hw:PinFieldViewModel}" x:DataType="hw:PinFieldViewModel">
+              <hwviews:PinDialog/>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Border>
+    </Border>
+
     <!-- Leaving the Controller page with unsaved changes (controller-page spec §4.4): over the
          whole window, sidebar included, so neither the nav nor the status's actions change the draft
          under it; Escape or a click outside is Stay -->

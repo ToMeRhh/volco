@@ -32,7 +32,7 @@ The page becomes the Controls page's pattern:
 7. **Smoothing (#108):** the firmware's smoothing stays here (Input feel); the app-side per-slider Smoothing is removed from Controls › Response.
 8. **The controller is called "Volco controller"** on the card and in the tray tooltip.
 9. **No jump between Controls and Hardware:** one shared drawing at identical geometry; only what is on and around it changes, with crossfades (§3.3).
-10. **Pins are a fuzzy-searchable dropdown in the inspector, no dialog.** Every GPIO the chip has, in number order, each row saying free, its owner, or why it can't be used. While the list is open, moving a slider or pressing a button lights up its pin's row (§6.3). No assumptions about the dev kit's pinout.
+10. **Pins are picked in a pin dialog showing every pin at once** (user, 2026-10-23; it replaced the fuzzy-searchable dropdown of the first build). Every GPIO the chip has, eight to a row by number, each saying free, its owner, or why it can't be used. While it is open, moving a slider or pressing a button marks its pin by colour, without picking it (§6.3). No assumptions about the dev kit's pinout.
 11. **Minimal UI,** as on Controls: no page subtitle, legends or explanatory captions beyond what the mocks show; tooltips carry detail.
 
 ## 3. Page structure
@@ -136,22 +136,22 @@ The header names the selection; rows are one line each (44 px) and keep their pl
 - **Light:** a segment None / LED / 2 LEDs / Screen. It reshapes only the rows under it:
   - LED: **Light pin**, **Lit when pin is** High / Low.
   - 2 LEDs: **Light A pin**, **Light B pin**, **Lit when pin is** High / Low.
-  - Screen: **Bus** (0–3, 2 and 3 marked "software") and **Address** (0x3C / 0x3D, with **Find screens** filling it, §9.2).
-- **Try the lights** (LED and 2 LEDs): flashes them on the controller (a single LED twice; a pair A then B), for saved and unsaved pins alike (§9.3).
+  - Screen: **Bus** (0–3, 2 and 3 marked "software") and **Address** (0x3C / 0x3D). **Find screens** lists the addresses that answer on each bus card of the I2C buses dialog (§9.2), one row each ("0x3C  Screen found, used by Button 1", "0x3D  Screen found, no button uses it"), then each configured screen that didn't ("0x3C  Button 1's screen didn't answer", in red); filling a button's Address from it is a follow-up.
+- **Try the lights** (LED and 2 LEDs): flashes them on the controller (a single LED lit, unlit, lit, 300 ms each; a pair A lit with B unlit for 600 ms, then B lit with A unlit; every step drives its level, so a lit LED still flashes), for saved and unsaved pins alike (§9.3). Decision (2026-10-22): Try always uses PinDrive, so a saved LED is driven like an unsaved one instead of through the test indicators.
 - **Remove Button N.**
 
 ### 6.3 The pin field
 
 One control for every pin: button, slider, light, bus SDA/SCL.
 
-- **Closed:** the value ("GPIO 5 ▾"), or "Not set".
-- **Open:** a text box with the list under it, every GPIO the chip has (`ChipInfo.Exists`) in number order. Typing filters with `FuzzyMatcher` over the number and the row's note ("3" keeps 3, 13, 23, 30–39; "slider" keeps the pins sliders use). Up/Down move, Enter picks, Escape restores the old value, a click outside closes without change.
-- **Each row's note, on the right:**
+- **Closed:** a button with a chip icon and the value ("GPIO 5", or "Not set"); no dropdown chevron, since it opens a dialog.
+- **Open:** the pin dialog over the window (decision 2026-10-23, replacing the filtered dropdown): every GPIO the chip has (`ChipInfo.Exists`) at once, eight to a row in number order, with an empty place where the chip has no pin (20, 24, 28–31), so a pin's column never moves. The field's pin has an accent border; unusable pins are greyed. Arrows move the selection (Left/Right along a row, Up/Down along a column, over unusable pins), Enter or a click picks, Escape, Cancel or a click on the scrim keep the old value.
+- **Each pin's note, under its number:**
   - **free**;
-  - **its owner** ("Slider 1", "Button 2 light", "I2C bus 0 SDA"); taken rows can be picked;
+  - **its owner** ("Slider 1", "Button 2 light", "I2C bus 0 SDA"); taken pins can be picked;
   - **why it can't be used for this role**, greyed and not pickable: "USB serial" (1, 3), "flash" (6–11), "no analog input" (a slider on a non-ADC pin), "input only" (a light or bus on 34–39).
 - **Problems on the field** (from `DraftProblems`, which already lists both ends of a conflict): the field gets the danger outline and the message under it ("Slider 1 also uses GPIO 33."), with one fix where there is one: **Swap with Slider 1** (exchanges the two pins in the draft). The other control's tile and field are marked too. Save waits until every problem is fixed. Today's informational hints become notes on the row: "no pull-up" for a button on 34–39, "not with Wi-Fi" for a slider on ADC2 while Wi-Fi is on.
-- **Detect (the pin lights up):** while the list is open and the controller is connected with firmware that supports it, Volco asks the controller to watch its pins (§9.1). Moving a slider (for a slider's pin) or pressing a button (for a button's pin) lights up that pin's row ("moving now" / "pressed now"), scrolls to it, and makes it the keyboard selection, even when the typed text had hidden it; Enter or a click picks it. Light and bus pins have no detection. Without support, nothing lights up.
+- **Detect (the pin lights up):** while the dialog is open and the controller is connected with firmware that supports it, Volco asks the controller to watch its pins (§9.1), and the dialog says "Move a slider to see which pin it's on." (or "Press a button…"). Moving a slider (for a slider's pin) or pressing a button (for a button's pin) marks that pin, by colour only and never by words (user, 2026-10-23): **moving now**, filled with the accent, until 1 s passes without another report; then **moved before**, tinted with an accent dot, until the dialog closes. Several pins can be marked at once. Marking never picks a pin or moves the selection: the user picks. While the watch is on, the controls change no volume and run no action (§9.1). The watch stops when the dialog closes, the selection moves to another tile, the page is left or the window hides; it times out on the controller 30 s after the last renewal if Volco goes away. A pin's mark is the controller's report, not a guess: an older firmware simply marks nothing.
 
 ### 6.4 I2C bus
 
@@ -216,10 +216,10 @@ Three helpers need the firmware. Each ships behind the build id: an older firmwa
 | `0x8B` | PinWatch | PC→controller | role (0 stop, 1 analog, 2 button) |
 | `0x07` | PinActivity | controller→PC | pin |
 
-- While a watch is on, the controller samples every usable pin for the role that is not an output (configured LEDs) and not a configured I2C pin: for analog, the ADC-capable pins (ADC2 skipped while Wi-Fi is up); for button, every usable pin with its pull-up on (34–39 read without one). Configured slider and button pins are included, so a taken pin lights up too.
+- While a watch is on, the controller samples every usable pin for the role that is not an output (configured LEDs) and not a configured I2C pin: for analog, the ADC-capable pins (ADC2 skipped while Wi-Fi is up); for button, every usable pin with its pull-up on except free 34–39 (no pull-up, so they would float; a button configured there is still watched). Decision (2026-10-22): only the role's own kind of configured pin is included: an analog watch samples free ADC pins and configured slider pins, a button watch free pins and configured button pins, so a taken pin of that kind lights up too, and a pin of the other kind is never touched (no pull-up lands on a slider). Thresholds are `volco_pin_helpers.h` constants (an analog pin must get 300 codes from a slowly following baseline with little jitter, so a slow drift never reports; a button must be low 30 ms after 500 ms high).
 - It reports a pin that moved (analog) or went low (button), at most every 250 ms per pin. **A floating pin must not light up:** the builder picks the thresholds (for example a large, sustained change) and checks them on the hardware.
-- Normal input keeps working during a watch. Pins the watch changed go back to their previous mode when it stops.
-- It stops on role 0, on host loss, and 30 s after the last PinWatch (the app renews every 10 s while the list is open).
+- The controller keeps reporting input during a watch, but Volco ignores it, as in the hardware test (§8.5; user, 2026-10-23): slider and button messages raise only raw input (the live meters) and reach neither audio nor actions, so moving a control to find its pin changes nothing. A gesture started before the watch never fires, nor one held across its end. Pins the watch changed go back to their previous mode when it stops.
+- It stops on role 0, on host loss, and 30 s after the last PinWatch (the app renews every 10 s while the pin dialog is open).
 
 ### 9.2 Find screens
 
@@ -228,7 +228,7 @@ Three helpers need the firmware. Each ships behind the build id: an older firmwa
 | `0x8C` | I2cScan | PC→controller | SDA pin, SCL pin |
 | `0x08` | I2cScanResult | controller→PC | SDA, SCL, count, addresses |
 
-The controller scans 0x08–0x77 on the given pins (the configured bus when the pins are one, else a temporary software bus) and answers. Refused pins (not usable, input only) answer count 0.
+The controller scans 0x08–0x77 on the given pins (the configured bus when the pins are one, else a temporary software bus) and answers. Refused pins (not usable, input only, SDA = SCL, or a pair that shares a pin with a configured bus without being that bus) answer count 0. The app waits 3 s for the result. A draft pair that the controller would refuse that way (it shares a pin with a bus a screen uses in the saved setup without being it) isn't sent: the row says "Save first to scan these pins." No answer shows only "The controller didn't answer." with no rows.
 
 ### 9.3 Drive a pin (Try the lights on unsaved pins)
 
@@ -236,7 +236,7 @@ The controller scans 0x08–0x77 on the given pins (the configured bus when the 
 |---|---|---|---|
 | `0x8D` | PinDrive | PC→controller | pin, level (0/1), duration (u16 ms) |
 
-Drives an output-capable pin that is free or a configured LED pin, then restores it. Refused silently otherwise. Saved LEDs keep using today's test indicators.
+Drives an output-capable pin that is free or a configured LED pin, then restores it. Refused silently otherwise. Decision (2026-10-22, replacing "saved LEDs keep using today's test indicators"): Try the lights uses PinDrive for saved and unsaved LED pins alike. A Led frame for a driven pin waits until the drive ends, then the LED shows the PC's last value.
 
 ### 9.4 Common
 
@@ -301,7 +301,7 @@ The tray's "Update controller firmware…" and the sidebar's attention dot keep 
   - Automatic port: the connection layer tries ports in order (§10.1); `LinkStatus` stays the one source for the card.
 - **Config:** `connection.serial.comPort` empty = Automatic, `connection.serial.lastPort` (new, optional; no schema bump needed beyond the usual rules if the field is additive). **#108:** `sliders[i].smoothingFactor` is dropped (no schema bump: an old file's field is ignored on load and gone on the next save), and `SliderProcessor` loses its smoothing.
 - **Settings follow removed controls:** the draft records which inputs were removed; on a confirmed save (`ControllerConfigService`'s success), one `ConfigManager` change deletes those entries from `sliders` and `buttons` and shifts the later ones down, `Index` rewritten as on every save. Added controls get empty entries as today (`AddMissing`).
-- **Pin rows:** a Core helper lists every pin for a role with its state (free, owner, unusable reason) from `ChipInfo` and the draft, so the dropdown and tests share it.
+- **Pin rows:** a Core helper lists every pin for a role with its state (free, owner, unusable reason) from `ChipInfo` and the draft, so the pin dialog and tests share it.
 - **Tray tooltip:** "Volco controller" in its controller lines.
 
 ### 12.2 App

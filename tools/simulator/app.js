@@ -63,6 +63,17 @@
     raw: i => Math.round((device ? device.faderValue(i) : 0.5) * 4095),
   });
 
+  // The pin helpers (issue #120), rebuilt at each boot for the stored config; a reboot ends them.
+  let pins = null;
+  function pinHelpers() {
+    return root.VolcoPinHelpers.createPinHelpers({
+      send: p => link.sendPayload(p, now()),
+      config: hw.config,
+      showLed: (b, v) => { if (boardKinds[b] === hw.kinds[b]) device?.setLed(b, v); },
+      lastLed: b => leds[b] ?? 0,
+    });
+  }
+
   const link = root.VolcoLink.createLink({
     sendFrame(bytes, payload, bad) {
       connection.send(bytes);
@@ -72,8 +83,11 @@
     sliderValue: i => cal.map(i, Math.round((device ? device.faderValue(i) : 0.5) * 4095)),
     onLed: (b, v) => show({ button: b, led: v }),
     onScreen: (b, transition, content, t) => show({ button: b, transition, content }, t),
-    onHostLost: t => { cal.hostLost(); blankDisplays(t); },
+    onHostLost: t => { cal.hostLost(); pins?.hostLost(); blankDisplays(t); },
     onCalibrate: (i, action, t) => cal.calibrate(i, action, t),
+    onPinWatch: (role, t) => pins?.watch(role, t),
+    onI2cScan: (sda, scl) => pins?.scan(sda, scl),
+    onPinDrive: (pin, level, ms, t) => pins?.drive(pin, level, ms, t),
     onConfigFrame: (p, t) => (session ? session.onFrame(p, t) : false),
   });
   const parser = P.createParser(
@@ -84,7 +98,7 @@
   function show(u, t = now()) {
     if (u.led !== undefined) {
       leds[u.button] = u.led;
-      if (boardKinds[u.button] === hw.kinds[u.button]) device?.setLed(u.button, u.led);
+      if (boardKinds[u.button] === hw.kinds[u.button] && !pins?.driven(u.button)) device?.setLed(u.button, u.led);   // a PinDrive holds its LED
       return;
     }
     const slot = slots[u.button];
@@ -122,6 +136,7 @@
   function boot({ drop = false } = {}) {
     hw = current();
     beh = O.behaviour(hw.config.screens);
+    pins = pinHelpers();
     cal.configure(hw.config.sliders.slice(0, hw.sliders).map(s => ({ pin: s.pin, auto: s.autoCalibrate !== false })));
     link.setHardware({ sliders: hw.sliders, kinds: hw.kinds, configState: hw.state, configCrc: hw.crc });
     slots = []; leds = [];
@@ -137,6 +152,7 @@
     if (connection?.isOpen()) goLive(); else enterDemo();
   }
   function enterDemo() {
+    pins?.hostLost();   // the socket closed mid-drive: give the LEDs back before the demo drives them
     mode = 'demo';
     demoHost = D.createDemoHost(hw.kinds);
     for (const u of demoHost.initial()) show(u);
@@ -176,6 +192,7 @@
     if (mode !== 'live' || rebooting || i >= hw.sliders) return;
     const raw = Math.round(value * 4095);
     cal.reading(i, raw);
+    pins.slider(i, now());
     const send = () => { lastSlider[i] = now(); link.sendSlider(i, cal.map(i, raw), now()); };
     clearTimeout(pendingSlider[i]);
     // Auto-calibrate just learned the span: the stretched position goes out at once.
@@ -186,7 +203,7 @@
     const real = i < hw.kinds.length && boardKinds[i] === hw.kinds[i] && !rebooting;
     if (!real) return;   // a draft-only button: the controller doesn't have it yet
     if (!panels.filterButton(i, pressed, now())) return;   // the press that woke the screens
-    if (mode === 'live') { link.sendButton(i, pressed, now()); return; }
+    if (mode === 'live') { if (pressed) pins.button(i, now()); link.sendButton(i, pressed, now()); return; }
     if (!pressed) return;
     for (const u of demoHost.press(i)) show(u);
     room?.setOutput(demoHost.state.output, demoHost.state.outputMuted);
@@ -260,7 +277,7 @@
   setInterval(() => {
     const t = now();
     session?.tick(t);
-    if (mode === 'live' && !rebooting) { link.tick(t); cal.tick(t); }
+    if (mode === 'live' && !rebooting) { link.tick(t); cal.tick(t); pins.tick(t); }
   }, TICK_MS);
   if (prefs.autoConnect) connection.connect();
 

@@ -81,7 +81,7 @@ Four rows (Pin, Auto-calibrate, Calibration, Remove) fit the Hardware section's 
 
 ### Wire
 
-Two new messages; `kProtocolVersion` stays 1 (app and firmware ship together; the build-id check already prompts for a firmware update). `0x8B`–`0x8D` and `0x07`–`0x08` are reserved by the Hardware page's firmware helpers (hardware-page §9), so calibration takes the next free numbers:
+Two new messages; `kProtocolVersion` stays 1 (app and firmware ship together; the build-id check already prompts for a firmware update). `0x8B`–`0x8D` and `0x07`–`0x08` are the Hardware page's firmware helpers (hardware-page §9), so calibration took the next free numbers:
 
 | Type | Name | Direction | Body |
 |---|---|---|---|

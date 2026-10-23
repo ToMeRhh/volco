@@ -43,6 +43,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.PropertyChanged += OnControlsPropertyChanged;
         _runtime.RawInput += OnRawInput;
         _runtime.CalibrationChanged += OnCalibrationChanged;
+        _runtime.PinActivity += OnPinActivity;
         Status = new ControllerStatusViewModel(controller, this);
         SaveCommand = new RelayCommand(() => _controller.SaveCommand.Execute(null), () => _controller.CanSave && _controller.Problems.Count == 0);
         Chooser = new SetupChooserViewModel(controller, OnChooserPicked, CancelStartOver);
@@ -303,6 +304,11 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     private void OnControllerPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Try the lights and Find screens read the controller's readiness and test, which raise no
+        // event of their own.
+        if (Inspected is ButtonWiringViewModel button) button.TryLightsCommand.NotifyCanExecuteChanged();
+        if (Buses is { } buses)
+            foreach (var bus in buses.Buses) bus.FindScreensCommand.NotifyCanExecuteChanged();
         if (e.PropertyName is nameof(ControllerViewModel.CanEdit) or null or "")
         {
             OnPropertyChanged(nameof(IsReadOnly));
@@ -511,7 +517,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     {
         if (_disposed || IsTesting || Buses is not null) return;
         I2cBusesViewModel? dialog = null;
-        dialog = new I2cBusesViewModel(_controller, PinField, () => { if (ReferenceEquals(Buses, dialog)) CloseBuses(); }, bus);
+        dialog = new I2cBusesViewModel(_controller, PinField, () => { if (ReferenceEquals(Buses, dialog)) CloseBuses(); }, bus, _runtime.ScanI2cAsync);
         Buses = dialog;
     }
 
@@ -546,7 +552,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         else if (_controls.Selected is ButtonItemViewModel button && Buttons.IndexOf(button) is >= 0 and var bi)
         {
             if (Inspected is not ButtonWiringViewModel { } shown || shown.Index != bi || !ReferenceEquals(shown.Item, button))
-                next = new ButtonWiringViewModel(bi, button, _controller, kind => PinField(new PinOwner(kind, bi)), () => AskRemove(button), ShowBus);
+                next = new ButtonWiringViewModel(bi, button, _controller, kind => PinField(new PinOwner(kind, bi)), () => AskRemove(button), ShowBus, _runtime.TryLights);
         }
         else next = null;
 
@@ -610,10 +616,45 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (_pinFields.TryGetValue(owner, out var field)) return field;
         field = new PinFieldViewModel(DraftPins.LabelOf(owner.Kind), DraftPins.RoleOf(owner.Kind), owner,
                                       () => _controller.Draft, () => DraftPins.Get(_controller.Draft, owner),
-                                      pin => SetPin(owner, pin), SwapPins);
+                                      pin => SetPin(owner, pin), SwapPins, _runtime.StartPinWatch, ui: _ui);
+        field.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PinFieldViewModel.IsOpen)) OnPinFieldOpenChanged(field);
+        };
         _pinFields[owner] = field;
         UpdatePinField(field);
         return field;
+    }
+
+    /// <summary>The pin field whose pin dialog is open (a window-level overlay), or null. Opening
+    /// one closes any other.</summary>
+    [ObservableProperty] private PinFieldViewModel? _pinDialog;
+
+    private void OnPinFieldOpenChanged(PinFieldViewModel field)
+    {
+        if (field.IsOpen)
+        {
+            foreach (var other in _pinFields.Values)
+                if (!ReferenceEquals(other, field) && other.IsOpen) other.Cancel();
+            PinDialog = field;
+        }
+        else if (ReferenceEquals(PinDialog, field)) PinDialog = null;
+    }
+
+    /// <summary>Detect: the controller saw a pin move or be pressed (transport thread); the open
+    /// pin dialog, at most one, marks its pin.</summary>
+    private void OnPinActivity(object? sender, int pin) => _ui.Post(() =>
+    {
+        if (_disposed || pin < 0) return;
+        foreach (var field in _pinFields.Values)
+            if (field.IsOpen) field.OnPinActivity((uint)pin);
+    });
+
+    /// <summary>Closes the open pin dialog, which stops its pin watch: the window is hidden or the
+    /// page left, and the visual tree stays.</summary>
+    public void ClosePinDialog()
+    {
+        foreach (var field in _pinFields.Values) field.Cancel();
     }
 
     private void UpdatePinField(PinFieldViewModel field)
@@ -732,6 +773,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     public void OnPageLeft()
     {
         if (_disposed) return;
+        ClosePinDialog();
         _controller.OnPageLeft();
         _controls.FixSelection();
     }
@@ -842,6 +884,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _controls.PropertyChanged -= OnControlsPropertyChanged;
         _runtime.RawInput -= OnRawInput;
         _runtime.CalibrationChanged -= OnCalibrationChanged;
+        _runtime.PinActivity -= OnPinActivity;
+        ClosePinDialog();
         Status.Dispose();
         CloseCalibration();
         CloseBuses();

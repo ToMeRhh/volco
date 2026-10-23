@@ -85,6 +85,8 @@ class SoftI2c {
 };
 
 SoftI2c softBus[2];  // buses 2 and 3; pins and clock come from the config in screens_init
+volco::RuntimeBus busConfig[volco::kI2cBuses];
+bool busStarted[volco::kI2cBuses];  // only buses a screen uses are started
 
 // Every bus is started in screens_init, and each panel writes through this for its bus. (U8g2's
 // own Wire1 driver, the *_2ND_HW_I2C panels, only exists when the core defines
@@ -191,13 +193,16 @@ void screens_init(const volco::RuntimeConfig& rc, uint32_t now) {
   brightness = sc.brightness;
   dimBrightness = sc.dimBrightness;
 
-  bool started[volco::kI2cBuses] = {false, false, false, false};
+  for (uint8_t i = 0; i < volco::kI2cBuses; i++) {
+    busConfig[i] = rc.i2c[i];
+    busStarted[i] = false;
+  }
   for (uint8_t b = 0; b < rc.buttonCount && numScreens < volco::kMaxScreens; b++) {
     const volco::RuntimeButton& btn = rc.buttons[b];
     if (btn.kind != volco::KIND_SCREEN) continue;
-    if (!started[btn.bus]) {  // only buses a screen uses are started (GPIO 21 may be an LED)
+    if (!busStarted[btn.bus]) {  // only buses a screen uses are started (GPIO 21 may be an LED)
       startBus(btn.bus, rc.i2c[btn.bus]);
-      started[btn.bus] = true;
+      busStarted[btn.bus] = true;
     }
     Screen& s = screens[numScreens];
     s.button = b;
@@ -261,4 +266,25 @@ void screens_tick(uint32_t now) {
     render(s, now);
     break;
   }
+}
+
+// Find screens on a started hardware bus: an empty write to each address, 0 = it answered. A stuck
+// bus times out (50 ms each), so the scan stops at the first timeout or bus error.
+bool screens_scan_bus(uint8_t bus, uint8_t* addresses, uint8_t& count) {
+  count = 0;
+  if (bus > 1 || !busStarted[bus]) return false;
+  TwoWire& wire = bus == 0 ? Wire : Wire1;
+  for (uint8_t a = 0x08; a <= 0x77 && count < volco::kMaxScanAddresses; a++) {
+    wire.beginTransmission(a);
+    const uint8_t r = wire.endTransmission();
+    if (r == 0) addresses[count++] = a;
+    else if (r == 5 || r == 4) break;  // timeout, or the bus is not usable
+  }
+  return true;
+}
+
+// A scan bit-banged on a software bus's pins: its pins back as begin() set them.
+void screens_restart_bus(uint8_t bus) {
+  if (bus < 2 || bus >= volco::kI2cBuses || !busStarted[bus]) return;
+  softBus[bus - 2].begin(busConfig[bus].sda, busConfig[bus].scl, busConfig[bus].clockHz);
 }

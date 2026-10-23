@@ -44,6 +44,10 @@
           </Border>
         </Grid>
 
+        <Button Name="TryLightsButton" Classes="InspectorRow" Content="Try the lights" IsVisible="{Binding HasLeds}"
+                Command="{Binding TryLightsCommand}"
+                ToolTip.Tip="Flashes the light's pins from this draft, saved or not. Pins the saved setup uses for something else light up only after saving."/>
+
         <Grid Name="BusRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding IsScreen}">
           <TextBlock Name="BusLabel" Classes="RowLabel" Text="Bus"/>
           <ComboBox Name="BusBox" Grid.Column="1" Classes="RowControl"

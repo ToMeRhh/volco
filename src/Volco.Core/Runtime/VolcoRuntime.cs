@@ -411,6 +411,228 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         }
     }
 
+    // ── Firmware helpers: Detect, Find screens, Try the lights ───────────────────────────────
+
+    private readonly object _watchGate = new();
+    private PinWatchRole _watchRole;     // guarded by _watchGate; Stop = no watch
+    private int _watchGeneration;        // guarded by _watchGate; the current watch's
+    private ITimer? _watchTimer;         // guarded by _watchGate
+
+    /// <summary>A watched pin moved: its number, from a PinActivity of the current connection. Any
+    /// thread (the transport's).</summary>
+    public event EventHandler<int>? PinActivity;
+
+    /// <summary>A pin watch is on: as in a test, Slider and Button messages raise only
+    /// <see cref="RawInput"/> and reach neither audio nor actions (moving a control to find its pin
+    /// changes nothing).</summary>
+    public bool IsWatchingPins { get { lock (_watchGate) return _watchRole != PinWatchRole.Stop; } }
+
+    /// <summary>Starts watching the controller's pins for <paramref name="role"/> (Analog or Button).
+    /// One watch at a time: a new one replaces the old. Sent now, every
+    /// <see cref="VolcoRuntimeOptions.PinWatchRenewal"/> and after each Hello of the current session;
+    /// disposing the handle sends Stop (only if it is still the current watch; idempotent).</summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="role"/> is Stop.</exception>
+    public IDisposable StartPinWatch(PinWatchRole role)
+    {
+        if (role == PinWatchRole.Stop) throw new ArgumentOutOfRangeException(nameof(role), "Dispose the watch to stop it.");
+        int generation;
+        bool started;
+        lock (_watchGate)
+        {
+            if (IsDisposed) return new PinWatchHandle(this, -1);
+            started = _watchRole == PinWatchRole.Stop;
+            generation = ++_watchGeneration;
+            _watchRole = role;
+            _watchTimer?.Dispose();
+            _watchTimer = _options.Time.CreateTimer(_ => RenewPinWatch(generation), null,
+                _options.PinWatchRenewal, _options.PinWatchRenewal);
+            // Sent under the gate, so a renewal or a Hello's resend can't land after a later Stop.
+            _link.SendRaw(ProtocolEncoder.EncodePinWatch(role));
+        }
+        AppLog.Info($"Pin watch: {role}");
+        if (started)
+        {
+            _buttonPressDetector?.Reset();   // a gesture started before the watch can't fire during it
+            _sliderProcessor?.DropPending();  // nor a slider value queued just before it
+        }
+        return new PinWatchHandle(this, generation);
+    }
+
+    private void RenewPinWatch(int generation)
+    {
+        lock (_watchGate)
+        {
+            if (IsDisposed || generation != _watchGeneration || _watchRole == PinWatchRole.Stop) return;
+            _link.SendRaw(ProtocolEncoder.EncodePinWatch(_watchRole));
+        }
+    }
+
+    /// <summary>After a Hello this app speaks: the controller may have rebooted, so the watch goes again.</summary>
+    private void ResendPinWatch()
+    {
+        lock (_watchGate)
+        {
+            if (IsDisposed || _watchRole == PinWatchRole.Stop) return;
+            _link.SendRaw(ProtocolEncoder.EncodePinWatch(_watchRole));
+        }
+    }
+
+    /// <summary>Ends the watch (only <paramref name="generation"/>'s; -1 for any) and sends Stop.</summary>
+    private void StopPinWatch(int generation)
+    {
+        PinWatchRole role;
+        lock (_watchGate)
+        {
+            if (_watchRole == PinWatchRole.Stop || (generation != -1 && generation != _watchGeneration)) return;
+            role = _watchRole;
+            _watchRole = PinWatchRole.Stop;
+            _watchTimer?.Dispose();
+            _watchTimer = null;
+            _link.SendRaw(ProtocolEncoder.EncodePinWatch(PinWatchRole.Stop));
+        }
+        AppLog.Info($"Pin watch: {role} stopped");
+        _buttonPressDetector?.Reset();   // a button held across the end fires nothing
+    }
+
+    private sealed class PinWatchHandle(VolcoRuntime runtime, int generation) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (generation < 0 || Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            runtime.StopPinWatch(generation);
+        }
+    }
+
+    /// <summary>A scan waiting for its result.</summary>
+    private sealed class PendingScan(int sda, int scl)
+    {
+        public int Sda { get; } = sda;
+        public int Scl { get; } = scl;
+        public TaskCompletionSource<IReadOnlyList<int>?> Result { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ITimer? Timer { get; set; }
+        public CancellationTokenRegistration Registration { get; set; }
+    }
+
+    private readonly object _scanGate = new();
+    private readonly List<PendingScan> _scans = new();   // guarded by _scanGate
+
+    /// <summary>Scans the I2C bus on <paramref name="sda"/>/<paramref name="scl"/> (firmware helpers,
+    /// Find screens). The addresses that answered (0x08-0x77; empty for a refused pair), or null: no
+    /// connection, no result within <see cref="VolcoRuntimeOptions.I2cScanTimeout"/> (e.g. a firmware
+    /// without the helpers), or the runtime was disposed. Cancelling <paramref name="ct"/> cancels the
+    /// task. Results are matched by the pins, so two scans of the same pins share the first result.</summary>
+    public Task<IReadOnlyList<int>?> ScanI2cAsync(int sda, int scl, CancellationToken ct = default)
+    {
+        if (sda is < 0 or > byte.MaxValue || scl is < 0 or > byte.MaxValue)
+            return Task.FromResult<IReadOnlyList<int>?>(null);
+        if (ct.IsCancellationRequested) return Task.FromCanceled<IReadOnlyList<int>?>(ct);
+
+        var scan = new PendingScan(sda, scl);
+        lock (_scanGate)
+        {
+            if (IsDisposed) return Task.FromResult<IReadOnlyList<int>?>(null);
+            _scans.Add(scan);
+            scan.Timer = _options.Time.CreateTimer(_ =>
+            {
+                if (FinishScan(scan)) AppLog.Info($"I2C scan of SDA {sda}, SCL {scl}: no answer");
+            }, null, _options.I2cScanTimeout, Timeout.InfiniteTimeSpan);
+        }
+        if (ct.CanBeCanceled)
+            scan.Registration = ct.Register(() => { if (FinishScan(scan, complete: false)) scan.Result.TrySetCanceled(ct); });
+        if (_link.SendRaw(ProtocolEncoder.EncodeI2cScan(sda, scl))) AppLog.Info($"I2C scan of SDA {sda}, SCL {scl}");
+        else FinishScan(scan);   // no connection
+        return scan.Result.Task;
+    }
+
+    /// <summary>Takes a scan out of the pending list and stops its timer. False when it was already
+    /// finished. Completes it with null unless the caller completes it otherwise.</summary>
+    private bool FinishScan(PendingScan scan, IReadOnlyList<int>? addresses = null, bool complete = true)
+    {
+        lock (_scanGate)
+        {
+            if (!_scans.Remove(scan)) return false;
+            scan.Timer?.Dispose();
+        }
+        scan.Registration.Unregister();
+        if (complete) scan.Result.TrySetResult(addresses);
+        return true;
+    }
+
+    private void OnI2cScanResult(I2cScanResultMessage message)
+    {
+        PendingScan[] matching;
+        lock (_scanGate) matching = _scans.Where(s => s.Sda == message.Sda && s.Scl == message.Scl).ToArray();
+        AppLog.Info($"I2C scan of SDA {message.Sda}, SCL {message.Scl}: " +
+                    (message.Addresses.Count == 0 ? "nothing" : string.Join(", ", message.Addresses.Select(a => $"0x{a:X2}"))));
+        foreach (var scan in matching) FinishScan(scan, message.Addresses);
+    }
+
+    /// <summary>Drives a pin high or low for <paramref name="duration"/> (up to 65535 ms), after which
+    /// the controller restores it (firmware helpers, Try the lights). The controller ignores a pin it
+    /// may not drive. False when no connection is attached.</summary>
+    public bool DrivePin(int pin, bool high, TimeSpan duration)
+    {
+        if (IsDisposed || pin is < 0 or > byte.MaxValue) return false;
+        var ms = (ushort)Math.Clamp(duration.TotalMilliseconds, 0, ushort.MaxValue);
+        return _link.SendRaw(ProtocolEncoder.EncodePinDrive(pin, high, ms));
+    }
+
+    private readonly object _lightGate = new();
+    private int _lightGeneration;                    // guarded by _lightGate
+    private readonly List<ITimer> _lightTimers = new();   // guarded by _lightGate
+
+    /// <summary>Plays <paramref name="steps"/> (<see cref="LightTry.Steps"/>) on the controller as
+    /// PinDrives, each at its <see cref="LightStep.At"/> (timers on <see cref="VolcoRuntimeOptions.Time"/>).
+    /// A new call cancels the steps of the last one not yet sent.</summary>
+    public void TryLights(IReadOnlyList<LightStep> steps)
+    {
+        lock (_lightGate)
+        {
+            if (IsDisposed) return;
+            int generation = ++_lightGeneration;
+            CancelLightTimers();
+            foreach (var step in steps)
+            {
+                if (step.At <= TimeSpan.Zero) DrivePin(step.Pin, step.High, step.Duration);
+                else _lightTimers.Add(_options.Time.CreateTimer(_ => PlayLightStep(generation, step), null,
+                    step.At, Timeout.InfiniteTimeSpan));
+            }
+        }
+    }
+
+    private void PlayLightStep(int generation, LightStep step)
+    {
+        lock (_lightGate)
+        {
+            if (IsDisposed || generation != _lightGeneration) return;
+            DrivePin(step.Pin, step.High, step.Duration);
+        }
+    }
+
+    /// <summary>Caller holds _lightGate.</summary>
+    private void CancelLightTimers()
+    {
+        foreach (var timer in _lightTimers) timer.Dispose();
+        _lightTimers.Clear();
+    }
+
+    /// <summary>On dispose, before the link goes: stops the watch (its Stop still sent), completes every
+    /// pending scan with null and drops the light steps not yet sent.</summary>
+    private void StopPinHelpers()
+    {
+        StopPinWatch(-1);
+        PendingScan[] scans;
+        lock (_scanGate) scans = _scans.ToArray();
+        foreach (var scan in scans) FinishScan(scan);
+        lock (_lightGate)
+        {
+            _lightGeneration++;
+            CancelLightTimers();
+        }
+    }
+
     /// <summary>The test state of every button, from its presses so far (<see cref="TestMode"/>).</summary>
     private IReadOnlyList<ButtonDisplay?> TestDisplays()
     {
@@ -1062,8 +1284,19 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                     AppLog.Info($"Hello: v{hello.Version}, {hello.Chip}, firmware '{hello.FirmwareVersion}', config {hello.ConfigState} " +
                                 $"crc {hello.ConfigCrc:X8}, {hello.SliderCount} sliders, buttons [{string.Join(",", hello.Buttons)}]");
                     HelloReceived?.Invoke(this, hello);
-                    if (hello.Version == ProtocolVersion.Current) QueryCalibrations(hello.SliderCount);
+                    if (hello.Version == ProtocolVersion.Current)
+                    {
+                        QueryCalibrations(hello.SliderCount);
+                        ResendPinWatch();
+                    }
                 }
+                break;
+            case PinActivityMessage activity:
+                // Same stale-sender filter as Hello.
+                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) PinActivity?.Invoke(this, activity.Pin);
+                break;
+            case I2cScanResultMessage scan:
+                if (ReferenceEquals(sender, Volatile.Read(ref _connection))) OnI2cScanResult(scan);
                 break;
             case CalibrationMessage calibration:
                 // Same stale-sender filter as Hello.
@@ -1076,9 +1309,10 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             case SliderMessage slider:
                 // Every slider and button raises raw input (hardware-page spec §12.1); in a test
                 // (spec §8.5) that is all: nothing reaches the slider processor or the detector.
-                // A slider held for a calibration sweep (slider-calibration spec) likewise.
+                // A slider held for a calibration sweep (slider-calibration spec) and a pin watch
+                // (hardware-page spec §9.1) likewise.
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Slider, slider.SliderIndex, slider.Value));
-                if (InTestMode || IsSliderHeld(slider.SliderIndex)) break;
+                if (InTestMode || IsWatchingPins || IsSliderHeld(slider.SliderIndex)) break;
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
                 _sliderProcessor?.HandleSliderEvent(slider.SliderIndex, slider.Value);
                 break;
@@ -1090,6 +1324,10 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, testButton.ButtonIndex, pressed ? 1 : 0, presses));
                 break;
             }
+            case ButtonMessage watched when IsWatchingPins:
+                RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, watched.ButtonIndex,
+                                                             watched.State == ButtonState.Pressed ? 1 : 0));
+                break;
             case ButtonMessage button:
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, button.ButtonIndex,
                                                              button.State == ButtonState.Pressed ? 1 : 0));
@@ -1116,7 +1354,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
 
     private void OnButtonPressDetected(object? sender, ButtonPressEventArgs e)
     {
-        if (IsDisposed || InTestMode) return;   // second guard (spec §8.5): no action during a test
+        if (IsDisposed || InTestMode || IsWatchingPins) return;   // second guard (spec §8.5): no action during a test or a watch
 
         AppLog.Info($"Button press detected: Index={e.ButtonIndex}, Type={e.PressType}");
         var config = Config.Config;
@@ -1648,6 +1886,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         // that the test is over.
         if (wasTesting) InTestModeChanged?.Invoke(this, false);
         ReleaseAllSliders(cancelSweeps: true);   // before the link goes, so the Cancel can still be sent
+        StopPinHelpers();                        // likewise, for the watch's Stop
         _link.Dispose();
 
         // Take ownership of the current transport (see _connection): a concurrent restart that

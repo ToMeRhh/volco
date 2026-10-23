@@ -24,6 +24,23 @@ public enum MessageType : byte
     ConfigWriteEnd = 0x8A,
     Calibration = 0x09,
     Calibrate = 0x8E,
+    PinActivity = 0x07,
+    I2cScanResult = 0x08,
+    PinWatch = 0x8B,
+    I2cScan = 0x8C,
+    PinDrive = 0x8D,
+}
+
+/// <summary>What a PinWatch asks the controller to sample (firmware helpers, Detect). The controller
+/// stops on its own 30 s after the last PinWatch.</summary>
+public enum PinWatchRole : byte
+{
+    /// <summary>Stops the watch.</summary>
+    Stop = 0,
+    /// <summary>Free ADC pins and the configured slider pins.</summary>
+    Analog = 1,
+    /// <summary>Free pins (with the pull-up on) and the configured button pins.</summary>
+    Button = 2,
 }
 
 /// <summary>What a Calibrate asks of the controller (slider-calibration spec, Wire). Every one is
@@ -177,6 +194,22 @@ public sealed class CalibrationMessage(int sliderIndex, bool learned, bool sweep
     public bool AutoCalibrate { get; } = autoCalibrate;
     public ushort Low { get; } = low;
     public ushort High { get; } = high;
+}
+
+/// <summary>A watched pin moved (firmware helpers, Detect): at most one per pin per 250 ms.</summary>
+public sealed class PinActivityMessage(int pin) : ControllerMessage(MessageType.PinActivity)
+{
+    public int Pin { get; } = pin;
+}
+
+/// <summary>The answer to an I2cScan (firmware helpers, Find screens): the 7-bit addresses (0x08-0x77)
+/// that answered on <see cref="Sda"/>/<see cref="Scl"/>. A refused pair answers with none.</summary>
+public sealed class I2cScanResultMessage(int sda, int scl, IReadOnlyList<int> addresses)
+    : ControllerMessage(MessageType.I2cScanResult)
+{
+    public int Sda { get; } = sda;
+    public int Scl { get; } = scl;
+    public IReadOnlyList<int> Addresses { get; } = addresses;
 }
 
 /// <summary>The controller's keepalive: sent when it has sent nothing else for a second.</summary>

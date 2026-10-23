@@ -59,6 +59,24 @@ public static class ProtocolEncoder
     public static byte[] EncodeCalibrate(int index, CalibrateAction action)
         => BuildFrame(new[] { (byte)MessageType.Calibrate, (byte)index, (byte)action });
 
+    /// <summary>Starts, renews or stops a pin watch (firmware helpers, Detect); the controller answers
+    /// with a PinActivity for each pin that moves.</summary>
+    public static byte[] EncodePinWatch(PinWatchRole role)
+        => BuildFrame(new[] { (byte)MessageType.PinWatch, (byte)role });
+
+    /// <summary>Scans an I2C bus on these pins (firmware helpers, Find screens); the controller answers
+    /// with an I2cScanResult for the same pins.</summary>
+    public static byte[] EncodeI2cScan(int sda, int scl)
+        => BuildFrame(new[] { (byte)MessageType.I2cScan, (byte)sda, (byte)scl });
+
+    /// <summary>Drives a pin high or low for a while, then restores it (firmware helpers, Try the
+    /// lights). The controller ignores a pin it may not drive.</summary>
+    public static byte[] EncodePinDrive(int pin, bool high, ushort durationMs)
+        => BuildFrame(new[]
+        {
+            (byte)MessageType.PinDrive, (byte)pin, high ? (byte)1 : (byte)0, (byte)(durationMs >> 8), (byte)durationMs,
+        });
+
     /// <summary>LED: lit when value ≠ 0. LED pair: 1 lights A, 2 lights B, anything else neither.</summary>
     public static byte[] EncodeLed(int button, byte value)
         => BuildFrame(new[] { (byte)MessageType.Led, (byte)button, value });
@@ -117,6 +135,16 @@ public static class ProtocolEncoder
             (byte)((learned ? 1 : 0) | (sweeping ? 2 : 0) | (autoCalibrate ? 4 : 0)),
             (byte)(low >> 8), (byte)low, (byte)(high >> 8), (byte)high,
         });
+
+    public static byte[] EncodePinActivity(int pin)
+        => BuildFrame(new[] { (byte)MessageType.PinActivity, (byte)pin });
+
+    public static byte[] EncodeI2cScanResult(int sda, int scl, IReadOnlyList<int> addresses)
+    {
+        var body = new List<byte> { (byte)MessageType.I2cScanResult, (byte)sda, (byte)scl, (byte)addresses.Count };
+        body.AddRange(addresses.Select(a => (byte)a));
+        return BuildFrame(body.ToArray());
+    }
 
     private static void AppendText(List<byte> body, string text)
     {

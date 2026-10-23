@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using Volco.App.ViewModels;
 using Volco.App.ViewModels.Hardware;
 using Volco.Core.Communication;
@@ -60,27 +61,19 @@ public sealed class PinFieldViewModelTests : IDisposable
     }
 
     [Fact]
-    public void QueryFiltersByNumberAndNote()
+    public void CellsPutEachPinInItsPlace_EightToARow()
     {
         var rig = new Rig(new ControllerConfig(), PinRole.ButtonInput, Button1);
         rig.Field.Open();
-        rig.Field.Query = "3";
-        var expected = Enumerable.Range(0, 64).Select(p => (uint)p).Where(p => Chip.Exists(p) && p.ToString().Contains('3'));
-        Assert.Equal(expected, rig.Field.Rows.Select(r => r.Pin));
-        Assert.Contains(3u, rig.Field.Rows.Select(r => r.Pin));
-        Assert.Contains(13u, rig.Field.Rows.Select(r => r.Pin));
-        Assert.Contains(39u, rig.Field.Rows.Select(r => r.Pin));
-        Assert.Equal(new[] { 5 }, rig.Field.Rows.Single(r => r.Pin == 3).Matches);
-
-        var diy = new Rig(Diy(), PinRole.ButtonInput, new PinOwner(PinOwnerKind.Button, 3));
-        diy.Field.Open();
-        diy.Field.Query = "slider";
-        Assert.NotEmpty(diy.Field.Rows);
-        Assert.All(diy.Field.Rows, r => Assert.StartsWith("Slider", r.Note));
-        Assert.Equal(new uint[] { 32, 33, 34, 35, 36 }, diy.Field.Rows.Select(r => r.Pin));
-
-        diy.Field.Query = "";
-        Assert.Equal(Enumerable.Range(0, 64).Count(p => Chip.Exists((uint)p)), diy.Field.Rows.Count);
+        var cells = rig.Field.Cells;
+        Assert.Equal(40, cells.Count);   // GPIO 0-39, five rows of eight
+        for (uint pin = 0; pin < 40; pin++)
+        {
+            if (Chip.Exists(pin)) Assert.Equal(pin, Assert.IsType<PinRowViewModel>(cells[(int)pin]).Pin);
+            else Assert.IsType<PinGap>(cells[(int)pin]);   // 20, 24, 28-31
+        }
+        Assert.Equal(rig.Field.Rows, cells.OfType<PinRowViewModel>());
+        Assert.Equal("Button 1 pin", rig.Field.Title);
     }
 
     [Fact]
@@ -95,7 +88,7 @@ public sealed class PinFieldViewModelTests : IDisposable
     }
 
     [Fact]
-    public void MoveSkipsUnusableRows()
+    public void MoveSkipsUnusablePins_AlongARowAndAColumn()
     {
         var rig = new Rig(new ControllerConfig(), PinRole.ButtonInput, Button1, value: 5);
         rig.Field.Open();
@@ -104,7 +97,16 @@ public sealed class PinFieldViewModelTests : IDisposable
         Assert.Equal(12u, rig.Field.Highlighted!.Pin);
         rig.Field.Move(-1);
         Assert.Equal(5u, rig.Field.Highlighted!.Pin);
-        Assert.True(rig.Field.Rows.Single(r => r.Pin == 5).IsHighlighted);
+        rig.Field.Move(+PinFieldViewModel.Columns);   // the pin under it
+        Assert.Equal(13u, rig.Field.Highlighted!.Pin);
+        rig.Field.Move(+PinFieldViewModel.Columns);
+        Assert.Equal(21u, rig.Field.Highlighted!.Pin);
+        rig.Field.Move(+PinFieldViewModel.Columns);   // 29 doesn't exist: on to 37
+        Assert.Equal(37u, rig.Field.Highlighted!.Pin);
+        rig.Field.Move(+PinFieldViewModel.Columns);   // nothing below: stays
+        Assert.Equal(37u, rig.Field.Highlighted!.Pin);
+        Assert.True(rig.Field.Rows.Single(r => r.Pin == 37).IsHighlighted);
+        Assert.False(rig.Field.Rows.Single(r => r.Pin == 5).IsHighlighted);
     }
 
     [Fact]
@@ -121,16 +123,17 @@ public sealed class PinFieldViewModelTests : IDisposable
     }
 
     [Fact]
-    public void EnterPicksTheHighlightedRow()
+    public void EnterPicksTheHighlightedPin()
     {
         var rig = new Rig(new ControllerConfig(), PinRole.SliderInput, Slider1);
         rig.Field.Open();
-        rig.Field.Query = "36";
-        Assert.Equal(36u, rig.Field.Highlighted!.Pin);
+        Assert.Equal(0u, rig.Field.Highlighted!.Pin);   // nothing set: the first pin a slider can use
+        rig.Field.Move(+1);   // 1 is USB serial
+        Assert.Equal(2u, rig.Field.Highlighted!.Pin);
         rig.Field.Commit();
-        Assert.Equal(new uint?[] { 36 }, rig.Sets);
+        Assert.Equal(new uint?[] { 2 }, rig.Sets);
         Assert.False(rig.Field.IsOpen);
-        Assert.Equal("GPIO 36", rig.Field.ValueText);
+        Assert.Equal("GPIO 2", rig.Field.ValueText);
     }
 
     [Fact]
@@ -218,6 +221,141 @@ public sealed class PinFieldViewModelTests : IDisposable
         Assert.False(light.IsEditable);
         light.Open();
         Assert.False(light.IsOpen);
+    }
+
+    /// <summary>A field over <paramref name="role"/> whose watch func records the roles it was asked for and
+    /// how many of the watches it handed out were disposed.</summary>
+    private sealed class WatchRig
+    {
+        public readonly List<PinWatchRole> Started = new();
+        public int Disposed;
+        public readonly PinFieldViewModel Field;
+        public readonly FakeTimeProvider Time = new();
+
+        public WatchRig(PinRole role, PinOwner self, bool withWatch = true)
+        {
+            var draft = Diy();
+            Field = new PinFieldViewModel("Pin", role, self, () => draft, () => 33u, _ => { }, null,
+                                          withWatch ? r => { Started.Add(r); return new Stop(this); } : null, Time);
+        }
+
+        private sealed class Stop(WatchRig rig) : IDisposable
+        {
+            public void Dispose() => rig.Disposed++;
+        }
+    }
+
+    [Fact]
+    public void Open_SliderPin_StartsAnalogWatch_CloseStopsIt()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        Assert.Equal([PinWatchRole.Analog], rig.Started);
+        Assert.Equal(0, rig.Disposed);
+        rig.Field.Cancel();
+        Assert.Equal(1, rig.Disposed);
+
+        var buttons = new WatchRig(PinRole.ButtonInput, Button1);
+        buttons.Field.Open();
+        Assert.Equal([PinWatchRole.Button], buttons.Started);
+    }
+
+    [Fact]
+    public void NotEditable_StopsTheWatch()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        rig.Field.IsEditable = false;
+        Assert.False(rig.Field.IsOpen);
+        Assert.Equal(1, rig.Disposed);
+    }
+
+    [Fact]
+    public void LightPin_StartsNoWatch()
+    {
+        var rig = new WatchRig(PinRole.LightOutput, new PinOwner(PinOwnerKind.Light, 0));
+        rig.Field.Open();
+        Assert.Empty(rig.Started);
+    }
+
+    [Fact]
+    public void Activity_MarksThePinWithoutSelectingIt_NowThenBefore()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        Assert.Equal("Move a slider to see which pin it's on.", rig.Field.WatchHint);
+        var selected = rig.Field.Highlighted;
+        rig.Field.OnPinActivity(32);
+        var row = rig.Field.Rows.Single(r => r.Pin == 32);
+        Assert.Equal(PinActivityState.Now, row.Activity);
+        Assert.True(row.IsMovingNow);
+        Assert.Same(selected, rig.Field.Highlighted);   // marked, not selected
+        Assert.DoesNotContain(rig.Field.Rows, r => r.IsHighlighted && r.Pin == 32);
+
+        rig.Time.Advance(TimeSpan.FromMilliseconds(600));
+        rig.Field.OnPinActivity(32);                      // still moving: the hold starts again
+        rig.Time.Advance(TimeSpan.FromMilliseconds(600));
+        Assert.True(row.IsMovingNow);
+        rig.Time.Advance(PinFieldViewModel.ActivityHold);
+        Assert.Equal(PinActivityState.Before, row.Activity);
+        Assert.True(row.HasMoved);
+        Assert.False(row.IsMovingNow);
+
+        rig.Field.OnPinActivity(34);                      // another one: both stay marked
+        Assert.True(rig.Field.Rows.Single(r => r.Pin == 34).IsMovingNow);
+        Assert.True(row.HasMoved);
+        rig.Field.OnPinActivity(32);                      // moved again: now once more
+        Assert.True(row.IsMovingNow);
+
+        rig.Field.OnPinActivity(200);                     // a pin the chip doesn't list
+        Assert.Equal(2, rig.Field.Rows.Count(r => r.Activity != PinActivityState.None));
+
+        var buttons = new WatchRig(PinRole.ButtonInput, Button1);
+        buttons.Field.Open();
+        Assert.Equal("Press a button to see which pin it's on.", buttons.Field.WatchHint);
+        buttons.Field.OnPinActivity(4);
+        Assert.True(buttons.Field.Rows.Single(r => r.Pin == 4).IsMovingNow);
+    }
+
+    [Fact]
+    public void Activity_SurvivesARefresh_AndGoesWithTheDialog()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        rig.Field.OnPinActivity(32);
+        rig.Time.Advance(PinFieldViewModel.ActivityHold);
+        rig.Field.OnPinActivity(34);
+        rig.Field.Refresh();
+        Assert.True(rig.Field.Rows.Single(r => r.Pin == 32).HasMoved);
+        Assert.True(rig.Field.Rows.Single(r => r.Pin == 34).IsMovingNow);
+
+        rig.Field.Cancel();
+        rig.Time.Advance(PinFieldViewModel.ActivityHold);   // the hold of a closed dialog does nothing
+        rig.Field.Open();
+        Assert.All(rig.Field.Rows, r => Assert.Equal(PinActivityState.None, r.Activity));
+    }
+
+    [Fact]
+    public void Activity_WhenClosed_IsIgnored()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.OnPinActivity(33);
+        rig.Field.Open();
+        rig.Field.Cancel();
+        rig.Field.OnPinActivity(33);
+        Assert.Empty(rig.Field.Rows);
+        Assert.Null(rig.Field.Highlighted);
+        Assert.Null(rig.Field.WatchHint);
+    }
+
+    [Fact]
+    public void NoWatchFunc_NothingLights()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1, withWatch: false);
+        rig.Field.Open();
+        rig.Field.OnPinActivity(32);
+        Assert.DoesNotContain(rig.Field.Rows, r => r.Activity != PinActivityState.None);
+        Assert.Null(rig.Field.WatchHint);
     }
 
     [Fact]

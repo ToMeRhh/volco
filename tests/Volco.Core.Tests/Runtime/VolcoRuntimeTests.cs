@@ -850,6 +850,36 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void PinWatch_SliderAndButtonMessages_RaiseRawInput_AndReachNothingElse()
+    {
+        var runtime = StartRuntime();
+        var c = Connection(0);
+        ConnectAndGreet(c);
+        var raw = new ConcurrentQueue<RawInputEventArgs>();
+        runtime.RawInput += (_, e) => raw.Enqueue(e);
+        var activity = 0;
+        runtime.ButtonActivity += (_, _) => activity++;
+
+        using (runtime.StartPinWatch(PinWatchRole.Button))
+        {
+            Assert.True(runtime.IsWatchingPins);
+            c.RaiseMessage(new SliderMessage(2, 1234));
+            Press(c, 0);
+            Thread.Sleep(100);
+        }
+
+        Assert.False(runtime.IsWatchingPins);
+        Assert.Equal(new[] { (RawInputKind.Slider, 2, 1234), (RawInputKind.Button, 0, 1), (RawInputKind.Button, 0, 0) },
+                     raw.Select(e => (e.Kind, e.Index, e.Value)).ToArray());
+        Assert.Empty(Snapshot(_engine.DeviceVolumeCalls));
+        Assert.Empty(Snapshot(_engine.ToggleMuteCalls));
+        Assert.Equal(0, activity);
+
+        Press(c, 0);   // after the watch, input works again
+        Assert.True(WaitUntil(() => Snapshot(_engine.ToggleMuteCalls).Count == 1));
+    }
+
+    [Fact]
     public void RawInputIsRaisedOutsideTestMode_AndInputStillWorks()
     {
         var runtime = StartRuntime();

@@ -167,6 +167,27 @@ size_t encodeCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi,
   return encodeFrame(p, sizeof p, out);
 }
 
+size_t encodePinActivity(uint8_t pin, uint8_t* out) {
+  const uint8_t p[] = {MSG_PIN_ACTIVITY, pin};
+  return encodeFrame(p, sizeof p, out);
+}
+
+static size_t buildI2cScanResult(uint8_t sda, uint8_t scl, uint8_t count, const uint8_t* addresses, uint8_t* p) {
+  if (count > kMaxScanAddresses) count = kMaxScanAddresses;
+  size_t n = 0;
+  p[n++] = MSG_I2C_SCAN_RESULT;
+  p[n++] = sda;
+  p[n++] = scl;
+  p[n++] = count;
+  for (uint8_t i = 0; i < count; i++) p[n++] = addresses[i];
+  return n;
+}
+
+size_t encodeI2cScanResult(uint8_t sda, uint8_t scl, uint8_t count, const uint8_t* addresses, uint8_t* out) {
+  uint8_t p[4 + kMaxScanAddresses];
+  return encodeFrame(p, buildI2cScanResult(sda, scl, count, addresses, p), out);
+}
+
 Link::Link(const LinkConfig& config, LinkSink& sink) : config_(config), sink_(sink) {
   if (config_.buttons > kMaxButtons) config_.buttons = kMaxButtons;
 }
@@ -247,6 +268,15 @@ void Link::onPayload(const uint8_t* p, uint8_t len, uint32_t now, uint8_t transp
     case MSG_CALIBRATE:
       if (len == 3) sink_.calibrate(p[1], p[2], now);
       break;
+    case MSG_PIN_WATCH:
+      if (len == 2) sink_.pinWatch(p[1], now);
+      break;
+    case MSG_I2C_SCAN:
+      if (len == 3) sink_.i2cScan(p[1], p[2], now);
+      break;
+    case MSG_PIN_DRIVE:
+      if (len == 5) sink_.pinDrive(p[1], p[2], (uint16_t)(p[3] << 8 | p[4]), now);
+      break;
     default:
       break;  // Heartbeat (its arrival is the point) and unknown types
   }
@@ -307,6 +337,16 @@ void Link::sendButton(uint8_t index, bool pressed, uint32_t now) {
 void Link::sendCalibration(uint8_t index, uint8_t flags, uint16_t lo, uint16_t hi, uint32_t now) {
   const uint8_t p[] = {MSG_CALIBRATION, index, flags, (uint8_t)(lo >> 8), (uint8_t)lo, (uint8_t)(hi >> 8), (uint8_t)hi};
   sendFrame(p, sizeof p, now);
+}
+
+void Link::sendPinActivity(uint8_t pin, uint32_t now) {
+  const uint8_t p[] = {MSG_PIN_ACTIVITY, pin};
+  sendFrame(p, sizeof p, now);
+}
+
+void Link::sendI2cScanResult(uint8_t sda, uint8_t scl, uint8_t count, const uint8_t* addresses, uint32_t now) {
+  uint8_t p[4 + kMaxScanAddresses];
+  sendFrame(p, buildI2cScanResult(sda, scl, count, addresses, p), now);
 }
 
 }  // namespace volco
