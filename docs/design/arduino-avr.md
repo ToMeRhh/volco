@@ -56,7 +56,7 @@ Per chip:
   ADC-capable = (adc1 ∪ adc2) ∩ usable.
 - `labels`: the pin's name in the UI (`GPIO 4`; `D2`, `A0`), and optional `notes` (`Nano only`).
 - `limits`: `sliders`, `buttons`, `blob` (maximum config bytes), `chunk` (config chunk bytes).
-- `features`: `screens`, `wifi`.
+- `features`: `screens`, `wifi`, `detect` (the firmware runs the pin watch, §6.7).
 
 | | ESP32 | Arduino Uno / Nano |
 |---|---|---|
@@ -67,6 +67,7 @@ Per chip:
 | sliders / buttons | 16 / 32 | 8 / 16 |
 | blob / chunk | 1024 / 240 | 384 / 96 |
 | screens / Wi-Fi | yes / yes | no / no |
+| Detect | yes | no (until a watch fits the budget, §6.7) |
 
 A full AVR config (8 sliders, 16 buttons with LED pairs, input tuning, a preset name) is about
 280 bytes. The pin numbers are the Arduino core's (`A0` = 14 … `A7` = 21), which is what the AVR
@@ -173,6 +174,22 @@ The `avr328` build must use at most 1,536 bytes of static RAM (leaving 512 for t
 30,720 bytes of flash (fits the old 2 KB bootloader). CI fails the build above either; a post
 script reads `avr-size`.
 
+### 6.7 Firmware helpers (issue #120)
+
+The helpers (hardware-page spec §9: PinWatch for Detect, I2cScan for Find screens, PinDrive for
+Try the lights) were built for the classic ESP32 and must follow the chip:
+
+- `PinWatch` keeps per-pin state for a fixed 40 pins (`kPins`, GPIO 0–39). It is sized from the
+  chip instead (its highest pin + 1), so an ESP32 variant with more pins (the S3 goes to GPIO 48)
+  only needs its `chips.json` entry. The pin masks are already 64-bit on both sides.
+- Which pins a watch samples already comes from the chip's sets (ADC1/ADC2, input-only), not from
+  pin numbers; an `analogOnly` pin joins only an analog watch.
+- AVR: the ESP32 watch keeps about 36 bytes per pin with floats (~700 bytes for 20 pins), too much
+  for the 1,536-byte RAM budget. The `avr328` firmware ships without PinWatch (`detect: false`); a
+  fixed-point watch with a few bytes per pin is a follow-up. I2cScan is not built (no screens).
+  PinDrive is kept: Try the lights works on AVR.
+- A command for a helper the firmware lacks is ignored, as an older firmware does today.
+
 ## 7. Flashing
 
 ### 7.1 `Stk500Flasher` (`Volco.Core/Firmware/`)
@@ -243,6 +260,11 @@ presets, and offers "apply the saved one" only when the mirror validates for tha
 
 - The board line shows the chip's `name`.
 - Pin pickers show the chip's labels and notes; analog-only pins appear only in slider pickers.
+  The pin dialog (#120) lays out the chip's pins by number, eight to a row, labelled `D2`, `A0`;
+  `PinFieldViewModel` and `ControllerViewModel` take the connected chip's `ChipInfo` instead of
+  `ChipInfo.Esp32`.
+- Without `detect`: the pin dialog has no watch hint and starts no watch. Without `screens`: no
+  Find screens (it lives in the I2C buses dialog, which is gone too).
 - On a chip without screens: no Screen indicator choice, no I2C rows, no screen behaviour, no bus
   clocks. Without Wi-Fi: no Wi-Fi section.
 - "Add slider" / "Add button" are disabled at the limit, with "Arduino Uno / Nano supports up to
@@ -293,17 +315,21 @@ cover both.
    ESP32 hardware feel test.
 2. **Chip-aware contract:** AVR entry in `chips.json`; `ChipFamily.ArduinoAvr`; limits, fields 17
    and 18, digital/analog-only rules; per-chip golden vectors; chunk size by chip; callers pass the
-   connected chip. No hardware needed.
+   connected chip (including the pin dialog's, from #120); `PinWatch` sized from the chip (§6.7).
+   No hardware needed.
 3. **AVR firmware:** `avr328` environment, EEPROM store, decoder/validator, main loop, budgets in
    CI, tool USB IDs. Boards flashed with `pio run -e avr328 -t upload`, checked with
    `hello_check.py` and `config_tool.py`.
 4. **In-app flashing:** `Stk500Flasher`, flasher list, catalog and manifest by chip, embedding both
    images, release zip and relink bundle.
-5. **UI, presets, simulator, docs:** the Hardware page, `deej-nano.json` and the setup dialog, the
+5. **UI, presets, simulator, docs:** the Hardware page (pin labels in the pin dialog, Detect and
+   Find screens hidden by feature), `deej-nano.json` and the setup dialog, the
    simulator's board choice, `CLAUDE.md` and `firmware/README.md`.
 
 ## 11. Out of scope
 
+- Other ESP32 variants (S3, C3, mini boards with another chip): with §6.7 each is a `chips.json`
+  entry (pins, ADC sets, reserved pins, labels), a Hello chip id and a firmware build; separate work.
 - Other AVR boards (Mega, Leonardo/Pro Micro with native USB), the Nano Every, the Nano ESP32.
 - Screens or Wi-Fi on the 328P.
 - Telling a Uno from a Nano.
