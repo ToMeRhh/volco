@@ -240,7 +240,7 @@ public sealed class StatusLevelsTests : IDisposable
         var items = menu.Items.Select(i => i is MenuItem m ? (string)m.Header! : "―").ToArray();
         Assert.Equal(new[]
         {
-            "Connection…", "Reconnect", "Disconnect", "―", "Check firmware", "Reinstall firmware…", "―",
+            "Connection…", "Reconnect", "Disconnect", "―", "Check firmware", "Update firmware", "Reinstall firmware…", "―",
             "Load a preset…", "Start over…",
         }, items);
         menu.Hide();
