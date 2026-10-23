@@ -31,3 +31,11 @@ calibrate_2_start AA 03 8E 02 01 8D
 calibrate_0_query AA 03 8E 00 00 8E
 calibration_1_learned_auto AA 07 09 01 05 00 AA 09 F6 58
 calibration_0_raw_sweeping AA 07 09 00 02 0F FF 00 00 FB
+pin_watch_analog AA 02 8B 01 8A
+pin_watch_button AA 02 8B 02 89
+pin_watch_stop AA 02 8B 00 8B
+pin_activity_33 AA 02 07 21 26
+i2c_scan_25_26 AA 03 8C 19 1A 8F
+i2c_scan_result_25_26_two AA 06 08 19 1A 02 3C 3D 08
+i2c_scan_result_25_26_none AA 04 08 19 1A 00 0B
+pin_drive_12_high_300 AA 05 8D 0C 01 01 2C AD

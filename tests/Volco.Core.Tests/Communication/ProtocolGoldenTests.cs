@@ -156,12 +156,52 @@ public class ProtocolGoldenTests
     }
 
     [Fact]
+    public void PinHelperFrames_EncodeToTheGoldenBytes()
+    {
+        Assert.Equal(Golden["pin_watch_analog"], ProtocolEncoder.EncodePinWatch(PinWatchRole.Analog));
+        Assert.Equal(Golden["pin_watch_button"], ProtocolEncoder.EncodePinWatch(PinWatchRole.Button));
+        Assert.Equal(Golden["pin_watch_stop"], ProtocolEncoder.EncodePinWatch(PinWatchRole.Stop));
+        Assert.Equal(Golden["pin_activity_33"], ProtocolEncoder.EncodePinActivity(33));
+        Assert.Equal(Golden["i2c_scan_25_26"], ProtocolEncoder.EncodeI2cScan(25, 26));
+        Assert.Equal(Golden["i2c_scan_result_25_26_two"], ProtocolEncoder.EncodeI2cScanResult(25, 26, new[] { 0x3C, 0x3D }));
+        Assert.Equal(Golden["i2c_scan_result_25_26_none"], ProtocolEncoder.EncodeI2cScanResult(25, 26, Array.Empty<int>()));
+        Assert.Equal(Golden["pin_drive_12_high_300"], ProtocolEncoder.EncodePinDrive(12, high: true, 300));
+    }
+
+    [Fact]
+    public void PinHelperFrames_ParseFromTheGoldenBytes()
+    {
+        var activity = Assert.IsType<PinActivityMessage>(Assert.Single(Parse(Golden["pin_activity_33"])));
+        Assert.Equal(33, activity.Pin);
+
+        var two = Assert.IsType<I2cScanResultMessage>(Assert.Single(Parse(Golden["i2c_scan_result_25_26_two"])));
+        Assert.Equal((25, 26), (two.Sda, two.Scl));
+        Assert.Equal(new[] { 0x3C, 0x3D }, two.Addresses);
+
+        var none = Assert.IsType<I2cScanResultMessage>(Assert.Single(Parse(Golden["i2c_scan_result_25_26_none"])));
+        Assert.Equal((25, 26), (none.Sda, none.Scl));
+        Assert.Empty(none.Addresses);
+    }
+
+    [Fact]
+    public void I2cScanResult_ShorterThanItsCount_IsDropped()
+    {
+        // Count 3, but only two addresses.
+        byte[] body = { 0x08, 25, 26, 3, 0x3C, 0x3D };
+        byte cs = 0; foreach (var b in body) cs ^= b;
+        Assert.Empty(Parse(new byte[] { 0xAA, (byte)body.Length }.Concat(body).Append(cs).ToArray()));
+    }
+
+    [Fact]
     public void PcOnlyMessages_AreNotParsedAsControllerMessages()
     {
         Assert.Empty(Parse(Golden["heartbeat"]));
         Assert.Empty(Parse(Golden["screen_muted_mic"]));
         Assert.Empty(Parse(Golden["calibrate_2_start"]));
         Assert.Empty(Parse(Golden["calibrate_0_query"]));
+        Assert.Empty(Parse(Golden["pin_watch_analog"]));
+        Assert.Empty(Parse(Golden["i2c_scan_25_26"]));
+        Assert.Empty(Parse(Golden["pin_drive_12_high_300"]));
     }
 
     [Fact]

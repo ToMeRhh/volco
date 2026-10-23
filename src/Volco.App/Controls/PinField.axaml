@@ -38,11 +38,19 @@
     <Style Selector="Button.PinRow:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.PinRow.highlighted /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
     </Style>
+    <Style Selector="Button.PinRow.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    </Style>
     <Style Selector="Button.PinRow:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent"/>
     </Style>
     <Style Selector="Button.PinRow:disabled">
       <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+    <Style Selector="Button.PinRow TextBlock.PinActivity">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
     </Style>
     <Style Selector="Button.PinRow TextBlock.PinNote">
       <Setter Property="FontSize" Value="12"/>
@@ -74,12 +82,15 @@
               <ItemsControl Name="RowList" ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="hw:PinRowViewModel">
-                    <Button Name="PinRowButton" Classes="PinRow" Classes.highlighted="{Binding IsHighlighted}"
+                    <Button Name="PinRowButton" Classes="PinRow" Classes.highlighted="{Binding IsHighlighted}" Classes.active="{Binding IsActive}"
                             Classes.current="{Binding IsCurrent}" IsEnabled="{Binding IsPickable}" Click="Row_Click">
                       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <controls:HighlightText Name="RowText" Source="{Binding Text}" Highlight="{Binding Matches}"/>
                         <controls:HighlightText Grid.Column="1" Name="RowNote" Classes="PinNote" Source="{Binding Note}"
-                                                Highlight="{Binding NoteMatches}" HorizontalAlignment="Right"/>
+                                                Highlight="{Binding NoteMatches}" HorizontalAlignment="Right"
+                                                IsVisible="{Binding !IsActive}"/>
+                        <TextBlock Grid.Column="1" Name="RowActivity" Classes="PinActivity" Text="{Binding ActivityText}"
+                                   IsVisible="{Binding IsActive}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                       </Grid>
                     </Button>
                   </DataTemplate>

@@ -495,6 +495,7 @@ public partial class SettingsWindow : Window
         _stage?.Hardware?.CloseLeavePrompt();
         _hardware.CloseCalibration();   // a sweep that hadn't ended is cancelled
         _hardware.CloseBuses();
+        _hardware.ClosePinLists();   // an open pin list stops its watch
         _hardware.Status.Progress.Close();   // a result goes with the window; a running operation stays
         _vm.ControllerIfCreated?.OnWindowHidden();   // and the last firmware result goes
         _vm.ControlsIfCreated?.CloseDialog();    // and closes the Controller page's dialog

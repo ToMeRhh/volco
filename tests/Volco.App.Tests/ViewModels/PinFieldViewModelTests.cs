@@ -220,6 +220,119 @@ public sealed class PinFieldViewModelTests : IDisposable
         Assert.False(light.IsOpen);
     }
 
+    /// <summary>A field over <paramref name="role"/> whose watch func records the roles it was asked for and
+    /// how many of the watches it handed out were disposed.</summary>
+    private sealed class WatchRig
+    {
+        public readonly List<PinWatchRole> Started = new();
+        public int Disposed;
+        public readonly PinFieldViewModel Field;
+
+        public WatchRig(PinRole role, PinOwner self, bool withWatch = true)
+        {
+            var draft = Diy();
+            Field = new PinFieldViewModel("Pin", role, self, () => draft, () => 33u, _ => { }, null,
+                                          withWatch ? r => { Started.Add(r); return new Stop(this); } : null);
+        }
+
+        private sealed class Stop(WatchRig rig) : IDisposable
+        {
+            public void Dispose() => rig.Disposed++;
+        }
+    }
+
+    [Fact]
+    public void Open_SliderPin_StartsAnalogWatch_CloseStopsIt()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        Assert.Equal([PinWatchRole.Analog], rig.Started);
+        Assert.Equal(0, rig.Disposed);
+        rig.Field.Cancel();
+        Assert.Equal(1, rig.Disposed);
+
+        var buttons = new WatchRig(PinRole.ButtonInput, Button1);
+        buttons.Field.Open();
+        Assert.Equal([PinWatchRole.Button], buttons.Started);
+    }
+
+    [Fact]
+    public void NotEditable_StopsTheWatch()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        rig.Field.IsEditable = false;
+        Assert.False(rig.Field.IsOpen);
+        Assert.Equal(1, rig.Disposed);
+    }
+
+    [Fact]
+    public void LightPin_StartsNoWatch()
+    {
+        var rig = new WatchRig(PinRole.LightOutput, new PinOwner(PinOwnerKind.Light, 0));
+        rig.Field.Open();
+        Assert.Empty(rig.Started);
+    }
+
+    [Fact]
+    public void Activity_LightsRowAndHighlightsIt()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        rig.Field.OnPinActivity(32);
+        var row = rig.Field.Rows.Single(r => r.Pin == 32);
+        Assert.True(row.IsActive);
+        Assert.Equal("moving now", row.ActivityText);
+        Assert.Same(row, rig.Field.Highlighted);
+
+        rig.Field.OnPinActivity(34);
+        Assert.False(row.IsActive);
+        Assert.True(rig.Field.Rows.Single(r => r.Pin == 34).IsActive);
+
+        var buttons = new WatchRig(PinRole.ButtonInput, Button1);
+        buttons.Field.Open();
+        buttons.Field.OnPinActivity(4);
+        Assert.Equal("pressed now", buttons.Field.Rows.Single(r => r.Pin == 4).ActivityText);
+
+        rig.Field.OnPinActivity(200);   // a pin the chip doesn't list
+        Assert.True(rig.Field.Rows.Single(r => r.Pin == 34).IsActive);
+    }
+
+    [Fact]
+    public void Activity_ShowsRowHiddenByTheQuery()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.Open();
+        rig.Field.Query = "5";
+        Assert.DoesNotContain(rig.Field.Rows, r => r.Pin == 33);
+        rig.Field.OnPinActivity(33);
+        Assert.Contains(rig.Field.Rows, r => r.Pin == 33);
+        Assert.Equal(rig.Field.Rows.Select(r => r.Pin).Order(), rig.Field.Rows.Select(r => r.Pin));
+        Assert.Equal(33u, rig.Field.Highlighted!.Pin);
+        Assert.Equal("moving now", rig.Field.Highlighted.ActivityText);
+    }
+
+    [Fact]
+    public void Activity_WhenClosed_IsIgnored()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1);
+        rig.Field.OnPinActivity(33);
+        rig.Field.Open();
+        rig.Field.Cancel();
+        rig.Field.OnPinActivity(33);
+        Assert.Empty(rig.Field.Rows);
+        Assert.Null(rig.Field.Highlighted);
+    }
+
+    [Fact]
+    public void NoWatchFunc_NothingLights()
+    {
+        var rig = new WatchRig(PinRole.SliderInput, Slider1, withWatch: false);
+        rig.Field.Open();
+        rig.Field.OnPinActivity(32);
+        Assert.DoesNotContain(rig.Field.Rows, r => r.IsActive);
+    }
+
     [Fact]
     public void DraftPinsReadAndWriteEveryUse()
     {

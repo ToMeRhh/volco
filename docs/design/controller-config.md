@@ -817,6 +817,8 @@ The result is one of: `NoDevice | UnsupportedChip(name) | VolcoMatches | Differe
 
 ### 8.7 The Controller page (UI)
 
+The wiring helpers in the Hardware section (Detect in the pin field, Find screens on an I2C bus, Try the lights on a button) are specified in `hardware-page.md` §6 and §9.
+
 A sixth settings page, **Controller**, after Connection. The sections, top to bottom:
 
 **1. Status and firmware**

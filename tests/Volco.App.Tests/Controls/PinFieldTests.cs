@@ -21,13 +21,13 @@ public class PinFieldTests
 {
     private sealed record Shown(Window Window, PinField Field, PinFieldViewModel Vm, List<uint?> Sets);
 
-    private static Shown Show(uint? value = 4)
+    private static Shown Show(uint? value = 4, Func<Volco.Core.Communication.PinWatchRole, IDisposable?>? watch = null)
     {
         var draft = new ControllerConfig();
         var sets = new List<uint?>();
         uint? current = value;
         var vm = new PinFieldViewModel("Button pin", PinRole.ButtonInput, new PinOwner(PinOwnerKind.Button, 0),
-                                       () => draft, () => current, v => { sets.Add(v); current = v; }, null);
+                                       () => draft, () => current, v => { sets.Add(v); current = v; }, null, watch);
         var field = new PinField { DataContext = vm, Width = 240, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top };
         var window = new Window { Content = field, Width = 600, Height = 500 };
         window.Show();
@@ -92,6 +92,30 @@ public class PinFieldTests
         Press(s, Avalonia.Input.Key.Escape, PhysicalKey.Escape);
         Assert.False(popup.IsOpen);
         Assert.Equal(new uint?[] { 5 }, s.Sets);
+    }
+
+    [AvaloniaFact]
+    public void Activity_ScrollsTheRowIntoView()
+    {
+        var s = Show(watch: _ => new Noop());
+        Open(s);
+        s.Vm.OnPinActivity(39);
+        Settle(s.Window);
+        var popup = Named<Popup>(s.Field, "ListPopup");
+        var scroll = popup.Child!.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var container = popup.Child.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Name == "PinRowButton" && ((PinRowViewModel)b.DataContext!).Pin == 39);
+        Assert.True(container.IsVisible);
+        var top = container.TranslatePoint(new Point(0, 0), scroll)!.Value.Y;
+        Assert.True(top >= 0 && top + container.Bounds.Height <= scroll.Bounds.Height + 1, $"row at {top} of {scroll.Bounds.Height}");
+        var note = container.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "RowActivity");
+        Assert.True(note.IsVisible);
+        Assert.Equal("pressed now", note.Text);
+    }
+
+    private sealed class Noop : IDisposable
+    {
+        public void Dispose() { }
     }
 
     [AvaloniaFact]

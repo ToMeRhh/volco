@@ -39,7 +39,11 @@ public partial class PinField : UserControl
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (_vm is not null) _vm.PropertyChanged -= OnVmPropertyChanged;
+        if (_vm is not null)
+        {
+            _vm.PropertyChanged -= OnVmPropertyChanged;
+            _vm.Cancel();
+        }
         _vm = DataContext as PinFieldViewModel;
         if (_vm is not null) _vm.PropertyChanged += OnVmPropertyChanged;
         Classes.Set("invalid", _vm?.HasError == true);

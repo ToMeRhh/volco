@@ -33,6 +33,14 @@ public sealed record VolcoRuntimeOptions
     /// Reconnect or a port change). Zero: none.</summary>
     public TimeSpan ConnectGrace { get; init; } = TimeSpan.FromSeconds(3);
 
+    /// <summary>How often a pin watch is sent again while it runs (firmware helpers, Detect); the
+    /// controller stops watching 30 s after the last one.</summary>
+    public TimeSpan PinWatchRenewal { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long <see cref="VolcoRuntime.ScanI2cAsync"/> waits for the controller's result
+    /// (firmware helpers, Find screens).</summary>
+    public TimeSpan I2cScanTimeout { get; init; } = TimeSpan.FromSeconds(3);
+
     /// <summary>HelloRequest retry, heartbeat and tick intervals.</summary>
     public ControllerLinkOptions Link { get; init; } = ControllerLinkOptions.Default;
 }

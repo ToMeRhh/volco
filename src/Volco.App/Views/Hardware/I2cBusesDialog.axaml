@@ -63,6 +63,27 @@
                               ItemsSource="{x:Static hw:BusWiringViewModel.ClockChoices}"
                               SelectedIndex="{Binding ClockIndex, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
                   </Grid>
+                  <!-- Find screens (hardware-page spec §6.4): the addresses that answer on this bus's
+                       pins, saved or not, and the configured screens that didn't -->
+                  <Grid Name="FindScreensRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Classes="RowLabel" Text="Screens on these pins"/>
+                    <Button Name="FindScreensButton" Grid.Column="1" VerticalAlignment="Center" Content="Find screens"
+                            Command="{Binding FindScreensCommand}"
+                            ToolTip.Tip="Scans this bus's SDA and SCL pins, saved or not, for screens."/>
+                  </Grid>
+                  <TextBlock Name="FindResultText" Classes="Secondary" Margin="12,0,12,8" Text="{Binding FindResult}"
+                             IsVisible="{Binding FindResult, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                  <ItemsControl Name="FoundRows" ItemsSource="{Binding Found}" IsVisible="{Binding HasFound}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="hw:ScreenFoundViewModel">
+                        <Grid Classes="InspectorRow" ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                          <TextBlock Classes="RowLabel" Classes.problem="{Binding IsMissing}" Text="{Binding Address}"/>
+                          <TextBlock Grid.Column="1" Classes="Secondary" Classes.problem="{Binding IsMissing}" Text="{Binding Text}"
+                                     VerticalAlignment="Center"/>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                 </controls:CardRows>
               </Border>
             </DataTemplate>

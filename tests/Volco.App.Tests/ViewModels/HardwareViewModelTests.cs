@@ -67,6 +67,40 @@ public sealed class HardwareViewModelTests : IDisposable
         }
     }
 
+    private int PinWatchFrames(PinWatchRole role)
+    {
+        var frame = ProtocolEncoder.EncodePinWatch(role);
+        return Conn.SentFrames.Count(f => f.SequenceEqual(frame));
+    }
+
+    private PinFieldViewModel OpenSliderPinList()
+    {
+        Settings(DiyBlob);
+        GreetInSync(DiyBlob);
+        var field = Hardware.PinField(new PinOwner(PinOwnerKind.Slider, 0));
+        field.Open();
+        Until(() => PinWatchFrames(PinWatchRole.Analog) == 1);
+        Assert.Equal(0, PinWatchFrames(PinWatchRole.Stop));
+        return field;
+    }
+
+    [Fact]
+    public void ClosePinLists_StopsTheWatchOfAnOpenList()
+    {
+        var field = OpenSliderPinList();
+        Hardware.ClosePinLists();
+        Until(() => PinWatchFrames(PinWatchRole.Stop) == 1);
+        Assert.False(field.IsOpen);
+    }
+
+    [Fact]
+    public void DisposingTheHardwareModel_StopsTheWatchOfAnOpenList()
+    {
+        OpenSliderPinList();
+        Hardware.Dispose();
+        Until(() => PinWatchFrames(PinWatchRole.Stop) == 1);
+    }
+
     private byte[] LastWriteBurst() => Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
 
     private void WaitForWrite() => Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
@@ -375,5 +409,100 @@ public sealed class HardwareViewModelTests : IDisposable
         Assert.Empty(Hardware.Buttons);
         Assert.True(Hardware.IsReadOnly);
         Assert.All(_settings!.Controls.Sliders.Items, s => Assert.NotNull(s.Wiring));
+    }
+    // ── Try the lights (hardware-page spec §6.2) ─────────────────────────────────────────────
+
+    private ButtonWiringViewModel SelectButton(int index)
+    {
+        Settings(DiyBlob);
+        GreetInSync(DiyBlob);
+        _settings!.Controls.Select(_settings.Controls.Buttons.Items[index]);
+        return Assert.IsType<ButtonWiringViewModel>(Hardware.Inspected);
+    }
+
+    private List<byte[]> Drives() => Conn.SentFrames.Where(f => f.Length > 2 && f[2] == (byte)MessageType.PinDrive).ToList();
+
+    private static byte[] Drive(int pin, bool high, int ms) => ProtocolEncoder.EncodePinDrive(pin, high, (ushort)ms);
+
+    [Fact]
+    public void TryLights_SingleLed_SendsLitUnlitLitOnItsDraftPin()
+    {
+        var button = SelectButton(0);
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.Light, 0), 12);   // not saved
+        Controller.OnDraftEdited();
+        button.LitWhenHigh = true;
+        Assert.True(button.TryLightsCommand.CanExecute(null));
+
+        button.TryLightsCommand.Execute(null);
+        Until(() => Drives().Count == 3);
+        Assert.Equal(new[] { Drive(12, true, 300), Drive(12, false, 300), Drive(12, true, 300) }, Drives());
+
+        button.LitWhenHigh = false;
+        button.TryLightsCommand.Execute(null);
+        Until(() => Drives().Count == 6);
+        Assert.Equal(new[] { Drive(12, false, 300), Drive(12, true, 300), Drive(12, false, 300) }, Drives().Skip(3));
+    }
+
+    [Fact]
+    public void TryLights_Pair_SendsAThenB()
+    {
+        var button = SelectButton(2);
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.LightA, 2), 4);
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.LightB, 2), 18);
+        Controller.OnDraftEdited();
+
+        button.TryLightsCommand.Execute(null);
+
+        Until(() => Drives().Count == 4);
+        Assert.Equal(new[] { Drive(4, true, 600), Drive(18, false, 600), Drive(18, true, 600), Drive(4, false, 600) }, Drives());
+    }
+
+    [Fact]
+    public void TryLights_EnabledOnceTheControllerIsReady()
+    {
+        Settings(DiyBlob);
+        _settings!.Controls.Select(_settings.Controls.Buttons.Items[0]);
+        var button = Assert.IsType<ButtonWiringViewModel>(Hardware.Inspected);
+        int changed = 0;
+        button.TryLightsCommand.CanExecuteChanged += (_, _) => changed++;
+        Assert.False(button.TryLightsCommand.CanExecute(null));
+        Assert.False(Controller.CanEdit);
+
+        // Another setup than Volco's copy: the controller is ready, the draft stays read-only.
+        Conn.SetStatus(TransportStatus.Open);
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(DiyBlob) ^ 1));
+        _ui.RunAll();
+
+        Assert.False(Controller.CanEdit);
+        Assert.Same(button, Hardware.Inspected);
+        Assert.True(changed > 0);
+        Assert.True(button.TryLightsCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void TryLights_DisabledWhenAPinIsNotSet()
+    {
+        var button = SelectButton(2);
+        Assert.True(button.TryLightsCommand.CanExecute(null));
+
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.LightB, 2), null);
+        Controller.OnDraftEdited();
+
+        Assert.False(button.TryLightsCommand.CanExecute(null));
+        button.TryLightsCommand.Execute(null);
+        Assert.Empty(Drives());
+    }
+
+    [Fact]
+    public void TryLights_HiddenForScreenAndNone()
+    {
+        var button = SelectButton(0);
+        Assert.True(button.HasLeds);
+
+        button.LightIndex = 3;
+        Assert.False(button.HasLeds);
+        button.LightIndex = 0;
+        Assert.False(button.HasLeds);
+        Assert.False(button.TryLightsCommand.CanExecute(null));
     }
 }

@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.App.ViewModels.Search;
+using Volco.Core.Communication;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
 
@@ -43,6 +44,13 @@ public sealed partial class PinRowViewModel : ObservableObject
 
     /// <summary>The keyboard selection: Enter picks it.</summary>
     [ObservableProperty] private bool _isHighlighted;
+
+    /// <summary>Detect saw this pin move or be pressed: the row is lit and shows
+    /// <see cref="ActivityText"/> in place of its note.</summary>
+    [ObservableProperty] private bool _isActive;
+
+    /// <summary>"moving now" (a slider's pin) or "pressed now" (a button's), once <see cref="IsActive"/>.</summary>
+    [ObservableProperty] private string _activityText = "";
 }
 
 /// <summary>
@@ -60,7 +68,10 @@ public sealed partial class PinFieldViewModel : ObservableObject
     private readonly Action<uint?> _set;
     private readonly Action<PinOwner, PinOwner>? _swap;
     private List<PinRowViewModel> _all = new();
+    private readonly Func<PinWatchRole, IDisposable?>? _watch;
+    private IDisposable? _watching;
     private PinOwner? _other;
+    private PinRowViewModel? _active;
 
     /// <param name="label">"Pin", "Button pin", "Light A pin", "SDA"…</param>
     /// <param name="role">What the pin is for: which pins are unusable.</param>
@@ -69,9 +80,13 @@ public sealed partial class PinFieldViewModel : ObservableObject
     /// <param name="get">The field's pin in the draft.</param>
     /// <param name="set">Writes a picked pin into the draft.</param>
     /// <param name="swap">The fix of a shared pin: exchanges self's and the other use's pins.</param>
+    /// <param name="watch">Starts the controller's pin watch for Detect while the list is open; null for
+    /// none. The result is disposed on close.</param>
     public PinFieldViewModel(string label, PinRole role, PinOwner self, Func<ControllerConfig> draft,
-                             Func<uint?> get, Action<uint?> set, Action<PinOwner, PinOwner>? swap)
+                             Func<uint?> get, Action<uint?> set, Action<PinOwner, PinOwner>? swap,
+                             Func<PinWatchRole, IDisposable?>? watch = null)
     {
+        _watch = watch;
         Label = label;
         _role = role;
         _self = self;
@@ -142,7 +157,37 @@ public sealed partial class PinFieldViewModel : ObservableObject
         IsOpen = true;
         Filter();
         Highlight(Rows.FirstOrDefault(r => r.IsCurrent && r.IsPickable) ?? Rows.FirstOrDefault(r => r.IsPickable));
+        _watching?.Dispose();
+        _watching = WatchRole() is { } role ? _watch?.Invoke(role) : null;
     }
+
+    /// <summary>Detect: a pin of the list moved or was pressed. Lights its row (shown again if the
+    /// query hid it) and highlights it when it can be picked; the previous lit row goes out. Ignored
+    /// while closed, without a watch, or for a pin the chip doesn't list.</summary>
+    public void OnPinActivity(uint pin)
+    {
+        if (!IsOpen || _watching is null) return;
+        var row = _all.FirstOrDefault(r => r.Pin == pin);
+        if (row is null) return;
+        if (_active is not null && !ReferenceEquals(_active, row)) _active.IsActive = false;
+        _active = row;
+        row.ActivityText = _role == PinRole.SliderInput ? "moving now" : "pressed now";
+        row.IsActive = true;
+        if (!Rows.Contains(row))
+        {
+            var rows = new List<PinRowViewModel>(Rows) { row };
+            Rows = rows.OrderBy(r => r.Pin).ToList();
+            OnPropertyChanged(nameof(Rows));
+        }
+        if (row.IsPickable) Highlight(row);
+    }
+
+    private PinWatchRole? WatchRole() => _role switch
+    {
+        PinRole.SliderInput => PinWatchRole.Analog,
+        PinRole.ButtonInput => PinWatchRole.Button,
+        _ => null,
+    };
 
     /// <summary>Picks a row (a click): sets the pin and closes. Unusable rows are ignored.</summary>
     public void Pick(PinRowViewModel row)
@@ -204,6 +249,10 @@ public sealed partial class PinFieldViewModel : ObservableObject
 
     private void Close()
     {
+        _watching?.Dispose();
+        _watching = null;
+        _active = null;
+        foreach (var row in _all) row.IsActive = false;
         IsOpen = false;
         Query = "";
         Highlight(null);

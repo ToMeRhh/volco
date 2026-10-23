@@ -132,6 +132,14 @@ public class ProtocolParser
             case MessageType.Calibration when payload.Length >= 7:
                 return new CalibrationMessage(payload[1], (payload[2] & 1) != 0, (payload[2] & 2) != 0, (payload[2] & 4) != 0,
                     (ushort)(payload[3] << 8 | payload[4]), (ushort)(payload[5] << 8 | payload[6]));
+            case MessageType.PinActivity when payload.Length >= 2:
+                return new PinActivityMessage(payload[1]);
+            case MessageType.I2cScanResult when payload.Length >= 4 && payload.Length >= 4 + payload[3]:
+            {
+                var addresses = new int[payload[3]];
+                for (int a = 0; a < addresses.Length; a++) addresses[a] = payload[4 + a];
+                return new I2cScanResultMessage(payload[1], payload[2], addresses);
+            }
             default:
                 return null;   // PC to controller types, unknown types, or a body too short for its type
         }

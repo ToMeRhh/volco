@@ -30,25 +30,45 @@ public sealed class ControllerSettingsBusTests : IDisposable
     private ControllerViewModel Controller => _settings!.Controller;
     private HardwareViewModel Hardware => _settings!.Hardware;
 
-    private void SetUp(bool screen)
+    /// <summary>The DIY setup saved with button 1's screen on bus 0 (SDA 25, SCL 26).</summary>
+    private static readonly byte[] ScreenBlob = ControllerConfigCodec.Encode(WithScreen());
+
+    private static ControllerConfig WithScreen()
     {
+        var config = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        config.Buttons[0].Screen = new Screen();
+        return config;
+    }
+
+    /// <summary>Volco's mirror is <paramref name="saved"/> (DIY by default); with <paramref name="greet"/>
+    /// the controller says hello with that setup.</summary>
+    private void SetUp(bool screen, byte[]? saved = null, bool greet = true)
+    {
+        saved ??= DiyBlob;
         var config = _rig.Config.Config;
         config.Sliders = Enumerable.Range(0, 5).Select(i => new SliderConfig { Index = i, Name = $"s{i}" }).ToList();
         config.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
-        config.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
+        config.ControllerConfigBlob = Convert.ToBase64String(saved);
         _settings = _rig.CreateSettings(_ui);
         _ = _settings.Controls;
-        var conn = _rig.Connection!;
-        conn.SetStatus(TransportStatus.Open);
-        conn.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
-            ControllerConfigCodec.Crc32(DiyBlob), 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
-        _ui.RunAll();
+        if (!greet) return;
+        Greet(saved);
         Assert.True(Controller.CanEdit);
         if (screen)
         {
             Controller.Draft.Buttons[0].Screen = new Screen();   // on bus 0
             Controller.OnDraftEdited();
         }
+    }
+
+    private void Greet(byte[] saved)
+    {
+        var conn = _rig.Connection!;
+        conn.SetStatus(TransportStatus.Open);
+        var first = saved == ScreenBlob ? IndicatorKind.Screen : IndicatorKind.Led;
+        conn.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
+            ControllerConfigCodec.Crc32(saved), 5, new[] { first, IndicatorKind.Led, IndicatorKind.LedPair }));
+        _ui.RunAll();
     }
 
     private ControllerSettingsViewModel Settings()
@@ -172,5 +192,156 @@ public sealed class ControllerSettingsBusTests : IDisposable
         Assert.Equal("Bus 0 needs attention", settings.BusesSummary);
         Assert.True(row.Sda.HasError);
         Assert.True(row.Scl.HasError);
+    }
+    // ── Find screens (hardware-page spec §6.4) ───────────────────────────────────────────────
+
+    private sealed class Scanner
+    {
+        public List<(int Sda, int Scl)> Calls { get; } = new();
+        public IReadOnlyList<int>? Answer { get; set; } = Array.Empty<int>();
+
+        public Task<IReadOnlyList<int>?> Scan(int sda, int scl, CancellationToken ct)
+        {
+            Calls.Add((sda, scl));
+            return Task.FromResult(Answer);
+        }
+    }
+
+    private I2cBusesViewModel? _found;
+
+    /// <summary>An I2C buses dialog over the draft whose bus 0 card scans with <paramref name="scanner"/>.</summary>
+    private BusWiringViewModel FindRow(Scanner scanner, byte[]? saved = null)
+    {
+        SetUp(screen: true, saved);
+        _found = new I2cBusesViewModel(Controller, Hardware.PinField, () => { }, null, scanner.Scan);
+        return Assert.Single(_found.Buses);
+    }
+
+    /// <summary>The draft changed: the dialog follows it, as the Hardware page's does.</summary>
+    private void Edited()
+    {
+        Edited();
+        _found!.Refresh();
+    }
+
+    [Fact]
+    public async Task FindScreens_ListsAddressesAndTheirButtons()
+    {
+        var scanner = new Scanner { Answer = new[] { 0x3C, 0x3E } };
+        var row = FindRow(scanner);
+        Controller.Draft.Buttons[0].Screen = new Screen { Bus = 1 };   // off this bus
+        Controller.Draft.Buttons[1].Screen = new Screen { Bus = 0, Address = 0x3C };
+        Controller.Draft.Buttons[2].Screen = new Screen { Bus = 0, Address = 0x3D };
+        Edited();
+
+        await row.FindScreensCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { ("0x3C", "Button 2", false), ("0x3E", "", false), ("0x3D", "Button 3", true) },
+                     row.Found.Select(f => (f.Address, f.UsedBy, f.IsMissing)));
+        Assert.Equal("Button 3 · Not found", row.Found[2].Text);
+        Assert.Null(row.FindResult);
+    }
+
+    [Fact]
+    public async Task FindScreens_UsesUnsavedPins()
+    {
+        var scanner = new Scanner();
+        var row = FindRow(scanner);
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.BusSda, 0), 21);
+        Edited();
+
+        await row.FindScreensCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { (21, 26) }, scanner.Calls);
+        Assert.Equal("No screens answered.", row.FindResult);
+    }
+
+    [Fact]
+    public async Task FindScreens_NoAnswer_SaysSo()
+    {
+        var row = FindRow(new Scanner { Answer = null });
+
+        await row.FindScreensCommand.ExecuteAsync(null);
+
+        Assert.Equal("The controller didn't answer.", row.FindResult);
+        Assert.Empty(row.Found);   // no screen is "Not found": nothing was scanned
+    }
+
+    [Fact]
+    public async Task FindScreens_PinsHalfOffASavedBus_AsksToSaveFirst()
+    {
+        // The controller refuses a pair that shares a pin with a saved screen bus without being it.
+        var scanner = new Scanner { Answer = new[] { 0x3C } };
+        var row = FindRow(scanner, ScreenBlob);
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.BusSda, 0), 21);   // SCL stays 26
+        Edited();
+
+        await row.FindScreensCommand.ExecuteAsync(null);
+
+        Assert.Empty(scanner.Calls);
+        Assert.Equal("Save first to scan these pins.", row.FindResult);
+        Assert.Empty(row.Found);
+    }
+
+    [Fact]
+    public async Task FindScreens_TheSavedBusItself_Scans()
+    {
+        var scanner = new Scanner { Answer = new[] { 0x3C } };
+        var row = FindRow(scanner, ScreenBlob);
+
+        await row.FindScreensCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { (25, 26) }, scanner.Calls);
+        Assert.Equal("0x3C", Assert.Single(row.Found).Address);
+    }
+
+    [Fact]
+    public void FindScreens_EnabledOnceTheControllerIsReady()
+    {
+        SetUp(screen: false, ScreenBlob, greet: false);
+        Hardware.OpenBuses();
+        var row = Assert.Single(Assert.IsType<I2cBusesViewModel>(Hardware.Buses).Buses);
+        int changed = 0;
+        row.FindScreensCommand.CanExecuteChanged += (_, _) => changed++;
+        Assert.False(row.FindScreensCommand.CanExecute(null));
+
+        Greet(ScreenBlob);
+
+        Assert.True(changed > 0);
+        Assert.True(row.FindScreensCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void FindScreens_DisabledWithoutPins()
+    {
+        var row = FindRow(new Scanner());
+        Assert.True(row.FindScreensCommand.CanExecute(null));
+
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.BusScl, 0), null);
+        Edited();
+
+        Assert.False(row.FindScreensCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void FindScreens_DisabledWithoutAScanner()
+    {
+        SetUp(screen: true);
+        var dialog = new I2cBusesViewModel(Controller, Hardware.PinField, () => { }, null);
+        Assert.False(Assert.Single(dialog.Buses).FindScreensCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task PinChange_ClearsTheResult()
+    {
+        var row = FindRow(new Scanner { Answer = new[] { 0x3C } });
+        await row.FindScreensCommand.ExecuteAsync(null);
+        Assert.NotEmpty(row.Found);
+
+        DraftPins.Set(Controller.Draft, new PinOwner(PinOwnerKind.BusSda, 0), 21);
+        Edited();
+
+        Assert.Empty(row.Found);
+        Assert.Null(row.FindResult);
     }
 }

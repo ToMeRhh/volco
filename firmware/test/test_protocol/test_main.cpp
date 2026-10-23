@@ -456,6 +456,87 @@ void test_send_calibration_is_traffic() {
   TEST_ASSERT_EQUAL(1, sink.sent.size());
 }
 
+// ── Pin helpers ─────────────────────────────────────────────────────────────
+void test_pin_helper_frames_encode_to_golden_bytes() {
+  uint8_t out[kMaxPayload + 3];
+  size_t n = encodePinActivity(33, out);
+  auto g = golden("pin_activity_33");
+  TEST_ASSERT_FALSE(g.empty());
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  const uint8_t two[] = {0x3C, 0x3D};
+  n = encodeI2cScanResult(25, 26, 2, two, out);
+  g = golden("i2c_scan_result_25_26_two");
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  n = encodeI2cScanResult(25, 26, 0, nullptr, out);
+  g = golden("i2c_scan_result_25_26_none");
+  TEST_ASSERT_EQUAL(g.size(), n);
+  TEST_ASSERT_EQUAL_MEMORY(g.data(), out, n);
+  // The PC's frames.
+  TEST_ASSERT_TRUE(frameOf({MSG_PIN_WATCH, WATCH_ANALOG}) == golden("pin_watch_analog"));
+  TEST_ASSERT_TRUE(frameOf({MSG_PIN_WATCH, WATCH_BUTTON}) == golden("pin_watch_button"));
+  TEST_ASSERT_TRUE(frameOf({MSG_PIN_WATCH, WATCH_STOP}) == golden("pin_watch_stop"));
+  TEST_ASSERT_TRUE(frameOf({MSG_I2C_SCAN, 25, 26}) == golden("i2c_scan_25_26"));
+  TEST_ASSERT_TRUE(frameOf({MSG_PIN_DRIVE, 12, 1, 0x01, 0x2C}) == golden("pin_drive_12_high_300"));
+}
+
+struct HelperSink : FakeSink {
+  std::vector<std::vector<uint32_t>> watches, scans, drives;
+  void pinWatch(uint8_t role, uint32_t now) override { watches.push_back({role, now}); }
+  void i2cScan(uint8_t sda, uint8_t scl, uint32_t now) override { scans.push_back({sda, scl, now}); }
+  void pinDrive(uint8_t pin, uint8_t level, uint16_t durationMs, uint32_t now) override {
+    drives.push_back({pin, level, durationMs, now});
+  }
+};
+
+void test_pin_helper_requests_reach_the_sink() {
+  HelperSink sink;
+  Link link(config(), sink);
+  link.begin(0);
+  deliver(link, golden("pin_watch_analog"), 10);
+  deliver(link, golden("pin_watch_stop"), 20);
+  deliver(link, golden("i2c_scan_25_26"), 30);
+  deliver(link, golden("pin_drive_12_high_300"), 40);
+  TEST_ASSERT_EQUAL(2, sink.watches.size());
+  TEST_ASSERT_TRUE((std::vector<uint32_t>{1, 10}) == sink.watches[0]);
+  TEST_ASSERT_TRUE((std::vector<uint32_t>{0, 20}) == sink.watches[1]);
+  TEST_ASSERT_EQUAL(1, sink.scans.size());
+  TEST_ASSERT_TRUE((std::vector<uint32_t>{25, 26, 30}) == sink.scans[0]);
+  TEST_ASSERT_EQUAL(1, sink.drives.size());
+  TEST_ASSERT_TRUE((std::vector<uint32_t>{12, 1, 300, 40}) == sink.drives[0]);
+}
+
+void test_wrong_length_helper_requests_are_ignored() {
+  HelperSink sink;
+  Link link(config(), sink);
+  link.begin(0);
+  deliver(link, frameOf({MSG_PIN_WATCH}), 10);
+  deliver(link, frameOf({MSG_PIN_WATCH, 1, 0}), 20);
+  deliver(link, frameOf({MSG_I2C_SCAN, 25}), 30);
+  deliver(link, frameOf({MSG_PIN_DRIVE, 12, 1, 0}), 40);
+  deliver(link, frameOf({MSG_PIN_DRIVE, 12, 1, 0, 100, 0}), 50);
+  TEST_ASSERT_EQUAL(0, sink.watches.size());
+  TEST_ASSERT_EQUAL(0, sink.scans.size());
+  TEST_ASSERT_EQUAL(0, sink.drives.size());
+}
+
+void test_send_pin_activity_is_traffic() {
+  FakeSink sink;
+  Link link(config(), sink);
+  link.begin(0);
+  sink.sent.clear();
+  link.sendPinActivity(33, 900);
+  TEST_ASSERT_EQUAL(1, sink.sent.size());
+  TEST_ASSERT_TRUE(sink.sent[0] == golden("pin_activity_33"));
+  link.tick(1800);  // 900 ms since the last frame: no Alive yet
+  TEST_ASSERT_EQUAL(1, sink.sent.size());
+  const uint8_t two[] = {0x3C, 0x3D};
+  link.sendI2cScanResult(25, 26, 2, two, 1850);
+  TEST_ASSERT_EQUAL(2, sink.sent.size());
+  TEST_ASSERT_TRUE(sink.sent[1] == golden("i2c_scan_result_25_26_two"));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_parser_resyncs_after_garbage_and_bad_checksum);
@@ -488,5 +569,9 @@ int main(int, char**) {
   RUN_TEST(test_calibrate_reaches_the_sink);
   RUN_TEST(test_short_calibrate_is_ignored);
   RUN_TEST(test_send_calibration_is_traffic);
+  RUN_TEST(test_pin_helper_frames_encode_to_golden_bytes);
+  RUN_TEST(test_pin_helper_requests_reach_the_sink);
+  RUN_TEST(test_wrong_length_helper_requests_are_ignored);
+  RUN_TEST(test_send_pin_activity_is_traffic);
   return UNITY_END();
 }

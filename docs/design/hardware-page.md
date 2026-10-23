@@ -136,8 +136,8 @@ The header names the selection; rows are one line each (44 px) and keep their pl
 - **Light:** a segment None / LED / 2 LEDs / Screen. It reshapes only the rows under it:
   - LED: **Light pin**, **Lit when pin is** High / Low.
   - 2 LEDs: **Light A pin**, **Light B pin**, **Lit when pin is** High / Low.
-  - Screen: **Bus** (0–3, 2 and 3 marked "software") and **Address** (0x3C / 0x3D, with **Find screens** filling it, §9.2).
-- **Try the lights** (LED and 2 LEDs): flashes them on the controller (a single LED twice; a pair A then B), for saved and unsaved pins alike (§9.3).
+  - Screen: **Bus** (0–3, 2 and 3 marked "software") and **Address** (0x3C / 0x3D). **Find screens** lists the addresses that answer on each bus card of the I2C buses dialog (§9.2); filling a button's Address from it is a follow-up.
+- **Try the lights** (LED and 2 LEDs): flashes them on the controller (a single LED lit, unlit, lit, 300 ms each; a pair A lit with B unlit for 600 ms, then B lit with A unlit; every step drives its level, so a lit LED still flashes), for saved and unsaved pins alike (§9.3). Decision (2026-10-22): Try always uses PinDrive, so a saved LED is driven like an unsaved one instead of through the test indicators.
 - **Remove Button N.**
 
 ### 6.3 The pin field
@@ -216,7 +216,7 @@ Three helpers need the firmware. Each ships behind the build id: an older firmwa
 | `0x8B` | PinWatch | PC→controller | role (0 stop, 1 analog, 2 button) |
 | `0x07` | PinActivity | controller→PC | pin |
 
-- While a watch is on, the controller samples every usable pin for the role that is not an output (configured LEDs) and not a configured I2C pin: for analog, the ADC-capable pins (ADC2 skipped while Wi-Fi is up); for button, every usable pin with its pull-up on (34–39 read without one). Configured slider and button pins are included, so a taken pin lights up too.
+- While a watch is on, the controller samples every usable pin for the role that is not an output (configured LEDs) and not a configured I2C pin: for analog, the ADC-capable pins (ADC2 skipped while Wi-Fi is up); for button, every usable pin with its pull-up on except free 34–39 (no pull-up, so they would float; a button configured there is still watched). Decision (2026-10-22): only the role's own kind of configured pin is included: an analog watch samples free ADC pins and configured slider pins, a button watch free pins and configured button pins, so a taken pin of that kind lights up too, and a pin of the other kind is never touched (no pull-up lands on a slider). Thresholds are `volco_pin_helpers.h` constants (an analog pin must get 300 codes from a slowly following baseline with little jitter, so a slow drift never reports; a button must be low 30 ms after 500 ms high).
 - It reports a pin that moved (analog) or went low (button), at most every 250 ms per pin. **A floating pin must not light up:** the builder picks the thresholds (for example a large, sustained change) and checks them on the hardware.
 - Normal input keeps working during a watch. Pins the watch changed go back to their previous mode when it stops.
 - It stops on role 0, on host loss, and 30 s after the last PinWatch (the app renews every 10 s while the list is open).
@@ -228,7 +228,7 @@ Three helpers need the firmware. Each ships behind the build id: an older firmwa
 | `0x8C` | I2cScan | PC→controller | SDA pin, SCL pin |
 | `0x08` | I2cScanResult | controller→PC | SDA, SCL, count, addresses |
 
-The controller scans 0x08–0x77 on the given pins (the configured bus when the pins are one, else a temporary software bus) and answers. Refused pins (not usable, input only) answer count 0.
+The controller scans 0x08–0x77 on the given pins (the configured bus when the pins are one, else a temporary software bus) and answers. Refused pins (not usable, input only, SDA = SCL, or a pair that shares a pin with a configured bus without being that bus) answer count 0. The app waits 3 s for the result. A draft pair that the controller would refuse that way (it shares a pin with a bus a screen uses in the saved setup without being it) isn't sent: the row says "Save first to scan these pins." No answer shows only "The controller didn't answer." with no rows.
 
 ### 9.3 Drive a pin (Try the lights on unsaved pins)
 
@@ -236,7 +236,7 @@ The controller scans 0x08–0x77 on the given pins (the configured bus when the 
 |---|---|---|---|
 | `0x8D` | PinDrive | PC→controller | pin, level (0/1), duration (u16 ms) |
 
-Drives an output-capable pin that is free or a configured LED pin, then restores it. Refused silently otherwise. Saved LEDs keep using today's test indicators.
+Drives an output-capable pin that is free or a configured LED pin, then restores it. Refused silently otherwise. Decision (2026-10-22, replacing "saved LEDs keep using today's test indicators"): Try the lights uses PinDrive for saved and unsaved LED pins alike. A Led frame for a driven pin waits until the drive ends, then the LED shows the PC's last value.
 
 ### 9.4 Common
 

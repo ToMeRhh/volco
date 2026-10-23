@@ -15,14 +15,18 @@ public sealed partial class I2cBusesViewModel : ObservableObject
 {
     private readonly ControllerViewModel _controller;
     private readonly Func<PinOwner, PinFieldViewModel> _pin;
+    private readonly Func<int, int, CancellationToken, Task<IReadOnlyList<int>?>>? _scan;
     private IReadOnlyList<BusWiringViewModel> _buses = [];
 
     /// <param name="pin">The pin field of a use (a bus's SDA or SCL), shared with the rest of the page.</param>
     /// <param name="focus">The bus the dialog was opened for (its card is marked), or null.</param>
-    internal I2cBusesViewModel(ControllerViewModel controller, Func<PinOwner, PinFieldViewModel> pin, Action close, int? focus)
+    /// <param name="scan">The I2C scan of a bus's pins (Find screens); null for none.</param>
+    internal I2cBusesViewModel(ControllerViewModel controller, Func<PinOwner, PinFieldViewModel> pin, Action close, int? focus,
+                               Func<int, int, CancellationToken, Task<IReadOnlyList<int>?>>? scan = null)
     {
         _controller = controller;
         _pin = pin;
+        _scan = scan;
         FocusedBus = focus;
         DoneCommand = new RelayCommand(close);
         AddCommand = new RelayCommand(Add, () => CanAdd);
@@ -65,7 +69,7 @@ public sealed partial class I2cBusesViewModel : ObservableObject
             var old = _buses.ToDictionary(b => b.Bus);
             _buses = listed.Select(bus => old.TryGetValue(bus, out var row) ? row
                 : new BusWiringViewModel(bus, _controller, _pin(new PinOwner(PinOwnerKind.BusSda, bus)),
-                                         _pin(new PinOwner(PinOwnerKind.BusScl, bus)), Remove) { IsFocused = bus == FocusedBus }).ToList();
+                                         _pin(new PinOwner(PinOwnerKind.BusScl, bus)), Remove, _scan) { IsFocused = bus == FocusedBus }).ToList();
             OnPropertyChanged(nameof(Buses));
             OnPropertyChanged(nameof(HasNoBuses));
         }
