@@ -422,6 +422,11 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// thread (the transport's).</summary>
     public event EventHandler<int>? PinActivity;
 
+    /// <summary>A pin watch is on: as in a test, Slider and Button messages raise only
+    /// <see cref="RawInput"/> and reach neither audio nor actions (moving a control to find its pin
+    /// changes nothing).</summary>
+    public bool IsWatchingPins { get { lock (_watchGate) return _watchRole != PinWatchRole.Stop; } }
+
     /// <summary>Starts watching the controller's pins for <paramref name="role"/> (Analog or Button).
     /// One watch at a time: a new one replaces the old. Sent now, every
     /// <see cref="VolcoRuntimeOptions.PinWatchRenewal"/> and after each Hello of the current session;
@@ -431,9 +436,11 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     {
         if (role == PinWatchRole.Stop) throw new ArgumentOutOfRangeException(nameof(role), "Dispose the watch to stop it.");
         int generation;
+        bool started;
         lock (_watchGate)
         {
             if (IsDisposed) return new PinWatchHandle(this, -1);
+            started = _watchRole == PinWatchRole.Stop;
             generation = ++_watchGeneration;
             _watchRole = role;
             _watchTimer?.Dispose();
@@ -443,6 +450,11 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             _link.SendRaw(ProtocolEncoder.EncodePinWatch(role));
         }
         AppLog.Info($"Pin watch: {role}");
+        if (started)
+        {
+            _buttonPressDetector?.Reset();   // a gesture started before the watch can't fire during it
+            _sliderProcessor?.DropPending();  // nor a slider value queued just before it
+        }
         return new PinWatchHandle(this, generation);
     }
 
@@ -479,6 +491,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             _link.SendRaw(ProtocolEncoder.EncodePinWatch(PinWatchRole.Stop));
         }
         AppLog.Info($"Pin watch: {role} stopped");
+        _buttonPressDetector?.Reset();   // a button held across the end fires nothing
     }
 
     private sealed class PinWatchHandle(VolcoRuntime runtime, int generation) : IDisposable
@@ -1296,9 +1309,10 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             case SliderMessage slider:
                 // Every slider and button raises raw input (hardware-page spec §12.1); in a test
                 // (spec §8.5) that is all: nothing reaches the slider processor or the detector.
-                // A slider held for a calibration sweep (slider-calibration spec) likewise.
+                // A slider held for a calibration sweep (slider-calibration spec) and a pin watch
+                // (hardware-page spec §9.1) likewise.
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Slider, slider.SliderIndex, slider.Value));
-                if (InTestMode || IsSliderHeld(slider.SliderIndex)) break;
+                if (InTestMode || IsWatchingPins || IsSliderHeld(slider.SliderIndex)) break;
                 AppLog.Debug($"Slider event: Index={slider.SliderIndex}, Value={slider.Value}");
                 _sliderProcessor?.HandleSliderEvent(slider.SliderIndex, slider.Value);
                 break;
@@ -1310,6 +1324,10 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, testButton.ButtonIndex, pressed ? 1 : 0, presses));
                 break;
             }
+            case ButtonMessage watched when IsWatchingPins:
+                RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, watched.ButtonIndex,
+                                                             watched.State == ButtonState.Pressed ? 1 : 0));
+                break;
             case ButtonMessage button:
                 RawInput?.Invoke(this, new RawInputEventArgs(RawInputKind.Button, button.ButtonIndex,
                                                              button.State == ButtonState.Pressed ? 1 : 0));
@@ -1336,7 +1354,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
 
     private void OnButtonPressDetected(object? sender, ButtonPressEventArgs e)
     {
-        if (IsDisposed || InTestMode) return;   // second guard (spec §8.5): no action during a test
+        if (IsDisposed || InTestMode || IsWatchingPins) return;   // second guard (spec §8.5): no action during a test or a watch
 
         AppLog.Info($"Button press detected: Index={e.ButtonIndex}, Type={e.PressType}");
         var config = Config.Config;
