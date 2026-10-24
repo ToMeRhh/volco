@@ -80,7 +80,7 @@
       devtools.frame('→', payload, bad);
       if (payload[0] === P.MSG.CONFIG_RESULT) devtools.resetForcedResult();
     },
-    sliderValue: i => cal.map(i, Math.round((device ? device.faderValue(i) : 0.5) * 4095)),
+    sliderValue: i => cal.sent(i, Math.round((device ? device.faderValue(i) : 0.5) * 4095)),
     onLed: (b, v) => show({ button: b, led: v }),
     onScreen: (b, transition, content, t) => show({ button: b, transition, content }, t),
     onHostLost: t => { cal.hostLost(); pins?.hostLost(); blankDisplays(t); },
@@ -137,7 +137,7 @@
     hw = current();
     beh = O.behaviour(hw.config.screens);
     pins = pinHelpers();
-    cal.configure(hw.config.sliders.slice(0, hw.sliders).map(s => ({ pin: s.pin, auto: s.autoCalibrate !== false })));
+    cal.configure(hw.config.sliders.slice(0, hw.sliders).map(s => ({ pin: s.pin, auto: s.autoCalibrate !== false, reverse: s.reverse === true })));
     link.setHardware({ sliders: hw.sliders, kinds: hw.kinds, configState: hw.state, configCrc: hw.crc });
     slots = []; leds = [];
     hw.kinds.forEach((k, i) => {
@@ -193,7 +193,7 @@
     const raw = Math.round(value * 4095);
     cal.reading(i, raw);
     pins.slider(i, now());
-    const send = () => { lastSlider[i] = now(); link.sendSlider(i, cal.map(i, raw), now()); };
+    const send = () => { lastSlider[i] = now(); link.sendSlider(i, cal.sent(i, raw), now()); };
     clearTimeout(pendingSlider[i]);
     // Auto-calibrate just learned the span: the stretched position goes out at once.
     if (cal.becameLearned(i) || now() - (lastSlider[i] || 0) >= SLIDER_MS) send();

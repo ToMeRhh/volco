@@ -9,10 +9,11 @@
     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
       <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
         <TextBlock Name="SaveBarText" Text="{Binding SaveBarText}" VerticalAlignment="Center"/>
-        <TextBlock Name="SaveBarNote" Classes="Secondary" Text="{Binding SaveBarNote}" VerticalAlignment="Center"/>
+        <TextBlock Name="SaveBarNote" Classes="Secondary" Text="{Binding SaveBarNote}" VerticalAlignment="Center"
+                   IsVisible="{Binding SaveBarNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
       </StackPanel>
       <Button Name="DiscardButton" Grid.Column="1" Content="Discard" Command="{Binding DiscardCommand}"/>
-      <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save to controller" Command="{Binding SaveCommand}"/>
+      <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save" Command="{Binding SaveCommand}"/>
     </Grid>
   </Border>
 </UserControl>

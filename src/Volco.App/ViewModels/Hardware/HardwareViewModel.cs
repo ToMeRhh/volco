@@ -178,7 +178,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (Source(_controller.Layout.Sliders, sliderIndex) is not int input) return;
         CalibrationDialogViewModel? dialog = null;
         dialog = new CalibrationDialogViewModel(input, _runtime, _ui, () => { if (ReferenceEquals(Calibration, dialog)) CloseCalibration(); },
-                                                number: sliderIndex + 1);
+                                                number: sliderIndex + 1,
+                                                reversed: Saved(_controller.BaselineConfig().Sliders, input)?.Reverse == true);
         Calibration = dialog;
     }
 
@@ -202,7 +203,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (tile.IsNew) return false;
         if (tile.Wiring is { HasChange: true })
         {
-            why = "Save to controller first";
+            why = "Save first";
             return false;
         }
         if (_controller.IsControllerReady && !_controller.InSync)
@@ -236,6 +237,10 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The draft holds the user's unsaved changes (<see cref="ControllerViewModel.HasUnsavedChanges"/>):
     /// leaving the Controller page asks first, and the drawing shows the draft's controls.</summary>
     public bool HasUnsavedChanges => _controller.HasUnsavedChanges;
+
+    /// <summary>The controller draft alone holds unsaved changes (not the button timing): the
+    /// drawing shows the draft's controls then.</summary>
+    public bool HasUnsavedControllerChanges => _controller.HasUnsavedControllerChanges;
 
     /// <summary>The open leave prompt, or null.</summary>
     [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
@@ -325,6 +330,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             or nameof(ControllerViewModel.Notice) or null or "") UpdateSaveBar();
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or null or "") OnPropertyChanged(nameof(IsDirty));
         if (e.PropertyName is nameof(ControllerViewModel.HasUnsavedChanges) or null or "") OnPropertyChanged(nameof(HasUnsavedChanges));
+        if (e.PropertyName is nameof(ControllerViewModel.HasUnsavedControllerChanges) or null or "") OnPropertyChanged(nameof(HasUnsavedControllerChanges));
         UpdateChooser();
         UpdateCalibrationRows();
     }
@@ -349,13 +355,14 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The note beside the count.</summary>
-    public string SaveBarNote => "Saving restarts the controller";
+    /// <summary>The note beside the count, while Save sends the controller's config; null when only
+    /// the button timing (Volco's own settings) changed.</summary>
+    public string? SaveBarNote => _controller.ControllerDirty ? "Saving restarts the controller" : null;
 
     /// <summary>Discard: the draft goes back to Volco's copy.</summary>
     public ICommand DiscardCommand => _controller.RevertCommand;
 
-    /// <summary>Save to controller; disabled while the draft has problems or can't be saved.</summary>
+    /// <summary>Save; disabled while the draft has problems or can't be saved.</summary>
     public IRelayCommand SaveCommand { get; }
 
     /// <summary>Changed tiles, removed and added controls, changed buses and changed settings sections.</summary>
@@ -372,9 +379,21 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         for (int bus = 0; bus <= 3; bus++)
             if (!Equals(ControllerDraft.Bus(draft, bus), ControllerDraft.Bus(baseline, bus))) n++;
         if (!Equals(draft.Screens, baseline.Screens)) n++;
-        if (!Equals(draft.Input, baseline.Input)) n++;
+        // Controller settings' Sliders and Buttons cards (the button timing is Volco's, in the draft too).
+        if (InputDiffers(draft.Input, baseline.Input, i => i.HasFilterWeightPct, i => i.FilterWeightPct)
+            || InputDiffers(draft.Input, baseline.Input, i => i.HasSliderDeadband, i => i.SliderDeadband)
+            || InputDiffers(draft.Input, baseline.Input, i => i.HasSliderIntervalMs, i => i.SliderIntervalMs)) n++;
+        if (InputDiffers(draft.Input, baseline.Input, i => i.HasDebounceMs, i => i.DebounceMs) || _controller.TimingDirty) n++;
         if (!Equals(draft.Udp, baseline.Udp)) n++;
         return n;
+    }
+
+    /// <summary>One field of the input tuning differs, its presence included (an absent message has
+    /// none of its fields).</summary>
+    private static bool InputDiffers(InputTuning? a, InputTuning? b, Func<InputTuning, bool> has, Func<InputTuning, uint> value)
+    {
+        bool hasA = a is not null && has(a), hasB = b is not null && has(b);
+        return hasA != hasB || (hasA && value(a!) != value(b!));
     }
 
     private void UpdateSaveBar()
@@ -382,6 +401,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         OnPropertyChanged(nameof(ShowSaveBar));
         OnPropertyChanged(nameof(SaveBarText));
+        OnPropertyChanged(nameof(SaveBarNote));
         SaveCommand.NotifyCanExecuteChanged();
     }
 
@@ -463,19 +483,21 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The title row's "Controller settings" chip: the inspector shows the controller's
     /// settings and the tile selection is cleared. Not during a hardware test: the
     /// inspector is hidden then (spec §8), so the chip is disabled.</summary>
-    public void SelectControllerSettings()
+    /// <param name="openSliders">Opens the Sliders card too (a slider's Smoothing link).</param>
+    public void SelectControllerSettings(bool openSliders = false)
     {
         if (_disposed || IsTesting) return;
         _settingsSelected = true;
         _controls.Selected = null;
         UpdateInspected();
+        if (openSliders && Inspected is ControllerSettingsViewModel settings) settings.IsSlidersOpen = true;
     }
 
     private IRelayCommand? _selectControllerSettingsCommand;
 
     /// <summary>The title row's "Controller settings" chip.</summary>
     public IRelayCommand SelectControllerSettingsCommand
-        => _selectControllerSettingsCommand ??= new RelayCommand(SelectControllerSettings, () => !IsTesting);
+        => _selectControllerSettingsCommand ??= new RelayCommand(() => SelectControllerSettings(), () => !IsTesting);
 
     /// <summary>The inspector shows the controller's settings: the chip is marked.</summary>
     public bool IsSettingsSelected => Inspected is ControllerSettingsViewModel;
@@ -546,7 +568,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             {
                 var index = si;
                 next = new SliderWiringViewModel(si, slider, PinField(new PinOwner(PinOwnerKind.Slider, si)), () => AskRemove(slider),
-                                                 _controller, () => OpenCalibration(index));
+                                                 _controller, () => OpenCalibration(index),
+                                                 () => SelectControllerSettings(openSliders: true));
             }
         }
         else if (_controls.Selected is ButtonItemViewModel button && Buttons.IndexOf(button) is >= 0 and var bi)

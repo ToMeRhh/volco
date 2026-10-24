@@ -27,6 +27,12 @@ static std::string value(const volco_config_ControllerConfig& c, size_t size, co
     const volco_config_Slider& s = c.sliders[i];
     return std::to_string(!s.has_auto_calibrate || s.auto_calibrate ? 1 : 0);
   }
+  if (key.rfind("sliders.", 0) == 0 && key.size() > 16 && key.compare(key.size() - 8, 8, ".reverse") == 0) {
+    const size_t i = std::stoul(key.substr(8));
+    if (i >= c.sliders_count) return "?" + key;
+    const volco_config_Slider& s = c.sliders[i];
+    return std::to_string(s.has_reverse && s.reverse ? 1 : 0);
+  }
   if (c.buttons_count > 0) {
     const volco_config_Button& b = c.buttons[0];
     if (key == "buttons.0.kind") {

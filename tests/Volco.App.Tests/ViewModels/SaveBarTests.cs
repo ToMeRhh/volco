@@ -59,6 +59,14 @@ public sealed class SaveBarTests : IDisposable
     {
         SetUpInSync();
         Assert.False(Hardware.ShowSaveBar);
+        Assert.Null(Hardware.SaveBarNote);
+    }
+
+    [Fact]
+    public void AControllerChange_ShowsTheRestartNote()
+    {
+        SetUpInSync();
+        Controller.SetSliderPin(1, 39);
         Assert.Equal("Saving restarts the controller", Hardware.SaveBarNote);
     }
 
@@ -119,5 +127,56 @@ public sealed class SaveBarTests : IDisposable
         Assert.Equal(new[] { "a", "b", "c", "d", "e" }, Config.Sliders.Select(s => s.Name));
         Assert.True(Controller.Layout.IsIdentity);
         Assert.False(Controller.IsDirty);
+    }
+
+    // ── Button timing (slider-feel spec, "The save rule") ────────────────────────────────────
+
+    [Fact]
+    public void TimingOnly_ShowsBar_WithoutRestartNote()
+    {
+        SetUpInSync();
+        Controller.HoldMs = 700;
+        Assert.True(Hardware.ShowSaveBar);
+        Assert.Equal("1 change not saved", Hardware.SaveBarText);
+        Assert.True(string.IsNullOrEmpty(Hardware.SaveBarNote));
+    }
+
+    [Fact]
+    public void TimingOnly_Save_WritesConfig_SendsNothing()
+    {
+        SetUpInSync();
+        var writes = Conn.SentFrames.Count(f => f.Length > 3 && f[2] == 0x88);
+        Controller.HoldMs = 700;
+        Controller.DoublePressMs = 250;
+        Assert.True(Hardware.SaveCommand.CanExecute(null));
+        Hardware.SaveCommand.Execute(null);
+        _ui.RunAll();
+        Assert.Equal(700, Config.ButtonTiming.LongPressMs);
+        Assert.Equal(250, Config.ButtonTiming.DoublePressWindowMs);
+        Assert.Equal(writes, Conn.SentFrames.Count(f => f.Length > 3 && f[2] == 0x88));
+        Assert.False(Controller.IsSaving);
+        Assert.False(Controller.IsDirty);
+        Assert.False(Hardware.ShowSaveBar);
+    }
+
+    [Fact]
+    public void TimingAndController_ShowsTheRestartNote()
+    {
+        SetUpInSync();
+        Controller.HoldMs = 700;
+        Controller.DebounceMs = 45;
+        Assert.Equal("Saving restarts the controller", Hardware.SaveBarNote);
+    }
+
+    [Fact]
+    public void CountChanges_ButtonsCardOnce()
+    {
+        SetUpInSync();
+        Controller.HoldMs = 700;
+        Controller.DoublePressMs = 250;
+        Controller.DebounceMs = 45;
+        Assert.Equal("1 change not saved", Hardware.SaveBarText);
+        Controller.SmoothingPct = 10;
+        Assert.Equal("2 changes not saved", Hardware.SaveBarText);
     }
 }

@@ -7,7 +7,8 @@ using Xunit;
 
 namespace Volco.Core.Tests.Config;
 
-/// <summary>Schema v7: button presets become modes (Controls page spec, delivery step 7).</summary>
+/// <summary>Schema v7: button presets become modes (Controls page spec, delivery step 7). Later
+/// schemas stamp over it, so these assert the current version.</summary>
 public class ConfigMigrationV7Tests : IDisposable
 {
     private readonly string _tempDir;
@@ -59,7 +60,7 @@ public class ConfigMigrationV7Tests : IDisposable
         var v6 = V6Json();
         var c = Load(v6).Config;
 
-        Assert.Equal(7, c.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, c.SchemaVersion);
         Assert.Equal(new[] { "default", "preset-2" }, c.Modes.Select(m => m.Id));
         Assert.Equal(new[] { "Default", "Gaming" }, c.Modes.Select(m => m.Name));
         var binding = c.Buttons[0].BindingFor("default");
@@ -72,7 +73,7 @@ public class ConfigMigrationV7Tests : IDisposable
         Assert.Contains("\"modes\"", saved);
         Assert.Contains("\"modeId\"", saved);
         Assert.Contains("\"GoToMode\"", saved);
-        Assert.Contains("\"schemaVersion\": 7", saved);
+        Assert.Contains($"\"schemaVersion\": {AppConfig.CurrentSchemaVersion}", saved);
         Assert.DoesNotContain("\"presets\"", saved);
         Assert.DoesNotContain("presetId", saved);
         Assert.DoesNotContain("Preset\"", saved);
@@ -91,11 +92,11 @@ public class ConfigMigrationV7Tests : IDisposable
     }
 
     [Fact]
-    public void V2_LoadsToV7Modes()
+    public void V2_LoadsToModes()
     {
         var c = Load(ConfigManagerLoadSaveTests.V2Json).Config;
 
-        Assert.Equal(7, c.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, c.SchemaVersion);
         var mode = Assert.Single(c.Modes);
         Assert.Equal(AppConfig.DefaultModeId, mode.Id);
         Assert.Equal(ButtonActionType.MuteCurrentInput, c.Buttons[0].BindingFor(AppConfig.DefaultModeId).SinglePress.Action);
@@ -106,17 +107,17 @@ public class ConfigMigrationV7Tests : IDisposable
     }
 
     [Fact]
-    public void V7_LoadsUnchanged_NoBak()
+    public void Current_LoadsUnchanged_NoBak()
     {
         const string v7 = """
-        { "schemaVersion": 7, "connection": { "type": "Serial", "serial": { "comPort": "COM7" } },
+        { "schemaVersion": 8, "connection": { "type": "Serial", "serial": { "comPort": "COM7" } },
           "sliders": [],
           "buttons": [ { "index": 0, "actions": { "mode-2": { "singlePress": { "action": "GoToMode", "modeId": "default" } } } } ],
           "modes": [ { "id": "default", "name": "Default" }, { "id": "mode-2", "name": "Calls" } ] }
         """;
         var c = Load(v7).Config;
 
-        Assert.Equal(7, c.SchemaVersion);
+        Assert.Equal(AppConfig.CurrentSchemaVersion, c.SchemaVersion);
         Assert.Equal(new[] { "default", "mode-2" }, c.Modes.Select(m => m.Id));
         var action = c.Buttons[0].BindingFor("mode-2").SinglePress;
         Assert.Equal(ButtonActionType.GoToMode, action.Action);

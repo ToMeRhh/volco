@@ -19,6 +19,8 @@ namespace Volco.Core.Config;
 /// which then still carry their old schema number until the v1 → v2 name resolution runs.</item>
 /// <item>v6 → v7: button presets become modes (<see cref="RenamePresetsToModes"/>), run by
 /// <see cref="ConfigManager.Load"/> on every older file after the shape upgrade.</item>
+/// <item>v7 → v8: the first button's hold and double-press timing becomes the controller's
+/// (<see cref="MoveButtonTiming"/>).</item>
 /// </list>
 ///
 /// Both read raw JSON rather than the deserialized <see cref="AppConfig"/>, because the old
@@ -27,6 +29,33 @@ namespace Volco.Core.Config;
 /// </summary>
 public static class ConfigMigrator
 {
+    /// <summary>v7 → v8: <c>buttonTiming</c> takes <c>longPressMs</c> and <c>doublePressWindowMs</c>
+    /// from the first button (the default for a missing key); every button loses both keys, and
+    /// every slider loses <c>invert</c>, <c>curve</c> and <c>deadZonePercent</c>.</summary>
+    public static void MoveButtonTiming(JsonObject root)
+    {
+        var first = (root["buttons"] as JsonArray)?.FirstOrDefault() as JsonObject;
+        var timing = new ButtonTimingConfig();
+        root["buttonTiming"] = new JsonObject
+        {
+            ["longPressMs"] = first?["longPressMs"] is JsonValue l && l.TryGetValue<int>(out var lp) ? lp : timing.LongPressMs,
+            ["doublePressWindowMs"] = first?["doublePressWindowMs"] is JsonValue d && d.TryGetValue<int>(out var dp) ? dp : timing.DoublePressWindowMs,
+        };
+        if (root["buttons"] is JsonArray buttons)
+            foreach (var b in buttons.OfType<JsonObject>())
+            {
+                b.Remove("longPressMs");
+                b.Remove("doublePressWindowMs");
+            }
+        if (root["sliders"] is JsonArray sliders)
+            foreach (var s in sliders.OfType<JsonObject>())
+            {
+                s.Remove("invert");
+                s.Remove("curve");
+                s.Remove("deadZonePercent");
+            }
+    }
+
     /// <summary>True only for a schema v1 file (no "schemaVersion", or 0/1): its device names still
     /// need resolving against live devices. v2 and v3 are upgraded in <see cref="ConfigManager.Load"/>
     /// and must never come through here (that would write config.v1.bak and re-parse them as v1).</summary>

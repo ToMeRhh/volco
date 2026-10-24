@@ -11,6 +11,7 @@ void toRuntime(const volco_config_ControllerConfig& c, RuntimeConfig& r) {
   for (pb_size_t i = 0; i < c.sliders_count; i++) {
     r.sliderPins[i] = (uint8_t)c.sliders[i].pin;
     r.sliderAutoCalibrate[i] = c.sliders[i].has_auto_calibrate ? c.sliders[i].auto_calibrate : true;
+    r.sliderReverse[i] = c.sliders[i].has_reverse && c.sliders[i].reverse;
   }
 
   r.buttonCount = (uint8_t)c.buttons_count;

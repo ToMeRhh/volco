@@ -44,6 +44,16 @@ public class ConfigDiffTests
     }
 
     [Fact]
+    public void ConfigDiffListsReverseDirection()
+    {
+        var mine = Sliders(32, 33);
+        var theirs = mine.Clone();
+        theirs.Sliders[1].Reverse = true;
+        Assert.Equal(new[] { "Slider 2 reverse direction on" }, ConfigDiff.Lines(mine, theirs, forTheirs: true));
+        Assert.Equal(new[] { "Slider 2 reverse direction off" }, ConfigDiff.Lines(mine, theirs, forTheirs: false));
+    }
+
+    [Fact]
     public void ScreensLightsAndWifi()
     {
         var mine = Sliders(32);

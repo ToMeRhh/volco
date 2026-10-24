@@ -83,7 +83,7 @@ def screen(m, i, bus, address):
 def maximal():
     m = pb.ControllerConfig(preset="p" * 24)
     for _ in range(16):
-        m.sliders.add(pin=39)
+        m.sliders.add(pin=39, reverse=True)
     for _ in range(32):
         b = m.buttons.add(pin=39)
         b.led_pair.pin_a, b.led_pair.pin_b, b.led_pair.active_low = 39, 39, True
@@ -139,9 +139,12 @@ decode_ok("unknown_field", bytes.fromhex("98060132020864"), screens__brightness=
 ac = diy()
 ac.sliders[1].auto_calibrate = False
 decode_ok("auto_calibrate_off", blob(ac), sliders=5, sliders__0__auto_calibrate=1, sliders__1__auto_calibrate=0)
+rv = diy()
+rv.sliders[2].reverse = True
+decode_ok("slider_reverse", blob(rv), sliders=5, sliders__0__reverse=0, sliders__2__reverse=1)
 mx = blob(maximal())
-assert len(mx) == 683, len(mx)  # 663 bytes with two buses; buses 2 and 3 add 20
-decode_ok("maximal", mx, size=683, sliders=16, buttons=32)
+assert len(mx) == 715, len(mx)  # 663 bytes with two buses; buses 2 and 3 add 20, reverse on 16 sliders 32
+decode_ok("maximal", mx, size=715, sliders=16, buttons=32)
 
 # ---- decode-fail -----------------------------------------------------------------------------
 lines.append("# decode-fail <name> <hex>")

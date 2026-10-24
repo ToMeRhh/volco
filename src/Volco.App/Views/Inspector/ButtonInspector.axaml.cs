@@ -9,6 +9,4 @@ public partial class ButtonInspector : TileInspector
     {
         AvaloniaXamlLoader.Load(this);
     }
-
-    protected override string SubSectionBodyName => "TimingBody";
 }

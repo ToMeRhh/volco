@@ -14,7 +14,7 @@ Some boards keep each slider's wiper away from the ADC rails (a resistor at each
 
 ## Non-goals
 
-- No change to the slider's Controls section; Response (curve, dead zone, reverse) is unchanged.
+- No change to the slider's Controls section. (Response was removed later by `slider-feel-settings.md`: curve and dead zone are gone and Reverse direction is a Hardware field; the dialog's bar mirrors for a reversed slider, the reported ends stay raw.)
 - No calibration of anything but the two ends (no midpoint, no curve fitting).
 - No backward compatibility with older firmware or configs (single user; app and firmware ship together).
 
@@ -56,7 +56,7 @@ The experiment's "hold button 1 at boot" reset is removed; Re-calibrate replaces
 6. The controller ends a sweep by itself, as a Cancel, when the host is lost or 60 s pass without Done (the app is gone). The dialog closes and the status banner says why if the link dropped. A report that says a slider is sweeping while the app holds no sweep for it (the app restarted mid-sweep) gets a Cancel at once.
 7. When a sweep ends (any way), the controller sends the slider's Calibration report and then a fresh Slider frame with its position stretched by the final ends, whatever the deadband says. The app releases the input hold when that report arrives, so the fresh position reaches audio (my call: the app's last position is from before the sweep and stretched by the old ends, so `ReapplySlider` would set a stale value).
 
-**Re-calibrate is enabled only when** the controller is connected (Ready), that slider has no unsaved Hardware changes (its pin and Auto-calibrate as saved are what the controller runs; the button's tooltip says "Save to controller first"), the controller runs Volco's saved setup (else the tooltip says "Volco's setup differs from the controller's"), it is not a new slider, and no hardware test, save or firmware operation is running.
+**Re-calibrate is enabled only when** the controller is connected (Ready), that slider has no unsaved Hardware changes (its pin and Auto-calibrate as saved are what the controller runs; the button's tooltip says "Save first"), the controller runs Volco's saved setup (else the tooltip says "Volco's setup differs from the controller's"), it is not a new slider, and no hardware test, save or firmware operation is running.
 
 ### What the Hardware section shows
 

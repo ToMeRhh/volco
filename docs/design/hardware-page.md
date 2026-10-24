@@ -29,7 +29,7 @@ The page becomes the Controls page's pattern:
 4. **One transport at a time:** USB, Wi-Fi or Simulator.
 5. **Live input always shows on the Hardware page:** slider levels and presses, without starting a test. Test is for the lights and for stopping input from reaching audio and actions.
 6. **Any slider or button can be removed,** with a warning that later controls are renumbered.
-7. **Smoothing (#108):** the firmware's smoothing stays here (Input feel); the app-side per-slider Smoothing is removed from Controls › Response.
+7. **Smoothing (#108):** the firmware's smoothing stays here (Input feel, since split into Sliders and Buttons by `slider-feel-settings.md`); the app-side per-slider Smoothing is removed from Controls › Response.
 8. **The controller is called "Volco controller"** on the card and in the tray tooltip.
 9. **No jump between Controls and Hardware:** one shared drawing at identical geometry; only what is on and around it changes, with crossfades (§3.3).
 10. **Pins are picked in a pin dialog showing every pin at once** (user, 2026-10-23; it replaced the fuzzy-searchable dropdown of the first build). Every GPIO the chip has, eight to a row by number, each saying free, its owner, or why it can't be used. While it is open, moving a slider or pressing a button marks its pin by colour, without picking it (§6.3). No assumptions about the dev kit's pinout.
@@ -160,16 +160,17 @@ Selected from its chip: **SDA** and **SCL** (pin fields), **Clock** (100 / 400 k
 ### 6.5 Problems and Save
 
 - Every problem in the draft shows on its field and tile (`DraftProblems`, unchanged rules), including the controller's `ConfigResult` INVALID mapped to its field.
-- **Save bar** at the bottom of the drawing area, shown while dirty: "1 change not saved" (count of changed tiles plus changed controller settings), "Saving restarts the controller", **Discard**, **Save to controller**. It replaces today's snackbar for the draft; the save's progress and result go to the card (§4.1). "This setup isn't on the controller yet" replaces the count for a new draft.
-- **Removing a control** (any one, decision 6) asks a plain "Remove Slider 3?" and nothing more: the drawing shows the result. The controls after it are renumbered and **keep what they do** (user, 2026-10-20): in the draft, the tile that was Slider 4 is now Slider 3 and still shows Slider 4's target and actions. On the controller's confirmation of the save, Volco's settings are rewritten to match: the removed control's entry is deleted and the later ones shift down (`sliders[i]`, or `buttons[i]` with its actions in every mode, timing and the rest). A discarded or failed save changes nothing in Volco's settings. This replaces today's rule (actions stayed with the number).
+- **Save bar** at the bottom of the drawing area, shown while dirty: "1 change not saved" (count of changed tiles plus changed controller cards, each counted once; Sliders if weight or deadband changed, Buttons if debounce, hold or double press changed), "Saving restarts the controller" (not shown when only the two button timings changed), **Discard**, **Save**. It replaces today's snackbar for the draft; the save's progress and result go to the card (§4.1). "This setup isn't on the controller yet" replaces the count for a new draft.
+- **Removing a control** (any one, decision 6) asks a plain "Remove Slider 3?" and nothing more: the drawing shows the result. The controls after it are renumbered and **keep what they do** (user, 2026-10-20): in the draft, the tile that was Slider 4 is now Slider 3 and still shows Slider 4's target and actions. On the controller's confirmation of the save, Volco's settings are rewritten to match: the removed control's entry is deleted and the later ones shift down (`sliders[i]`, or `buttons[i]` with its actions in every mode, and the rest). A discarded or failed save changes nothing in Volco's settings. This replaces today's rule (actions stayed with the number).
 - The UDP warning before saving Wi-Fi changes while connected over Wi-Fi is kept (controller-config §8.4).
 
 ### 6.6 Controller settings (the chip)
 
-Header "Controller" (the controller's chip and counts moved under the sidebar's status line, controller-page spec §5). Three sections, each opened and closed on its own (Screens and Input feel can be open together; user, 2026-10-22), each a card (controller-page spec §4.3, Cards): the header (in bold) is the card's first row, and the section's rows sit under it in the card, indented, and indented and tinted again for a sub-option or a sub-section (Fine tune). A setting whose label doesn't say enough has a "?" in front of its label whose tooltip (on hover) explains it; the plain ones (Brightness, Dim after, Dimmed to, Turn off after, Wi-Fi) don't (user, 2026-10-22).
+Header "Controller" (the controller's chip and counts moved under the sidebar's status line, controller-page spec §5). Four sections (Screens, Sliders, Buttons, Wi-Fi; Input feel was split by `slider-feel-settings.md`), each opened and closed on its own (Screens, Sliders and Buttons can be open together; user, 2026-10-22), each a card (controller-page spec §4.3, Cards): the header (in bold) is the card's first row, and the section's rows sit under it in the card, indented, and indented and tinted again for a sub-option or a sub-section (Fine tune). A setting whose label doesn't say enough has a "?" in front of its label whose tooltip (on hover) explains it; the plain ones (Brightness, Dim after, Dimmed to, Turn off after, Wi-Fi) don't (user, 2026-10-22).
 
 - **Screens** (only when a button has a screen; summary "80%, off after 30 min"): Brightness (a % slider over 0–255), Dim after (Never, 1, 2, 5, 10, 30 minutes, 1 hour), Dimmed to (Low, Medium), Turn off after (same list) with its sub-option **When off, the first press only wakes it** (the firmware swallows the press only while the screens are off, not dimmed; disabled while Turn off after is Never, and its value is kept), Prevent burn-in (pixel shift on/off), I2C buses (a summary and Edit, which opens the I2C buses dialog, controller-page spec §4.3). **Fine tune** holds the scroll, slide and pixel-shift timings as today's numeric fields.
-- **Input feel** (summary "Normal"): Slider smoothing Low / Normal / High, mapped onto the firmware's smoothing weight and deadband (the builder picks the three pairs; Normal = today's defaults). **Fine tune** shows today's four raw fields (debounce, read sliders every, smoothing weight, ignore changes below); a raw value off the three pairs shows the segment as Custom.
+- **Sliders** (summary "Normal"; replaces Input feel, `slider-feel-settings.md`): Smoothing Low / Normal / High, mapped onto the firmware's smoothing weight and deadband (Feels (40, 15), (20, 25), (10, 40)). **Fine tune:** Smoothing weight, Ignore changes below; a raw value off the three pairs shows the segment as Custom.
+- **Buttons** (summary "500 ms · 300 ms"): Hold after (200-2000 ms, step 50) and Double press within (100-1000 ms, step 50), controller-wide and stored by Volco in `config.json` (`buttonTiming`) but part of this draft, so Save commits them (a Save with only them sends nothing to the controller). **Fine tune:** Debounce. Read sliders every is not in the UI (the proto field is kept and a value set elsewhere is saved unchanged).
 - **Wi-Fi** (summary "Off" or "On · HomeNet"): opens the Connection dialog on Wi-Fi (§10.2).
 
 Values that don't land on a list entry (a config set elsewhere) show as "Custom (90 s)" and are kept.
@@ -309,18 +310,18 @@ The tray's "Update controller firmware…" and the sidebar's attention dot keep 
 - **The stage** (§3.3): the drawing (case, `FillWrapPanel` grids, `SliderTile`, `ButtonTile`, the mode frame) moves out of `ControlsPage` into a stage control in `SettingsWindow`, with a decoration mode (Controls, Hardware). Controls' behaviour is unchanged.
 - **Hardware page:** a new view model over today's `ControllerViewModel` logic (draft, banner, save, firmware, setup); the old `ControllerPage` view, its row view models (`HardwareRows`) and the test overlay go.
 - **Pin field:** a control (text box + popup list) used everywhere a pin is edited, with `FuzzyMatcher`.
-- **Controls › Response** loses Smoothing (#108).
+- **Controls › Response** loses Smoothing (#108; Response itself was removed later, `slider-feel-settings.md`).
 
 ## 13. Testing
 
 Headless (`Volco.App.Tests`), replacing `ControllerPage` tests where they test removed UI:
 - **Stage:** switching Controls ↔ Hardware keeps every tile's bounds (a layout test with 5 sliders and 4 buttons, with and without a screen, and dense); selection and scroll carry over.
 - **Leaving with unsaved changes:** the prompt for each page; Save and continue waits for confirmation, a failure stays; Discard and continue; Stay; Save disabled with problems; hiding the window keeps the draft.
-- **Removing a middle control:** after a confirmed save, Volco's sliders (target, name, response) and buttons (actions in every mode, timing) after it have shifted down and the removed one's are gone; a discarded or failed save leaves them untouched; the draft's tiles show the shifted targets and actions before the save.
+- **Removing a middle control:** after a confirmed save, Volco's sliders (target, name) and buttons (actions in every mode) after it have shifted down and the removed one's are gone; a discarded or failed save leaves them untouched; the draft's tiles show the shifted targets and actions before the save.
 - **Card:** each row of §4.1 from a `LinkStatus` × banner × firmware matrix; the ⋯ menu's enabled states during an operation and a test.
 - **Pin field:** rows and notes per role from `ChipInfo` and a draft; filtering; greyed rows can't be picked; Escape restores; a taken pick shows the problem and Swap fixes it; PinActivity lights up and scrolls to its row past the filter.
 - **Inspector:** Light segment reshapes only its rows; Try sends PinDrive for unsaved pins and test indicators for saved ones; Remove with the renumber warning.
-- **Controller settings:** list values map to and from config fields; Custom kept; Input feel's three pairs and Custom.
+- **Controller settings:** list values map to and from config fields; Custom kept; the Sliders card's three pairs and Custom.
 - **Chooser and Compare:** cards per mirror and presets; Keep adopts without writing; Send writes the mirror bytes.
 - **Test on the drawing:** enters and leaves test mode; lights cycle; leaving the page ends it.
 - **Connection dialog:** Automatic and manual ports; the Wi-Fi flow with a fake transport (Hello within 15 s; none → back to USB).
@@ -337,11 +338,11 @@ Separate PRs, in this order, each green on CI:
 
 1. **The shared stage.** Controls' drawing moves into the window's stage; Controls looks and behaves the same; Hardware still shows today's page beside it.
 2. **The Hardware page on the stage:** card and ⋯ menu, tile captions, inspector with the pin dropdown (no Detect yet), bus chips, save bar, Controller settings, the chooser and Compare, test on the drawing, live input, the crossfade. Today's page goes. The Connection section moves into the dialog with today's fields (port list without Automatic).
-3. **#108:** Controls › Response loses Smoothing (no schema bump).
+3. **#108:** Controls › Response loses Smoothing (no schema bump; Response itself was removed later, `slider-feel-settings.md`).
 4. **Connection dialog proper:** Automatic port, port descriptions (Windows seam), the Wi-Fi flow.
 5. **Firmware helpers:** PinWatch (Detect), I2cScan (Find screens), PinDrive (Try on unsaved pins); app wiring; simulator.
 6. **Docs:** CLAUDE.md (Hardware page paragraph, wire table, firmware), `firmware/README.md`, controller-config §8.7 points here, README screenshots.
 
 ## 15. Left to the builder
 
-Names, file layout, exact pixel values the mocks leave open, the pin-watch thresholds (§9.1, checked on hardware), Input feel's three pairs, wording not given above, and test structure.
+Names, file layout, exact pixel values the mocks leave open, the pin-watch thresholds (§9.1, checked on hardware), the Sliders card's three pairs, wording not given above, and test structure.

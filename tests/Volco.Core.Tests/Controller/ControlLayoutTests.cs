@@ -47,8 +47,6 @@ public class ControlLayoutTests
         {
             b.Actions["default"] = new ButtonBindingConfig();
             b.Actions["mode-2"] = new ButtonBindingConfig();
-            b.LongPressMs = 600 + b.Index;
-            b.DoublePressWindowMs = 250 + b.Index;
         }
         var old2 = c.Buttons[2];
         var layout = ControlLayout.Identity(0, 3);
@@ -57,8 +55,6 @@ public class ControlLayoutTests
         Assert.Equal(2, c.Buttons.Count);
         Assert.Same(old2, c.Buttons[1]);
         Assert.Equal(new[] { "default", "mode-2" }, c.Buttons[1].Actions.Keys.OrderBy(k => k));
-        Assert.Equal(602, c.Buttons[1].LongPressMs);
-        Assert.Equal(252, c.Buttons[1].DoublePressWindowMs);
         Assert.Equal(1, c.Buttons[1].Index);
     }
 

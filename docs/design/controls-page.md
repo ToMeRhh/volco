@@ -33,7 +33,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
 1. **The drawing comes from the controller.** Sliders form one wrapping grid and buttons another, in input order. There is no arrangeable layout.
 2. **The inspector does not change length while you use it.**
    - Its rows are one line each, and choices open dialogs.
-   - Only the Response (sliders) and Timing (buttons) sections expand, and they start closed.
+   - Nothing expands: the Response (sliders) and Timing (buttons) sections that did are replaced by `slider-feel-settings.md`.
 3. **Modes are buttons-only, and each is a complete set of actions.** A mode is not a set of overrides of a base mode.
 4. **Picking a mode tab edits that mode. It never changes the live mode.** "Make live" does.
 5. **The first mode is the start-up mode**, as today (`AppConfig.Presets`: the first is live at start). It cannot be deleted.
@@ -41,7 +41,7 @@ Desktop only. The window is resizable down to today's minimum (820 × 520), and 
 7. **Edit modes:** a pencil at the right end of the tabs. While editing, tabs can be dragged to reorder, clicked to rename, and deleted with × (except the first). The pencil becomes a check mark that ends editing.
 8. **Buttons have no names.** A button's label is its main action, with its other actions listed below.
 9. **Swapping a button moves only its actions.** One grip, beside a button's action rows, drags all its actions onto another button in the edited mode only. The drag image is the action rows, not the cap or light. There are no per-action drag handles.
-10. **Sliders keep optional names. Swapping a slider moves only what it controls and its name**, by a grip beside the track. The response settings (curve, dead zone, reverse) and the live level stay with the physical slider, and each slider's new target is set to its last reported position at once (`VolcoRuntime.ReapplySlider`, no OSD); so is a target picked in the target dialog. The drag image is the label row.
+10. **Sliders keep optional names. Swapping a slider moves only what it controls and its name**, by a grip beside the track. Reverse (a Hardware field now) and the live level stay with the physical slider, and each slider's new target is set to its last reported position at once (`VolcoRuntime.ReapplySlider`, no OSD); so is a target picked in the target dialog. The drag image is the label row.
 11. **Inspector "Clear"** removes all of a button's actions in the edited mode, with Undo.
 12. **The light or screen follows the main action** (§7), as today.
 13. **The controller works normally while the window is open.**
@@ -130,7 +130,7 @@ The header shows the control's kind and number. Its body is a fixed set of rows:
 
 - **Header:** "Slider N", with an editable name field. The placeholder is the target's label.
 - **Controls row:** the target's icon or app icons and its label, e.g. "Speakers", "Spotify, Discord", "Main output" or "Everything else". It opens the target dialog (§6.2).
-- **Response (collapsed):**
+- **Response (collapsed): replaced by `slider-feel-settings.md`** (curve and dead zone are gone; reverse is in the Hardware section). As approved then:
   - the curve as four small graphs: Linear, Log, Exp, S-curve;
   - Dead zone (0–45 %) and Reverse.
   - These are today's per-slider settings. Smoothing is gone (#108): the firmware smooths every sample, controller-wide.
@@ -144,7 +144,7 @@ The header shows the control's kind and number. Its body is a fixed set of rows:
   - An empty row shows "—" and a +.
   - Clicking a row opens the action dialog (§6.1).
 - **Light or Screen row:** the preview and "Follows Press" (or Double press or Hold, whichever is the main action), or "Off". It is not editable.
-- **Timing (collapsed):** Hold after and Double press within, per button as today, until #109 moves them.
+- **Timing (collapsed): replaced by `slider-feel-settings.md`** (Hold after and Double press within are controller-wide, in Controller settings › Buttons). As approved then: Hold after and Double press within, per button.
 
 ## 6. Dialogs
 
@@ -331,7 +331,7 @@ Headless tests in `Volco.App.Tests`, replacing `ButtonsPageTests`, `ButtonsPageC
   - fixed rows;
   - Clear and Undo;
   - Try runs through `ActionOrigin`;
-  - Response and Timing persist.
+  - (Response and Timing sections: gone, `slider-feel-settings.md`.)
 - **Action dialog:**
   - focus on open; full list with an empty query;
   - fuzzy order ("tgo" puts Toggle outputs first);

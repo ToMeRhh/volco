@@ -7,7 +7,7 @@ namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
 /// The Hardware section of a slider's inspector (controller-page spec §4.3, hardware-page spec
-/// §6.1): its pin, Auto-calibrate and its calibration with Re-calibrate (slider-calibration spec,
+/// §6.1): its pin, Reverse direction, Auto-calibrate and its calibration with Re-calibrate (slider-calibration spec,
 /// "What the Hardware section shows"), Remove, and the danger mark on the section's header. Made
 /// for one draft slider; the Hardware view model refreshes it after every draft change and drops it
 /// when the selection moves.
@@ -18,7 +18,7 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     private readonly Action _recalibrate;
 
     internal SliderWiringViewModel(int index, SliderItemViewModel item, PinFieldViewModel pin, Action remove,
-                                   ControllerViewModel controller, Action recalibrate)
+                                   ControllerViewModel controller, Action recalibrate, Action openSmoothing)
     {
         Index = index;
         Item = item;
@@ -26,6 +26,8 @@ public sealed partial class SliderWiringViewModel : ObservableObject
         _controller = controller;
         _recalibrate = recalibrate;
         RemoveCommand = new RelayCommand(remove);
+        OpenSmoothingCommand = new RelayCommand(openSmoothing);
+        _smoothingSummary = ControllerSettingsViewModel.SmoothingName(controller);
         RecalibrateCommand = new RelayCommand(() => _recalibrate(), () => CanRecalibrate);
     }
 
@@ -75,6 +77,28 @@ public sealed partial class SliderWiringViewModel : ObservableObject
         }
     }
 
+    /// <summary>Reverse direction (a draft field, sent with Save like the pin; off by default): the controller
+    /// sends 4095 minus the reading.</summary>
+    public bool Reverse
+    {
+        get => Message?.Reverse ?? false;
+        set
+        {
+            if (Message is not { } s || value == Reverse || !_controller.CanEdit) { OnPropertyChanged(); return; }
+            // Back to the saved value, the message is again the saved one byte for byte (absent = off).
+            if (!value && _saved is not { HasReverse: true }) s.ClearReverse();
+            else s.Reverse = value;
+            OnPropertyChanged();
+            _controller.OnDraftEdited();
+        }
+    }
+
+    /// <summary>The controller-wide smoothing's name ("Normal"), beside "Smoothing (all sliders)".</summary>
+    [ObservableProperty] private string _smoothingSummary;
+
+    /// <summary>Opens Controller settings with the Sliders card open.</summary>
+    public IRelayCommand OpenSmoothingCommand { get; }
+
     /// <summary>The Auto-calibrate row's caption while the draft's setting differs from the saved one.</summary>
     public string? AutoCalibrateNote
         => _saved is { } saved && Message is { } s && saved.AutoCalibrate != s.AutoCalibrate
@@ -87,7 +111,7 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     /// saved (no unsaved change of it, not new), and no test, save or firmware operation runs.</summary>
     [ObservableProperty] private bool _canRecalibrate;
 
-    /// <summary>Why Re-calibrate is off: "Save to controller first" while the slider's unsaved changes
+    /// <summary>Why Re-calibrate is off: "Save first" while the slider's unsaved changes
     /// hold it off, "Volco's setup differs from the controller's" while the controller holds another setup.</summary>
     [ObservableProperty] private string? _recalibrateTooltip;
 
@@ -105,7 +129,9 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     {
         _saved = saved;
         OnPropertyChanged(nameof(AutoCalibrate));
+        OnPropertyChanged(nameof(Reverse));
         OnPropertyChanged(nameof(AutoCalibrateNote));
+        SmoothingSummary = ControllerSettingsViewModel.SmoothingName(_controller);
         CalibrationText = CaptionFor(state);
         CanRecalibrate = canRecalibrate;
         RecalibrateTooltip = why;

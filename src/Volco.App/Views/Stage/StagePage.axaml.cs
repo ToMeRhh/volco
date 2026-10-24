@@ -74,8 +74,8 @@ public partial class StagePage : UserControl
     }
 
     /// <summary>How far down a tile's inspector its Hardware section starts (controller-page spec
-    /// §4.3): the tallest header and Controls or Actions section of the drawn tiles, with their
-    /// sub-sections (Response, Timing) open, measured on an unseen copy. A tile's inspector is at
+    /// §4.3): the tallest header and Controls or Actions section of the drawn tiles,
+    /// measured on an unseen copy. A tile's inspector is at
     /// least this tall above its Hardware section, so that section never moves.</summary>
     public double InspectorTopHeight
     {
@@ -206,7 +206,7 @@ public partial class StagePage : UserControl
         else if (e.PropertyName is nameof(HardwareViewModel.ShowSaveBar)) UpdateSaveBar();
         else if (e.PropertyName is nameof(HardwareViewModel.IsTesting)) UpdateTesting();
         else if (e.PropertyName is nameof(HardwareViewModel.Inspected)) UpdateSidePanel();
-        if (e.PropertyName is nameof(HardwareViewModel.HasUnsavedChanges) or null or "") ScheduleTileSources();
+        if (e.PropertyName is nameof(HardwareViewModel.HasUnsavedControllerChanges) or null or "") ScheduleTileSources();
     }
 
     /// <summary>The setup chooser takes the case's rectangle (hardware-page spec §3.3, §7.1): the
@@ -260,7 +260,7 @@ public partial class StagePage : UserControl
     private void UpdateTileSources()
     {
         var vm = Vm;
-        var hw = Hardware is { HasUnsavedChanges: true } h ? h : null;
+        var hw = Hardware is { HasUnsavedControllerChanges: true } h ? h : null;
         Show(_sliderList, vm is null ? null
              : hw is not null && !hw.Sliders.SequenceEqual(vm.Sliders.Items) ? hw.Sliders : vm.Sliders.Items);
         Show(_buttonList, vm is null ? null

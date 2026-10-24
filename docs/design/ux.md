@@ -28,15 +28,15 @@ Every setting the Step 2 UI edits, mapped to the `AppConfig` property and to whe
 | Sliders | Mapping type: Processes / Output Device / Unmapped | `Sliders[i].Type` | Slider card: "Apps / All other apps / A device" ("Unmapped" is renamed "All other apps") |
 | Sliders | Processes (comma-separated) | `Sliders[i].Processes` | Slider card, chip input with process autocomplete |
 | Sliders | Output device | `Sliders[i].Device` | Slider card, device picker; empty = "Current default output" |
-| Sliders | Invert | `Sliders[i].Invert` | Slider card, Advanced |
-| Sliders | Response curve | `Sliders[i].Curve` | Slider card, Advanced |
-| Sliders | Dead zone | `Sliders[i].DeadZonePercent` | Slider card, Advanced |
+| Sliders | Invert | `Sliders[i].Invert` | Slider card, Advanced (replaced by `slider-feel-settings.md`) |
+| Sliders | Response curve | `Sliders[i].Curve` | Slider card, Advanced (replaced by `slider-feel-settings.md`) |
+| Sliders | Dead zone | `Sliders[i].DeadZonePercent` | Slider card, Advanced (replaced by `slider-feel-settings.md`) |
 | Sliders | Live level | (runtime `SliderLevelChanged`) | Level bar in the closed card header |
 | Buttons | Single / double / long press action | `Buttons[i].SinglePress/DoublePress/LongPress.Action` | Button card: Press / Double press / Hold, **per preset** |
 | Buttons | Action device | `Buttons[i].*.Device` | Inline under the action picker |
 | Buttons | Test (runs the action once) | (command) | "Test" button next to each action picker |
-| Buttons | Long-press threshold | `Buttons[i].LongPressMs` | Button card, Advanced ("Hold after") |
-| Buttons | Double-press window | `Buttons[i].DoublePressWindowMs` | Button card, Advanced |
+| Buttons | Long-press threshold | `Buttons[i].LongPressMs` | Button card, Advanced ("Hold after") (replaced by `buttonTiming` in `slider-feel-settings.md`) |
+| Buttons | Double-press window | `Buttons[i].DoublePressWindowMs` | Button card, Advanced (replaced by `buttonTiming` in `slider-feel-settings.md`) |
 | Output Devices | Toggle device 1 / 2 | `OutputDevices.Device1/Device2` | Moves into the "Toggle between two outputs" action as its A and B devices. **The page is removed.** |
 | General | Debug logging | `DebugLogging` | General page, "Detailed logging" |
 | Update window | GitHub token | `Updates.GitHubToken` | Removed (2026-10-07): the updater reads public GitHub Releases without a token |
@@ -99,7 +99,7 @@ Four pages in a 200 px navigation column: **Sliders, Buttons, Connection, Genera
     - All other apps: a hint listing what is excluded ("everything except spotify.exe, chrome.exe").
     - A device: device picker, first entry "Current default output".
     - Not set up (no segment selected): hint "Not set up. Choose what this slider controls."
-  - **Advanced** (collapsed): Invert direction, Response curve, Dead zone.
+  - **Advanced** (collapsed): Invert direction, Response curve, Dead zone. (Replaced by `slider-feel-settings.md`: only Reverse direction survives, in the Hardware section.)
 - **Activity:** when the controller sends a value for a slider, its card's level bar moves and the card gets a brief accent outline. This is how a user finds which card is which physical slider.
 
 ### 3.4 Buttons page
@@ -110,7 +110,7 @@ Four pages in a 200 px navigation column: **Sliders, Buttons, Connection, Genera
   - With two or more, folder tabs show the presets, and the button cards sit inside the tab of the preset you are **editing**. Each preset has its own colour (by position, six tints per theme, `PresetFill{n}`/`PresetEdge{n}`): its tab is filled with it, and the edited tab's frame takes its fill and edge, so it is clear which preset the cards belong to. The preset **live** on the controller has a green dot. Next to the tabs: Add preset; at the top of the tab: the live line (or Make live), Rename, Delete.
   - A banner under the tabs says either "*Default* is live on the controller" or "You are editing *Gaming*. The controller is using *Default*. [Make Gaming live]".
   - The app always starts on the first preset.
-  - Only actions are per preset. Timing and position are shared by every preset. Dragging a button card moves its actions in every preset; Reset clears them in every preset.
+  - Only actions are per preset. Timing (now controller-wide, `slider-feel-settings.md`) and position are shared by every preset. Dragging a button card moves its actions in every preset; Reset clears them in every preset.
 - **Closed card:** drag handle · "Button N" · summary of the edited preset's actions · controller-light preview (§3.6) · ⋯ · chevron.
 - **Open card:**
   - Three action rows, always visible: **Press, Double press, Hold**. Each has a grouped action picker, a **Test** button, and its parameters indented below.

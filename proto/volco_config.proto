@@ -20,6 +20,7 @@ message ControllerConfig {
 message Slider {
   optional uint32 pin = 1;         // ADC-capable GPIO
   optional bool auto_calibrate = 2 [default = true];  // learn the travel's ends while in use
+  optional bool reverse = 3 [default = false];        // send 4095 - value
 }
 
 message Button {
