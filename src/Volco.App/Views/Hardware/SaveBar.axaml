@@ -3,16 +3,18 @@
              xmlns:hw="using:Volco.App.ViewModels.Hardware"
              x:Class="Volco.App.Views.Hardware.SaveBar"
              x:DataType="hw:HardwareViewModel">
-  <!-- The save bar (hardware-page spec §6.5): what is unsaved, what saving does, Discard and Save -->
-  <Border Name="SaveBarBorder" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
-          BorderThickness="0,1,0,0" Padding="20,10">
-    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-      <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-        <TextBlock Name="SaveBarText" Text="{Binding SaveBarText}" VerticalAlignment="Center"/>
+  <!-- The save bar (hardware-page spec §6.5): across the top of the drawing in amber, with a warning
+       sign, what is unsaved, what saving does, Discard and Save -->
+  <Border Name="SaveBarBorder" Classes="SaveBar">
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+      <PathIcon Name="SaveBarIcon" Data="{StaticResource Icon.Status.Warning}" Width="18" Height="18"
+                Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <TextBlock Name="SaveBarText" Classes="SaveBarText" Text="{Binding SaveBarText}" VerticalAlignment="Center"/>
         <TextBlock Name="SaveBarNote" Classes="Secondary" Text="{Binding SaveBarNote}" VerticalAlignment="Center"/>
       </StackPanel>
-      <Button Name="DiscardButton" Grid.Column="1" Content="Discard" Command="{Binding DiscardCommand}"/>
-      <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save to controller" Command="{Binding SaveCommand}"/>
+      <Button Name="DiscardButton" Grid.Column="2" Content="Discard" Command="{Binding DiscardCommand}"/>
+      <Button Name="SaveButton" Grid.Column="3" Classes="Primary" Content="Save to controller" Command="{Binding SaveCommand}"/>
     </Grid>
   </Border>
 </UserControl>

@@ -20,6 +20,7 @@
       <SolidColorBrush x:Key="OnAccentBrush" Color="{DynamicResource OnAccentColor}"/>
       <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
       <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
+      <SolidColorBrush x:Key="WarningSoftBrush" Color="{DynamicResource WarningSoftColor}"/>
       <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
       <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
@@ -52,6 +53,7 @@
       <SolidColorBrush x:Key="OnAccentBrush" Color="{DynamicResource OnAccentColor}"/>
       <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
       <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
+      <SolidColorBrush x:Key="WarningSoftBrush" Color="{DynamicResource WarningSoftColor}"/>
       <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
       <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
@@ -84,6 +86,7 @@
       <SolidColorBrush x:Key="OnAccentBrush" Color="{DynamicResource OnAccentColor}"/>
       <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
       <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
+      <SolidColorBrush x:Key="WarningSoftBrush" Color="{DynamicResource WarningSoftColor}"/>
       <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
       <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>
@@ -116,6 +119,7 @@
       <SolidColorBrush x:Key="OnAccentBrush" Color="{DynamicResource OnAccentColor}"/>
       <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
       <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
+      <SolidColorBrush x:Key="WarningSoftBrush" Color="{DynamicResource WarningSoftColor}"/>
       <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
       <SolidColorBrush x:Key="SurfaceCardBrush" Color="{DynamicResource SurfaceCardColor}"/>
       <SolidColorBrush x:Key="SurfaceStrokeBrush" Color="{DynamicResource SurfaceStrokeColor}"/>

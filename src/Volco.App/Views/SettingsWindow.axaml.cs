@@ -509,9 +509,21 @@ public partial class SettingsWindow : Window
         // Hide instead of close so the tray's Open Settings can bring the same window back.
         if (!ShouldHideInsteadOfClose(e.CloseReason, AllowClose, VolcoApplication.IsExiting)) return;
         e.Cancel = true;
-        // Hiding ends a running test too, and doesn't ask about unsaved changes: the draft is kept
-        // and the window reopens on the Controller page.
-        _stage?.Hardware?.CloseLeavePrompt();
+        // Closing with unsaved controller changes asks first, as leaving the Controller page does,
+        // over that page so the changes show; the window hides once they were saved or discarded.
+        if (_hardware.HasUnsavedChanges)
+        {
+            ShowPage("controller");
+            _hardware.AskToLeave(HideWindow, closing: true);
+            return;
+        }
+        HideWindow();
+    }
+
+    /// <summary>Hides the window (the tray's Open Settings brings it back); a running test ends.</summary>
+    private void HideWindow()
+    {
+        _hardware.CloseLeavePrompt();
         _hardware.CloseCalibration();   // a sweep that hadn't ended is cancelled
         _hardware.CloseBuses();
         _hardware.ClosePinDialog();   // an open pin dialog stops its watch

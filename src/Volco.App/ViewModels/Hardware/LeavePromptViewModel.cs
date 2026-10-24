@@ -8,22 +8,26 @@ namespace Volco.App.ViewModels.Hardware;
 /// Leaving Hardware with unsaved changes asks first (hardware-page spec §3.3): Save and continue
 /// (waits for the controller's confirmation, with its progress here; a failure keeps the user on
 /// Hardware with the error on the card), Discard and continue, or Stay. Save is disabled while the
-/// draft has problems. Raised by the settings window for any page; hiding the window doesn't ask.
+/// draft has problems. Raised by the settings window for any page, and by its close button (the
+/// window hides to the tray), when the buttons say "close" and Stay is Cancel.
 /// A save already running (the save bar's) is adopted: the prompt waits for it as for its own.
 /// </summary>
 public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
 {
     private readonly ControllerViewModel _controller;
     private Action _proceed;
+    private bool _closing;
     private readonly Action _close;
     private bool _disposed;
 
     /// <param name="proceed">Goes where the user was going; runs after the prompt closed.</param>
     /// <param name="close">Closes the prompt (the user stays on Hardware).</param>
-    public LeavePromptViewModel(ControllerViewModel controller, Action proceed, Action close)
+    /// <param name="closing">The window is closing rather than another page opening.</param>
+    public LeavePromptViewModel(ControllerViewModel controller, Action proceed, Action close, bool closing = false)
     {
         _controller = controller;
         _proceed = proceed;
+        _closing = closing;
         _close = close;
         _isSaving = controller.IsSaving;
         SaveAndContinueCommand = new RelayCommand(SaveAndContinue, () => CanSaveAndContinue);
@@ -35,9 +39,26 @@ public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
 
     public string Title => "Unsaved changes";
 
-    /// <summary>Another page was chosen while the prompt is open: the prompt (and a save it runs)
-    /// stays, and continuing goes to that page instead.</summary>
-    public void Retarget(Action proceed) => _proceed = proceed;
+    public string Message => _closing
+        ? "Your controller changes aren't saved. Save them before closing?"
+        : "Your controller changes aren't saved. Save them before leaving?";
+
+    public string SaveLabel => _closing ? "Save and close" : "Save and continue";
+    public string DiscardLabel => _closing ? "Discard and close" : "Discard and continue";
+    public string StayLabel => _closing ? "Cancel" : "Stay";
+
+    /// <summary>Another page was chosen, or the window closed, while the prompt is open: the prompt
+    /// (and a save it runs) stays, and continuing goes there instead.</summary>
+    public void Retarget(Action proceed, bool closing = false)
+    {
+        _proceed = proceed;
+        if (_closing == closing) return;
+        _closing = closing;
+        OnPropertyChanged(nameof(Message));
+        OnPropertyChanged(nameof(SaveLabel));
+        OnPropertyChanged(nameof(DiscardLabel));
+        OnPropertyChanged(nameof(StayLabel));
+    }
 
     /// <summary>Save and continue's save runs: the prompt waits for the controller's confirmation.</summary>
     [ObservableProperty]

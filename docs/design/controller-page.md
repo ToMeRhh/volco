@@ -62,10 +62,10 @@ The side panel is a card (all four edges, rounded corners, a margin from the win
 ### 4.4 Saving
 
 - Controls settings save at once, as today.
-- Controller changes (Hardware sections, Add, Remove, Controller settings, the chooser) go into the controller draft. The save bar ("N changes not saved · Saving restarts the controller · Discard · Save to controller") appears under the drawing only while the draft is dirty.
+- Controller changes (Hardware sections, Add, Remove, Controller settings, the chooser) go into the controller draft. The save bar ("N changes not saved · Saving restarts the controller · Discard · Save to controller") appears as an amber band across the top of the drawing only while the draft is dirty.
 - Removing a control and saving shifts Volco's settings as the redesign branch does (spec §6.5).
 - **Volco's saved copy in the setup chooser is sent to the controller at once** (with the usual restart, in the progress dialog), since the controller has run it before; presets and Start empty open a draft (user, 2026-10-21). Picking it discards the draft first (which ends a Start over); a controller that already holds the copy gets nothing, so it doesn't restart for nothing. The card is disabled while it can't be sent: "Connect the controller first" without a ready controller, "Wait for the current operation to finish" while a save, a test or a firmware operation runs.
-- Leaving the Controller page for General with a dirty draft asks first (the leave prompt), as Hardware did. Hiding the window doesn't.
+- Leaving the Controller page for General with a dirty draft asks first (the leave prompt), as Hardware did. Closing the window to the tray asks too, over the Controller page (Save and close, Discard and close, Cancel).
 
 ## 5. Controller status: three levels (user, 2026-10-21, revised)
 
