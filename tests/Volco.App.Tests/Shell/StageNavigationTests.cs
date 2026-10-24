@@ -516,7 +516,7 @@ public sealed class StageNavigationTests
     {
         using var s = Show();
         s.Vm.Controller.SetSliderPin(1, 39);
-        s.Window.Close();   // hides, without asking
+        s.Window.Hide();   // a hide that isn't the close button (which asks) keeps the draft
         Settle(s.Window);
         Assert.False(s.Window.IsVisible);
         Assert.Null(s.Vm.Hardware.LeavePrompt);

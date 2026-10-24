@@ -14,9 +14,10 @@
        Only the drawing scrolls. -->
   <Panel>
     <Grid ColumnDefinitions="*,Auto">
-      <!-- The drawing scrolls; the save bar (while the controller draft is unsaved) sits under it -->
-      <Grid RowDefinitions="*,Auto">
-      <ScrollViewer Name="DrawingScroll" VerticalScrollBarVisibility="Auto">
+      <!-- The drawing scrolls; the save bar (while the controller draft is unsaved) sits over it -->
+      <Grid RowDefinitions="Auto,*">
+      <hwviews:SaveBar Name="SaveBarHost" IsVisible="False"/>
+      <ScrollViewer Name="DrawingScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,8,20,20" Spacing="14">
           <!-- The title row (spec §4.2): "Controller", then + Add, Controller settings and Test -->
           <Grid Name="TitleRow" Classes="StageTitleRow" ColumnDefinitions="*,Auto">
@@ -153,7 +154,6 @@
                      Text="{Binding ConnectLine}" IsVisible="{Binding ShowConnectLine}"/>
         </StackPanel>
       </ScrollViewer>
-      <hwviews:SaveBar Name="SaveBarHost" Grid.Row="1" IsVisible="False"/>
       </Grid>
 
       <!-- The side panel (controller-page spec §4.3), a card. The controller's panel

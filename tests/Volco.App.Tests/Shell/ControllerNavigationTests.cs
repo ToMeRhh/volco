@@ -185,6 +185,94 @@ public sealed class ControllerNavigationTests : IDisposable
         Assert.Same(stage, s.Window.CurrentPage);
     }
 
+    /// <summary>Closing the window (to the tray) with a dirty draft asks as leaving does, over the
+    /// Controller page and with close wording; Cancel keeps the window and the draft, Discard and
+    /// close hides it with the draft gone.</summary>
+    [AvaloniaFact]
+    public void ClosingWithADirtyDraftAsks()
+    {
+        using var s = Show();
+        s.Vm.Controller.SetSliderPin(1, 39);
+        Settle(s.Window);
+        Assert.IsType<GeneralPage>(s.Window.CurrentPage);
+
+        s.Window.Close();
+        Settle(s.Window);
+        Assert.True(s.Window.IsVisible);
+        var prompt = Assert.IsType<Volco.App.ViewModels.Hardware.LeavePromptViewModel>(s.Vm.Hardware.LeavePrompt);
+        Assert.True(In<Border>(s.Window, "LeaveOverlay").IsVisible);
+        Assert.IsType<StagePage>(s.Window.CurrentPage);   // the changes show under the prompt
+        Assert.Equal("Save and close", In<Button>(s.Window, "SaveAndContinueButton").Content);
+        Assert.Equal("Discard and close", In<Button>(s.Window, "DiscardAndContinueButton").Content);
+        Assert.Equal("Cancel", In<Button>(s.Window, "StayButton").Content);
+
+        prompt.StayCommand.Execute(null);
+        Settle(s.Window);
+        Assert.True(s.Window.IsVisible);
+        Assert.Null(s.Vm.Hardware.LeavePrompt);
+        Assert.True(s.Vm.Hardware.HasUnsavedChanges);
+
+        s.Window.Close();
+        Settle(s.Window);
+        s.Vm.Hardware.LeavePrompt!.DiscardAndContinueCommand.Execute(null);
+        Settle(s.Window);
+        Assert.False(s.Window.IsVisible);
+        Assert.Null(s.Vm.Hardware.LeavePrompt);
+        Assert.False(s.Vm.Hardware.HasUnsavedChanges);
+    }
+
+    /// <summary>Closing while the leave prompt is open for General turns it into the close prompt.</summary>
+    [AvaloniaFact]
+    public void ClosingWhileTheLeavePromptIsOpenRetargetsIt()
+    {
+        using var s = Show();
+        s.Window.ShowPage("controller");
+        Settle(s.Window);
+        s.Vm.Controller.SetSliderPin(1, 39);
+        Settle(s.Window);
+        s.Window.ShowPage("general");
+        Settle(s.Window);
+        var prompt = s.Vm.Hardware.LeavePrompt!;
+        Assert.Equal("Stay", prompt.StayLabel);
+
+        s.Window.Close();
+        Settle(s.Window);
+        Assert.Same(prompt, s.Vm.Hardware.LeavePrompt);
+        Assert.Equal("Cancel", In<Button>(s.Window, "StayButton").Content);
+        prompt.DiscardAndContinueCommand.Execute(null);
+        Settle(s.Window);
+        Assert.False(s.Window.IsVisible);   // hidden, not on General
+    }
+
+    /// <summary>A clean draft closes (hides) at once.</summary>
+    [AvaloniaFact]
+    public void ClosingWithACleanDraftDoesntAsk()
+    {
+        using var s = Show();
+        s.Window.Close();
+        Settle(s.Window);
+        Assert.False(s.Window.IsVisible);
+        Assert.Null(s.Vm.Hardware.LeavePrompt);
+    }
+
+    /// <summary>The save bar is across the top of the drawing, above the title row.</summary>
+    [AvaloniaFact]
+    public void TheSaveBarIsAtTheTop()
+    {
+        using var s = Show();
+        s.Window.ShowPage("controller");
+        Settle(s.Window);
+        s.Vm.Controller.SetSliderPin(1, 39);
+        Settle(s.Window);
+        var stage = Stage(s);
+        var bar = In<Volco.App.Views.Hardware.SaveBar>(stage, "SaveBarHost");
+        Assert.True(bar.IsVisible);
+        var barBottom = bar.TranslatePoint(new Point(0, bar.Bounds.Height), stage)!.Value.Y;
+        var title = In<TextBlock>(stage, "PageTitle").TranslatePoint(new Point(0, 0), stage)!.Value.Y;
+        Assert.Equal(0, bar.TranslatePoint(new Point(0, 0), stage)!.Value.Y);
+        Assert.True(barBottom <= title, $"bar ends at {barBottom}, title at {title}");
+    }
+
     /// <summary>With no copy of the controller's setup the draft is the Blank placeholder: it holds
     /// nothing the user changed, so leaving doesn't ask, and the drawing is Volco's controls.</summary>
     [AvaloniaFact]

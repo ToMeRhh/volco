@@ -1104,6 +1104,19 @@
     <Setter Property="MinHeight" Value="48"/>
   </Style>
 
+  <!-- The save bar across the top of the drawing while the controller draft is unsaved: amber, so
+       it reads as something to act on, under the status banner's neutral surface -->
+  <Style Selector="Border.SaveBar">
+    <Setter Property="Background" Value="{DynamicResource WarningSoftBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
+    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    <Setter Property="Padding" Value="20,8"/>
+    <Setter Property="MinHeight" Value="48"/>
+  </Style>
+  <Style Selector="TextBlock.SaveBarText">
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
   <!-- ── Settings window chrome ────────────────────────────────────────── -->
   <!-- The client area extends into the title bar; these fill the title bar row. -->
   <Style Selector="Border.Sidebar">

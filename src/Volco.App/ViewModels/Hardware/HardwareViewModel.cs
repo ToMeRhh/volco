@@ -245,14 +245,15 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The open leave prompt, or null.</summary>
     [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
 
-    /// <summary>Asks before leaving Hardware with unsaved changes; <paramref name="proceed"/> goes
-    /// on once the draft was saved (and confirmed) or discarded. While a prompt is open it stays
-    /// (a save it runs goes on) and only where it continues to changes.</summary>
-    public void AskToLeave(Action proceed)
+    /// <summary>Asks before leaving Hardware (or, with <paramref name="closing"/>, closing the
+    /// window) with unsaved changes; <paramref name="proceed"/> goes on once the draft was saved
+    /// (and confirmed) or discarded. While a prompt is open it stays (a save it runs goes on) and
+    /// only where it continues to changes.</summary>
+    public void AskToLeave(Action proceed, bool closing = false)
     {
         if (_disposed) return;
-        if (LeavePrompt is { } open) open.Retarget(proceed);
-        else LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt);
+        if (LeavePrompt is { } open) open.Retarget(proceed, closing);
+        else LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt, closing);
     }
 
     /// <summary>Closes the leave prompt: the user stays on Hardware.</summary>

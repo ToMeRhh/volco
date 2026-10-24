@@ -28,6 +28,8 @@
       <Color x:Key="SuccessColor">#FF1F7A45</Color>
       <Color x:Key="WarningColor">#FF9A5B00</Color>
       <Color x:Key="DangerColor">#FFB42318</Color>
+      <!-- The save bar's fill (unsaved controller changes), under WarningColor's edge -->
+      <Color x:Key="WarningSoftColor">#FFFBF0DD</Color>
       <!-- Mode tints (the Controller page's modes): a soft fill and its edge, one pair per mode -->
       <Color x:Key="ModeFill0Color">#FFEAF0FC</Color>
       <Color x:Key="ModeEdge0Color">#FF3358C4</Color>
@@ -62,6 +64,8 @@
       <Color x:Key="SuccessColor">#FF5CC98A</Color>
       <Color x:Key="WarningColor">#FFE7B04F</Color>
       <Color x:Key="DangerColor">#FFF4877C</Color>
+      <!-- The save bar's fill (unsaved controller changes), under WarningColor's edge -->
+      <Color x:Key="WarningSoftColor">#FF33280F</Color>
       <!-- Mode tints (the Controller page's modes): a soft fill and its edge, one pair per mode -->
       <Color x:Key="ModeFill0Color">#FF1C2335</Color>
       <Color x:Key="ModeEdge0Color">#FF8AA6F2</Color>
@@ -96,6 +100,8 @@
       <Color x:Key="SuccessColor">#FF3FF23F</Color>
       <Color x:Key="WarningColor">#FFFFFF00</Color>
       <Color x:Key="DangerColor">#FFFF8A80</Color>
+      <!-- The save bar's fill (unsaved controller changes), under WarningColor's edge -->
+      <Color x:Key="WarningSoftColor">#FF2A2A00</Color>
       <!-- Mode tints (the Controller page's modes): a soft fill and its edge, one pair per mode -->
       <Color x:Key="ModeFill0Color">#FF00222A</Color>
       <Color x:Key="ModeEdge0Color">#FF1AEBFF</Color>
@@ -130,6 +136,8 @@
       <Color x:Key="SuccessColor">#FF0A5C1E</Color>
       <Color x:Key="WarningColor">#FF6B3D00</Color>
       <Color x:Key="DangerColor">#FF8E0B0B</Color>
+      <!-- The save bar's fill (unsaved controller changes), under WarningColor's edge -->
+      <Color x:Key="WarningSoftColor">#FFF3E7D2</Color>
       <!-- Mode tints (the Controller page's modes): a soft fill and its edge, one pair per mode -->
       <Color x:Key="ModeFill0Color">#FFE2EEF2</Color>
       <Color x:Key="ModeEdge0Color">#FF174F63</Color>
