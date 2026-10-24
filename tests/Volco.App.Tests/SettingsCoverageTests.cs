@@ -211,10 +211,11 @@ public class SettingsCoverageTests
         Named<ToggleSwitch>(host, "BurnInToggle").IsChecked = false;           // screens.pixel_shift_enabled
         Settle(window);
 
-        Open(window, host, "InputHeader", "InputBody");
-        Open(window, host, "InputFineHeader", "InputFineBody");
+        Open(window, host, "SlidersHeader", "SlidersBody");
+        Open(window, host, "SlidersFineHeader", "SlidersFineBody");
+        Open(window, host, "ButtonsHeader", "ButtonsBody");
+        Open(window, host, "ButtonsFineHeader", "ButtonsFineBody");
         Named<NumericUpDown>(host, "DebounceBox").Value = 25;                  // input.debounce_ms
-        Named<NumericUpDown>(host, "SliderIntervalBox").Value = 15;            // input.slider_interval_ms
         Named<NumericUpDown>(host, "SmoothingBox").Value = 40;                 // input.filter_weight_pct
         Named<NumericUpDown>(host, "DeadbandBox").Value = 30;                  // input.slider_deadband
         Settle(window);
@@ -264,8 +265,8 @@ public class SettingsCoverageTests
         Assert.False(screens.PixelShiftEnabled);
         Assert.Equal((900u, 40u, 700u, 300u, 120u),
                      (screens.ScrollHoldMs, screens.ScrollSpeedPxS, screens.ScrollEndHoldMs, screens.TransitionMs, screens.PixelShiftEveryS));
-        Assert.Equal((25u, 15u, 40u, 30u),
-                     (saved.Input.DebounceMs, saved.Input.SliderIntervalMs, saved.Input.FilterWeightPct, saved.Input.SliderDeadband));
+        Assert.Equal((25u, 40u, 30u),
+                     (saved.Input.DebounceMs, saved.Input.FilterWeightPct, saved.Input.SliderDeadband));
         Assert.True(saved.Udp.Enabled);
         Assert.Equal(("home", "password1", 0xC0A8010Au, 23456u, 23457u),
                      (saved.Udp.Ssid, saved.Udp.Password, saved.Udp.PcIp, saved.Udp.PcPort, saved.Udp.LocalPort));

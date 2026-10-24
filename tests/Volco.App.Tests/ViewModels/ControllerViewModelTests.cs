@@ -239,6 +239,28 @@ public sealed class ControllerViewModelTests : IDisposable
 
     // ── Button timing (slider-feel spec, "The save rule") ────────────────────────────────
 
+    /// <summary>Review Focus 5: the sample interval has no control, and a value set elsewhere survives a save.</summary>
+    [Fact]
+    public void SliderInterval_HiddenAndKept()
+    {
+        var config = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        config.Input.SliderIntervalMs = 20;
+        var mirror = ControllerConfigCodec.Encode(config);
+        var vm = Vm(mirror);
+        GreetInSync(mirror);
+        vm.SmoothingPct = 10;   // High
+        vm.Deadband = 40;
+        vm.SaveCommand.Execute(null);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        var sent = ControllerConfigCodec.Encode(vm.Draft);
+        ConfirmLastWrite(sent);
+        Until(() => !vm.IsSaving);
+
+        var saved = ControllerConfigCodec.Decode(Convert.FromBase64String(_rig.Config.Config.ControllerConfigBlob!));
+        Assert.Equal(20u, saved.Input.SliderIntervalMs);
+        Assert.Equal(10u, saved.Input.FilterWeightPct);
+    }
+
     [Fact]
     public void TimingAndController_Save_CommitsTimingOnConfirmation()
     {

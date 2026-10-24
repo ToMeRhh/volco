@@ -478,19 +478,21 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The title row's "Controller settings" chip: the inspector shows the controller's
     /// settings and the tile selection is cleared. Not during a hardware test: the
     /// inspector is hidden then (spec §8), so the chip is disabled.</summary>
-    public void SelectControllerSettings()
+    /// <param name="openSliders">Opens the Sliders card too (a slider's Smoothing link).</param>
+    public void SelectControllerSettings(bool openSliders = false)
     {
         if (_disposed || IsTesting) return;
         _settingsSelected = true;
         _controls.Selected = null;
         UpdateInspected();
+        if (openSliders && Inspected is ControllerSettingsViewModel settings) settings.IsSlidersOpen = true;
     }
 
     private IRelayCommand? _selectControllerSettingsCommand;
 
     /// <summary>The title row's "Controller settings" chip.</summary>
     public IRelayCommand SelectControllerSettingsCommand
-        => _selectControllerSettingsCommand ??= new RelayCommand(SelectControllerSettings, () => !IsTesting);
+        => _selectControllerSettingsCommand ??= new RelayCommand(() => SelectControllerSettings(), () => !IsTesting);
 
     /// <summary>The inspector shows the controller's settings: the chip is marked.</summary>
     public bool IsSettingsSelected => Inspected is ControllerSettingsViewModel;
@@ -561,7 +563,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             {
                 var index = si;
                 next = new SliderWiringViewModel(si, slider, PinField(new PinOwner(PinOwnerKind.Slider, si)), () => AskRemove(slider),
-                                                 _controller, () => OpenCalibration(index));
+                                                 _controller, () => OpenCalibration(index),
+                                                 () => SelectControllerSettings(openSliders: true));
             }
         }
         else if (_controls.Selected is ButtonItemViewModel button && Buttons.IndexOf(button) is >= 0 and var bi)

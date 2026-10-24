@@ -726,7 +726,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     }
 
     public decimal? DebounceMs { get => In.DebounceMs; set => EditIn(i => { if (value is { } n) i.DebounceMs = (uint)n; else i.ClearDebounceMs(); }); }
-    public decimal? SliderIntervalMs { get => In.SliderIntervalMs; set => EditIn(i => { if (value is { } n) i.SliderIntervalMs = (uint)n; else i.ClearSliderIntervalMs(); }); }
     public decimal? SmoothingPct { get => In.FilterWeightPct; set => EditIn(i => { if (value is { } n) i.FilterWeightPct = (uint)n; else i.ClearFilterWeightPct(); }); }
     public decimal? Deadband { get => In.SliderDeadband; set => EditIn(i => { if (value is { } n) i.SliderDeadband = (uint)n; else i.ClearSliderDeadband(); }); }
 

@@ -18,7 +18,7 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     private readonly Action _recalibrate;
 
     internal SliderWiringViewModel(int index, SliderItemViewModel item, PinFieldViewModel pin, Action remove,
-                                   ControllerViewModel controller, Action recalibrate)
+                                   ControllerViewModel controller, Action recalibrate, Action openSmoothing)
     {
         Index = index;
         Item = item;
@@ -26,6 +26,8 @@ public sealed partial class SliderWiringViewModel : ObservableObject
         _controller = controller;
         _recalibrate = recalibrate;
         RemoveCommand = new RelayCommand(remove);
+        OpenSmoothingCommand = new RelayCommand(openSmoothing);
+        _smoothingSummary = ControllerSettingsViewModel.SmoothingName(controller);
         RecalibrateCommand = new RelayCommand(() => _recalibrate(), () => CanRecalibrate);
     }
 
@@ -91,6 +93,12 @@ public sealed partial class SliderWiringViewModel : ObservableObject
         }
     }
 
+    /// <summary>The controller-wide smoothing's name ("Normal"), beside "Smoothing (all sliders)".</summary>
+    [ObservableProperty] private string _smoothingSummary;
+
+    /// <summary>Opens Controller settings with the Sliders card open.</summary>
+    public IRelayCommand OpenSmoothingCommand { get; }
+
     /// <summary>The Auto-calibrate row's caption while the draft's setting differs from the saved one.</summary>
     public string? AutoCalibrateNote
         => _saved is { } saved && Message is { } s && saved.AutoCalibrate != s.AutoCalibrate
@@ -123,6 +131,7 @@ public sealed partial class SliderWiringViewModel : ObservableObject
         OnPropertyChanged(nameof(AutoCalibrate));
         OnPropertyChanged(nameof(Reverse));
         OnPropertyChanged(nameof(AutoCalibrateNote));
+        SmoothingSummary = ControllerSettingsViewModel.SmoothingName(_controller);
         CalibrationText = CaptionFor(state);
         CanRecalibrate = canRecalibrate;
         RecalibrateTooltip = why;

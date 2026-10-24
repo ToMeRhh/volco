@@ -47,6 +47,13 @@
             <Button Name="RecalibrateButton" Content="Re-calibrate" Command="{Binding RecalibrateCommand}"/>
           </Panel>
         </Grid>
+
+        <!-- Read-only here: the setting is controller-wide; the link opens it -->
+        <Grid Name="SmoothingRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <TextBlock Classes="RowLabel" Text="Smoothing (all sliders)"/>
+          <HyperlinkButton Name="SmoothingLink" Grid.Column="1" Padding="0" Content="{Binding SmoothingSummary}"
+                           Command="{Binding OpenSmoothingCommand}"/>
+        </Grid>
       </controls:CardRows>
     </Border>
     <Button Name="HardwareRemoveButton" Classes="Danger" HorizontalAlignment="Left"
