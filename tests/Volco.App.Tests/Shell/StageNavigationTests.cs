@@ -227,16 +227,28 @@ public sealed class StageNavigationTests
         var actions = In<TransitioningContentControl>(s.Stage, "TitleActions");
         Assert.IsType<HardwareTitleActions>(actions.Content);
 
-        // + Add › Slider and › Button add to the draft.
+        // + Add › Slider and › Button add to the draft, each through its pin dialog.
         var add = In<Button>(actions, "AddButton");
         var menu = Assert.IsType<MenuFlyout>(add.Flyout);
         menu.ShowAt(add);
         Settle(s.Window);
         Assert.Equal(new[] { "Slider", "Button" }, menu.Items.OfType<MenuItem>().Select(i => (string)i.Header!));
-        menu.Items.OfType<MenuItem>().First().Command!.Execute(null);
-        menu.Items.OfType<MenuItem>().Last().Command!.Execute(null);
+        void AddWithPin(MenuItem item, uint pin)
+        {
+            item.Command!.Execute(null);
+            Settle(s.Window);
+            var dialog = s.Vm.Hardware.PinDialog!;
+            Assert.True(dialog.IsAdding);
+            dialog.ChooseManually();
+            dialog.Pick(dialog.Rows.Single(r => r.Pin == pin));
+            dialog.Confirm();
+            Settle(s.Window);
+        }
+        AddWithPin(menu.Items.OfType<MenuItem>().First(), 39);
+        AddWithPin(menu.Items.OfType<MenuItem>().Last(), 27);
         menu.Hide();
         Settle(s.Window);
+        Assert.Null(s.Vm.Hardware.PinDialog);
         Assert.Equal(6, s.Vm.Controller.Draft.Sliders.Count);
         Assert.Equal(4, s.Vm.Controller.Draft.Buttons.Count);
         Assert.Equal(6, s.Stage.Tiles().OfType<SliderTile>().Count());

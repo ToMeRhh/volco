@@ -9,7 +9,8 @@ namespace Volco.App.Views.Hardware;
 /// <summary>
 /// The pin dialog over a <see cref="PinFieldViewModel"/>: Left/Right move the selection along a row,
 /// Up/Down along a column, Enter picks it, Escape closes without change (the settings window takes
-/// Escape first and does the same); a click on a pin picks it.
+/// Escape first and does the same); a click on a pin picks it (while adding, selects it: Add or
+/// Enter takes it).
 /// </summary>
 public partial class PinDialog : UserControl
 {
@@ -27,6 +28,10 @@ public partial class PinDialog : UserControl
     }
 
     private void Cancel_Click(object? sender, RoutedEventArgs e) => Vm?.Cancel();
+
+    private void Add_Click(object? sender, RoutedEventArgs e) => Vm?.Confirm();
+
+    private void ChooseManually_Click(object? sender, RoutedEventArgs e) => Vm?.ChooseManually();
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {

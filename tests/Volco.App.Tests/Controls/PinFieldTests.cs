@@ -146,6 +146,7 @@ public class PinFieldTests
         Assert.Contains("now", tile.Classes);
         Assert.DoesNotContain("highlighted", tile.Classes);   // marked, not selected
         Assert.False(Named<Ellipse>(tile, "MovedDot").IsVisible);
+        Assert.True(Named<Ellipse>(tile, "MovingDot").IsVisible);        // the green dot
         Assert.Equal("free", Named<TextBlock>(tile, "PinNote").Text);   // no words for the state
 
         s.Time.Advance(PinFieldViewModel.ActivityHold);
@@ -153,7 +154,56 @@ public class PinFieldTests
         Assert.DoesNotContain("now", tile.Classes);
         Assert.Contains("before", tile.Classes);
         Assert.True(Named<Ellipse>(tile, "MovedDot").IsVisible);
+        Assert.False(Named<Ellipse>(tile, "MovingDot").IsVisible);
         Assert.Equal("free", Named<TextBlock>(tile, "PinNote").Text);
+    }
+
+    /// <summary>Opened by + Add: no pins until one is heard, Add enabled once one is selected,
+    /// "Choose manually" for the grid, Cancel and Add closing.</summary>
+    [AvaloniaFact]
+    public void Adding_ListsOnlyTheHeardPins_ThenAdds()
+    {
+        var s = Show(value: null, watch: _ => new Noop());
+        var cancels = 0;
+        s.Vm.OpenToAdd(() => cancels++);
+        Settle(s.Window);
+        Assert.Equal("Add Button 1", Named<TextBlock>(s.Dialog, "PinDialogTitle").Text);
+        Assert.Equal("Listening for button presses…", Named<TextBlock>(s.Dialog, "WatchHintText").Text);
+        Assert.True(Named<Ellipse>(s.Dialog, "ListeningDot").IsEffectivelyVisible);
+        Assert.False(Named<TextBlock>(s.Dialog, "WatchDetailText").IsEffectivelyVisible);
+        Assert.False(Named<ItemsControl>(s.Dialog, "PinCells").IsEffectivelyVisible);
+        Assert.True(Named<Ellipse>(s.Dialog, "WaitingDot").IsEffectivelyVisible);
+        Assert.DoesNotContain(s.Dialog.GetVisualDescendants().OfType<Button>(), b => b.Name == "PinTile" && b.IsEffectivelyVisible);
+        var add = Named<Button>(s.Dialog, "PinAddButton");
+        Assert.True(add.IsEffectivelyVisible);
+        Assert.Equal("Add button", add.Content);
+        Assert.False(add.IsEffectivelyEnabled);
+
+        s.Vm.OnPinActivity(15);
+        Settle(s.Window);
+        var shown = s.Dialog.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "PinTile" && b.IsEffectivelyVisible).ToList();
+        var tile = Assert.Single(shown);
+        Assert.Equal(15u, ((PinRowViewModel)tile.DataContext!).Pin);
+        Assert.Contains("highlighted", tile.Classes);   // the first heard is selected
+        Assert.False(Named<Ellipse>(s.Dialog, "WaitingDot").IsEffectivelyVisible);
+        Assert.True(add.IsEffectivelyEnabled);
+
+        Named<Button>(s.Dialog, "ChooseManuallyButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Settle(s.Window);
+        Assert.True(Named<ItemsControl>(s.Dialog, "PinCells").IsEffectivelyVisible);
+        Assert.True(Named<TextBlock>(s.Dialog, "WatchDetailText").IsEffectivelyVisible);
+        Assert.False(Named<Button>(s.Dialog, "ChooseManuallyButton").IsEffectivelyVisible);
+        Tile(s, 13).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // selects, doesn't close
+        Settle(s.Window);
+        Assert.True(s.Vm.IsOpen);
+        Assert.Empty(s.Sets);
+
+        add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Settle(s.Window);
+        Assert.False(s.Vm.IsOpen);
+        Assert.Equal(new uint?[] { 13 }, s.Sets);
+        Assert.Equal(0, cancels);
+        Assert.False(Named<Button>(s.Dialog, "PinAddButton").IsVisible);   // opened from the field: no Add
     }
 
     private sealed class Noop : IDisposable

@@ -266,11 +266,40 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
 
     // ── Commands of the title row (spec §3.2) ────────────────────────────────────────────────
 
-    /// <summary>+ Add › Slider.</summary>
-    public IRelayCommand AddSliderCommand => _controller.AddSliderCommand;
+    /// <summary>+ Add › Slider: adds it, selects its tile and opens its pin dialog to add (§6.3).</summary>
+    [RelayCommand]
+    private void AddSlider() => Add(PinOwnerKind.Slider, _controller.AddSliderCommand, () => Sliders);
 
-    /// <summary>+ Add › Button.</summary>
-    public IRelayCommand AddButtonCommand => _controller.AddButtonCommand;
+    /// <summary>+ Add › Button: the same for a button's pin.</summary>
+    [RelayCommand]
+    private void AddButton() => Add(PinOwnerKind.Button, _controller.AddButtonCommand, () => Buttons);
+
+    private void Add<T>(PinOwnerKind kind, IRelayCommand add, Func<IList<T>> tiles) where T : ObservableObject
+    {
+        if (_disposed || !_controller.CanEdit) return;
+        var before = _controls.Selected;
+        add.Execute(null);
+        var list = tiles();
+        if (list.Count == 0) return;
+        var index = list.Count - 1;
+        var tile = list[index];
+        _controls.Select(tile);
+        PinField(new PinOwner(kind, index)).OpenToAdd(() =>
+        {
+            // Cancelled: the new control goes, if it is still the last one and still has no pin.
+            if (_disposed) return;
+            var draft = _controller.Draft;
+            bool unset = kind == PinOwnerKind.Slider
+                ? index == draft.Sliders.Count - 1 && !draft.Sliders[index].HasPin
+                : index == draft.Buttons.Count - 1 && !draft.Buttons[index].HasPin;
+            if (!unset) return;
+            if (kind == PinOwnerKind.Slider) _controller.DropNewSlider(index);
+            else _controller.DropNewButton(index);
+            if (before is SliderItemViewModel bs && Sliders.Contains(bs)) _controls.Select(bs);
+            else if (before is ButtonItemViewModel bb && Buttons.Contains(bb)) _controls.Select(bb);
+            else SelectAfterRemove(list, index);
+        });
+    }
 
     /// <summary>⋯ Start over…: the drawing returns to the setup chooser; the draft stays until a
     /// choice is made.</summary>

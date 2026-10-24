@@ -309,6 +309,25 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         OnDraftEdited();
     }
 
+    /// <summary>The pin dialog of a control just added was cancelled: the control goes, even when the
+    /// draft stopped being editable meanwhile (the controller went away), but never during a save.</summary>
+    internal void DropNewSlider(int index)
+    {
+        if (IsSaving || index < 0 || index >= _draft.Sliders.Count) return;
+        _draft.Sliders.RemoveAt(index);
+        Layout.RemoveSlider(index);
+        OnDraftEdited();
+    }
+
+    /// <summary><see cref="DropNewSlider"/> for a button.</summary>
+    internal void DropNewButton(int index)
+    {
+        if (IsSaving || index < 0 || index >= _draft.Buttons.Count) return;
+        _draft.Buttons.RemoveAt(index);
+        Layout.RemoveButton(index);
+        OnDraftEdited();
+    }
+
     /// <summary>Removes button <paramref name="index"/> from the draft. The later ones move down
     /// and keep their actions (spec §6.5); the inspector asks first.</summary>
     internal void RemoveButton(int index)

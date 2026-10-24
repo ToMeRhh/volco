@@ -283,7 +283,7 @@ public sealed class PinFieldViewModelTests : IDisposable
     {
         var rig = new WatchRig(PinRole.SliderInput, Slider1);
         rig.Field.Open();
-        Assert.Equal("Move a slider to see which pin it's on.", rig.Field.WatchHint);
+        Assert.Equal("Listening for slider movements…", rig.Field.WatchHint);
         var selected = rig.Field.Highlighted;
         rig.Field.OnPinActivity(32);
         var row = rig.Field.Rows.Single(r => r.Pin == 32);
@@ -312,7 +312,7 @@ public sealed class PinFieldViewModelTests : IDisposable
 
         var buttons = new WatchRig(PinRole.ButtonInput, Button1);
         buttons.Field.Open();
-        Assert.Equal("Press a button to see which pin it's on.", buttons.Field.WatchHint);
+        Assert.Equal("Listening for button presses…", buttons.Field.WatchHint);
         buttons.Field.OnPinActivity(4);
         Assert.True(buttons.Field.Rows.Single(r => r.Pin == 4).IsMovingNow);
     }
@@ -356,6 +356,105 @@ public sealed class PinFieldViewModelTests : IDisposable
         rig.Field.OnPinActivity(32);
         Assert.DoesNotContain(rig.Field.Rows, r => r.Activity != PinActivityState.None);
         Assert.Null(rig.Field.WatchHint);
+    }
+
+    // ── Opened by + Add ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>A watch rig opened to add, counting the cancels.</summary>
+    private static (WatchRig Rig, Func<int> Cancels) Adding(PinRole role, PinOwner self, bool withWatch = true)
+    {
+        var rig = new WatchRig(role, self, withWatch);
+        var cancels = 0;
+        rig.Field.OpenToAdd(() => cancels++);
+        return (rig, () => cancels);
+    }
+
+    [Fact]
+    public void OpenToAdd_ListsNothing_UntilAPinIsHeard_ThenSelectsTheFirst()
+    {
+        var (rig, _) = Adding(PinRole.SliderInput, new PinOwner(PinOwnerKind.Slider, 5));
+        var f = rig.Field;
+        Assert.True(f is { IsOpen: true, IsAdding: true, IsListView: true, IsGridView: false, IsWaiting: true });
+        Assert.Empty(f.Heard);
+        Assert.Null(f.Highlighted);
+        Assert.False(f.CanConfirm);
+        Assert.Equal("Add Slider 6", f.Title);
+
+        f.OnPinActivity(34);
+        f.OnPinActivity(32);
+        f.OnPinActivity(34);   // heard again: keeps its place
+        Assert.Equal([34u, 32u], f.Heard.Select(r => r.Pin));
+        Assert.False(f.IsWaiting);
+        Assert.Equal(34u, f.Highlighted!.Pin);
+        Assert.True(f.CanConfirm);
+        Assert.True(f.Heard[0].IsMovingNow);
+    }
+
+    [Fact]
+    public void OpenToAdd_AClickSelects_AddSets_AndNoCancel()
+    {
+        var (rig, cancels) = Adding(PinRole.ButtonInput, new PinOwner(PinOwnerKind.Button, 3));
+        var f = rig.Field;
+        f.OnPinActivity(4);
+        f.OnPinActivity(5);
+        f.Pick(f.Heard[1]);
+        Assert.True(f.IsOpen);   // a click only selects
+        Assert.Equal(5u, f.Highlighted!.Pin);
+        f.Move(-1);
+        Assert.Equal(4u, f.Highlighted!.Pin);
+        f.Commit();              // Enter is Add
+        Assert.False(f.IsOpen);
+        Assert.False(f.IsAdding);
+        Assert.Equal(0, cancels());
+        Assert.Equal("Button 4 pin", f.Title);
+    }
+
+    [Fact]
+    public void OpenToAdd_CancelRunsTheCancelOnce()
+    {
+        var (rig, cancels) = Adding(PinRole.SliderInput, Slider1);
+        rig.Field.Cancel();
+        rig.Field.Cancel();
+        Assert.Equal(1, cancels());
+        Assert.Equal(1, rig.Disposed);
+        rig.Field.Open();        // opened from the field later: not adding
+        Assert.False(rig.Field.IsAdding);
+        rig.Field.Cancel();
+        Assert.Equal(1, cancels());
+    }
+
+    [Fact]
+    public void OpenToAdd_NotEditable_Cancels()
+    {
+        var (rig, cancels) = Adding(PinRole.SliderInput, Slider1);
+        rig.Field.IsEditable = false;
+        Assert.False(rig.Field.IsOpen);
+        Assert.Equal(1, cancels());
+    }
+
+    [Fact]
+    public void ChooseManually_ShowsTheGrid_KeepingTheSelectionAndTheMarks()
+    {
+        var (rig, _) = Adding(PinRole.SliderInput, Slider1);
+        var f = rig.Field;
+        f.OnPinActivity(32);
+        f.ChooseManually();
+        Assert.True(f is { IsGridView: true, IsListView: false, IsAdding: true });
+        Assert.Equal(32u, f.Highlighted!.Pin);
+        Assert.True(f.Rows.Single(r => r.Pin == 32).IsMovingNow);
+        f.Pick(f.Rows.Single(r => r.Pin == 35));
+        Assert.True(f.IsOpen);
+        Assert.Equal(35u, f.Highlighted!.Pin);
+        f.Move(-1);              // the grid's moves again: by pin number
+        Assert.Equal(34u, f.Highlighted!.Pin);
+    }
+
+    [Fact]
+    public void OpenToAdd_WithoutAWatch_OpensOnTheGrid()
+    {
+        var (rig, _) = Adding(PinRole.SliderInput, Slider1, withWatch: false);
+        Assert.True(rig.Field is { IsGridView: true, IsAdding: true, HasWatchHint: false });
+        Assert.Null(rig.Field.Highlighted);
     }
 
     [Fact]
