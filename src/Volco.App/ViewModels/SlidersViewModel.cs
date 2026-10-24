@@ -288,6 +288,5 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         Processes = new List<string>(s.Processes),
         AppPaths = new Dictionary<string, string>(s.AppPaths),
         Device = s.Device is null ? null : new DeviceRefConfig { Id = s.Device.Id, FriendlyName = s.Device.FriendlyName },
-        Invert = s.Invert,
     };
 }
