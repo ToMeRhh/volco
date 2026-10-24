@@ -370,7 +370,6 @@ public class ConfigMigratorTests
 
         Assert.Equal(SliderMappingType.Device, cm.Config.Sliders[0].Type);
         Assert.True(cm.Config.Sliders[0].Invert);
-        Assert.Equal(ResponseCurve.Logarithmic, cm.Config.Sliders[0].Curve);
         Assert.Equal(SliderMappingType.Processes, cm.Config.Sliders[1].Type);
         Assert.Equal(new List<string> { "spotify.exe", "chrome.exe" }, cm.Config.Sliders[1].Processes);
         Assert.Equal(SliderMappingType.Device, cm.Config.Sliders[2].Type);

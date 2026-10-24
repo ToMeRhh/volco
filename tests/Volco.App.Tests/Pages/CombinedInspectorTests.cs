@@ -134,7 +134,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(In<Border>(inspector, "ControlsHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(inspector, "ControlsBody").IsEffectivelyVisible);
         Assert.True(In<Button>(inspector, "ControlsRow").IsEffectivelyVisible);
-        Assert.True(In<ToggleButton>(inspector, "ResponseToggle").IsEffectivelyVisible);
+        Assert.True(In<ToggleSwitch>(inspector, "InvertSwitch").IsEffectivelyVisible);
         var section = Section(inspector);
         Assert.True(In<Border>(section, "HardwareHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(section, "HardwareBody").IsEffectivelyVisible);
@@ -142,7 +142,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(field.IsEffectivelyVisible);
         Assert.Equal($"GPIO {DiyConfig.Sliders[0].Pin}", PinValue(field));
         Assert.Equal("Remove Slider 1", In<Button>(section, "HardwareRemoveButton").Content);
-        // No toggles: neither section collapses (Response is a sub-section of Controls).
+        // No toggles: neither section collapses (Timing is a sub-section of Actions).
         Assert.DoesNotContain(inspector.GetVisualDescendants().OfType<ToggleButton>(), t => t.Name is "ControlsHeader" or "HardwareHeader");
         Assert.DoesNotContain(inspector.GetVisualDescendants(), v => v is Control { Name: "HardwareSummaryText" });
         // Hardware sits under Controls.
@@ -182,7 +182,7 @@ public sealed class CombinedInspectorTests : IDisposable
         foreach (var open in new[] { false, true })
             foreach (var item in items)
             {
-                // Response or Timing closed, then open
+                // Timing closed, then open
                 if (item is SliderItemViewModel slider) slider.IsAdvancedOpen = open;
                 else ((ButtonItemViewModel)item).IsAdvancedOpen = open;
                 Select(s, item);
@@ -200,7 +200,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(gaps.Max() > 1, "a slider's Controls section is shorter than a button's Actions");
     }
 
-    /// <summary>Opening Response or Timing doesn't move the Hardware section: the probes measure
+    /// <summary>Opening Timing doesn't move the Hardware section: the probes measure
     /// every tile with its sub-section open (user, 2026-10-22).</summary>
     [AvaloniaFact]
     public void OpeningASubSectionDoesNotMoveHardware()

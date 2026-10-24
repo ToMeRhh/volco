@@ -289,7 +289,5 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         AppPaths = new Dictionary<string, string>(s.AppPaths),
         Device = s.Device is null ? null : new DeviceRefConfig { Id = s.Device.Id, FriendlyName = s.Device.FriendlyName },
         Invert = s.Invert,
-        Curve = s.Curve,
-        DeadZonePercent = s.DeadZonePercent,
     };
 }

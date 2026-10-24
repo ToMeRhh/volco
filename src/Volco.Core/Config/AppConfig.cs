@@ -5,9 +5,6 @@ namespace Volco.Core.Config;
 [JsonConverter(typeof(JsonStringEnumConverter<ConnectionType>))]
 public enum ConnectionType { Serial, Udp, WebSocket }
 
-[JsonConverter(typeof(JsonStringEnumConverter<ResponseCurve>))]
-public enum ResponseCurve { Linear, Logarithmic, Exponential, SCurve }
-
 [JsonConverter(typeof(JsonStringEnumConverter<SliderMappingType>))]
 public enum SliderMappingType
 {
@@ -134,8 +131,6 @@ public partial class SliderConfig
     }
 
     public bool Invert { get; set; }
-    public ResponseCurve Curve { get; set; } = ResponseCurve.Linear;
-    public double DeadZonePercent { get; set; } = 0;   // 0..0.2
 
     /// <summary>Display name for the configured device; "" means the current default output.</summary>
     [JsonIgnore]

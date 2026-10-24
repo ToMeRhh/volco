@@ -309,7 +309,7 @@ public class SettingsCoverageTests
     }
 
     [AvaloniaFact]
-    public void Sliders_NameTargetAndResponse()
+    public void Sliders_NameTargetAndReverse()
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -337,12 +337,7 @@ public class SettingsCoverageTests
         Settle(window);
         var inspector = Inspector(page);
         Named<TextBox>(inspector, "NameBox").Text = "Music";                   // Sliders[i].Name
-        Assert.False(Named<Border>(inspector, "ResponseBody").IsEffectivelyVisible);   // starts closed
-        Named<ToggleButton>(inspector, "ResponseToggle").IsChecked = true;
-        Settle(window);
         Named<ToggleSwitch>(inspector, "InvertSwitch").IsChecked = true;       // Sliders[i].Invert
-        Named<ListBox>(inspector, "CurveList").SelectedIndex = 2;              // Sliders[i].Curve
-        Named<Slider>(inspector, "DeadZoneSlider").Value = 0.1;                // Sliders[i].DeadZonePercent
 
         // Slider 3: the main output (no device).
         dialog = OpenTarget(page, window, vm, 3);
@@ -359,8 +354,6 @@ public class SettingsCoverageTests
         Assert.Equal("Headphones", s[2].Device!.FriendlyName);
         Assert.Equal("Music", s[2].Name);
         Assert.True(s[2].Invert);
-        Assert.Equal(ResponseCurve.Exponential, s[2].Curve);
-        Assert.Equal(0.1, s[2].DeadZonePercent);
         Assert.Equal(SliderMappingType.Device, s[3].Type);
         Assert.Null(s[3].Device);
     }
