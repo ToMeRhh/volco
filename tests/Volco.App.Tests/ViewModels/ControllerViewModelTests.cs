@@ -244,7 +244,7 @@ public sealed class ControllerViewModelTests : IDisposable
     public void SliderInterval_HiddenAndKept()
     {
         var config = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
-        config.Input.SliderIntervalMs = 20;
+        (config.Input ??= new InputTuning()).SliderIntervalMs = 20;
         var mirror = ControllerConfigCodec.Encode(config);
         var vm = Vm(mirror);
         GreetInSync(mirror);
