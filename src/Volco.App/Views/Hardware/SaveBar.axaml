@@ -13,7 +13,7 @@
                    IsVisible="{Binding SaveBarNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
       </StackPanel>
       <Button Name="DiscardButton" Grid.Column="1" Content="Discard" Command="{Binding DiscardCommand}"/>
-      <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save to controller" Command="{Binding SaveCommand}"/>
+      <Button Name="SaveButton" Grid.Column="2" Classes="Primary" Content="Save" Command="{Binding SaveCommand}"/>
     </Grid>
   </Border>
 </UserControl>

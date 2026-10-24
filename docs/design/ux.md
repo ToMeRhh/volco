@@ -28,15 +28,15 @@ Every setting the Step 2 UI edits, mapped to the `AppConfig` property and to whe
 | Sliders | Mapping type: Processes / Output Device / Unmapped | `Sliders[i].Type` | Slider card: "Apps / All other apps / A device" ("Unmapped" is renamed "All other apps") |
 | Sliders | Processes (comma-separated) | `Sliders[i].Processes` | Slider card, chip input with process autocomplete |
 | Sliders | Output device | `Sliders[i].Device` | Slider card, device picker; empty = "Current default output" |
-| Sliders | Invert | `Sliders[i].Invert` | Slider card, Advanced |
-| Sliders | Response curve | `Sliders[i].Curve` | Slider card, Advanced |
-| Sliders | Dead zone | `Sliders[i].DeadZonePercent` | Slider card, Advanced |
+| Sliders | Invert | `Sliders[i].Invert` | Slider card, Advanced | (replaced by `slider-feel-settings.md`)
+| Sliders | Response curve | `Sliders[i].Curve` | Slider card, Advanced | (replaced by `slider-feel-settings.md`)
+| Sliders | Dead zone | `Sliders[i].DeadZonePercent` | Slider card, Advanced | (replaced by `slider-feel-settings.md`)
 | Sliders | Live level | (runtime `SliderLevelChanged`) | Level bar in the closed card header |
 | Buttons | Single / double / long press action | `Buttons[i].SinglePress/DoublePress/LongPress.Action` | Button card: Press / Double press / Hold, **per preset** |
 | Buttons | Action device | `Buttons[i].*.Device` | Inline under the action picker |
 | Buttons | Test (runs the action once) | (command) | "Test" button next to each action picker |
-| Buttons | Long-press threshold | `Buttons[i].LongPressMs` | Button card, Advanced ("Hold after") |
-| Buttons | Double-press window | `Buttons[i].DoublePressWindowMs` | Button card, Advanced |
+| Buttons | Long-press threshold | `Buttons[i].LongPressMs` | Button card, Advanced ("Hold after") (replaced by `buttonTiming` in `slider-feel-settings.md`) |
+| Buttons | Double-press window | `Buttons[i].DoublePressWindowMs` | Button card, Advanced | (replaced by `buttonTiming` in `slider-feel-settings.md`)
 | Output Devices | Toggle device 1 / 2 | `OutputDevices.Device1/Device2` | Moves into the "Toggle between two outputs" action as its A and B devices. **The page is removed.** |
 | General | Debug logging | `DebugLogging` | General page, "Detailed logging" |
 | Update window | GitHub token | `Updates.GitHubToken` | Removed (2026-10-07): the updater reads public GitHub Releases without a token |

@@ -278,7 +278,7 @@ public sealed class CombinedInspectorTests : IDisposable
         var inspector = SliderInspector(s);
         Assert.Same(s.Hardware.Sliders[5], inspector.DataContext);
         var text = In<TextBlock>(inspector, "SaveFirstText");
-        Assert.Equal("Save to controller to set it up", text.Text);
+        Assert.Equal("Save to set it up", text.Text);
         Assert.True(text.IsEffectivelyVisible);
         var save = In<Button>(inspector, "SaveFirstButton");
         Assert.True(save.IsEffectivelyVisible);

@@ -136,7 +136,7 @@
           <!-- A control the draft adds (controller-page spec §4.1): Volco sets it up after the
                save. It spans both rows, which keep their shared heights (the actions are hidden). -->
           <TextBlock Name="NewText" Grid.RowSpan="2" Classes="TileNew"
-                     Text="New · Save to controller to set it up" IsVisible="{Binding IsNew}"/>
+                     Text="New · Save to set it up" IsVisible="{Binding IsNew}"/>
         </Grid>
 
         <!-- During a hardware test, the test state in the same row as the actions; both are always

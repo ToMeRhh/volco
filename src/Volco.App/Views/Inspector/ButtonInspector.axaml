@@ -79,8 +79,8 @@
           <Panel Name="ActionsBody" Classes="GroupBody">
             <Border Name="SaveFirstPanel" Classes="InspectorRows SaveFirst" IsVisible="{Binding IsNew}">
               <StackPanel Spacing="10">
-                <TextBlock Name="SaveFirstText" Classes="Secondary" TextWrapping="Wrap" Text="Save to controller to set it up"/>
-                <Button Name="SaveFirstButton" Classes="Primary" HorizontalAlignment="Left" Content="Save to controller"
+                <TextBlock Name="SaveFirstText" Classes="Secondary" TextWrapping="Wrap" Text="Save to set it up"/>
+                <Button Name="SaveFirstButton" Classes="Primary" HorizontalAlignment="Left" Content="Save"
                         Command="{Binding $parent[stage:StagePage].Hardware.SaveCommand, FallbackValue={x:Null}}"/>
               </StackPanel>
             </Border>

@@ -140,7 +140,7 @@ public sealed class ControllerViewModelTests : IDisposable
     public void SettingUp_ADraftEqualToVolcosSavedCopy_IsStillUnsaved_UntilTheControllerHasIt()
     {
         // An erased controller, and Volco still has the same setup saved: the draft equals the
-        // mirror, but the controller doesn't hold it, so Save to controller must stay.
+        // mirror, but the controller doesn't hold it, so Save must stay.
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.None, 0));
         Assert.Equal(BannerKind.NotSetUpHasMirror, vm.Banner.Kind);

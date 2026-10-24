@@ -111,7 +111,7 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     /// saved (no unsaved change of it, not new), and no test, save or firmware operation runs.</summary>
     [ObservableProperty] private bool _canRecalibrate;
 
-    /// <summary>Why Re-calibrate is off: "Save to controller first" while the slider's unsaved changes
+    /// <summary>Why Re-calibrate is off: "Save first" while the slider's unsaved changes
     /// hold it off, "Volco's setup differs from the controller's" while the controller holds another setup.</summary>
     [ObservableProperty] private string? _recalibrateTooltip;
 

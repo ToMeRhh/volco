@@ -137,13 +137,13 @@ public sealed class SliderCalibrationTests : IDisposable
         Controller.SetSliderPin(1, 39);
         Assert.False(s.CanRecalibrate);
         Assert.False(s.RecalibrateCommand.CanExecute(null));
-        Assert.Equal("Save to controller first", s.RecalibrateTooltip);
+        Assert.Equal("Save first", s.RecalibrateTooltip);
         Controller.RevertCommand.Execute(null);
         s = Select(1);
         Assert.True(s.CanRecalibrate);
         s.AutoCalibrate = false;
         Assert.False(s.CanRecalibrate);
-        Assert.Equal("Save to controller first", s.RecalibrateTooltip);
+        Assert.Equal("Save first", s.RecalibrateTooltip);
         s.AutoCalibrate = true;
         Assert.True(s.CanRecalibrate);
 

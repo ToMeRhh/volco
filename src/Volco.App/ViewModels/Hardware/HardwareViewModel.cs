@@ -203,7 +203,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (tile.IsNew) return false;
         if (tile.Wiring is { HasChange: true })
         {
-            why = "Save to controller first";
+            why = "Save first";
             return false;
         }
         if (_controller.IsControllerReady && !_controller.InSync)
@@ -357,7 +357,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>Discard: the draft goes back to Volco's copy.</summary>
     public ICommand DiscardCommand => _controller.RevertCommand;
 
-    /// <summary>Save to controller; disabled while the draft has problems or can't be saved.</summary>
+    /// <summary>Save; disabled while the draft has problems or can't be saved.</summary>
     public IRelayCommand SaveCommand { get; }
 
     /// <summary>Changed tiles, removed and added controls, changed buses and changed settings sections.</summary>
