@@ -350,8 +350,9 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The note beside the count.</summary>
-    public string SaveBarNote => "Saving restarts the controller";
+    /// <summary>The note beside the count, while Save sends the controller's config; null when only
+    /// the button timing (Volco's own settings) changed.</summary>
+    public string? SaveBarNote => _controller.ControllerDirty ? "Saving restarts the controller" : null;
 
     /// <summary>Discard: the draft goes back to Volco's copy.</summary>
     public ICommand DiscardCommand => _controller.RevertCommand;
@@ -373,9 +374,21 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         for (int bus = 0; bus <= 3; bus++)
             if (!Equals(ControllerDraft.Bus(draft, bus), ControllerDraft.Bus(baseline, bus))) n++;
         if (!Equals(draft.Screens, baseline.Screens)) n++;
-        if (!Equals(draft.Input, baseline.Input)) n++;
+        // Controller settings' Sliders and Buttons cards (the button timing is Volco's, in the draft too).
+        if (InputDiffers(draft.Input, baseline.Input, i => i.HasFilterWeightPct, i => i.FilterWeightPct)
+            || InputDiffers(draft.Input, baseline.Input, i => i.HasSliderDeadband, i => i.SliderDeadband)
+            || InputDiffers(draft.Input, baseline.Input, i => i.HasSliderIntervalMs, i => i.SliderIntervalMs)) n++;
+        if (InputDiffers(draft.Input, baseline.Input, i => i.HasDebounceMs, i => i.DebounceMs) || _controller.TimingDirty) n++;
         if (!Equals(draft.Udp, baseline.Udp)) n++;
         return n;
+    }
+
+    /// <summary>One field of the input tuning differs, its presence included (an absent message has
+    /// none of its fields).</summary>
+    private static bool InputDiffers(InputTuning? a, InputTuning? b, Func<InputTuning, bool> has, Func<InputTuning, uint> value)
+    {
+        bool hasA = a is not null && has(a), hasB = b is not null && has(b);
+        return hasA != hasB || (hasA && value(a!) != value(b!));
     }
 
     private void UpdateSaveBar()
@@ -383,6 +396,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         OnPropertyChanged(nameof(ShowSaveBar));
         OnPropertyChanged(nameof(SaveBarText));
+        OnPropertyChanged(nameof(SaveBarNote));
         SaveCommand.NotifyCanExecuteChanged();
     }
 

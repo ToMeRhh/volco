@@ -237,6 +237,114 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.Null(vm.Notice);
     }
 
+    // ── Button timing (slider-feel spec, "The save rule") ────────────────────────────────
+
+    [Fact]
+    public void TimingAndController_Save_CommitsTimingOnConfirmation()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.HoldMs = 700;
+        vm.DebounceMs = 45;
+        vm.SaveCommand.Execute(null);
+        Assert.True(vm.IsSaving);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        Assert.Equal(500, _rig.Config.Config.ButtonTiming.LongPressMs);   // not before the controller confirms
+
+        ConfirmLastWrite(ControllerConfigCodec.Encode(vm.Draft));
+        Until(() => !vm.IsSaving);
+        Assert.Equal(700, _rig.Config.Config.ButtonTiming.LongPressMs);
+        Assert.Equal(700m, vm.HoldMs);
+        Assert.False(vm.TimingDirty);
+        Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public void TimingAndController_FailedSave_KeepsTimingUnsaved()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.HoldMs = 700;
+        vm.DebounceMs = 45;
+        vm.SaveCommand.Execute(null);
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Invalid, 0, 2));
+        Until(() => !vm.IsSaving);
+        Assert.Equal(500, _rig.Config.Config.ButtonTiming.LongPressMs);
+        Assert.Equal(700m, vm.HoldMs);
+        Assert.True(vm.TimingDirty);
+        Assert.True(vm.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public void Discard_RevertsTiming()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.HoldMs = 700;
+        vm.DoublePressMs = 250;
+        Assert.True(vm.IsDirty);
+        Assert.True(vm.HasUnsavedChanges);
+        Assert.True(vm.CanSave);
+
+        vm.RevertCommand.Execute(null);
+        Assert.Equal(500m, vm.HoldMs);
+        Assert.Equal(300m, vm.DoublePressMs);
+        Assert.False(vm.IsDirty);
+        Assert.False(vm.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public void NotInSync_TimingNotEditable()
+    {
+        var vm = Vm(DiyBlob);
+        vm.HoldMs = 700;
+        Assert.Equal(500m, vm.HoldMs);
+        Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public void ANullTiming_IsIgnored()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.HoldMs = null;
+        Assert.Equal(500m, vm.HoldMs);
+        Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public void MirrorChange_WithOnlyTimingDirty_DraftFollows_TimingKept()
+    {
+        var vm = Vm(DiyBlob);
+        GreetInSync(DiyBlob);
+        vm.HoldMs = 700;
+
+        var changed = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        changed.Sliders[0].Pin = 39;
+        var blob = ControllerConfigCodec.Encode(changed);
+        var save = _rig.Runtime.ControllerConfig.SaveAsync(blob, TestContext.Current.CancellationToken);
+        ConfirmLastWrite(blob);
+        Until(() => save.IsCompleted && vm.BaselineConfig().Sliders[0].Pin == 39);
+        Assert.Equal(blob, ControllerConfigCodec.Encode(vm.Draft));   // the controller draft followed
+        Assert.Null(vm.Notice);
+        Assert.Equal(700m, vm.HoldMs);
+        Assert.True(vm.TimingDirty);
+        Assert.False(vm.ControllerDirty);
+    }
+
+    [Fact]
+    public void ANewDraft_KeepsTheTimingDraft()
+    {
+        var vm = Vm();
+        Greet(Hello(ControllerConfigState.None, 0));
+        vm.StartFromScratchCommand.Execute(null);
+        vm.HoldMs = 700;
+        vm.StartFromPresetCommand.Execute(Diy);
+        Assert.Equal(700m, vm.HoldMs);
+        Assert.True(vm.TimingDirty);
+    }
+
     // ── Presets ────────────────────────────────────────────────────────────────────────────
 
     [Fact]

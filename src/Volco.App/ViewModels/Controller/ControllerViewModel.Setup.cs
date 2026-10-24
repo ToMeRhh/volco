@@ -31,7 +31,7 @@ public sealed partial class ControllerViewModel
     private void SetupApplySaved()
     {
         if (!CanStartNewDraft) return;
-        Revert();
+        RevertController();   // a new draft: the button timing stays
         if (!InSync) ApplyMine();
     }
 
