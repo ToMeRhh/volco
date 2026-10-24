@@ -282,6 +282,71 @@ public sealed class HardwareViewModelTests : IDisposable
         Assert.Equal(_settings.Controls.Sliders.Items, Hardware.Sliders);
     }
 
+    // ── + Add opens the pin dialog to add (spec §6.3) ───────────────────────────────────────
+
+    [Fact]
+    public void AddSlider_SelectsItAndOpensItsPinDialogListening()
+    {
+        SetUpInSync();
+        Hardware.AddSliderCommand.Execute(null);
+        Assert.Equal(6, Hardware.Sliders.Count);
+        Assert.Same(Hardware.Sliders[5], _settings!.Controls.Selected);
+        var field = Assert.IsType<PinFieldViewModel>(Hardware.PinDialog);
+        Assert.Same(Hardware.PinField(new PinOwner(PinOwnerKind.Slider, 5)), field);
+        Assert.True(field is { IsAdding: true, IsListView: true, IsWaiting: true, CanConfirm: false });
+        Assert.Equal("Add Slider 6", field.Title);
+        Assert.Equal("Add slider", field.ConfirmLabel);
+        Assert.Equal("Listening for slider movements…", field.WatchHint);
+        Until(() => PinWatchFrames(PinWatchRole.Analog) == 1);
+    }
+
+    [Fact]
+    public void AddSlider_TheMovedPinShowsUp_AddGivesItThePin()
+    {
+        SetUpInSync();
+        Hardware.AddSliderCommand.Execute(null);
+        var field = Hardware.PinDialog!;
+        Conn.RaiseMessage(new PinActivityMessage(32));
+        Until(() => field.Heard.Count == 1);
+        Assert.Equal(32u, field.Heard[0].Pin);
+        Assert.True(field.CanConfirm);   // the first heard is selected
+
+        field.Confirm();
+        Assert.Null(Hardware.PinDialog);
+        Assert.Equal(6, Hardware.Sliders.Count);
+        Assert.Equal(32u, Controller.Draft.Sliders[5].Pin);
+        Assert.Same(Hardware.Sliders[5], _settings!.Controls.Selected);
+    }
+
+    [Fact]
+    public void AddButton_Cancel_RemovesItAndGivesTheSelectionBack()
+    {
+        SetUpInSync();
+        var controls = _settings!.Controls;
+        controls.Select(Hardware.Sliders[1]);
+        Hardware.AddButtonCommand.Execute(null);
+        Assert.Equal(4, Hardware.Buttons.Count);
+        var field = Hardware.PinDialog!;
+        Assert.Equal(("Add Button 4", "Add button", "Listening for button presses…"), (field.Title, field.ConfirmLabel, field.WatchHint));
+
+        field.Cancel();
+        Assert.Null(Hardware.PinDialog);
+        Assert.Equal(3, Hardware.Buttons.Count);
+        Assert.Equal(3, Controller.Draft.Buttons.Count);
+        Assert.False(Controller.IsDirty);
+        Assert.Same(Hardware.Sliders[1], controls.Selected);
+    }
+
+    [Fact]
+    public void AddSlider_ClosingThePinDialogAnyOtherWay_RemovesIt()
+    {
+        SetUpInSync();
+        Hardware.AddSliderCommand.Execute(null);
+        Hardware.ClosePinDialog();   // Escape, the scrim, the window hidden, the page left
+        Assert.Equal(5, Hardware.Sliders.Count);
+        Assert.False(Controller.IsDirty);
+    }
+
     // ── The selection Controls gets back (Controls has no detached tiles, bus or settings) ───
 
     [Fact]

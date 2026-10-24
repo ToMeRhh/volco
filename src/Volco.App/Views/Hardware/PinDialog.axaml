@@ -6,8 +6,10 @@
   <!-- The pin dialog (hardware-page spec §6.3): every GPIO of the chip at once, eight to a row in
        number order with a gap where the chip has no pin. A pin shows its number and its note (free,
        its owner, why it can't be used); unusable pins are greyed, the field's pin has an accent
-       border. Detect marks pins by colour only: moving now is filled with the accent, moved before
-       is tinted with an accent dot. A click or Enter picks; Escape, Cancel or the scrim keep the value. -->
+       border. Detect marks pins by colour only: moving now has a green dot and edge, moved before
+       is tinted with an accent dot. A click or Enter picks; Escape, Cancel or the scrim keep the value.
+       Opened by + Add, it lists only the pins heard (none at first) until "Choose manually", a click
+       selects, and Add or Cancel (which removes the new control) closes it. -->
   <UserControl.Styles>
     <Style Selector="Button.PinTile">
       <Setter Property="Background" Value="{DynamicResource SurfaceCardBrush}"/>
@@ -37,9 +39,31 @@
     <Style Selector="Button.PinTile.before">
       <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
     </Style>
-    <Style Selector="Button.PinTile.now">
-      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <!-- While adding, the selection is what Add takes: the accent edge -->
+    <Style Selector="Grid.adding Button.PinTile.highlighted">
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="BorderThickness" Value="2"/>
+    </Style>
+    <Style Selector="Button.PinTile.now">
+      <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}"/>
+      <Setter Property="BorderThickness" Value="2"/>
+    </Style>
+    <!-- The listening mark: a green dot that pulses while the dialog watches -->
+    <Style Selector="Ellipse.ListeningDot">
+      <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+      <Style.Animations>
+        <Animation Duration="0:0:1.4" IterationCount="Infinite">
+          <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="1"/>
+          </KeyFrame>
+          <KeyFrame Cue="50%">
+            <Setter Property="Opacity" Value="0.25"/>
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="1"/>
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
     </Style>
     <Style Selector="Button.PinTile:disabled">
       <Setter Property="Opacity" Value="0.4"/>
@@ -53,54 +77,87 @@
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
       <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
     </Style>
-    <Style Selector="Button.PinTile.now TextBlock">
-      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
-    </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="16,12,16,16">
+  <Grid Name="PinDialogRoot" RowDefinitions="Auto,*,Auto" Margin="16,12,16,16" Classes.adding="{Binding IsAdding}">
+    <Grid.DataTemplates>
+      <DataTemplate DataType="{x:Type hw:PinGap}">
+        <Panel/>
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type hw:PinRowViewModel}" x:DataType="hw:PinRowViewModel">
+        <Button Name="PinTile" Classes="PinTile" Classes.current="{Binding IsCurrent}"
+                Classes.highlighted="{Binding IsHighlighted}" Classes.now="{Binding IsMovingNow}"
+                Classes.before="{Binding HasMoved}" IsEnabled="{Binding IsPickable}"
+                ToolTip.Tip="{Binding Note}" ToolTip.ShowOnDisabled="True" Click="Tile_Click">
+          <Panel>
+            <StackPanel Spacing="1" VerticalAlignment="Center">
+              <TextBlock Name="PinNumber" Classes="PinNumber" Text="{Binding Text}"/>
+              <TextBlock Name="PinNote" Classes="PinNote" Text="{Binding Note}"/>
+            </StackPanel>
+            <Ellipse Name="MovedDot" Width="7" Height="7" Fill="{DynamicResource AccentBrush}"
+                     HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding HasMoved}"/>
+            <Ellipse Name="MovingDot" Width="10" Height="10" Fill="{DynamicResource SuccessBrush}"
+                     HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding IsMovingNow}"/>
+          </Panel>
+        </Button>
+      </DataTemplate>
+    </Grid.DataTemplates>
+
     <StackPanel Spacing="6" Margin="0,0,0,14">
       <TextBlock Name="PinDialogTitle" Classes="DialogTitle" Text="{Binding Title}"/>
-      <TextBlock Name="WatchHintText" Classes="Secondary" TextWrapping="Wrap" Text="{Binding WatchHint}"
-                 IsVisible="{Binding HasWatchHint}"/>
+      <StackPanel Name="WatchHintRow" Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasWatchHint}">
+        <Ellipse Name="ListeningDot" Classes="ListeningDot" Width="8" Height="8" VerticalAlignment="Center"/>
+        <TextBlock Name="WatchHintText" Text="{Binding WatchHint}" VerticalAlignment="Center"/>
+      </StackPanel>
+      <TextBlock Name="WatchDetailText" Classes="Secondary" Text="{Binding WatchDetail}">
+        <TextBlock.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="HasWatchHint"/>
+            <Binding Path="IsGridView"/>
+          </MultiBinding>
+        </TextBlock.IsVisible>
+      </TextBlock>
     </StackPanel>
 
     <!-- The grid takes the focus (the tiles don't), so the arrows move the selection -->
     <Border Name="PinGrid" Grid.Row="1" Focusable="True" Background="Transparent">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <ItemsControl Name="PinCells" ItemsSource="{Binding Cells}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <!-- PinFieldViewModel.Columns -->
-              <UniformGrid Columns="8"/>
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.DataTemplates>
-            <DataTemplate DataType="{x:Type hw:PinGap}">
-              <Panel/>
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type hw:PinRowViewModel}" x:DataType="hw:PinRowViewModel">
-              <Button Name="PinTile" Classes="PinTile" Classes.current="{Binding IsCurrent}"
-                      Classes.highlighted="{Binding IsHighlighted}" Classes.now="{Binding IsMovingNow}"
-                      Classes.before="{Binding HasMoved}" IsEnabled="{Binding IsPickable}"
-                      ToolTip.Tip="{Binding Note}" ToolTip.ShowOnDisabled="True" Click="Tile_Click">
-                <Panel>
-                  <StackPanel Spacing="1" VerticalAlignment="Center">
-                    <TextBlock Name="PinNumber" Classes="PinNumber" Text="{Binding Text}"/>
-                    <TextBlock Name="PinNote" Classes="PinNote" Text="{Binding Note}"/>
-                  </StackPanel>
-                  <Ellipse Name="MovedDot" Width="7" Height="7" Fill="{DynamicResource AccentBrush}"
-                           HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding HasMoved}"/>
-                </Panel>
-              </Button>
-            </DataTemplate>
-          </ItemsControl.DataTemplates>
-        </ItemsControl>
-      </ScrollViewer>
+      <Panel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" IsVisible="{Binding IsGridView}">
+          <ItemsControl Name="PinCells" ItemsSource="{Binding Cells}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <!-- PinFieldViewModel.Columns -->
+                <UniformGrid Columns="8"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+        </ScrollViewer>
+        <!-- The list view: the pins heard so far, as tiles of the grid's size; an empty place
+             with the listening mark until the first -->
+        <Panel Name="HeardView" MinHeight="180" IsVisible="{Binding IsListView}">
+          <ItemsControl Name="HeardPins" ItemsSource="{Binding Heard}" VerticalAlignment="Top">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="8"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+          <Ellipse Name="WaitingDot" Classes="ListeningDot" Width="18" Height="18"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IsWaiting}"/>
+        </Panel>
+      </Panel>
     </Border>
 
-    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,14,0,0">
-      <Button Name="PinCancelButton" Content="Cancel" Click="Cancel_Click"/>
-    </StackPanel>
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" IsVisible="{Binding IsListView}">
+        <TextBlock Classes="Secondary" Text="or" VerticalAlignment="Center"/>
+        <Button Name="ChooseManuallyButton" Classes="Ghost" Content="Choose manually" Click="ChooseManually_Click"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+        <Button Name="PinCancelButton" Content="Cancel" Click="Cancel_Click"/>
+        <Button Name="PinAddButton" Classes="Primary" Content="{Binding ConfirmLabel}" IsVisible="{Binding IsAdding}"
+                IsEnabled="{Binding CanConfirm}" Click="Add_Click"/>
+      </StackPanel>
+    </Grid>
   </Grid>
 </UserControl>

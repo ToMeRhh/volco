@@ -72,6 +72,9 @@ public sealed class PinGap
 /// restores. While it is open, Detect marks the pins the controller reports (<see cref="OnPinActivity"/>)
 /// without picking them. A problem on the field shows under it with one fix where there is one
 /// ("Swap with Slider 1").
+/// Opened by + Add (<see cref="OpenToAdd"/>), the dialog starts on the pins heard so far, none at
+/// first (<see cref="IsListView"/>), with "Choose manually" for the grid; a click only selects, and
+/// the new control gets its pin on Add (<see cref="Confirm"/>) or is removed on Cancel.
 /// </summary>
 public sealed partial class PinFieldViewModel : ObservableObject
 {
@@ -94,6 +97,8 @@ public sealed partial class PinFieldViewModel : ObservableObject
     private int _generation;   // bumped on every open and close: a hold timer of an older one does nothing
     private IDisposable? _watching;
     private PinOwner? _other;
+    private Action? _cancelAdd;            // while adding: removes the new control on Cancel
+    private readonly List<uint> _heard = new();   // the pins Detect reported, first heard first
 
     /// <param name="label">"Pin", "Button pin", "Light A pin", "SDA"…</param>
     /// <param name="role">What the pin is for: which pins are unusable.</param>
@@ -128,8 +133,37 @@ public sealed partial class PinFieldViewModel : ObservableObject
     /// <summary>The use this field edits.</summary>
     public PinOwner Owner => _self;
 
-    /// <summary>The dialog's title: "Slider 1 pin", "Button 2 light A pin", "I2C bus 0 SDA pin".</summary>
-    public string Title => $"{_self.Label} pin";
+    /// <summary>The dialog's title: "Slider 1 pin", "Button 2 light A pin", "I2C bus 0 SDA pin";
+    /// "Add Slider 6" while adding.</summary>
+    public string Title => IsAdding ? $"Add {_self.Label}" : $"{_self.Label} pin";
+
+    /// <summary>Opened by + Add: Add and Cancel (which removes the new control), a click selects.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    private bool _isAdding;
+
+    /// <summary>The dialog shows only the pins heard (<see cref="Heard"/>), not the grid; while adding,
+    /// until "Choose manually".</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsGridView), nameof(IsWaiting))]
+    private bool _isListView;
+
+    public bool IsGridView => !IsListView;
+
+    /// <summary>The list view has heard nothing yet.</summary>
+    public bool IsWaiting => IsListView && Heard.Count == 0;
+
+    /// <summary>The pins Detect reported since the dialog opened, first heard first.</summary>
+    public IReadOnlyList<PinRowViewModel> Heard { get; private set; } = [];
+
+    /// <summary>"Add slider" or "Add button".</summary>
+    public string ConfirmLabel => _role == PinRole.SliderInput ? "Add slider" : "Add button";
+
+    /// <summary>Add is enabled: a pickable pin is selected.</summary>
+    public bool CanConfirm => Highlighted is { IsPickable: true };
+
+    /// <summary>The grid view's line under the listening one, while the dialog watches.</summary>
+    public string WatchDetail => "A pin you move gets a green dot.";
 
     /// <summary>"GPIO 5", or "Not set".</summary>
     public string ValueText => _get() is { } pin ? $"GPIO {pin}" : "Not set";
@@ -143,7 +177,7 @@ public sealed partial class PinFieldViewModel : ObservableObject
     /// <summary>The problem on the field ("Slider 1 also uses GPIO 33."), or null.</summary>
     [ObservableProperty] private string? _error;
 
-    /// <summary>What Detect asks of the user while the dialog watches ("Move a slider…"), else null.</summary>
+    /// <summary>"Listening for slider movements…" (or button presses) while the dialog watches, else null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasWatchHint))]
     private string? _watchHint;
@@ -182,16 +216,38 @@ public sealed partial class PinFieldViewModel : ObservableObject
     public void Open()
     {
         if (!IsEditable || IsOpen) return;
+        OpenCore();
+        Highlight(Rows.FirstOrDefault(r => r.IsCurrent && r.IsPickable) ?? Rows.FirstOrDefault(r => r.IsPickable));
+        IsOpen = true;
+    }
+
+    /// <summary>+ Add: opens the dialog for the new control with nothing selected, on the pins heard
+    /// (none yet) while Detect can listen, else on the grid. <paramref name="cancel"/> runs on Cancel
+    /// (Escape, the scrim, or the dialog closed for any other reason), never after Add.</summary>
+    public void OpenToAdd(Action cancel)
+    {
+        if (!IsEditable || IsOpen) return;
+        IsAdding = true;
+        _cancelAdd = cancel;
+        OpenCore();
+        IsListView = _watching is not null;
+        Highlight(null);
+        IsOpen = true;
+    }
+
+    private void OpenCore()
+    {
         _generation++;
         SetRows(PinChoices.For(_draft(), ChipInfo.Esp32, _role, _self)
             .Select(c => new PinRowViewModel(c, c.Pin == _get())).ToList());
-        Highlight(Rows.FirstOrDefault(r => r.IsCurrent && r.IsPickable) ?? Rows.FirstOrDefault(r => r.IsPickable));
         _watching = WatchRole() is { } role ? _watch?.Invoke(role) : null;
         WatchHint = _watching is null ? null
-            : _role == PinRole.SliderInput ? "Move a slider to see which pin it's on."
-            : "Press a button to see which pin it's on.";
-        IsOpen = true;
+            : _role == PinRole.SliderInput ? "Listening for slider movements…"
+            : "Listening for button presses…";
     }
+
+    /// <summary>"Choose manually": the grid of every pin, keeping the selection and what Detect saw.</summary>
+    public void ChooseManually() => IsListView = false;
 
     /// <summary>Detect: the controller saw a pin move or be pressed. Its pin is marked "moving now"
     /// until <see cref="ActivityHold"/> passes without another report, then "moved before"; the
@@ -202,6 +258,13 @@ public sealed partial class PinFieldViewModel : ObservableObject
         var row = Rows.FirstOrDefault(r => r.Pin == pin);
         if (row is null) return;
         row.Activity = PinActivityState.Now;
+        if (!_heard.Contains(pin))
+        {
+            _heard.Add(pin);
+            SetHeard();
+            // While adding, the first pin heard is selected, so Add is one click away.
+            if (IsAdding && Highlighted is null && row.IsPickable) Highlight(row);
+        }
         if (_holds.Remove(pin, out var old)) old.Dispose();
         var generation = _generation;
         ITimer? timer = null;
@@ -228,23 +291,50 @@ public sealed partial class PinFieldViewModel : ObservableObject
         _ => null,
     };
 
-    /// <summary>Picks a pin (a click): sets it and closes. Unusable pins are ignored.</summary>
+    /// <summary>Picks a pin (a click): sets it and closes; while adding, only selects it. Unusable
+    /// pins are ignored.</summary>
     public void Pick(PinRowViewModel row)
     {
         if (row.IsUnusable || !IsEditable) return;
+        if (IsAdding)
+        {
+            Highlight(row);
+            return;
+        }
         Close();
         if (_get() != row.Pin) _set(row.Pin);
         OnPropertyChanged(nameof(ValueText));
     }
 
-    /// <summary>Escape, Cancel or a click on the scrim: the value stays as it was, the dialog closes.</summary>
-    public void Cancel() => Close();
+    /// <summary>Add: the new control gets the selected pin and the dialog closes.</summary>
+    public void Confirm()
+    {
+        if (!IsAdding || !IsEditable || Highlighted is not { IsPickable: true } row) return;
+        Close();
+        if (_get() != row.Pin) _set(row.Pin);
+        OnPropertyChanged(nameof(ValueText));
+    }
+
+    /// <summary>Escape, Cancel or a click on the scrim: the value stays as it was, the dialog closes;
+    /// while adding, the new control is removed.</summary>
+    public void Cancel()
+    {
+        if (!IsOpen) return;
+        var cancelAdd = _cancelAdd;
+        Close();
+        cancelAdd?.Invoke();
+    }
 
     /// <summary>Moves the selection by <paramref name="step"/> pin numbers (±1 along a row,
     /// ±<see cref="Columns"/> down or up a column), on to the next pickable pin that way; it stays
-    /// put when there is none.</summary>
+    /// put when there is none. In the list view, it moves by places in <see cref="Heard"/>.</summary>
     public void Move(int step)
     {
+        if (IsListView)
+        {
+            MoveInHeard(step);
+            return;
+        }
         if (step == 0 || Rows.Count == 0) return;
         var byPin = Rows.Where(r => r.IsPickable).ToDictionary(r => (long)r.Pin);
         if (Highlighted is null)
@@ -261,10 +351,29 @@ public sealed partial class PinFieldViewModel : ObservableObject
             }
     }
 
-    /// <summary>Enter: picks the selected pin.</summary>
+    private void MoveInHeard(int step)
+    {
+        var pickable = Heard.Where(r => r.IsPickable).ToList();
+        if (step == 0 || pickable.Count == 0) return;
+        var at = Highlighted is null ? -1 : Heard.ToList().IndexOf(Highlighted);
+        if (at < 0)
+        {
+            Highlight(step > 0 ? pickable[0] : pickable[^1]);
+            return;
+        }
+        for (var i = at + step; i >= 0 && i < Heard.Count; i += step)
+            if (Heard[i].IsPickable)
+            {
+                Highlight(Heard[i]);
+                return;
+            }
+    }
+
+    /// <summary>Enter: picks the selected pin (while adding, Add).</summary>
     public void Commit()
     {
-        if (Highlighted is { } row) Pick(row);
+        if (IsAdding) Confirm();
+        else if (Highlighted is { } row) Pick(row);
     }
 
     /// <summary>Shows a problem on the field (null clears it). <paramref name="other"/> is the other
@@ -291,8 +400,9 @@ public sealed partial class PinFieldViewModel : ObservableObject
         foreach (var row in rows)
             if (seen.TryGetValue(row.Pin, out var activity)) row.Activity = activity;
         SetRows(rows);
+        SetHeard();
         Highlighted = null;
-        Highlight(rows.FirstOrDefault(r => r.Pin == pin && r.IsPickable) ?? rows.FirstOrDefault(r => r.IsPickable));
+        Highlight(rows.FirstOrDefault(r => r.Pin == pin && r.IsPickable) ?? (IsAdding ? null : rows.FirstOrDefault(r => r.IsPickable)));
     }
 
     private void Fix()
@@ -309,9 +419,22 @@ public sealed partial class PinFieldViewModel : ObservableObject
         foreach (var timer in _holds.Values) timer.Dispose();
         _holds.Clear();
         WatchHint = null;
+        _cancelAdd = null;
+        _heard.Clear();
         IsOpen = false;
+        IsAdding = false;
+        IsListView = false;
         Highlight(null);
         SetRows([]);
+        SetHeard();
+    }
+
+    private void SetHeard()
+    {
+        var byPin = Rows.ToDictionary(r => r.Pin);
+        Heard = _heard.Where(byPin.ContainsKey).Select(p => byPin[p]).ToList();
+        OnPropertyChanged(nameof(Heard));
+        OnPropertyChanged(nameof(IsWaiting));
     }
 
     private void SetRows(List<PinRowViewModel> rows)
@@ -337,5 +460,6 @@ public sealed partial class PinFieldViewModel : ObservableObject
         Highlighted = row;
         if (row is not null) row.IsHighlighted = true;
         OnPropertyChanged(nameof(Highlighted));
+        OnPropertyChanged(nameof(CanConfirm));
     }
 }

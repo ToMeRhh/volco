@@ -271,7 +271,7 @@ public sealed class CombinedInspectorTests : IDisposable
     public void NewSliderAsksToSaveFirst()
     {
         using var s = Show();
-        s.Hardware.AddSliderCommand.Execute(null);
+        s.Vm.Controller.AddSliderCommand.Execute(null);   // the draft only, without the pin dialog
         Settle(s.Window);
         Select(s, s.Hardware.Sliders[5]);
 
@@ -291,7 +291,7 @@ public sealed class CombinedInspectorTests : IDisposable
     public void AfterTheConfirmedSaveTheControlsSectionAppears()
     {
         using var s = Show();
-        s.Hardware.AddSliderCommand.Execute(null);
+        s.Vm.Controller.AddSliderCommand.Execute(null);   // the draft only, without the pin dialog
         s.Vm.Controller.SetSliderPin(5, 39);
         Settle(s.Window);
         Select(s, s.Hardware.Sliders[5]);
@@ -423,12 +423,12 @@ public sealed class CombinedInspectorTests : IDisposable
         Select(s, s.Vm.Sliders.Items[0]);
         Assert.True(In<TextBox>(SliderInspector(s), "NameBox").IsEffectivelyEnabled);
 
-        s.Hardware.AddSliderCommand.Execute(null);
+        s.Vm.Controller.AddSliderCommand.Execute(null);   // the draft only, without the pin dialog
         Settle(s.Window);
         Select(s, s.Hardware.Sliders[5]);
         Assert.False(In<TextBox>(SliderInspector(s), "NameBox").IsEffectivelyEnabled);
 
-        s.Hardware.AddButtonCommand.Execute(null);
+        s.Vm.Controller.AddButtonCommand.Execute(null);   // the draft only, without the pin dialog
         Settle(s.Window);
         var added = s.Hardware.Buttons[3];
         Assert.True(added.IsNew);
@@ -444,7 +444,7 @@ public sealed class CombinedInspectorTests : IDisposable
     {
         using var s = Show();
         s.Vm.Controller.RemoveSlider(1);   // unsaved: Slider 3 is now the draft's Slider 2
-        s.Hardware.AddSliderCommand.Execute(null);
+        s.Vm.Controller.AddSliderCommand.Execute(null);   // the draft only, without the pin dialog
         Settle(s.Window);
         Until(s.Window, () => s.Page.Tiles().OfType<SliderTile>().Count() == 5);
 

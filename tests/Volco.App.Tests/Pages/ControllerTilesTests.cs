@@ -147,7 +147,7 @@ public sealed class ControllerTilesTests : IDisposable
         using var s = Show();
         Assert.All(Tiles<SliderTile>(s.Page), t => Assert.False(In<TextBlock>(t, "NewText").IsVisible));
 
-        s.Hardware.AddSliderCommand.Execute(null);
+        s.Vm.Controller.AddSliderCommand.Execute(null);   // the draft only, without the pin dialog
         Settle(s.Window);
 
         var sliders = Tiles<SliderTile>(s.Page);
@@ -164,7 +164,7 @@ public sealed class ControllerTilesTests : IDisposable
         Assert.False(Rect(sliders[0], "NewOutline").IsVisible);
         Assert.True(In<TextBlock>(sliders[0], "Label").IsVisible);
 
-        s.Hardware.AddButtonCommand.Execute(null);
+        s.Vm.Controller.AddButtonCommand.Execute(null);   // the draft only, without the pin dialog
         Settle(s.Window);
         var buttons = Tiles<ButtonTile>(s.Page);
         var button = buttons[^1];
