@@ -56,15 +56,20 @@ public sealed class HardwareFixesTests : IDisposable
     }
 
     /// <summary>The settings window, opened on General as the app opens it, then on Hardware over
-    /// the DIY setup (5 sliders named a..e; buttons LED, LED, pair with hold times 501..503), in
+    /// the DIY setup (5 sliders named a..e; buttons LED, LED, pair with a different press action each), in
     /// sync with the controller.</summary>
+    /// <summary>Each DIY button's press action, to tell the buttons apart.</summary>
+    private static readonly ButtonActionType[] Marks =
+        { ButtonActionType.MuteCurrentOutput, ButtonActionType.MediaPlayPause, ButtonActionType.MuteCurrentInput };
+
     private static Shown Show()
     {
         var blob = ControllerConfigCodec.Encode(ControllerPresets.ApplyTo(new ControllerConfig(), Diy));
         var rig = new TestRig();
         var c = rig.Config.Config;
         c.Sliders = "abcde".Select((n, i) => new SliderConfig { Index = i, Name = n.ToString(), Type = SliderMappingType.None }).ToList();
-        c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i, LongPressMs = 501 + i }).ToList();
+        c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
+        for (var i = 0; i < 3; i++) c.Buttons[i].GetOrAddBinding(AppConfig.DefaultModeId).SinglePress.Action = Marks[i];
         c.ControllerConfigBlob = Convert.ToBase64String(blob);
         var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
         var window = new SettingsWindow(vm, rig.Runtime) { Width = 1100, Height = 720 };
@@ -330,11 +335,11 @@ public sealed class HardwareFixesTests : IDisposable
         SaveAndAnswer(s, reply);
         ShowControls(s);
 
-        Assert.Equal(new[] { 502, 503 }, s.Config.Buttons.Select(x => x.LongPressMs));
+        Assert.Equal(Marks[1..], s.Config.Buttons.Select(x => x.BindingFor(AppConfig.DefaultModeId).SinglePress.Action));
         Assert.Equal(new[] { 0, 1 }, s.Config.Buttons.Select(x => x.Index));
-        Assert.Equal(new[] { 502, 503 }, Written(s).Buttons.Select(x => x.LongPressMs));
+        Assert.Equal(Marks[1..], Written(s).Buttons.Select(x => x.BindingFor(AppConfig.DefaultModeId).SinglePress.Action));
         var tiles = s.Stage.Tiles().OfType<ButtonTile>().ToList();
-        Assert.Equal(new[] { 502, 503 }, tiles.Select(t => ((ButtonItemViewModel)t.DataContext!).Config.LongPressMs));
+        Assert.Equal(Marks[1..], tiles.Select(t => ((ButtonItemViewModel)t.DataContext!).Config.BindingFor(AppConfig.DefaultModeId).SinglePress.Action));
         Assert.DoesNotContain(s.Vm.Buttons.Items, x => x.IsMissing);
     }
 

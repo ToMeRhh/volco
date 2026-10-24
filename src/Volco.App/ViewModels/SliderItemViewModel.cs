@@ -149,47 +149,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         _ => "Not set up",
     };
 
-    // ── Advanced ──────────────────────────────────────────────────────────────
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ResponseSummary))]
-    private bool _invert;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CurveIndex), nameof(ResponseSummary))]
-    private ResponseCurve _curve;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ResponseSummary))]
-    private double _deadZonePercent;
-
-    /// <summary>The inspector's Response summary: "Linear" with every setting at its default.</summary>
-    public string ResponseSummary
-        => Curve == ResponseCurve.Linear && DeadZonePercent == 0 && !Invert ? "Linear" : "Custom";
-
-    /// <summary>Order matches the curve picker: Linear, Logarithmic, Exponential, S-Curve.</summary>
-    public int CurveIndex
-    {
-        get => Curve switch
-        {
-            ResponseCurve.Logarithmic => 1,
-            ResponseCurve.Exponential => 2,
-            ResponseCurve.SCurve => 3,
-            _ => 0,
-        };
-        set
-        {
-            if (value < 0) return;
-            Curve = value switch
-            {
-                1 => ResponseCurve.Logarithmic,
-                2 => ResponseCurve.Exponential,
-                3 => ResponseCurve.SCurve,
-                _ => ResponseCurve.Linear,
-            };
-        }
-    }
-
     // ── View state ────────────────────────────────────────────────────────────
 
     /// <summary>The tile's captions on Hardware; null until the Controller page fills them.</summary>
@@ -204,9 +163,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     /// flashes; the view's style animation does the fading.</summary>
     [ObservableProperty]
     private bool _isActive;
-
-    [ObservableProperty]
-    private bool _isAdvancedOpen;
 
     [RelayCommand]
     private void RemoveLast() => _owner.RemoveLast();
@@ -237,9 +193,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
             SelectedDevice = Config.Device is { FriendlyName.Length: > 0 } configured
                 ? configured.FriendlyName
                 : CurrentDefaultOutput;
-            Invert = Config.Invert;
-            Curve = Config.Curve;
-            DeadZonePercent = Config.DeadZonePercent;
         }
         finally { _loading = false; }
         OnPropertyChanged(nameof(Summary));
@@ -279,32 +232,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         Config.Device = value == CurrentDefaultOutput ? null : DeviceRefLookup.DeviceRefFromName(_devices, value);
         Persist();
     }
-
-    partial void OnInvertChanged(bool value)
-    {
-        if (_loading) return;
-        Config.Invert = value;
-        Persist();
-    }
-
-    partial void OnCurveChanged(ResponseCurve value)
-    {
-        if (_loading) return;
-        Config.Curve = value;
-        Persist();
-    }
-
-    partial void OnDeadZonePercentChanged(double value)
-    {
-        // Two decimals: the slider control is continuous.
-        var rounded = Quantise(value);
-        if (rounded != value) { DeadZonePercent = rounded; return; }
-        if (_loading) return;
-        Config.DeadZonePercent = value;
-        Persist();
-    }
-
-    private static double Quantise(double v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
 
     private void Persist() => _save();
 

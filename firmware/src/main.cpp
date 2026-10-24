@@ -71,6 +71,9 @@ static void ledRestored(uint8_t pin) {
 
 static void reportPinActivity(uint8_t pin, uint32_t now) { pcLink->sendPinActivity(pin, now); }
 
+// What a slider sends: its reading stretched between the learned ends, mirrored when reversed.
+static uint16_t sent(uint8_t i, uint16_t v) { return volco::sliderOut(calibrations[i].map(v), rc.sliderReverse[i]); }
+
 static void sendCalibration(uint8_t i, uint32_t now) {
   const volco::SliderCalibration& c = calibrations[i];
   pcLink->sendCalibration(i, c.flags(), c.lo(), c.hi(), now);
@@ -82,7 +85,7 @@ static void finishSweep(uint8_t i, uint32_t now) {
   calibrations[i].reportDue(now);  // consumed: the report goes out here
   sendCalibration(i, now);
   lastSliderValues[i] = (uint16_t)smoothedValues[i];
-  pcLink->sendSlider(i, calibrations[i].map(lastSliderValues[i]), now);
+  pcLink->sendSlider(i, sent(i, lastSliderValues[i]), now);
   endsSaveNow = true;
 }
 
@@ -114,7 +117,7 @@ class HardwareSink : public volco::LinkSink {
   // Sent after every Hello (PR #68). The deadband then measures from the value just sent.
   uint16_t sliderValue(uint8_t i) override {
     lastSliderValues[i] = (uint16_t)smoothedValues[i];
-    return calibrations[i].map(lastSliderValues[i]);
+    return sent(i, lastSliderValues[i]);
   }
   // Every Calibrate for a slider that exists is answered with its Calibration.
   void calibrate(uint8_t i, uint8_t action, uint32_t now) override {
@@ -225,7 +228,7 @@ void loop() {
       if (calibrations[i].becameLearned() || abs(delta) > rc.input.sliderDeadband) {
         lastSliderValues[i] = filtered;
         screens_activity(now);
-        pcLink->sendSlider(i, calibrations[i].map(filtered), now);
+        pcLink->sendSlider(i, sent(i, filtered), now);
       }
     }
   }

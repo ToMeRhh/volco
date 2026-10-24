@@ -116,7 +116,7 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         vm.InputFeel = 1;
         Assert.Equal(20m, Controller.SmoothingPct);
         Assert.Equal(25m, Controller.Deadband);
-        Assert.Equal("Normal", vm.InputSummary);
+        Assert.Equal("Normal", vm.SlidersSummary);
         vm.InputFeel = 0;
         Assert.Equal((40m, 15m), (Controller.SmoothingPct, Controller.Deadband));
         vm.InputFeel = 2;
@@ -124,7 +124,32 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         vm.InputFeel = 1;
         Controller.Deadband = 30;
         Assert.Equal(3, vm.InputFeel);
-        Assert.Equal("Custom", vm.InputSummary);
+        Assert.Equal("Custom", vm.SlidersSummary);
+    }
+
+    [Fact]
+    public void ButtonsCard_EditsTiming()
+    {
+        var vm = SetUp();
+        Assert.Equal("500 ms · 300 ms", vm.ButtonsSummary);
+        vm.HoldMs = 700;
+        Assert.Equal(700m, Controller.HoldMs);
+        Assert.Equal("700 ms · 300 ms", vm.ButtonsSummary);
+        vm.DoublePressMs = 250;
+        Assert.Equal(250m, Controller.DoublePressMs);
+        Assert.Equal("700 ms · 250 ms", vm.ButtonsSummary);
+    }
+
+    [Fact]
+    public void SmoothingLink_OpensSlidersCard()
+    {
+        SetUp();
+        var hardware = _settings!.Hardware;
+        _settings.Controls.Select(_settings.Controls.Sliders.Items[0]);
+        var wiring = Assert.IsType<SliderWiringViewModel>(hardware.Inspected);
+        Assert.Equal("Normal", wiring.SmoothingSummary);
+        wiring.OpenSmoothingCommand.Execute(null);
+        Assert.True(Assert.IsType<ControllerSettingsViewModel>(hardware.Inspected).IsSlidersOpen);
     }
 
     [Fact]
@@ -133,7 +158,7 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         var vm = SetUp(screen: false);
         Assert.False(vm.ShowScreens);
         Assert.False(vm.IsScreensOpen);
-        Assert.True(vm.IsInputOpen);
+        Assert.True(vm.IsSlidersOpen);
     }
 
     /// <summary>Screens and Input feel open and close on their own (user, 2026-10-22).</summary>
@@ -142,15 +167,15 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
     {
         var vm = SetUp();
         Assert.True(vm.IsScreensOpen);
-        Assert.False(vm.IsInputOpen);
-        vm.ToggleInputCommand.Execute(null);
-        Assert.True(vm.IsInputOpen);
+        Assert.False(vm.IsSlidersOpen);
+        vm.ToggleSlidersCommand.Execute(null);
+        Assert.True(vm.IsSlidersOpen);
         Assert.True(vm.IsScreensOpen);   // both open
         vm.ToggleScreensCommand.Execute(null);
         Assert.False(vm.IsScreensOpen);
-        Assert.True(vm.IsInputOpen);
-        vm.ToggleInputCommand.Execute(null);
-        Assert.False(vm.IsInputOpen);   // both closed
+        Assert.True(vm.IsSlidersOpen);
+        vm.ToggleSlidersCommand.Execute(null);
+        Assert.False(vm.IsSlidersOpen);   // both closed
     }
 
     [Fact]
@@ -200,6 +225,23 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         Controller.OffAfterS = 91;
         Assert.NotSame(off, vm.OffAfter);
         Assert.True(vm.OffAfter[vm.OffAfterIndex].IsCustom);
+    }
+
+    [AvaloniaFact]
+    public void TheInspectorShowsSlidersAndButtonsCards()
+    {
+        var vm = SetUp();
+        var view = new ControllerSettingsInspector { DataContext = vm };
+        var window = new Window { Content = view, Width = 500, Height = 800 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var texts = view.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+        Assert.Contains("Sliders", texts);
+        Assert.Contains("Buttons", texts);
+        Assert.DoesNotContain("Input feel", texts);
+        Assert.DoesNotContain("Read sliders every", texts);
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<Control>(), c => c.Name == "SliderIntervalBox");
+        window.Close();
     }
 
     [Fact]

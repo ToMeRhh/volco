@@ -147,6 +147,21 @@ void test_auto_calibrate_copied_default_on() {
   TEST_ASSERT_TRUE(r.sliderAutoCalibrate[2]);
 }
 
+void test_slider_reverse() {
+  RuntimeConfig r;
+  toRuntime(decoded("slider_reverse"), r);
+  TEST_ASSERT_FALSE(r.sliderReverse[0]);
+  TEST_ASSERT_TRUE(r.sliderReverse[2]);
+  toRuntime(decoded("diy_reference"), r);  // absent: not reversed
+  for (uint8_t i = 0; i < 5; i++) TEST_ASSERT_FALSE(r.sliderReverse[i]);
+}
+
+void test_slider_out() {
+  TEST_ASSERT_EQUAL_UINT16(4095, sliderOut(0, true));
+  TEST_ASSERT_EQUAL_UINT16(0, sliderOut(4095, true));
+  TEST_ASSERT_EQUAL_UINT16(1000, sliderOut(1000, false));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_diy_reference);
@@ -155,5 +170,7 @@ int main(int, char**) {
   RUN_TEST(test_screen_buses_used_only);
   RUN_TEST(test_udp_copied);
   RUN_TEST(test_auto_calibrate_copied_default_on);
+  RUN_TEST(test_slider_reverse);
+  RUN_TEST(test_slider_out);
   return UNITY_END();
 }

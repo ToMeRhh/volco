@@ -672,7 +672,7 @@
   </Style>
   <!-- Inspector cards (controller-page spec §4.3, the Windows Settings look; user, 2026-10-22): a
        card (Border.InspectorRows) holds its rows in a CardRows, a hairline between each two. A
-       collapsible group's header (Screens, Response, Fine tune) is a row of its card; its body sits
+       collapsible group's header (Screens, Buttons, Fine tune) is a row of its card; its body sits
        under it, indented (Border.CardBody, a section's own rows) or indented and tinted
        (Border.Nested, a sub-option or a sub-group), so a child never reads as its parent's sibling. -->
   <Style Selector="controls|CardRows">
@@ -1023,57 +1023,6 @@
   </Style>
   <Style Selector="Border.LightPreview > Panel">
     <Setter Property="HorizontalAlignment" Value="Center"/>
-  </Style>
-  <!-- Response and Timing: a header row of their card (controller-page spec §4.3), the body a
-       Border.Nested under it -->
-  <Style Selector="ToggleButton.SectionHeader">
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="0"/>
-    <Setter Property="Height" Value="44"/>
-    <Setter Property="Padding" Value="12,0,8,0"/>
-    <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-    <Setter Property="VerticalContentAlignment" Value="Center"/>
-  </Style>
-  <Style Selector="ToggleButton.SectionHeader:checked /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-  </Style>
-  <Style Selector="ToggleButton.SectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SubtleBrush}"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-  </Style>
-  <Style Selector="ToggleButton.SectionHeader:checked PathIcon.SectionChevron">
-    <Setter Property="RenderTransform" Value="rotate(90deg)"/>
-  </Style>
-  <Style Selector="StackPanel.SectionBody">
-    <Setter Property="Margin" Value="12,10,12,12"/>
-    <Setter Property="Spacing" Value="10"/>
-  </Style>
-  <Style Selector="ListBox.Curves">
-    <Setter Property="Background" Value="Transparent"/>
-  </Style>
-  <Style Selector="ListBox.Curves ListBoxItem">
-    <Setter Property="Margin" Value="0,0,6,0"/>
-    <Setter Property="Padding" Value="4,5"/>
-    <Setter Property="HorizontalContentAlignment" Value="Center"/>
-    <Setter Property="CornerRadius" Value="6"/>
-    <Setter Property="FontSize" Value="11.5"/>
-  </Style>
-  <Style Selector="ListBox.Curves ListBoxItem TextBlock">
-    <Setter Property="HorizontalAlignment" Value="Center"/>
-  </Style>
-  <Style Selector="Path.CurveGraph">
-    <Setter Property="Width" Value="28"/>
-    <Setter Property="Height" Value="20"/>
-    <Setter Property="Stretch" Value="Fill"/>
-    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}"/>
-    <Setter Property="StrokeThickness" Value="1.5"/>
-    <Setter Property="HorizontalAlignment" Value="Center"/>
-  </Style>
-  <Style Selector="ListBox.Curves ListBoxItem:selected Path.CurveGraph">
-    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
   <!-- ── Settings window: the compact layout below 1000 px (spec §3.1) ───

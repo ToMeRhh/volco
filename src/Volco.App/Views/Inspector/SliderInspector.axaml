@@ -8,7 +8,7 @@
              x:Class="Volco.App.Views.Inspector.SliderInspector"
              x:DataType="vm:SliderItemViewModel">
   <!-- The selected slider (controller-page spec §4.3): its name, then the Controls section (what
-       it controls, its response) over the Hardware section (its pin, Remove), scrolling as one
+       it controls) over the Hardware section (its pin, Remove), scrolling as one
        (TileInspector). -->
   <StackPanel>
     <!-- At least the page's InspectorTopHeight, so Hardware starts where it does for every tile -->
@@ -21,7 +21,7 @@
                    PlaceholderText="{Binding TargetLabel}" IsEnabled="{Binding !IsNew}"/>
         </StackPanel>
 
-        <!-- Controls: what it controls and its response; a slider only the draft has is set up
+        <!-- Controls: what it controls; a slider only the draft has is set up
              once the controller has it -->
         <StackPanel Name="ControlsSection">
           <Border Name="ControlsHeader" Classes="GroupHeader">
@@ -30,14 +30,13 @@
           <Panel Name="ControlsBody" Classes="GroupBody">
             <Border Name="SaveFirstPanel" Classes="InspectorRows SaveFirst" IsVisible="{Binding IsNew}">
               <StackPanel Spacing="10">
-                <TextBlock Name="SaveFirstText" Classes="Secondary" TextWrapping="Wrap" Text="Save to controller to set it up"/>
-                <Button Name="SaveFirstButton" Classes="Primary" HorizontalAlignment="Left" Content="Save to controller"
+                <TextBlock Name="SaveFirstText" Classes="Secondary" TextWrapping="Wrap" Text="Save to set it up"/>
+                <Button Name="SaveFirstButton" Classes="Primary" HorizontalAlignment="Left" Content="Save"
                         Command="{Binding $parent[stage:StagePage].Hardware.SaveCommand, FallbackValue={x:Null}}"/>
               </StackPanel>
             </Border>
             <StackPanel Name="ControlsContent" Classes="InspectorGroupBody" IsVisible="{Binding !IsNew}">
-              <!-- One card: the Controls row, then Response's header and, open, its settings
-                   nested under it -->
+              <!-- One card: the Controls row -->
               <Border Classes="InspectorRows">
                 <controls:CardRows>
                   <Button Name="ControlsRow" Classes="InspectorRow"
@@ -57,61 +56,6 @@
                       <PathIcon Grid.Column="3" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
                     </Grid>
                   </Button>
-                  <ToggleButton Name="ResponseToggle" Classes="SectionHeader" IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
-                    <Grid ColumnDefinitions="*,Auto,Auto">
-                      <TextBlock Classes="SectionLabel" Text="Response"/>
-                      <TextBlock Name="ResponseSummaryText" Grid.Column="1" Classes="Caption" Margin="0,0,8,0"
-                                 VerticalAlignment="Center" Text="{Binding ResponseSummary}"/>
-                      <PathIcon Grid.Column="2" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
-                    </Grid>
-                  </ToggleButton>
-                  <Border Name="ResponseBody" Classes="Nested" IsVisible="{Binding IsAdvancedOpen}">
-                    <StackPanel Classes="SectionBody">
-                      <ListBox Name="CurveList" Classes="Curves" SelectedIndex="{Binding CurveIndex, Mode=TwoWay}">
-                        <ListBox.ItemsPanel>
-                          <ItemsPanelTemplate>
-                            <UniformGrid Columns="4"/>
-                          </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBoxItem ToolTip.Tip="Linear">
-                          <StackPanel Spacing="3">
-                            <Path Classes="CurveGraph" Data="M1,19 L19,1"/>
-                            <TextBlock Text="Linear"/>
-                          </StackPanel>
-                        </ListBoxItem>
-                        <ListBoxItem ToolTip.Tip="Logarithmic">
-                          <StackPanel Spacing="3">
-                            <Path Classes="CurveGraph" Data="M1,19 C1,8 8,1 19,1"/>
-                            <TextBlock Text="Log"/>
-                          </StackPanel>
-                        </ListBoxItem>
-                        <ListBoxItem ToolTip.Tip="Exponential">
-                          <StackPanel Spacing="3">
-                            <Path Classes="CurveGraph" Data="M1,19 C12,19 19,12 19,1"/>
-                            <TextBlock Text="Exp"/>
-                          </StackPanel>
-                        </ListBoxItem>
-                        <ListBoxItem ToolTip.Tip="S-curve">
-                          <StackPanel Spacing="3">
-                            <Path Classes="CurveGraph" Data="M1,19 C10,19 10,1 19,1"/>
-                            <TextBlock Text="S-curve"/>
-                          </StackPanel>
-                        </ListBoxItem>
-                      </ListBox>
-                      <Grid ColumnDefinitions="90,*,44">
-                        <TextBlock Text="Dead zone" Classes="Secondary" VerticalAlignment="Center"/>
-                        <Slider Name="DeadZoneSlider" Grid.Column="1" Minimum="0" Maximum="0.45"
-                                Value="{Binding DeadZonePercent, Mode=TwoWay}"/>
-                        <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" TextAlignment="Right"
-                                   Text="{Binding DeadZonePercent, StringFormat={}{0:P0}}"/>
-                      </Grid>
-                      <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Reverse" Classes="Secondary" VerticalAlignment="Center"/>
-                        <ToggleSwitch Name="InvertSwitch" Grid.Column="1" OnContent="" OffContent=""
-                                      IsChecked="{Binding Invert, Mode=TwoWay}"/>
-                      </Grid>
-                    </StackPanel>
-                  </Border>
                 </controls:CardRows>
               </Border>
             </StackPanel>

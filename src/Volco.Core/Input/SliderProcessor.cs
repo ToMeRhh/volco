@@ -8,7 +8,7 @@ namespace Volco.Core.Input;
 
 /// <summary>
 /// Event args for <see cref="SliderProcessor.SliderLevelChanged"/>.
-/// Carries the slider index and the final (post-curve) volume in [0,1].
+/// Carries the slider index and the final volume in [0,1].
 /// </summary>
 public sealed class SliderLevelEventArgs : EventArgs
 {
@@ -44,7 +44,7 @@ public class SliderProcessor : IDisposable
     public event EventHandler<VolumeChangeNotification>? VolumeChanged;
 
     /// <summary>
-    /// Raised after each slider's final (post-curve) volume is computed.
+    /// Raised after each slider's final volume is computed.
     /// Carries the slider index and level in [0,1]. Additive — does not replace VolumeChanged.
     /// The app wires this to SlidersViewModel.UpdateLiveLevel on the UI thread.
     /// </summary>
@@ -79,29 +79,7 @@ public class SliderProcessor : IDisposable
         }
     }
 
-    public static float MapAdcToVolume(ushort adcValue, bool invert)
-        => MapAdcToVolume(adcValue, invert, ResponseCurve.Linear, 0);
-
-    public static float MapAdcToVolume(ushort adcValue, bool invert, ResponseCurve curve, double deadZonePercent)
-    {
-        float raw = adcValue / 4095f;
-        if (invert) raw = 1f - raw;
-
-        var dz = (float)Math.Clamp(deadZonePercent, 0, 0.45);
-        if (dz > 0)
-            raw = raw <= dz ? 0f : (raw - dz) / (1f - dz);
-
-        return ApplyCurve(raw, curve);
-    }
-
-    private static float ApplyCurve(float x, ResponseCurve curve) => curve switch
-    {
-        ResponseCurve.Linear      => x,
-        ResponseCurve.Logarithmic => x <= 0 ? 0 : MathF.Pow(x, 0.5f),
-        ResponseCurve.Exponential => MathF.Pow(x, 2f),
-        ResponseCurve.SCurve      => x * x * (3f - 2f * x), // smoothstep
-        _                         => x
-    };
+    public static float MapAdcToVolume(ushort adcValue) => adcValue / 4095f;
 
     public static List<string> GetUnmappedProcesses(AppConfig config, IReadOnlySet<string> activeProcesses)
     {
@@ -217,7 +195,7 @@ public class SliderProcessor : IDisposable
     }
 
     /// <summary>
-    /// Fix D: the most recently processed (post-curve) volume in [0,1] for a
+    /// Fix D: the most recently processed volume in [0,1] for a
     /// slider index, or null when the index is out of range or that slider has never reported a
     /// value yet. The firmware reports every slider right after its Hello, so this is null only
     /// until the handshake (or for a slider the controller doesn't have) - callers (a settings
@@ -257,7 +235,7 @@ public class SliderProcessor : IDisposable
                 continue;
 
             var sliderConfig = config.Sliders[sliderIndex];
-            var volume = MapAdcToVolume(value.Value, sliderConfig.Invert, sliderConfig.Curve, sliderConfig.DeadZonePercent);
+            var volume = MapAdcToVolume(value.Value);
 
             lock (_lock)
             {

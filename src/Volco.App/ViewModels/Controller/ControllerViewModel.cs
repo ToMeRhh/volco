@@ -59,6 +59,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         _runtime.InTestModeChanged += OnInTestModeChanged;
 
         InitFirmware(firmware);
+        LoadTimingFromConfig();
         LoadDraftFromMirror();
         RefreshStatus();
     }
@@ -146,9 +147,13 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// about the draft (and layout) that was sent, nor during a hardware test (editing is paused).</summary>
     public bool CanEdit => _runtime.ControllerState == ControllerState.Ready && (InSync || _hasPermission) && !IsSaving && !IsTesting;
 
-    /// <summary>The baseline is Volco's saved copy, not what the controller holds: while setting up
-    /// a controller that doesn't hold the draft, it is always unsaved.</summary>
-    public bool IsDirty => _fixIt || IsSettingUp || !_draft.ToByteArray().AsSpan().SequenceEqual(_baseline);
+    /// <summary>The draft holds unsaved changes: to the controller's config or to the button timing.</summary>
+    public bool IsDirty => ControllerDirty || TimingDirty;
+
+    /// <summary>The controller's config differs from Volco's saved copy (the baseline), not from what
+    /// the controller holds: while setting up a controller that doesn't hold the draft, it is always
+    /// unsaved. Saving it sends it to the controller, which restarts.</summary>
+    internal bool ControllerDirty => _fixIt || IsSettingUp || !_draft.ToByteArray().AsSpan().SequenceEqual(_baseline);
 
     /// <summary>The draft is the Blank placeholder Volco starts from with no copy of the controller's
     /// setup, and nobody has started a draft from it: it counts as dirty against the empty baseline
@@ -162,7 +167,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The draft holds changes the user made and hasn't saved (dirty, and not the
     /// placeholder): leaving the Controller page asks first, and the drawing shows the draft's
     /// controls (controller-page spec §4.1, §4.4).</summary>
-    public bool HasUnsavedChanges => IsDirty && !IsPlaceholder;
+    public bool HasUnsavedChanges => HasUnsavedControllerChanges || TimingDirty;
+
+    /// <summary>The controller draft alone (not the button timing) holds unsaved changes: the
+    /// drawing shows the draft's controls then.</summary>
+    public bool HasUnsavedControllerChanges => ControllerDirty && !IsPlaceholder;
 
     public bool CanSave => CanEdit && IsDirty && !Busy;
 
@@ -259,11 +268,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>Dirty and the problems.</summary>
     private void Recompute()
     {
-        if (!IsDirty) SetSetupChanged(false);   // nothing unsaved is left for the notice to warn about
+        if (!ControllerDirty) SetSetupChanged(false);   // nothing unsaved is left for the notice to warn about
         if (CanEdit) ShowLocalErrors();
         else ClearErrors();
         OnPropertyChanged(nameof(IsDirty));
         OnPropertyChanged(nameof(HasUnsavedChanges));
+        OnPropertyChanged(nameof(HasUnsavedControllerChanges));
         OnPropertyChanged(nameof(IsSettingUp));
         OnPropertyChanged(nameof(CanSave));
         OnPropertyChanged(nameof(ShowBehaviour));
@@ -440,6 +450,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private void Save()
     {
         if (!CanSave) return;
+        if (!ControllerDirty)
+        {
+            SaveTimingOnly();
+            return;
+        }
         var v = ControllerConfigValidator.Validate(_draft, ChipInfo.Esp32);
         if (!v.IsOk)
         {
@@ -493,11 +508,16 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The bytes being saved.</summary>
     private byte[]? _savingBlob;
 
+    /// <summary>The button timing of the draft being saved, committed to Volco's settings once the
+    /// controller confirms; null for a save that isn't from the draft (Send Volco's).</summary>
+    private (int HoldMs, int DoublePressMs)? _savingTiming;
+
     private void SaveBytes(byte[] blob, bool udpChanged, ControlLayout? layout)
     {
         _udpChangedInSave = udpChanged;
         _savingLayout = layout;
         _savingBlob = blob;
+        _savingTiming = layout is not null ? (_holdMs, _doublePressMs) : null;
         _savingSetup = IsSettingUp || IsNotSetUp;
         _lastSaveFromDraft = layout is not null;
         IsSaving = true;
@@ -548,9 +568,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         if (r.Status == SaveStatus.Confirmed && _savingSetup) OfferTest = true;   // the status offers a test
         var layout = _savingLayout;
         var saved = _savingBlob;
+        var timing = _savingTiming;
         _savingLayout = null;
         _savingBlob = null;
+        _savingTiming = null;
         if (r.Status == SaveStatus.Confirmed && layout is not null) ApplyLayout(layout, saved);
+        if (r.Status == SaveStatus.Confirmed && timing is { } t) CommitTiming(t.HoldMs, t.DoublePressMs);
         RefreshAll();
         SaveFinished?.Invoke(this, r.Status);
     }
@@ -571,9 +594,17 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         ControlsShifted?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>The save bar's Discard: the draft goes back to Volco's saved copy.</summary>
+    /// <summary>The save bar's Discard: the draft goes back to Volco's saved copy and settings.</summary>
     [RelayCommand]
     private void Revert()
+    {
+        LoadTimingFromConfig();
+        RevertController();
+    }
+
+    /// <summary>The controller's part of the draft goes back to Volco's saved copy; the button
+    /// timing stays as it is.</summary>
+    private void RevertController()
     {
         SetProgress(null);
         _hasPermission = false;
@@ -627,6 +658,66 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public decimal? ScrollEndHoldMs { get => S.ScrollEndHoldMs; set => EditS(s => { if (value is { } n) s.ScrollEndHoldMs = (uint)n; else s.ClearScrollEndHoldMs(); }); }
     public decimal? TransitionMs { get => S.TransitionMs; set => EditS(s => { if (value is { } n) s.TransitionMs = (uint)n; else s.ClearTransitionMs(); }); }
 
+    // ── Button timing (slider-feel spec, "The save rule") ───────────────────────────────────
+
+    // Volco stores these itself (config.json), but they sit in Controller settings and so join the
+    // draft: editable when the rest is, committed by Save, reverted by Discard. Starting a new
+    // controller draft keeps them.
+    private int _holdMs;
+    private int _doublePressMs;
+
+    /// <summary>Hold after (ms): how long a press lasts before it counts as a hold.</summary>
+    public decimal? HoldMs { get => _holdMs; set => EditTiming(value, ref _holdMs); }
+
+    /// <summary>Double press within (ms): how soon a second press must follow the first.</summary>
+    public decimal? DoublePressMs { get => _doublePressMs; set => EditTiming(value, ref _doublePressMs); }
+
+    /// <summary>The draft's button timing differs from Volco's saved settings.</summary>
+    internal bool TimingDirty => _holdMs != _config.Config.ButtonTiming.LongPressMs
+                                 || _doublePressMs != _config.Config.ButtonTiming.DoublePressWindowMs;
+
+    /// <summary>An emptied box (null) changes nothing: the box shows the draft's value again.</summary>
+    private void EditTiming(decimal? value, ref int field, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
+    {
+        if (!CanEdit || value is not { } n) { OnPropertyChanged(name); return; }
+        field = (int)n;
+        OnPropertyChanged(name);
+        OnDraftEdited();
+    }
+
+    private void LoadTimingFromConfig()
+    {
+        _holdMs = _config.Config.ButtonTiming.LongPressMs;
+        _doublePressMs = _config.Config.ButtonTiming.DoublePressWindowMs;
+        OnTimingChanged();
+    }
+
+    private void OnTimingChanged()
+    {
+        OnPropertyChanged(nameof(HoldMs));
+        OnPropertyChanged(nameof(DoublePressMs));
+    }
+
+    /// <summary>Writes the button timing to Volco's settings (the runtime reads it at each press).</summary>
+    private void CommitTiming(int holdMs, int doublePressMs)
+    {
+        _config.Config.ButtonTiming.LongPressMs = holdMs;
+        _config.Config.ButtonTiming.DoublePressWindowMs = doublePressMs;
+        _config.RequestSave();
+        OnTimingChanged();
+    }
+
+    /// <summary>Save with only the button timing changed: it goes to Volco's settings at once. Nothing
+    /// is sent, the controller doesn't restart and no progress shows; the save bar goes. The draft's
+    /// controller config is unchanged, so there is nothing to validate.</summary>
+    private void SaveTimingOnly()
+    {
+        SetProgress(null);
+        CommitTiming(_holdMs, _doublePressMs);
+        RefreshAll();
+        SaveFinished?.Invoke(this, SaveStatus.Confirmed);
+    }
+
     // ── Input tuning and Wi-Fi ───────────────────────────────────────────────────────────────
 
     private InputTuning In => _draft.EffectiveInput();
@@ -640,7 +731,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     }
 
     public decimal? DebounceMs { get => In.DebounceMs; set => EditIn(i => { if (value is { } n) i.DebounceMs = (uint)n; else i.ClearDebounceMs(); }); }
-    public decimal? SliderIntervalMs { get => In.SliderIntervalMs; set => EditIn(i => { if (value is { } n) i.SliderIntervalMs = (uint)n; else i.ClearSliderIntervalMs(); }); }
     public decimal? SmoothingPct { get => In.FilterWeightPct; set => EditIn(i => { if (value is { } n) i.FilterWeightPct = (uint)n; else i.ClearFilterWeightPct(); }); }
     public decimal? Deadband { get => In.SliderDeadband; set => EditIn(i => { if (value is { } n) i.SliderDeadband = (uint)n; else i.ClearSliderDeadband(); }); }
 
@@ -775,7 +865,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         var decoded = DecodeMirror();
         var newBaseline = decoded?.ToByteArray() ?? Array.Empty<byte>();
         // A clean draft follows the new copy; a dirty one stays, and the save bar counts against it.
-        var follow = placeholder || !IsDirty || _draft.ToByteArray().AsSpan().SequenceEqual(newBaseline);
+        // The button timing isn't the controller's, so its changes neither hold the draft nor go.
+        var follow = placeholder || !ControllerDirty || _draft.ToByteArray().AsSpan().SequenceEqual(newBaseline);
         _baseline = newBaseline;
         if (follow)
         {

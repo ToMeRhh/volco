@@ -21,9 +21,9 @@ public class ConfigManagerTests
             },
             Sliders = new List<SliderConfig>
             {
-                new() { Index = 0, Type = SliderMappingType.Processes, Processes = new List<string> { "spotify.exe" }, Invert = false },
-                new() { Index = 1, Type = SliderMappingType.Device, Invert = false },
-                new() { Index = 2, Type = SliderMappingType.Unmapped, Invert = true },
+                new() { Index = 0, Type = SliderMappingType.Processes, Processes = new List<string> { "spotify.exe" } },
+                new() { Index = 1, Type = SliderMappingType.Device },
+                new() { Index = 2, Type = SliderMappingType.Unmapped },
             },
             Buttons = new List<ButtonConfig>
             {
@@ -65,7 +65,6 @@ public class ConfigManagerTests
         Assert.Equal("COM3", deserialized.Connection.Serial.ComPort);
         Assert.Equal(3, deserialized.Sliders.Count);
         Assert.Equal(SliderMappingType.Unmapped, deserialized.Sliders[2].Type);
-        Assert.True(deserialized.Sliders[2].Invert);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, deserialized.Buttons[0].Default().SinglePress.Action);
         Assert.Equal("Headphones", deserialized.Buttons[0].Default().DoublePress.DeviceB!.FriendlyName);
         Assert.Equal("default", deserialized.Buttons[0].BindingFor("gaming").LongPress.ModeId);
@@ -81,7 +80,6 @@ public class ConfigManagerTests
         config.Sliders[0] = new SliderConfig
         {
             Type = SliderMappingType.Device, Device = new DeviceRefConfig { Id = "{0.0.0}.{a}", FriendlyName = "Speakers" },
-            Curve = ResponseCurve.SCurve, DeadZonePercent = 0.05, Invert = true,
         };
         config.Sliders[1] = new SliderConfig { Type = SliderMappingType.Processes, Processes = { "spotify.exe" } };
         config.Buttons[0].Actions[AppConfig.DefaultModeId] = new ButtonBindingConfig
@@ -123,10 +121,8 @@ public class ConfigManagerTests
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         var cfg = JsonSerializer.Deserialize<AppConfig>(json, options)!;
 
-        Assert.Equal(ResponseCurve.Linear, cfg.Sliders[0].Curve);
-        Assert.Equal(0d, cfg.Sliders[0].DeadZonePercent);
-        Assert.Equal(500, cfg.Buttons[0].LongPressMs);
-        Assert.Equal(300, cfg.Buttons[0].DoublePressWindowMs);
+        Assert.Equal(500, cfg.ButtonTiming.LongPressMs);
+        Assert.Equal(300, cfg.ButtonTiming.DoublePressWindowMs);
     }
 
     [Fact]
@@ -470,7 +466,6 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(2, c.Modes.Count);
         Assert.Equal(ButtonActionType.NextMode, c.Buttons[0].Default().LongPress.Action);
         Assert.Equal("dev-2", c.Buttons[1].Default().SinglePress.DeviceB!.Id);
-        Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
 
         Assert.Contains($"\"schemaVersion\": {AppConfig.CurrentSchemaVersion}", File.ReadAllText(_configPath));
         Assert.Equal(V3Json, File.ReadAllText(Path.Combine(_tempDir, "config.v3.bak")));
@@ -560,14 +555,13 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(5, c.Sliders.Count);
         Assert.Equal(SliderMappingType.Unmapped, c.Sliders[2].Type);
         Assert.Equal("dev-2", c.Sliders[3].Device!.Id);
-        Assert.Equal(ResponseCurve.Logarithmic, c.Sliders[1].Curve);
 
         var mode = Assert.Single(c.Modes);
         Assert.Equal(AppConfig.DefaultModeId, mode.Id);
 
         Assert.Equal(3, c.Buttons.Count);
-        Assert.Equal(600, c.Buttons[0].LongPressMs);
-        Assert.Equal(250, c.Buttons[0].DoublePressWindowMs);
+        Assert.Equal(600, c.ButtonTiming.LongPressMs);
+        Assert.Equal(250, c.ButtonTiming.DoublePressWindowMs);
         Assert.Equal(ButtonActionType.MuteCurrentInput, c.Buttons[0].Default().SinglePress.Action);
         Assert.Equal("dev-1", c.Buttons[1].Default().SinglePress.Device!.Id);
 

@@ -1343,11 +1343,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                 // Fix A: no double-press action configured (in the live mode) -> pass 0, which
                 // makes ButtonPressDetector fire Single synchronously on release instead of waiting
                 // out a double-press window that can never be satisfied. Long-press is unaffected.
+                var timing = Config.Config.ButtonTiming;
                 var doublePressWindowMs = bcfg != null && bcfg.BindingFor(ActiveModeId).DoublePress.Action == ButtonActionType.None
                     ? 0
-                    : bcfg?.DoublePressWindowMs ?? 300;
+                    : timing.DoublePressWindowMs;
                 _buttonPressDetector?.HandleButtonEvent(button.ButtonIndex, button.State,
-                    bcfg?.LongPressMs ?? 500, doublePressWindowMs);
+                    timing.LongPressMs, doublePressWindowMs);
                 break;
         }
     }

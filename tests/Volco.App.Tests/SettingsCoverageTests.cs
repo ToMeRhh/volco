@@ -162,6 +162,8 @@ public class SettingsCoverageTests
         vm.Controls.Select(vm.Sliders.Items[0]);
         Settle(window);
         PickPin(window, Named<PinField>(page, "PinField"), 39);                // sliders[0].pin
+        Named<ToggleSwitch>(page, "ReverseToggle").IsChecked = true;           // sliders[0].reverse
+        Settle(window);
 
         vm.Controls.Select(vm.Buttons.Items[0]);
         Settle(window);
@@ -211,10 +213,13 @@ public class SettingsCoverageTests
         Named<ToggleSwitch>(host, "BurnInToggle").IsChecked = false;           // screens.pixel_shift_enabled
         Settle(window);
 
-        Open(window, host, "InputHeader", "InputBody");
-        Open(window, host, "InputFineHeader", "InputFineBody");
+        Open(window, host, "SlidersHeader", "SlidersBody");
+        Open(window, host, "SlidersFineHeader", "SlidersFineBody");
+        Open(window, host, "ButtonsHeader", "ButtonsBody");
+        Open(window, host, "ButtonsFineHeader", "ButtonsFineBody");
+        Named<NumericUpDown>(host, "HoldBox").Value = 700;                     // config.buttonTiming.longPressMs
+        Named<NumericUpDown>(host, "DoublePressBox").Value = 350;              // config.buttonTiming.doublePressWindowMs
         Named<NumericUpDown>(host, "DebounceBox").Value = 25;                  // input.debounce_ms
-        Named<NumericUpDown>(host, "SliderIntervalBox").Value = 15;            // input.slider_interval_ms
         Named<NumericUpDown>(host, "SmoothingBox").Value = 40;                 // input.filter_weight_pct
         Named<NumericUpDown>(host, "DeadbandBox").Value = 30;                  // input.slider_deadband
         Settle(window);
@@ -244,6 +249,10 @@ public class SettingsCoverageTests
         var saved = ControllerConfigCodec.Decode(Convert.FromBase64String(SaveAndReload(rig).ControllerConfigBlob!));
         Assert.Equal(ControllerConfigCodec.Decode(expected), saved);
         Assert.Equal(39u, saved.Sliders[0].Pin);
+        Assert.True(saved.Sliders[0].Reverse);
+        Assert.False(saved.Sliders[1].Reverse);
+        var timing = SaveAndReload(rig).ButtonTiming;
+        Assert.Equal((700, 350), (timing.LongPressMs, timing.DoublePressWindowMs));
         Assert.Equal(15u, saved.Buttons[0].Pin);
         Assert.Equal(22u, saved.Buttons[0].Led.Pin);
         Assert.NotEqual(diy.Buttons[0].Led.ActiveLow, saved.Buttons[0].Led.ActiveLow);
@@ -264,8 +273,8 @@ public class SettingsCoverageTests
         Assert.False(screens.PixelShiftEnabled);
         Assert.Equal((900u, 40u, 700u, 300u, 120u),
                      (screens.ScrollHoldMs, screens.ScrollSpeedPxS, screens.ScrollEndHoldMs, screens.TransitionMs, screens.PixelShiftEveryS));
-        Assert.Equal((25u, 15u, 40u, 30u),
-                     (saved.Input.DebounceMs, saved.Input.SliderIntervalMs, saved.Input.FilterWeightPct, saved.Input.SliderDeadband));
+        Assert.Equal((25u, 40u, 30u),
+                     (saved.Input.DebounceMs, saved.Input.FilterWeightPct, saved.Input.SliderDeadband));
         Assert.True(saved.Udp.Enabled);
         Assert.Equal(("home", "password1", 0xC0A8010Au, 23456u, 23457u),
                      (saved.Udp.Ssid, saved.Udp.Password, saved.Udp.PcIp, saved.Udp.PcPort, saved.Udp.LocalPort));
@@ -309,7 +318,7 @@ public class SettingsCoverageTests
     }
 
     [AvaloniaFact]
-    public void Sliders_NameTargetAndResponse()
+    public void Sliders_NameAndTarget()
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -330,19 +339,13 @@ public class SettingsCoverageTests
         Click(Named<Button>(dialog, "DoneButton"));
         Settle(window);
 
-        // Slider 2: a device, a name, and every response control.
+        // Slider 2: a device, and a name.
         dialog = OpenTarget(page, window, vm, 2);
         ClickTarget(dialog, window, "Headphones");                             // Sliders[i].Type = Device
         Click(Named<Button>(dialog, "DoneButton"));                            // Sliders[i].Device
         Settle(window);
         var inspector = Inspector(page);
         Named<TextBox>(inspector, "NameBox").Text = "Music";                   // Sliders[i].Name
-        Assert.False(Named<Border>(inspector, "ResponseBody").IsEffectivelyVisible);   // starts closed
-        Named<ToggleButton>(inspector, "ResponseToggle").IsChecked = true;
-        Settle(window);
-        Named<ToggleSwitch>(inspector, "InvertSwitch").IsChecked = true;       // Sliders[i].Invert
-        Named<ListBox>(inspector, "CurveList").SelectedIndex = 2;              // Sliders[i].Curve
-        Named<Slider>(inspector, "DeadZoneSlider").Value = 0.1;                // Sliders[i].DeadZonePercent
 
         // Slider 3: the main output (no device).
         dialog = OpenTarget(page, window, vm, 3);
@@ -358,9 +361,6 @@ public class SettingsCoverageTests
         Assert.Equal("dev-2", s[2].Device!.Id);
         Assert.Equal("Headphones", s[2].Device!.FriendlyName);
         Assert.Equal("Music", s[2].Name);
-        Assert.True(s[2].Invert);
-        Assert.Equal(ResponseCurve.Exponential, s[2].Curve);
-        Assert.Equal(0.1, s[2].DeadZonePercent);
         Assert.Equal(SliderMappingType.Device, s[3].Type);
         Assert.Null(s[3].Device);
     }
@@ -439,14 +439,6 @@ public class SettingsCoverageTests
             Named<TextBox>(d, "CommandPathBox").Text = "steam://rungameid/570";
             Done(d, window, vm);
 
-            // Timing, on button 0.
-            vm.Controls.Select(vm.Buttons.Items[0]);
-            Settle(window);
-            Named<ToggleButton>(Inspector(page), "TimingToggle").IsChecked = true;
-            Settle(window);
-            Named<NumericUpDown>(Inspector(page), "LongPressBox").Value = 700;              // LongPressMs
-            Named<NumericUpDown>(Inspector(page), "DoublePressBox").Value = 350;            // DoublePressWindowMs
-
             var b = SaveAndReload(rig).Buttons;
             var b0 = b[0].BindingFor(AppConfig.DefaultModeId);
             Assert.Equal(ButtonActionType.MuteSpecificDevice, b0.SinglePress.Action);
@@ -473,8 +465,6 @@ public class SettingsCoverageTests
             Assert.Equal(WhileRunningPolicy.StartAnother, b2.SinglePress.WhileRunning);
             Assert.Equal(ButtonActionType.OpenProgram, b2.DoublePress.Action);
             Assert.Equal("steam://rungameid/570", b2.DoublePress.Command!.Path);
-            Assert.Equal(700, b[0].LongPressMs);
-            Assert.Equal(350, b[0].DoublePressWindowMs);
         }
         finally { File.Delete(script); }
     }

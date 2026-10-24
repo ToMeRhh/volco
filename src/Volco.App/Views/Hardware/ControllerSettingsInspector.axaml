@@ -5,7 +5,7 @@
              xmlns:controls="using:Volco.App.Controls"
              x:Class="Volco.App.Views.Hardware.ControllerSettingsInspector"
              x:DataType="hw:ControllerSettingsViewModel">
-  <!-- The controller's settings (hardware-page spec §6.6): Screens, Input feel and Wi-Fi, each
+  <!-- The controller's settings (hardware-page spec §6.6): Screens, Sliders, Buttons and Wi-Fi, each
        opened on its own, each a card; the raw numbers are under Fine tune. A section's rows sit under its header
        in its card, indented, and a sub-option or a sub-section (Fine tune) indented and tinted again;
        a setting whose label doesn't say enough has a "?" in front of it whose tooltip explains it.
@@ -148,22 +148,22 @@
           </controls:CardRows>
         </Border>
 
-        <Border Name="InputSection" Classes="InspectorRows">
+        <Border Name="SlidersSection" Classes="InspectorRows">
           <controls:CardRows>
-            <Button Name="InputHeader" Classes="InspectorRow" Classes.open="{Binding IsInputOpen}"
-                    Command="{Binding ToggleInputCommand}">
+            <Button Name="SlidersHeader" Classes="InspectorRow" Classes.open="{Binding IsSlidersOpen}"
+                    Command="{Binding ToggleSlidersCommand}">
               <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                <TextBlock Classes="SectionLabel" Text="Input feel"/>
-                <TextBlock Name="InputSummary" Grid.Column="1" Classes="Caption" VerticalAlignment="Center" Text="{Binding InputSummary}"/>
+                <TextBlock Classes="SectionLabel" Text="Sliders"/>
+                <TextBlock Name="SlidersSummary" Grid.Column="1" Classes="Caption" VerticalAlignment="Center" Text="{Binding SlidersSummary}"/>
                 <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
               </Grid>
             </Button>
-            <Border Classes="CardBody" IsVisible="{Binding IsInputOpen}">
-              <controls:CardRows Name="InputBody" IsEnabled="{Binding IsEditable}" IsVisible="{Binding IsInputOpen}">
+            <Border Classes="CardBody" IsVisible="{Binding IsSlidersOpen}">
+              <controls:CardRows Name="SlidersBody" IsEnabled="{Binding IsEditable}" IsVisible="{Binding IsSlidersOpen}">
                 <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                   <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
                     <controls:HelpTip Text="How much the controller steadies its slider readings before sending them. High hides the jitter of a noisy slider, but the volume follows a little later and very small moves are ignored; Low follows every small move. Fine tune shows the two numbers behind it."/>
-                    <TextBlock Grid.Column="1" Classes="RowLabel" Text="Slider smoothing"/>
+                    <TextBlock Grid.Column="1" Classes="RowLabel" Text="Smoothing"/>
                   </Grid>
                   <Border Name="FeelSegment" Grid.Column="1" Classes="SegmentTrack">
                     <StackPanel Orientation="Horizontal" Spacing="2">
@@ -175,31 +175,15 @@
                     </StackPanel>
                   </Border>
                 </Grid>
-                <Button Name="InputFineHeader" Classes="InspectorRow" Classes.open="{Binding IsInputFineOpen}"
-                        Command="{Binding ToggleInputFineCommand}">
+                <Button Name="SlidersFineHeader" Classes="InspectorRow" Classes.open="{Binding IsSlidersFineOpen}"
+                        Command="{Binding ToggleSlidersFineCommand}">
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Fine tune"/>
                     <PathIcon Grid.Column="1" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
                   </Grid>
                 </Button>
-                <Border Classes="Nested" IsVisible="{Binding IsInputFineOpen}">
-                  <controls:CardRows Name="InputFineBody" IsVisible="{Binding IsInputFineOpen}">
-                    <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                      <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
-                        <controls:HelpTip Text="A button's contacts bounce for a few milliseconds when it is pressed or released. A change counts only once it has held this long. Raise it if one press sometimes counts as two."/>
-                        <TextBlock Grid.Column="1" Classes="RowLabel" Text="Debounce"/>
-                      </Grid>
-                      <NumericUpDown Name="DebounceBox" Grid.Column="1" Classes="RowControl" Minimum="1" Maximum="200" TextConverter="{StaticResource Milliseconds}"
-                                     Value="{Binding Controller.DebounceMs, Mode=TwoWay}"/>
-                    </Grid>
-                    <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                      <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
-                        <controls:HelpTip Text="How often the controller reads the sliders. Shorter follows a moving slider more closely; the smoothing works over these readings, so a longer interval also makes it slower."/>
-                        <TextBlock Grid.Column="1" Classes="RowLabel" Text="Read sliders every"/>
-                      </Grid>
-                      <NumericUpDown Name="SliderIntervalBox" Grid.Column="1" Classes="RowControl" Minimum="1" Maximum="100" TextConverter="{StaticResource Milliseconds}"
-                                     Value="{Binding Controller.SliderIntervalMs, Mode=TwoWay}"/>
-                    </Grid>
+                <Border Classes="Nested" IsVisible="{Binding IsSlidersFineOpen}">
+                  <controls:CardRows Name="SlidersFineBody" IsVisible="{Binding IsSlidersFineOpen}">
                     <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                       <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
                         <controls:HelpTip Text="How much each new slider reading counts against the running average. 100% sends the raw reading (no smoothing); lower values smooth more and follow more slowly."/>
@@ -215,6 +199,58 @@
                       </Grid>
                       <NumericUpDown Name="DeadbandBox" Grid.Column="1" Classes="RowControl" Minimum="0" Maximum="500"
                                      Value="{Binding Controller.Deadband, Mode=TwoWay}"/>
+                    </Grid>
+                  </controls:CardRows>
+                </Border>
+              </controls:CardRows>
+            </Border>
+          </controls:CardRows>
+        </Border>
+
+        <Border Name="ButtonsSection" Classes="InspectorRows">
+          <controls:CardRows>
+            <Button Name="ButtonsHeader" Classes="InspectorRow" Classes.open="{Binding IsButtonsOpen}"
+                    Command="{Binding ToggleButtonsCommand}">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="SectionLabel" Text="Buttons"/>
+                <TextBlock Name="ButtonsSummary" Grid.Column="1" Classes="Caption" VerticalAlignment="Center" Text="{Binding ButtonsSummary}"/>
+                <PathIcon Grid.Column="2" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+              </Grid>
+            </Button>
+            <Border Classes="CardBody" IsVisible="{Binding IsButtonsOpen}">
+              <controls:CardRows Name="ButtonsBody" IsEnabled="{Binding IsEditable}" IsVisible="{Binding IsButtonsOpen}">
+                <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                  <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
+                    <controls:HelpTip Text="How long you hold a button before it counts as a hold, not a press."/>
+                    <TextBlock Grid.Column="1" Classes="RowLabel" Text="Hold after"/>
+                  </Grid>
+                  <NumericUpDown Name="HoldBox" Grid.Column="1" Classes="RowControl" Minimum="200" Maximum="2000" Increment="50" TextConverter="{StaticResource Milliseconds}"
+                                 Value="{Binding HoldMs, Mode=TwoWay}"/>
+                </Grid>
+                <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                  <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
+                    <controls:HelpTip Text="How soon a second press must follow the first to count as a double press. A button with no double-press action doesn't wait for one, so its press runs at once."/>
+                    <TextBlock Grid.Column="1" Classes="RowLabel" Text="Double press within"/>
+                  </Grid>
+                  <NumericUpDown Name="DoublePressBox" Grid.Column="1" Classes="RowControl" Minimum="100" Maximum="1000" Increment="50" TextConverter="{StaticResource Milliseconds}"
+                                 Value="{Binding DoublePressMs, Mode=TwoWay}"/>
+                </Grid>
+                <Button Name="ButtonsFineHeader" Classes="InspectorRow" Classes.open="{Binding IsButtonsFineOpen}"
+                        Command="{Binding ToggleButtonsFineCommand}">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" VerticalAlignment="Center" Text="Fine tune"/>
+                    <PathIcon Grid.Column="1" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
+                  </Grid>
+                </Button>
+                <Border Classes="Nested" IsVisible="{Binding IsButtonsFineOpen}">
+                  <controls:CardRows Name="ButtonsFineBody" IsVisible="{Binding IsButtonsFineOpen}">
+                    <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                      <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
+                        <controls:HelpTip Text="A button's contacts bounce for a few milliseconds when it is pressed or released. A change counts only once it has held this long. Raise it if one press sometimes counts as two."/>
+                        <TextBlock Grid.Column="1" Classes="RowLabel" Text="Debounce"/>
+                      </Grid>
+                      <NumericUpDown Name="DebounceBox" Grid.Column="1" Classes="RowControl" Minimum="1" Maximum="200" TextConverter="{StaticResource Milliseconds}"
+                                     Value="{Binding Controller.DebounceMs, Mode=TwoWay}"/>
                     </Grid>
                   </controls:CardRows>
                 </Border>

@@ -116,8 +116,8 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
 
     // ── Reordering ────────────────────────────────────────────────────────────
 
-    /// <summary>Swaps what two sliders control and their names. The response settings and the
-    /// live level stay with each physical slider.</summary>
+    /// <summary>Swaps what two sliders control and their names. Reverse (in the controller
+    /// config) and the live level stay with each physical slider.</summary>
     public void Swap(int a, int b)
     {
         if (a == b || a < 0 || b < 0 || a >= Items.Count || b >= Items.Count) return;
@@ -288,8 +288,5 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
         Processes = new List<string>(s.Processes),
         AppPaths = new Dictionary<string, string>(s.AppPaths),
         Device = s.Device is null ? null : new DeviceRefConfig { Id = s.Device.Id, FriendlyName = s.Device.FriendlyName },
-        Invert = s.Invert,
-        Curve = s.Curve,
-        DeadZonePercent = s.DeadZonePercent,
     };
 }

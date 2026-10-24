@@ -11,10 +11,11 @@
                 Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
         <TextBlock Name="SaveBarText" Classes="SaveBarText" Text="{Binding SaveBarText}" VerticalAlignment="Center"/>
-        <TextBlock Name="SaveBarNote" Classes="Secondary" Text="{Binding SaveBarNote}" VerticalAlignment="Center"/>
+        <TextBlock Name="SaveBarNote" Classes="Secondary" Text="{Binding SaveBarNote}" VerticalAlignment="Center"
+                   IsVisible="{Binding SaveBarNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
       </StackPanel>
       <Button Name="DiscardButton" Grid.Column="2" Content="Discard" Command="{Binding DiscardCommand}"/>
-      <Button Name="SaveButton" Grid.Column="3" Classes="Primary" Content="Save to controller" Command="{Binding SaveCommand}"/>
+      <Button Name="SaveButton" Grid.Column="3" Classes="Primary" Content="Save" Command="{Binding SaveCommand}"/>
     </Grid>
   </Border>
 </UserControl>

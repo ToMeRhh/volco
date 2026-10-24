@@ -50,6 +50,7 @@ struct RuntimeConfig {
   uint8_t sliderCount;
   uint8_t sliderPins[kMaxSliders];
   bool sliderAutoCalibrate[kMaxSliders];  // learn the ends while in use (default on)
+  bool sliderReverse[kMaxSliders];        // send 4095 - value (default off)
   uint8_t buttonCount;
   RuntimeButton buttons[kMaxButtons];
   RuntimeBus i2c[kI2cBuses];  // 0, 1 hardware; 2, 3 software
@@ -57,6 +58,9 @@ struct RuntimeConfig {
   RuntimeScreens screens;
   RuntimeInput input;
 };
+
+// What a slider sends: the reading, or its mirror for a reversed slider.
+inline uint16_t sliderOut(uint16_t v, bool reverse) { return reverse ? (uint16_t)(4095 - v) : v; }
 
 // `config` must already have passed validateConfig (pins exist, buses present for screens, ...).
 void toRuntime(const volco_config_ControllerConfig& config, RuntimeConfig& out);

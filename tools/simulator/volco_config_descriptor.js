@@ -76,6 +76,13 @@
            "options": {
             "default": true
            }
+          },
+          "reverse": {
+           "type": "bool",
+           "id": 3,
+           "options": {
+            "default": false
+           }
           }
          }
         },

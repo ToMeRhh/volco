@@ -32,17 +32,18 @@ public sealed class SliderCalibrationTests : IDisposable
     private ControllerViewModel Controller => _settings!.Controller;
     private HardwareViewModel Hardware => _settings!.Hardware;
 
-    private void SetUpInSync()
+    private void SetUpInSync(byte[]? blob = null)
     {
+        blob ??= DiyBlob;
         var c = _rig.Config.Config;
         c.Sliders = "abcde".Select((n, i) => new SliderConfig { Index = i, Name = n.ToString() }).ToList();
         c.Buttons = Enumerable.Range(0, 3).Select(i => new ButtonConfig { Index = i }).ToList();
-        c.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
+        c.ControllerConfigBlob = Convert.ToBase64String(blob);
         _settings = _rig.CreateSettings(_ui);
         _ = _settings.Controls;
         Conn.SetStatus(TransportStatus.Open);
         Conn.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
-                                           ControllerConfigCodec.Crc32(DiyBlob), 5, DiyKinds));
+                                           ControllerConfigCodec.Crc32(blob), 5, DiyKinds));
         _ui.RunAll();
         Assert.True(Controller.CanEdit);
     }
@@ -136,13 +137,13 @@ public sealed class SliderCalibrationTests : IDisposable
         Controller.SetSliderPin(1, 39);
         Assert.False(s.CanRecalibrate);
         Assert.False(s.RecalibrateCommand.CanExecute(null));
-        Assert.Equal("Save to controller first", s.RecalibrateTooltip);
+        Assert.Equal("Save first", s.RecalibrateTooltip);
         Controller.RevertCommand.Execute(null);
         s = Select(1);
         Assert.True(s.CanRecalibrate);
         s.AutoCalibrate = false;
         Assert.False(s.CanRecalibrate);
-        Assert.Equal("Save to controller first", s.RecalibrateTooltip);
+        Assert.Equal("Save first", s.RecalibrateTooltip);
         s.AutoCalibrate = true;
         Assert.True(s.CanRecalibrate);
 
@@ -202,5 +203,52 @@ public sealed class SliderCalibrationTests : IDisposable
         Assert.False(Hardware.IsCalibrationOpen);
         Assert.False(_rig.Runtime.IsSliderHeld(1));
         Assert.Contains(Conn.SentFrames, f => f.AsSpan().SequenceEqual(ProtocolEncoder.EncodeCalibrate(1, CalibrateAction.Cancel)));
+    }
+
+    [Fact]
+    public void Reverse_IsADraftField()
+    {
+        SetUpInSync();
+        var s = Select(0);
+        Assert.False(s.Reverse);
+        var saved = ControllerConfigCodec.Encode(Controller.Draft);
+
+        s.Reverse = true;
+        Assert.True(Controller.Draft.Sliders[0].Reverse);
+        Assert.True(Controller.IsDirty);
+        Assert.True(Hardware.Sliders[0].Wiring!.HasChange);
+
+        s.Reverse = false;   // back as saved: the message is the saved one byte for byte
+        Assert.False(Controller.Draft.Sliders[0].HasReverse);
+        Assert.Equal(saved, ControllerConfigCodec.Encode(Controller.Draft));
+        Assert.False(Controller.IsDirty);
+    }
+
+    [Fact]
+    public void Reverse_NotEditable_WhenNotInSync()
+    {
+        SetUpInSync();
+        var s = Select(0);
+        Controller.StartTestCommand.Execute(null);
+        s.Reverse = true;
+        Assert.False(Controller.Draft.Sliders[0].Reverse);
+        Assert.False(Controller.IsDirty);
+    }
+
+    [Fact]
+    public void CalibrationDialog_MirrorsBar_ForReversedSlider()
+    {
+        var config = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        config.Sliders[1].Reverse = true;
+        SetUpInSync(ControllerConfigCodec.Encode(config));
+        Select(1).RecalibrateCommand.Execute(null);
+        var dialog = Assert.IsType<CalibrationDialogViewModel>(Hardware.Calibration);
+
+        Report(1, learned: true, auto: true, low: 500, high: 3500, sweeping: true);
+
+        Assert.Equal((4095 - 3500) / 4095.0, dialog.Low, 3);
+        Assert.Equal((4095 - 500) / 4095.0, dialog.High, 3);
+        Assert.Equal("3500", dialog.LowText);  // the left caption is the raw high, mirrored with the bar
+        Assert.Equal("500", dialog.HighText);
     }
 }

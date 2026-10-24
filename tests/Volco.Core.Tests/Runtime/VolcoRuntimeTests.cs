@@ -98,7 +98,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         foreach (var slider in c.Sliders) slider.Type = SliderMappingType.Device;
         c.Buttons[0].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentOutput };
         c.Buttons[1].Default().SinglePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
-        foreach (var b in c.Buttons) b.DoublePressWindowMs = 30;
+        c.ButtonTiming.DoublePressWindowMs = 30;
         configure?.Invoke(c);
 
         // Schema v3 keeps the toggle pair on the action: give every toggle action that names no
@@ -271,7 +271,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         var config = NewConfig(c =>
         {
             c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
-            c.Buttons[0].DoublePressWindowMs = 500;
+            c.ButtonTiming.DoublePressWindowMs = 500;
         });
         StartRuntime(config);
         var connection = Connection(0);
@@ -895,12 +895,44 @@ public sealed class VolcoRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void HoldUsesButtonTiming()
+    {
+        var config = NewConfig(c =>
+        {
+            c.Buttons[0].Default().LongPress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
+            c.ButtonTiming.LongPressMs = 200;
+        });
+        StartRuntime(config);
+        var connection = Connection(0);
+
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        Thread.Sleep(250);
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+
+        Assert.True(WaitUntil(() => Snapshot(_engine.ToggleMuteCalls).Count == 1), "the hold never fired");
+    }
+
+    [Fact]
+    public void NoDoublePressAction_FiresAtOnce_WithButtonTiming()
+    {
+        var config = NewConfig(c => c.ButtonTiming.DoublePressWindowMs = 1000);
+        StartRuntime(config);
+        var connection = Connection(0);
+
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Pressed));
+        connection.RaiseMessage(new ButtonMessage(0, ButtonState.Released));
+
+        // No double-press action: the press runs at once instead of waiting out the 1 s window.
+        Assert.True(WaitUntil(() => Snapshot(_engine.ToggleMuteCalls).Count == 1, TimeSpan.FromMilliseconds(500)));
+    }
+
+    [Fact]
     public void TestMode_AButtonHeldAcrossEntry_FiresNoLongPress()
     {
         var config = NewConfig(c =>
         {
             c.Buttons[0].Default().LongPress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
-            c.Buttons[0].LongPressMs = 150;
+            c.ButtonTiming.LongPressMs = 150;
         });
         var runtime = StartRuntime(config);
         var c = Connection(0);
@@ -922,7 +954,7 @@ public sealed class VolcoRuntimeTests : IDisposable
     {
         var config = NewConfig(c =>
         {
-            c.Buttons[0].DoublePressWindowMs = doublePressWindowMs;
+            c.ButtonTiming.DoublePressWindowMs = doublePressWindowMs;
             if (doublePressWindowMs > 0)
                 c.Buttons[0].Default().DoublePress = new ButtonActionConfig { Action = ButtonActionType.MuteCurrentInput };
         });

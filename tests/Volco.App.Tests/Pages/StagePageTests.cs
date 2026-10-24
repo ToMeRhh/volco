@@ -350,9 +350,7 @@ public class StagePageTests
         Assert.Equal("—", InRow<TextBlock>(s.Page, "Press", "ActionText").Text);
         Assert.Equal("Off", In<TextBlock>(Inspector(s.Page), "LightText").Text);
         Assert.Equal("Light", In<TextBlock>(Inspector(s.Page), "LightLabel").Text);
-        var cfg = s.Config.Buttons[1];
-        Assert.Equal($"{cfg.LongPressMs} ms · {cfg.DoublePressWindowMs} ms", In<TextBlock>(Inspector(s.Page), "TimingSummaryText").Text);
-        Assert.False(In<Border>(Inspector(s.Page), "TimingBody").IsEffectivelyVisible);   // starts closed
+        Assert.Null(Inspector(s.Page).FindControl<Control>("TimingToggle"));   // timing is the controller's
     }
 
     [AvaloniaFact]
@@ -573,10 +571,8 @@ public class StagePageTests
         var inspector = Inspector(s.Page);
         StackPanel Body() => In<StackPanel>(inspector, "ActionsContent");
         double LightTop() => In<Border>(inspector, "LightRow").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
-        double TimingTop() => In<ToggleButton>(inspector, "TimingToggle").TranslatePoint(new Point(0, 0), inspector)!.Value.Y;
         var bodyBefore = Body().DesiredSize.Height;
         var lightBefore = LightTop();
-        var timingBefore = TimingTop();
         Assert.True(bodyBefore > 0);
         Assert.True(In<Border>(inspector, "LightRow").IsEffectivelyVisible);
 
@@ -589,7 +585,6 @@ public class StagePageTests
         Assert.Equal("Screen", In<TextBlock>(Inspector(s.Page), "LightLabel").Text);
         Assert.Equal(bodyBefore, Body().DesiredSize.Height, 1);
         Assert.Equal(lightBefore, LightTop(), 1);
-        Assert.Equal(timingBefore, TimingTop(), 1);
     }
 
     [AvaloniaFact]

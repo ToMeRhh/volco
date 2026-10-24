@@ -6,7 +6,7 @@ This is a change on top of `docs/design/hardware-page.md` (the two-page design, 
 
 ## 1. Why
 
-The usual journey is: set the controller up once, then now and then change what a slider or button controls or tune its response. Wiring a new control is rare. Two pages, one for each, make the common path and the rare path look equally important, and send people between pages for one control. One page, with the rare part tucked away, is simpler.
+The usual journey is: set the controller up once, then now and then change what a slider or button controls or tune how a slider or button behaves. Wiring a new control is rare. Two pages, one for each, make the common path and the rare path look equally important, and send people between pages for one control. One page, with the rare part tucked away, is simpler.
 
 ## 2. Decisions (user, 2026-10-21)
 
@@ -17,9 +17,9 @@ The usual journey is: set the controller up once, then now and then change what 
 
 ## 3. Non-goals
 
-- No change to what each setting does, how Controls settings save (at once), or how the controller config saves (a draft, Save to controller, restart).
+- No change to what each setting does, how Controls settings save (at once), or how the controller config saves (a draft, Save, restart).
 - The later Hardware plans (Detect, Find screens, Try the lights, Automatic port, the Wi-Fi switch flow) are unaffected and plug into this page the same way.
-- #108 is decided in hardware-page.md (decision 7): the firmware's Input feel is the only smoothing, and Response has no Smoothing.
+- #108 is decided in hardware-page.md (decision 7): the firmware's smoothing is the only smoothing. Response and Timing are gone since `slider-feel-settings.md`.
 
 ## 4. The page
 
@@ -29,7 +29,7 @@ The usual journey is: set the controller up once, then now and then change what 
 - Tiles don't show pins (my call: wiring is the rare case; it lives in the Hardware section).
 - No I2C bus chips on the drawing (user, 2026-10-21): a bus's own settings live in the I2C buses dialog, opened from Controller settings › Screens (§4.3).
 - **A control with a wiring problem** (`DraftProblems`) gets the danger outline and a warning mark on its tile, with the problem as the tooltip ("Slider 1 also uses GPIO 33."); both ends of a conflict are marked (user, 2026-10-21).
-- **A control added with + Add** draws as a new tile, dashed in the accent colour, labelled "New · Save to controller to set it up" (user, 2026-10-21: Volco configures a slider, button, LED or screen only once the controller has it).
+- **A control added with + Add** draws as a new tile, dashed in the accent colour, labelled "New · Save to set it up" (user, 2026-10-21: Volco configures a slider, button, LED or screen only once the controller has it).
 - The drawing is the draft's controls when the controller draft has added or removed ones (as Hardware mode draws them), else the Controls items: the same `HardwareViewModel` tile sources, kept.
 - The setup chooser (not set up, can't be used, Start over) and the hardware test still take over the case rectangle, as on the redesign branch (my call).
 
@@ -39,30 +39,30 @@ The usual journey is: set the controller up once, then now and then change what 
 
 ### 4.3 Inspector
 
-The side panel is a card (all four edges, rounded corners, a margin from the window's edges; user, 2026-10-22). The header is today's Controls header ("Slider N" with its name field; "Button N" with Clear). Below it, **two sections, both always shown**: Controls/Actions, then Hardware, scrolling together as one (user, 2026-10-22, replacing the fixed thirds with their own scrolling). **The Hardware section starts at one height for every tile**: the highest point that clears the header and the Controls/Actions section of every drawn tile, with their sub-sections (Response, Timing) open, so it never moves: not when the selection goes from a slider to a button or between buttons, and not when a sub-section opens or closes (user, 2026-10-22). The page measures it on an unseen copy of a tile's inspector, its sub-section always open, one tile at a time, and empties the copy afterwards (`StagePage.InspectorTopHeight`): a page that kept a copy per tile took about a second to show again, since every control of a page is styled anew when it returns (user, 2026-10-22). A tile is measured again only when something that can change its height does; it changes only when the drawing does (a light added, a control added). One line per row.
+The side panel is a card (all four edges, rounded corners, a margin from the window's edges; user, 2026-10-22). The header is today's Controls header ("Slider N" with its name field; "Button N" with Clear). Below it, **two sections, both always shown**: Controls/Actions, then Hardware, scrolling together as one (user, 2026-10-22, replacing the fixed thirds with their own scrolling). **The Hardware section starts at one height for every tile**: the highest point that clears the header and the Controls/Actions section of every drawn tile, so it never moves: not when the selection goes from a slider to a button or between buttons (user, 2026-10-22). The page measures it on an unseen copy of a tile's inspector, one tile at a time, as the inspector is (no section is opened for it: Response and Timing are gone, `slider-feel-settings.md`), and empties the copy afterwards (`StagePage.InspectorTopHeight`): a page that kept a copy per tile took about a second to show again, since every control of a page is styled anew when it returns (user, 2026-10-22). A tile is measured again only when something that can change its height does; it changes only when the drawing does (a light added, a control added). One line per row.
 
-**Cards** (the Windows Settings look; user, 2026-10-22, replacing the guide line): each group of rows is a card with a hairline between rows. A collapsible group's header (Response, Timing, Screens, Fine tune) is a row of its card, and its rows sit under it in the same card, indented, and tinted for a sub-option or a sub-group, so a child never reads as its parent's sibling. Controls/Actions and Hardware stay small headers over their cards. A setting that needs explaining has a "?" in front of its label (its tooltip explains it), so the "?"s line up with the labels' starts.
+**Cards** (the Windows Settings look; user, 2026-10-22, replacing the guide line): each group of rows is a card with a hairline between rows. A collapsible group's header (Screens, Sliders, Buttons, Fine tune) is a row of its card, and its rows sit under it in the same card, indented, and tinted for a sub-option or a sub-group, so a child never reads as its parent's sibling. Controls/Actions and Hardware stay small headers over their cards. A setting that needs explaining has a "?" in front of its label (its tooltip explains it), so the "?"s line up with the labels' starts.
 
 **Slider**
-1. **Controls**: one card: the Controls row (target), then Response (curve, dead zone, reverse; collapsed) nested under it.
-2. **Hardware**: Pin; Auto-calibrate (a switch with a "?", a draft field saved with the controller config); Calibration (the learned ends or "Not calibrated", and Re-calibrate, which opens the sweep dialog; spec `slider-calibration.md`); Remove Slider N.
+1. **Controls**: one card: the Controls row (target). Response (curve, dead zone, reverse) is replaced by `slider-feel-settings.md`: curve and dead zone are gone, reverse moved to Hardware.
+2. **Hardware**: Pin; Reverse direction (a switch with a "?", a draft field saved with the controller config, `Slider.reverse`); Auto-calibrate (a switch with a "?", a draft field saved with the controller config); Calibration (the learned ends or "Not calibrated", and Re-calibrate, which opens the sweep dialog; spec `slider-calibration.md`); Smoothing (all sliders), a read-only row whose current value ("Normal") is a link that opens Controller settings with Sliders open; Remove Slider N.
 
 **Button**
-1. **Actions**: the mode pill; one card: the three gesture rows, then Timing (collapsed) nested under them; the Light or Screen row (follows the main action).
+1. **Actions**: the mode pill; one card: the three gesture rows; the Light or Screen row (follows the main action). There is no Timing: Hold after and Double press within are controller-wide, in Controller settings › Buttons.
 2. **Hardware**: Button pin; Light (None / LED / 2 LEDs / Screen) and its rows (a screen's Bus, then "Bus 0 wiring: SDA 25 · SCL 26 · 400 kHz", which opens the I2C buses dialog at that bus, then Address); Remove Button N.
 
 **Controller settings chip**: its redesign-branch inspector; in Screens, one **I2C buses** row ("Buses 0 and 2", or "Bus 0 needs attention" in red while a bus has a problem) whose Edit opens the **I2C buses dialog** (user, 2026-10-22). The dialog, over the window: one card per bus the draft has or a screen uses, in bus order: "Bus 0 · Hardware I2C" (2 and 3: Software I2C), which buttons' screens use it, its SDA and SCL pin fields and its Clock (100 / 400 kHz); **Remove** (disabled while a screen uses the bus, its tooltip naming the buttons), **Add bus N** (the lowest free number, its pins not set) and **Done**. Edits go to the draft as they are made, like the rest of the Hardware section, so Escape and the scrim close it like Done; the hardware test closes it.
 
 - A Hardware section with a problem (`DraftProblems`) shows the danger mark on its header and the problem on its field.
 - Read-only rules (spec hardware-page §5.4) apply to the Hardware section only; the Controls section is always editable, as today.
-- **A control that exists only in the unsaved draft** (added with + Add): its Controls section is replaced by "Save to controller to set it up" and a Save button (user, 2026-10-21: Volco configures a control only after the controller has it). The same holds for a button whose light type changed: until saved, its Light or Screen row says it will follow the new type after saving.
+- **A control that exists only in the unsaved draft** (added with + Add): its Controls section is replaced by "Save to set it up" and a Save button (user, 2026-10-21: Volco configures a control only after the controller has it). The same holds for a button whose light type changed: until saved, its Light or Screen row says it will follow the new type after saving.
 - **A control Volco has and the controller lacks** (the dashed "Not on this controller" tile): its Hardware section says "Not on this controller" and has no pin rows; Remove there is Controls' remove (Volco's settings only, last one only), as today (my call). It appears only when the controller changed outside Volco (Reinstall erased its setup, a different controller, config_tool or another Volco), since removing in Volco deletes the settings; Volco keeps them so the original controller or a re-setup restores what each control did.
 - **Which light a button shows:** the tile preview and the Actions section's Light or Screen row show what the controller has (the Hello), as today; the Hardware section shows the draft, and a changed light is marked there until saved (my call: the preview is what the controller shows).
 
 ### 4.4 Saving
 
 - Controls settings save at once, as today.
-- Controller changes (Hardware sections, Add, Remove, Controller settings, the chooser) go into the controller draft. The save bar ("N changes not saved · Saving restarts the controller · Discard · Save to controller") appears as an amber band across the top of the drawing only while the draft is dirty.
+- Controller changes (Hardware sections, Add, Remove, Controller settings, the chooser) go into the controller draft. Hold after and Double press within, which Volco stores itself, are part of that draft: a Save with only them writes `config.json` at once and sends nothing (no restart note, no progress dialog), and a Save with controller changes commits them when the controller confirms (`slider-feel-settings.md`, the save rule). The save bar ("N changes not saved · Saving restarts the controller · Discard · Save") appears as an amber band across the top of the drawing only while the draft is dirty.
 - Removing a control and saving shifts Volco's settings as the redesign branch does (spec §6.5).
 - **Volco's saved copy in the setup chooser is sent to the controller at once** (with the usual restart, in the progress dialog), since the controller has run it before; presets and Start empty open a draft (user, 2026-10-21). Picking it discards the draft first (which ends a Start over); a controller that already holds the copy gets nothing, so it doesn't restart for nothing. The card is disabled while it can't be sent: "Connect the controller first" without a ready controller, "Wait for the current operation to finish" while a save, a test or a firmware operation runs.
 - Leaving the Controller page for General with a dirty draft asks first (the leave prompt), as Hardware did. Closing the window to the tray asks too, over the Controller page (Save and close, Discard and close, Cancel).

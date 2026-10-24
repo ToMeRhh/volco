@@ -154,7 +154,7 @@ public sealed class ControllerTilesTests : IDisposable
         Assert.Equal(6, sliders.Count);
         var added = sliders[^1];
         var text = In<TextBlock>(added, "NewText");
-        Assert.Equal("New · Save to controller to set it up", text.Text);
+        Assert.Equal("New · Save to set it up", text.Text);
         Assert.True(text.IsEffectivelyVisible);
         Assert.Equal(1, DrawnOpacity(text));
         Assert.Same(In<Grid>(added, "LabelRow"), text.GetVisualParent());   // in the label's row
@@ -169,7 +169,7 @@ public sealed class ControllerTilesTests : IDisposable
         var buttons = Tiles<ButtonTile>(s.Page);
         var button = buttons[^1];
         var buttonText = In<TextBlock>(button, "NewText");
-        Assert.Equal("New · Save to controller to set it up", buttonText.Text);
+        Assert.Equal("New · Save to set it up", buttonText.Text);
         Assert.True(buttonText.IsEffectivelyVisible);
         var rows = In<Grid>(button, "ActionRows");
         Assert.Same(rows, buttonText.GetVisualParent());   // in the shared-size rows

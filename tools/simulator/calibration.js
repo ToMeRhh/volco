@@ -13,13 +13,13 @@
 
   /** One slider: SliderEnds + SliderCalibration of the firmware. */
   function createSlider() {
-    let lo = FULL, hi = 0, auto = true, sweeping = false, sweepStart = 0;
+    let lo = FULL, hi = 0, auto = true, reverse = false, sweeping = false, sweepStart = 0;
     let before = null, widened = false, forced = false, reported = false, lastReport = 0, ended = false;
     let becameLearned = false;
     const learned = () => hi >= lo && hi - lo >= MIN_SPAN;
     const endSweep = () => { sweeping = false; forced = true; ended = true; };
     return {
-      configure(a) { auto = a; },
+      configure(a, r) { auto = a; reverse = r === true; },
       /** Ends read back from storage (ignored unless they form a learned span). */
       restore(l, h) { if (h >= l && h - l >= MIN_SPAN) { lo = l; hi = h; } },
       autoCalibrate: () => auto,
@@ -44,6 +44,8 @@
         if (p >= 1) return FULL;
         return Math.floor(p * FULL + 0.5);
       },
+      /** What goes on the wire: map, mirrored (4095 - x) when the slider is reversed. */
+      sent(v) { const x = this.map(v); return reverse ? FULL - x : x; },
       startSweep(now) {
         if (sweeping) return false;
         before = { lo, hi };
@@ -90,21 +92,21 @@
     function finishSweep(i, now) {
       at(i).reportDue(now);
       report(i, now);
-      o.sendSlider(i, at(i).map(o.raw(i)), now);
+      o.sendSlider(i, at(i).sent(o.raw(i)), now);
     }
     return {
       /**
-       * Boot: the sliders the config has, as { pin, auto }. As the firmware's restoreEndsEntries
+       * Boot: the sliders the config has, as { pin, auto, reverse }. As the firmware's restoreEndsEntries
        * does, a slider keeps the learned ends of the one with its pin and the same Auto-calibrate
        * setting; the rest start unlearned, and no sweep survives a reboot.
        */
       configure(list) {
         const old = sliders.map(c => c && { pin: c.pin, auto: c.autoCalibrate(), ...c.stored() });
         sliders.length = 0;
-        list.forEach(({ pin, auto }, i) => {
+        list.forEach(({ pin, auto, reverse }, i) => {
           const c = at(i);
           c.pin = pin;
-          c.configure(auto);
+          c.configure(auto, reverse);
           const e = old.find(o => o && o.pin === pin);
           if (e && e.auto === auto) c.restore(e.lo, e.hi);
         });
@@ -112,6 +114,8 @@
       count: () => sliders.length,
       slider: at,
       map: (i, v) => at(i).map(v),
+      /** The value a Slider frame carries for a reading: map, mirrored for a reversed slider. */
+      sent: (i, v) => at(i).sent(v),
       /** A smoothed reading: the ends learn from it when auto-calibrating or sweeping. */
       reading(i, v) { if (i < sliders.length) at(i).reading(v); },
       /** True once after Auto-calibrate first learned slider i's span: send its position at once. */

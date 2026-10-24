@@ -9,6 +9,4 @@ public partial class SliderInspector : TileInspector
     {
         AvaloniaXamlLoader.Load(this);
     }
-
-    protected override string SubSectionBodyName => "ResponseBody";
 }

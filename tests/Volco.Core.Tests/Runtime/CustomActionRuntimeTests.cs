@@ -63,7 +63,7 @@ public sealed class CustomActionRuntimeTests : IDisposable
         var cm = new ConfigManager(Path.Combine(_dir, $"config-{Guid.NewGuid()}.json"));
         cm.Load();
         cm.Config.Connection.Type = transport;
-        foreach (var b in cm.Config.Buttons) b.DoublePressWindowMs = 30;
+        cm.Config.ButtonTiming.DoublePressWindowMs = 30;
         configure(cm.Config);
         var runtime = new VolcoRuntime(cm, _engine, true, config =>
         {

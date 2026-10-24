@@ -54,7 +54,7 @@
             </Border>
           </Panel>
         </Grid>
-        <!-- The captions: the label (a new control's "New · Save to controller to set it up"),
+        <!-- The captions: the label (a new control's "New · Save to set it up"),
              and during a hardware test the raw value in its place. Both are always measured, so
              the tile keeps its size when a test starts. Pins stay in the inspector
              (controller-page spec §4.1). -->
@@ -74,7 +74,7 @@
               </ToolTip.Tip>
             </TextBlock>
             <!-- A control the draft adds: in the label's place, in the same row -->
-            <TextBlock Name="NewText" Grid.ColumnSpan="2" Classes="TileNew" Text="New · Save to controller to set it up"
+            <TextBlock Name="NewText" Grid.ColumnSpan="2" Classes="TileNew" Text="New · Save to set it up"
                        IsVisible="{Binding IsNew}"/>
           </Grid>
           <StackPanel Name="WiringRow" Classes="WiringLayer WiringCaptions"

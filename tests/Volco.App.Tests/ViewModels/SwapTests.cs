@@ -2,6 +2,8 @@ using Volco.App.ViewModels;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Controller;
+using Volco.Core.Controller.Proto;
 using Volco.Core.Tests.Audio;
 using Xunit;
 
@@ -33,13 +35,11 @@ public sealed class SwapTests : IDisposable
     }
 
     [Fact]
-    public void SwapActions_EditedModeOnly_TimingStays()
+    public void SwapActions_EditedModeOnly()
     {
         Config.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
         Config.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentOutput;
-        Config.Buttons[0].LongPressMs = 800;
         Config.Buttons[2].Default().SinglePress.Action = ButtonActionType.MediaPlayPause;
-        Config.Buttons[2].LongPressMs = 500;
         var buttons = Vm().Buttons;
 
         buttons.SwapActions(0, 2);
@@ -48,8 +48,6 @@ public sealed class SwapTests : IDisposable
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[2].Default().SinglePress.Action);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
         Assert.False(Config.Buttons[2].Actions.ContainsKey("gaming"));
-        Assert.Equal(800, Config.Buttons[0].LongPressMs);
-        Assert.Equal(500, Config.Buttons[2].LongPressMs);
         Assert.Equal("Swapped button 1 and button 3 in Default", _toast.Message);
     }
 
@@ -106,14 +104,10 @@ public sealed class SwapTests : IDisposable
         a.Name = "Music";
         a.Type = SliderMappingType.Processes;
         a.Processes = new List<string> { "spotify.exe" };
-        a.Curve = ResponseCurve.Logarithmic;
-        a.DeadZonePercent = 0.05;
-        a.Invert = true;
         var b = Config.Sliders[1];
         b.Name = "";
         b.Type = SliderMappingType.Device;
         b.Device = new DeviceRefConfig { Id = "dev-1", FriendlyName = "Speakers" };
-        b.DeadZonePercent = 0.1;
         var sliders = Vm().Sliders;
         var item0 = sliders.Items[0];
         var item1 = sliders.Items[1];
@@ -133,11 +127,7 @@ public sealed class SwapTests : IDisposable
         Assert.Equal("Music", b.Name);
         Assert.Equal("Music", item1.Label);
         Assert.True(item0.IsDevice);
-        // ...the physical slider's feel and level did not.
-        Assert.Equal(ResponseCurve.Logarithmic, a.Curve);
-        Assert.Equal(0.05, a.DeadZonePercent);
-        Assert.True(a.Invert);
-        Assert.Equal(0.1, b.DeadZonePercent);
+        // ...the physical slider's level did not.
         Assert.Same(a, Config.Sliders[0]);
         Assert.Same(item0, sliders.Items[0]);
         Assert.Equal(0.2, item0.LiveLevel, 3);
@@ -152,6 +142,24 @@ public sealed class SwapTests : IDisposable
         Assert.Equal(SliderMappingType.Device, b.Type);
         Assert.Equal("dev-1", b.Device?.Id);
         Assert.Equal("Music", item0.Label);
+    }
+
+    [Fact]
+    public void SliderSwap_LeavesTheControllerDraftsReverseAlone()
+    {
+        var preset = ControllerPresets.All.Single(x => x.Id == ControllerPresets.DiyReferenceId);
+        var blueprint = ControllerPresets.ApplyTo(new ControllerConfig(), preset);
+        blueprint.Sliders[0].Reverse = true;
+        _rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(ControllerConfigCodec.Encode(blueprint));
+        using var controller = new ControllerViewModel(_rig.Config, _rig.Runtime, new RecordingDispatcher());
+        Assert.True(controller.Draft.Sliders[0].Reverse);
+        Assert.False(controller.Draft.Sliders[1].Reverse);
+        var sliders = Vm().Sliders;
+
+        sliders.Swap(0, 1);
+
+        Assert.True(controller.Draft.Sliders[0].Reverse);
+        Assert.False(controller.Draft.Sliders[1].Reverse);
     }
 
     [Fact]

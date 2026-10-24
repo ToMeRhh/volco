@@ -16,13 +16,12 @@ public sealed record GestureLine(PressType Gesture, string Label, string IconKey
 
 /// <summary>
 /// One button of the Controller page. Its position (= <see cref="Index"/>) is the hardware input
-/// number. Timing is shared by every mode; the action rows and the light and screen previews show
+/// number. The action rows and the light and screen previews show
 /// the mode being edited (when it is live, exactly what the controller shows).
 /// </summary>
 public sealed partial class ButtonItemViewModel : ObservableObject
 {
     private readonly IButtonCardOwner _owner;
-    private bool _loading;
 
     internal ButtonConfig Config { get; private set; }
 
@@ -69,19 +68,6 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     public ActionSlotViewModel Press { get; }
     public ActionSlotViewModel DoublePress { get; }
     public ActionSlotViewModel Hold { get; }
-
-    // ── Timing (shared by every mode) ───────────────────────────────────────
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TimingSummary))]
-    private int _longPressMs;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TimingSummary))]
-    private int _doublePressWindowMs;
-
-    /// <summary>The inspector's Timing summary.</summary>
-    public string TimingSummary => $"{LongPressMs} ms · {DoublePressWindowMs} ms";
 
     // ── Derived display ───────────────────────────────────────────────────────
 
@@ -191,9 +177,6 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     [ObservableProperty]
     private bool _isActive;
 
-    [ObservableProperty]
-    private bool _isAdvancedOpen;
-
     [RelayCommand]
     private void RemoveLast() => _owner.RemoveLast();
 
@@ -216,17 +199,9 @@ public sealed partial class ButtonItemViewModel : ObservableObject
         get { yield return Press; yield return DoublePress; yield return Hold; }
     }
 
-    /// <summary>Re-reads timing and the edited mode's actions (after a mode switch).</summary>
+    /// <summary>Re-reads the edited mode's actions (after a mode switch).</summary>
     internal void Reload()
     {
-        _loading = true;
-        try
-        {
-            LongPressMs = Config.LongPressMs;
-            DoublePressWindowMs = Config.DoublePressWindowMs;
-        }
-        finally { _loading = false; }
-
         var binding = Config.GetOrAddBinding(_owner.EditingModeId);
         Press.Bind(binding.SinglePress);
         DoublePress.Bind(binding.DoublePress);
@@ -338,20 +313,6 @@ public sealed partial class ButtonItemViewModel : ObservableObject
     {
         Refresh();
         RefreshProblems();
-        _owner.Changed(this);
-    }
-
-    partial void OnLongPressMsChanged(int value)
-    {
-        if (_loading) return;
-        Config.LongPressMs = value;
-        _owner.Changed(this);
-    }
-
-    partial void OnDoublePressWindowMsChanged(int value)
-    {
-        if (_loading) return;
-        Config.DoublePressWindowMs = value;
         _owner.Changed(this);
     }
 

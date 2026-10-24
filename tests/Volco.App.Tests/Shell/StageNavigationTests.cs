@@ -392,6 +392,26 @@ public sealed class StageNavigationTests
     }
 
     [AvaloniaFact]
+    public void SaveAndContinue_WithOnlyButtonTiming_ProceedsAtOnce_SendingNothing()
+    {
+        using var s = Show();
+        s.Vm.Controller.HoldMs = 700;
+        Settle(s.Window);
+        s.Window.ShowPage("general");
+        Settle(s.Window);
+        Assert.NotNull(s.Vm.Hardware.LeavePrompt);
+
+        Press(In<Button>(s.Window, "SaveAndContinueButton"));
+        Settle(s.Window);
+        Assert.Equal("general", s.NavTag);
+        Assert.IsType<GeneralPage>(s.Window.CurrentPage);
+        Assert.Null(s.Vm.Hardware.LeavePrompt);
+        Assert.False(AnyWrite(s));
+        Assert.Equal(700, s.Rig.Config.Config.ButtonTiming.LongPressMs);
+        Assert.False(s.Vm.Controller.IsDirty);
+    }
+
+    [AvaloniaFact]
     public void ANavClickWhileThePromptSavesKeepsThePromptAndItsSave()
     {
         using var s = Show();

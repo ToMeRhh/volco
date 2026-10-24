@@ -14,8 +14,8 @@ public sealed record DurationChoice(string Label, uint? Seconds, bool IsCustom =
 }
 
 /// <summary>
-/// The Hardware inspector of the controller's settings (hardware-page spec §6.6): Screens, Input feel
-/// and Wi-Fi, each opened and closed on its own, in plain words over the draft's raw fields (which stay under
+/// The Hardware inspector of the controller's settings (hardware-page spec §6.6): Screens, Sliders,
+/// Buttons and Wi-Fi, each opened and closed on its own, in plain words over the draft's raw fields (which stay under
 /// Fine tune). A value off a list shows as "Custom (90 s)" and is kept. Every edit goes through
 /// <see cref="ControllerViewModel"/>, which checks <see cref="ControllerViewModel.CanEdit"/>.
 /// </summary>
@@ -43,7 +43,7 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         _controller = controller;
         _openWifi = openWifi;
         _screensOpen = ShowScreens;
-        _isInputOpen = !ShowScreens;
+        _isSlidersOpen = !ShowScreens;
         OpenWifiCommand = new RelayCommand(_openWifi);
         OpenBusesCommand = new RelayCommand(openBuses);
         RefreshBuses();
@@ -60,8 +60,8 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     // ── Sections ─────────────────────────────────────────────────────────────────────────────
 
-    // Each section opens and closes on its own (user, 2026-10-22): Screens and Input feel can be
-    // open together. Screens starts open, Input feel only when there is no Screens section.
+    // Each section opens and closes on its own (user, 2026-10-22): Screens, Sliders and Buttons can be
+    // open together. Screens starts open, Sliders only when there is no Screens section.
     private bool _screensOpen;
 
     /// <summary>Screens is open (never while no button has a screen).</summary>
@@ -76,19 +76,27 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         }
     }
 
-    /// <summary>Input feel is open.</summary>
-    [ObservableProperty] private bool _isInputOpen;
+    /// <summary>Sliders is open.</summary>
+    [ObservableProperty] private bool _isSlidersOpen;
+
+    /// <summary>Buttons is open.</summary>
+    [ObservableProperty] private bool _isButtonsOpen;
 
     [RelayCommand] private void ToggleScreens() => IsScreensOpen = !IsScreensOpen;
-    [RelayCommand] private void ToggleInput() => IsInputOpen = !IsInputOpen;
+    [RelayCommand] private void ToggleSliders() => IsSlidersOpen = !IsSlidersOpen;
+    [RelayCommand] private void ToggleButtons() => IsButtonsOpen = !IsButtonsOpen;
     [RelayCommand] private void ToggleScreensFine() => IsScreensFineOpen = !IsScreensFineOpen;
-    [RelayCommand] private void ToggleInputFine() => IsInputFineOpen = !IsInputFineOpen;
+    [RelayCommand] private void ToggleSlidersFine() => IsSlidersFineOpen = !IsSlidersFineOpen;
+    [RelayCommand] private void ToggleButtonsFine() => IsButtonsFineOpen = !IsButtonsFineOpen;
 
     /// <summary>Fine tune of the Screens section is open.</summary>
     [ObservableProperty] private bool _isScreensFineOpen;
 
-    /// <summary>Fine tune of the Input feel section is open.</summary>
-    [ObservableProperty] private bool _isInputFineOpen;
+    /// <summary>Fine tune of the Sliders section is open.</summary>
+    [ObservableProperty] private bool _isSlidersFineOpen;
+
+    /// <summary>Fine tune of the Buttons section is open.</summary>
+    [ObservableProperty] private bool _isButtonsFineOpen;
 
     /// <summary>A button has a screen: the Screens section exists.</summary>
     public bool ShowScreens => _controller.ShowBehaviour;
@@ -257,23 +265,29 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         _problemBuses.IntersectWith(problems);
     }
 
-    // ── Input feel ───────────────────────────────────────────────────────────────────────────
+    // ── Sliders ──────────────────────────────────────────────────────────────────────────────
 
     /// <summary>"Low", "Normal", "High" or "Custom".</summary>
-    public string InputSummary => FeelNames[InputFeel];
+    public string SlidersSummary => SmoothingName(_controller);
 
     private static readonly string[] FeelNames = { "Low", "Normal", "High", "Custom" };
 
+    /// <summary>The smoothing's name for the draft's weight and deadband: the one place that maps them
+    /// (the Sliders summary and a slider's Smoothing link read it).</summary>
+    internal static string SmoothingName(ControllerViewModel c) => FeelNames[FeelOf(c)];
+
+    private static int FeelOf(ControllerViewModel c)
+    {
+        for (int i = 0; i < Feels.Length; i++)
+            if (c.SmoothingPct == Feels[i].Weight && c.Deadband == Feels[i].Deadband) return i;
+        return 3;
+    }
+
     /// <summary>0 Low, 1 Normal, 2 High, 3 Custom (the weight and deadband match none of the pairs).
-    /// Debounce and the sample interval are not touched.</summary>
+    /// Debounce is not touched.</summary>
     public int InputFeel
     {
-        get
-        {
-            for (int i = 0; i < Feels.Length; i++)
-                if (_controller.SmoothingPct == Feels[i].Weight && _controller.Deadband == Feels[i].Deadband) return i;
-            return 3;
-        }
+        get => FeelOf(_controller);
         set
         {
             if (value is < 0 or > 2 || !_controller.CanEdit)
@@ -294,6 +308,25 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
     public bool IsFeelHigh { get => InputFeel == 2; set { if (value) InputFeel = 2; } }
     public bool IsFeelCustom => InputFeel == 3;
 
+    // ── Buttons ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>"500 ms · 300 ms": Hold after and Double press within.</summary>
+    public string ButtonsSummary => $"{_controller.HoldMs} ms · {_controller.DoublePressMs} ms";
+
+    /// <summary>Hold after (ms), a pass-through of the timing draft.</summary>
+    public decimal? HoldMs
+    {
+        get => _controller.HoldMs;
+        set => _controller.HoldMs = value;
+    }
+
+    /// <summary>Double press within (ms), a pass-through of the timing draft.</summary>
+    public decimal? DoublePressMs
+    {
+        get => _controller.DoublePressMs;
+        set => _controller.DoublePressMs = value;
+    }
+
     // ── Wi-Fi ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>"Off" or "On · HomeNet".</summary>
@@ -311,7 +344,7 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         nameof(BrightnessPct), nameof(BrightnessSlider), nameof(DimAfter), nameof(DimAfterIndex), nameof(OffAfter),
         nameof(OffAfterIndex), nameof(DimmedTo), nameof(DimmedToIndex), nameof(PreventBurnIn), nameof(FirstPressOnlyWakes),
         nameof(CanSetFirstPressOnlyWakes),
-        nameof(InputSummary), nameof(InputFeel), nameof(IsFeelLow), nameof(IsFeelNormal), nameof(IsFeelHigh),
+        nameof(SlidersSummary), nameof(ButtonsSummary), nameof(HoldMs), nameof(DoublePressMs), nameof(InputFeel), nameof(IsFeelLow), nameof(IsFeelNormal), nameof(IsFeelHigh),
         nameof(IsFeelCustom), nameof(WifiSummary),
     };
 
@@ -320,11 +353,11 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
         // Any draft or state change can move a summary, a list's custom entry or the feel.
         RefreshBuses();
         foreach (var name in Watched) OnPropertyChanged(name);
-        // The last screen went while Screens was open: Input feel opens, so something stays open
+        // The last screen went while Screens was open: Sliders opens, so something stays open
         if (!ShowScreens && _screensOpen)
         {
             _screensOpen = false;
-            IsInputOpen = true;
+            IsSlidersOpen = true;
         }
     }
 
