@@ -430,14 +430,6 @@ public class SettingsCoverageTests
             Named<TextBox>(d, "CommandPathBox").Text = "steam://rungameid/570";
             Done(d, window, vm);
 
-            // Timing, on button 0.
-            vm.Controls.Select(vm.Buttons.Items[0]);
-            Settle(window);
-            Named<ToggleButton>(Inspector(page), "TimingToggle").IsChecked = true;
-            Settle(window);
-            Named<NumericUpDown>(Inspector(page), "LongPressBox").Value = 700;              // LongPressMs
-            Named<NumericUpDown>(Inspector(page), "DoublePressBox").Value = 350;            // DoublePressWindowMs
-
             var b = SaveAndReload(rig).Buttons;
             var b0 = b[0].BindingFor(AppConfig.DefaultModeId);
             Assert.Equal(ButtonActionType.MuteSpecificDevice, b0.SinglePress.Action);
@@ -464,8 +456,6 @@ public class SettingsCoverageTests
             Assert.Equal(WhileRunningPolicy.StartAnother, b2.SinglePress.WhileRunning);
             Assert.Equal(ButtonActionType.OpenProgram, b2.DoublePress.Action);
             Assert.Equal("steam://rungameid/570", b2.DoublePress.Command!.Path);
-            Assert.Equal(700, b[0].LongPressMs);
-            Assert.Equal(350, b[0].DoublePressWindowMs);
         }
         finally { File.Delete(script); }
     }

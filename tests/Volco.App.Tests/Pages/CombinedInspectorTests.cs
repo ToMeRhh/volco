@@ -178,48 +178,21 @@ public sealed class CombinedInspectorTests : IDisposable
         var items = new object[] { s.Vm.Sliders.Items[0], s.Vm.Buttons.Items[0], s.Vm.Buttons.Items[2], s.Vm.Sliders.Items[4] };
         var tops = new List<double>();
         var gaps = new List<double>();
-        foreach (var open in new[] { false, true })
-            foreach (var item in items)
-            {
-                // Timing closed, then open
-                if (item is SliderItemViewModel slider) slider.IsAdvancedOpen = open;
-                else ((ButtonItemViewModel)item).IsAdvancedOpen = open;
-                Select(s, item);
-                Control inspector = item is SliderItemViewModel ? SliderInspector(s) : ButtonInspector(s);
-                var top = HardwareTop(s, inspector);
-                tops.Add(top);
-                if (open) gaps.Add(top - ContentBottom(s, inspector));
-            }
+        foreach (var item in items)
+        {
+            Select(s, item);
+            Control inspector = item is SliderItemViewModel ? SliderInspector(s) : ButtonInspector(s);
+            var top = HardwareTop(s, inspector);
+            tops.Add(top);
+            gaps.Add(top - ContentBottom(s, inspector));
+        }
 
-        // The same height for sliders and buttons, their sub-sections open or closed…
+        // The same height for sliders and buttons…
         Assert.All(tops, t => Assert.InRange(t, tops[0] - 0.5, tops[0] + 0.5));
-        // …under every tile's content with its sub-section open, and no lower than the tallest one needs.
+        // …under every tile's content, and no lower than the tallest one needs.
         Assert.All(gaps, g => Assert.True(g >= -0.5, $"gap {g}"));
         Assert.InRange(gaps.Min(), -0.5, 0.5);
         Assert.True(gaps.Max() > 1, "a slider's Controls section is shorter than a button's Actions");
-    }
-
-    /// <summary>Opening Timing doesn't move the Hardware section: the probes measure
-    /// every tile with its sub-section open (user, 2026-10-22).</summary>
-    [AvaloniaFact]
-    public void OpeningASubSectionDoesNotMoveHardware()
-    {
-        using var s = Show(width: 1100, height: 900);
-        var item = s.Vm.Buttons.Items[0];
-        Select(s, item);
-        var inspector = ButtonInspector(s);
-        Assert.False(In<Border>(inspector, "TimingBody").IsEffectivelyVisible);
-        var closed = HardwareTop(s, inspector);
-        var height = s.Page.InspectorTopHeight;
-
-        In<ToggleButton>(inspector, "TimingToggle").IsChecked = true;   // no click: it would scroll the card
-        Settle(s.Window);
-        Assert.True(item.IsAdvancedOpen);
-        Assert.True(In<Border>(inspector, "TimingBody").IsEffectivelyVisible);
-        Assert.Equal(height, s.Page.InspectorTopHeight, 1);
-        Assert.Equal(closed, HardwareTop(s, inspector), 1);
-        Assert.True(HardwareTop(s, inspector) >= ContentBottom(s, inspector) - 0.5, "Timing's rows fit above Hardware");
-
     }
 
     /// <summary>The page keeps no copy of an inspector once the tiles are measured: one per tile
@@ -249,7 +222,6 @@ public sealed class CombinedInspectorTests : IDisposable
     {
         using var s = Show(width: 820, height: 520);
         var item = s.Vm.Buttons.Items[0];
-        item.IsAdvancedOpen = true;   // Timing open: more than the card's room
         Select(s, item);
         var inspector = ButtonInspector(s);
 

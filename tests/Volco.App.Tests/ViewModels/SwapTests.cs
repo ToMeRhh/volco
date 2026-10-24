@@ -33,13 +33,11 @@ public sealed class SwapTests : IDisposable
     }
 
     [Fact]
-    public void SwapActions_EditedModeOnly_TimingStays()
+    public void SwapActions_EditedModeOnly()
     {
         Config.Buttons[0].Default().SinglePress.Action = ButtonActionType.MuteCurrentOutput;
         Config.Buttons[0].GetOrAddBinding("gaming").SinglePress.Action = ButtonActionType.MuteCurrentOutput;
-        Config.Buttons[0].LongPressMs = 800;
         Config.Buttons[2].Default().SinglePress.Action = ButtonActionType.MediaPlayPause;
-        Config.Buttons[2].LongPressMs = 500;
         var buttons = Vm().Buttons;
 
         buttons.SwapActions(0, 2);
@@ -48,8 +46,6 @@ public sealed class SwapTests : IDisposable
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[2].Default().SinglePress.Action);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, Config.Buttons[0].BindingFor("gaming").SinglePress.Action);
         Assert.False(Config.Buttons[2].Actions.ContainsKey("gaming"));
-        Assert.Equal(800, Config.Buttons[0].LongPressMs);
-        Assert.Equal(500, Config.Buttons[2].LongPressMs);
         Assert.Equal("Swapped button 1 and button 3 in Default", _toast.Message);
     }
 

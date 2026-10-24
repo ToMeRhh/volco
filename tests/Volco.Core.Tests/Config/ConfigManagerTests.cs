@@ -121,8 +121,8 @@ public class ConfigManagerTests
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         var cfg = JsonSerializer.Deserialize<AppConfig>(json, options)!;
 
-        Assert.Equal(500, cfg.Buttons[0].LongPressMs);
-        Assert.Equal(300, cfg.Buttons[0].DoublePressWindowMs);
+        Assert.Equal(500, cfg.ButtonTiming.LongPressMs);
+        Assert.Equal(300, cfg.ButtonTiming.DoublePressWindowMs);
     }
 
     [Fact]
@@ -560,8 +560,8 @@ public class ConfigManagerLoadSaveTests : IDisposable
         Assert.Equal(AppConfig.DefaultModeId, mode.Id);
 
         Assert.Equal(3, c.Buttons.Count);
-        Assert.Equal(600, c.Buttons[0].LongPressMs);
-        Assert.Equal(250, c.Buttons[0].DoublePressWindowMs);
+        Assert.Equal(600, c.ButtonTiming.LongPressMs);
+        Assert.Equal(250, c.ButtonTiming.DoublePressWindowMs);
         Assert.Equal(ButtonActionType.MuteCurrentInput, c.Buttons[0].Default().SinglePress.Action);
         Assert.Equal("dev-1", c.Buttons[1].Default().SinglePress.Device!.Id);
 

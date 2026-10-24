@@ -8,7 +8,6 @@
              x:Class="Volco.App.Views.Inspector.ButtonInspector"
              x:DataType="vm:ButtonItemViewModel">
   <UserControl.Resources>
-    <conv:IntToDecimalConverter x:Key="IntToDecimal"/>
 
     <!-- One gesture's row: its action (a click opens the action dialog), the USB tag, a warning
          for a saved action with a problem, and Try. An empty row shows "—" and a +, which opens the dialog too. -->
@@ -86,39 +85,12 @@
               </StackPanel>
             </Border>
             <StackPanel Name="ActionsContent" Classes="InspectorGroupBody" IsVisible="{Binding !IsNew}">
-              <!-- One card: the three gestures, then Timing's header and, open, its settings
-                   nested under it -->
+              <!-- One card: the three gestures -->
               <Border Name="GestureCard" Classes="InspectorRows">
                 <controls:CardRows>
                   <ContentControl Name="ActionRow_Press" Content="{Binding Press}" ContentTemplate="{StaticResource ActionRowTemplate}"/>
                   <ContentControl Name="ActionRow_Double" Content="{Binding DoublePress}" ContentTemplate="{StaticResource ActionRowTemplate}"/>
                   <ContentControl Name="ActionRow_Hold" Content="{Binding Hold}" ContentTemplate="{StaticResource ActionRowTemplate}"/>
-                  <ToggleButton Name="TimingToggle" Classes="SectionHeader" IsChecked="{Binding IsAdvancedOpen, Mode=TwoWay}">
-                    <Grid ColumnDefinitions="*,Auto,Auto">
-                      <TextBlock Classes="SectionLabel" Text="Timing"/>
-                      <TextBlock Name="TimingSummaryText" Grid.Column="1" Classes="Caption" Margin="0,0,8,0"
-                                 VerticalAlignment="Center" Text="{Binding TimingSummary}"/>
-                      <PathIcon Grid.Column="2" Classes="SectionChevron" Data="{StaticResource Icon.ChevronRight}"/>
-                    </Grid>
-                  </ToggleButton>
-                  <Border Name="TimingBody" Classes="Nested" IsVisible="{Binding IsAdvancedOpen}">
-                    <StackPanel Classes="SectionBody">
-                      <Grid ColumnDefinitions="*,Auto,Auto">
-                        <TextBlock Text="Hold after" Classes="Secondary" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="LongPressBox" Grid.Column="1" Width="120"
-                                       Minimum="200" Maximum="2000" Increment="50" FormatString="0"
-                                       Value="{Binding LongPressMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
-                        <TextBlock Grid.Column="2" Text="ms" Classes="Caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                      </Grid>
-                      <Grid ColumnDefinitions="*,Auto,Auto">
-                        <TextBlock Text="Double press within" Classes="Secondary" VerticalAlignment="Center"/>
-                        <NumericUpDown Name="DoublePressBox" Grid.Column="1" Width="120"
-                                       Minimum="100" Maximum="1000" Increment="50" FormatString="0"
-                                       Value="{Binding DoublePressWindowMs, Mode=TwoWay, Converter={StaticResource IntToDecimal}}"/>
-                        <TextBlock Grid.Column="2" Text="ms" Classes="Caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                      </Grid>
-                    </StackPanel>
-                  </Border>
                 </controls:CardRows>
               </Border>
 

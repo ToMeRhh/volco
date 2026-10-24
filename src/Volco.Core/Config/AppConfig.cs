@@ -185,6 +185,13 @@ public class ModeConfig
     public string Name { get; set; } = "";
 }
 
+/// <summary>The hold and double-press timing of every button on the controller.</summary>
+public class ButtonTimingConfig
+{
+    public int LongPressMs { get; set; } = 500;
+    public int DoublePressWindowMs { get; set; } = 300;
+}
+
 public class ButtonConfig
 {
     /// <summary>Always equal to the button's position in <see cref="AppConfig.Buttons"/>, which is
@@ -192,11 +199,8 @@ public class ButtonConfig
     public int Index { get; set; }
 
     /// <summary>Per-mode actions, keyed by <see cref="ModeConfig.Id"/>. A missing key means the
-    /// button does nothing in that mode. Timing below is shared by every mode.</summary>
+    /// button does nothing in that mode.</summary>
     public Dictionary<string, ButtonBindingConfig> Actions { get; set; } = new();
-
-    public int LongPressMs { get; set; } = 500;
-    public int DoublePressWindowMs { get; set; } = 300;
 
     /// <summary>The binding for <paramref name="modeId"/>, or an empty one (not stored) when the
     /// mode has none.</summary>
@@ -214,7 +218,7 @@ public class ButtonConfig
 
 public class AppConfig
 {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
 
     /// <summary>Id of the mode every migrated or new config starts with.</summary>
     public const string DefaultModeId = "default";
@@ -231,6 +235,9 @@ public class AppConfig
     public ConnectionConfig Connection { get; set; } = new();
     public List<SliderConfig> Sliders { get; set; } = new();
     public List<ButtonConfig> Buttons { get; set; } = new();
+
+    /// <summary>Hold and double-press timing, the same for every button (schema v8).</summary>
+    public ButtonTimingConfig ButtonTiming { get; set; } = new();
 
     /// <summary>Button modes, in tab order. The first one is live when the app starts.</summary>
     public List<ModeConfig> Modes { get; set; } = new();
@@ -286,6 +293,7 @@ public class AppConfig
         Sliders ??= new();
         Buttons ??= new();
         Modes ??= new();
+        ButtonTiming ??= new();
         Devices ??= new();
         Devices.RemoveAll(d => d is null || string.IsNullOrEmpty(d.Id));
         if (Modes.Count == 0)

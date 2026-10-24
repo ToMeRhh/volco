@@ -51,11 +51,12 @@ public class ConfigManager
                         }
                         json = root.ToJsonString();
                     }
-                    else if (version is 3 or 4 or 5 or 6)
+                    else if (version is 3 or 4 or 5 or 6 or 7)
                     {
                         // v3 → v4 only adds "devices" and "controller", v4 → v5 only adds
                         // "controllerConfigBlob" (and drops the baud rate, below), and v5 → v6 only
-                        // adds the media, program and script action fields; the new fields
+                        // adds the media, program and script action fields, and v7 → v8 moves the button timing
+                        // (below); the new fields
                         // deserialize to their defaults when missing: stamp the version, keep a backup.
                         BackupBeforeMigration(json, $"config.v{version}.bak");
                         root["schemaVersion"] = AppConfig.CurrentSchemaVersion;
@@ -63,6 +64,8 @@ public class ConfigManager
                     }
                     // v6 → v7 renames presets to modes; every older file passes through it too.
                     if (version < 7) ConfigMigrator.RenamePresetsToModes(root);
+                    // v7 → v8: one button timing for the controller; sliders drop invert, curve and dead zone.
+                    if (version < 8) ConfigMigrator.MoveButtonTiming(root);
                     // The serial baud rate is fixed at 115200 since v5 (spec §8.1).
                     if (root["connection"]?["serial"] is JsonObject serial) serial.Remove("baudRate");
                     json = root.ToJsonString();

@@ -248,7 +248,6 @@ public class SettingsWindowTests
             if (host.Content is StagePage { DataContext: ControlsViewModel controls })
             {
                 controls.Select(controls.Buttons.Items[0]);
-                controls.Buttons.Items[0].IsAdvancedOpen = true;
             }
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();

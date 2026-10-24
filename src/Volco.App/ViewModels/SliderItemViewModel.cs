@@ -164,9 +164,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
     [ObservableProperty]
     private bool _isActive;
 
-    [ObservableProperty]
-    private bool _isAdvancedOpen;
-
     [RelayCommand]
     private void RemoveLast() => _owner.RemoveLast();
 

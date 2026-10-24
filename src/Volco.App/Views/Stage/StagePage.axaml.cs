@@ -74,8 +74,8 @@ public partial class StagePage : UserControl
     }
 
     /// <summary>How far down a tile's inspector its Hardware section starts (controller-page spec
-    /// §4.3): the tallest header and Controls or Actions section of the drawn tiles, with their
-    /// sub-sections (Timing) open, measured on an unseen copy. A tile's inspector is at
+    /// §4.3): the tallest header and Controls or Actions section of the drawn tiles,
+    /// measured on an unseen copy. A tile's inspector is at
     /// least this tall above its Hardware section, so that section never moves.</summary>
     public double InspectorTopHeight
     {
