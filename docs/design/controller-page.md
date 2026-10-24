@@ -6,7 +6,7 @@ This is a change on top of `docs/design/hardware-page.md` (the two-page design, 
 
 ## 1. Why
 
-The usual journey is: set the controller up once, then now and then change what a slider or button controls or tune its response. Wiring a new control is rare. Two pages, one for each, make the common path and the rare path look equally important, and send people between pages for one control. One page, with the rare part tucked away, is simpler.
+The usual journey is: set the controller up once, then now and then change what a slider or button controls or tune how a slider or button behaves. Wiring a new control is rare. Two pages, one for each, make the common path and the rare path look equally important, and send people between pages for one control. One page, with the rare part tucked away, is simpler.
 
 ## 2. Decisions (user, 2026-10-21)
 
