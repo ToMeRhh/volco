@@ -21,8 +21,7 @@ public class SliderProcessorTests
         {
             Index = 0,
             Type = SliderMappingType.Device,
-            Device = null,
-            Invert = false
+            Device = null
         });
 
         using var audio = new FakeAudioEngine();
@@ -698,27 +697,19 @@ public class SliderProcessorTests
     [Fact]
     public void MapAdcToVolume_ZeroReturnsZero()
     {
-        Assert.Equal(0f, SliderProcessor.MapAdcToVolume(0, invert: false), 3);
+        Assert.Equal(0f, SliderProcessor.MapAdcToVolume(0), 3);
     }
 
     [Fact]
     public void MapAdcToVolume_MaxReturnsOne()
     {
-        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095, invert: false), 3);
+        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095), 3);
     }
 
     [Fact]
     public void MapAdcToVolume_MidReturnsHalf()
     {
-        Assert.Equal(0.5f, SliderProcessor.MapAdcToVolume(2048, invert: false), 1);
-    }
-
-    [Fact]
-    public void MapAdcToVolume_InvertFlipsValue()
-    {
-        var normal = SliderProcessor.MapAdcToVolume(200, invert: false);
-        var inverted = SliderProcessor.MapAdcToVolume(200, invert: true);
-        Assert.Equal(1f, normal + inverted, 3);
+        Assert.Equal(0.5f, SliderProcessor.MapAdcToVolume(2048), 1);
     }
 
     [Fact]
@@ -810,15 +801,8 @@ public class SliderProcessorTests
     [Fact]
     public void MapAdcToVolume_IsLinear()
     {
-        Assert.Equal(0f, SliderProcessor.MapAdcToVolume(0, invert: false));
-        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095, invert: false));
-        Assert.Equal(2048 / 4095f, SliderProcessor.MapAdcToVolume(2048, invert: false), 4);
-    }
-
-    [Fact]
-    public void MapAdcToVolume_Invert_Reverses()
-    {
-        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(0, invert: true));
-        Assert.Equal(0f, SliderProcessor.MapAdcToVolume(4095, invert: true));
+        Assert.Equal(0f, SliderProcessor.MapAdcToVolume(0));
+        Assert.Equal(1f, SliderProcessor.MapAdcToVolume(4095));
+        Assert.Equal(2048 / 4095f, SliderProcessor.MapAdcToVolume(2048), 4);
     }
 }

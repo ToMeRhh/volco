@@ -7,7 +7,7 @@ namespace Volco.App.ViewModels.Hardware;
 
 /// <summary>
 /// The Hardware section of a slider's inspector (controller-page spec §4.3, hardware-page spec
-/// §6.1): its pin, Auto-calibrate and its calibration with Re-calibrate (slider-calibration spec,
+/// §6.1): its pin, Reverse direction, Auto-calibrate and its calibration with Re-calibrate (slider-calibration spec,
 /// "What the Hardware section shows"), Remove, and the danger mark on the section's header. Made
 /// for one draft slider; the Hardware view model refreshes it after every draft change and drops it
 /// when the selection moves.
@@ -75,6 +75,22 @@ public sealed partial class SliderWiringViewModel : ObservableObject
         }
     }
 
+    /// <summary>Reverse direction (a draft field, sent with Save like the pin; off by default): the controller
+    /// sends 4095 minus the reading.</summary>
+    public bool Reverse
+    {
+        get => Message?.Reverse ?? false;
+        set
+        {
+            if (Message is not { } s || value == Reverse || !_controller.CanEdit) { OnPropertyChanged(); return; }
+            // Back to the saved value, the message is again the saved one byte for byte (absent = off).
+            if (!value && _saved is not { HasReverse: true }) s.ClearReverse();
+            else s.Reverse = value;
+            OnPropertyChanged();
+            _controller.OnDraftEdited();
+        }
+    }
+
     /// <summary>The Auto-calibrate row's caption while the draft's setting differs from the saved one.</summary>
     public string? AutoCalibrateNote
         => _saved is { } saved && Message is { } s && saved.AutoCalibrate != s.AutoCalibrate
@@ -105,6 +121,7 @@ public sealed partial class SliderWiringViewModel : ObservableObject
     {
         _saved = saved;
         OnPropertyChanged(nameof(AutoCalibrate));
+        OnPropertyChanged(nameof(Reverse));
         OnPropertyChanged(nameof(AutoCalibrateNote));
         CalibrationText = CaptionFor(state);
         CanRecalibrate = canRecalibrate;

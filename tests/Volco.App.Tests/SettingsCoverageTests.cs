@@ -330,14 +330,13 @@ public class SettingsCoverageTests
         Click(Named<Button>(dialog, "DoneButton"));
         Settle(window);
 
-        // Slider 2: a device, a name, and every response control.
+        // Slider 2: a device, and a name.
         dialog = OpenTarget(page, window, vm, 2);
         ClickTarget(dialog, window, "Headphones");                             // Sliders[i].Type = Device
         Click(Named<Button>(dialog, "DoneButton"));                            // Sliders[i].Device
         Settle(window);
         var inspector = Inspector(page);
         Named<TextBox>(inspector, "NameBox").Text = "Music";                   // Sliders[i].Name
-        Named<ToggleSwitch>(inspector, "InvertSwitch").IsChecked = true;       // Sliders[i].Invert
 
         // Slider 3: the main output (no device).
         dialog = OpenTarget(page, window, vm, 3);
@@ -353,7 +352,6 @@ public class SettingsCoverageTests
         Assert.Equal("dev-2", s[2].Device!.Id);
         Assert.Equal("Headphones", s[2].Device!.FriendlyName);
         Assert.Equal("Music", s[2].Name);
-        Assert.True(s[2].Invert);
         Assert.Equal(SliderMappingType.Device, s[3].Type);
         Assert.Null(s[3].Device);
     }

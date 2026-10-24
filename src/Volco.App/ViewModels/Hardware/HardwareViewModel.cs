@@ -178,7 +178,8 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         if (Source(_controller.Layout.Sliders, sliderIndex) is not int input) return;
         CalibrationDialogViewModel? dialog = null;
         dialog = new CalibrationDialogViewModel(input, _runtime, _ui, () => { if (ReferenceEquals(Calibration, dialog)) CloseCalibration(); },
-                                                number: sliderIndex + 1);
+                                                number: sliderIndex + 1,
+                                                reversed: Saved(_controller.BaselineConfig().Sliders, input)?.Reverse == true);
         Calibration = dialog;
     }
 

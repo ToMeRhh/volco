@@ -56,14 +56,6 @@
                       <PathIcon Grid.Column="3" Classes="RowChevron" Data="{StaticResource Icon.ChevronRight}"/>
                     </Grid>
                   </Button>
-                  <Grid Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
-                      <controls:HelpTip Text="Turn this on if turning the volume up moves this slider the wrong way, for example a slider mounted upside down."/>
-                      <TextBlock Grid.Column="1" Classes="RowLabel" Text="Reverse"/>
-                    </Grid>
-                    <ToggleSwitch Name="InvertSwitch" Grid.Column="1" OnContent="" OffContent=""
-                                  IsChecked="{Binding Invert, Mode=TwoWay}"/>
-                  </Grid>
                 </controls:CardRows>
               </Border>
             </StackPanel>

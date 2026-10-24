@@ -106,7 +106,6 @@ public sealed class SwapTests : IDisposable
         a.Name = "Music";
         a.Type = SliderMappingType.Processes;
         a.Processes = new List<string> { "spotify.exe" };
-        a.Invert = true;
         var b = Config.Sliders[1];
         b.Name = "";
         b.Type = SliderMappingType.Device;
@@ -130,8 +129,7 @@ public sealed class SwapTests : IDisposable
         Assert.Equal("Music", b.Name);
         Assert.Equal("Music", item1.Label);
         Assert.True(item0.IsDevice);
-        // ...the physical slider's feel and level did not.
-        Assert.True(a.Invert);
+        // ...the physical slider's level did not.
         Assert.Same(a, Config.Sliders[0]);
         Assert.Same(item0, sliders.Items[0]);
         Assert.Equal(0.2, item0.LiveLevel, 3);

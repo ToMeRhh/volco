@@ -21,9 +21,9 @@ public class ConfigManagerTests
             },
             Sliders = new List<SliderConfig>
             {
-                new() { Index = 0, Type = SliderMappingType.Processes, Processes = new List<string> { "spotify.exe" }, Invert = false },
-                new() { Index = 1, Type = SliderMappingType.Device, Invert = false },
-                new() { Index = 2, Type = SliderMappingType.Unmapped, Invert = true },
+                new() { Index = 0, Type = SliderMappingType.Processes, Processes = new List<string> { "spotify.exe" } },
+                new() { Index = 1, Type = SliderMappingType.Device },
+                new() { Index = 2, Type = SliderMappingType.Unmapped },
             },
             Buttons = new List<ButtonConfig>
             {
@@ -65,7 +65,6 @@ public class ConfigManagerTests
         Assert.Equal("COM3", deserialized.Connection.Serial.ComPort);
         Assert.Equal(3, deserialized.Sliders.Count);
         Assert.Equal(SliderMappingType.Unmapped, deserialized.Sliders[2].Type);
-        Assert.True(deserialized.Sliders[2].Invert);
         Assert.Equal(ButtonActionType.MuteCurrentOutput, deserialized.Buttons[0].Default().SinglePress.Action);
         Assert.Equal("Headphones", deserialized.Buttons[0].Default().DoublePress.DeviceB!.FriendlyName);
         Assert.Equal("default", deserialized.Buttons[0].BindingFor("gaming").LongPress.ModeId);
@@ -81,7 +80,6 @@ public class ConfigManagerTests
         config.Sliders[0] = new SliderConfig
         {
             Type = SliderMappingType.Device, Device = new DeviceRefConfig { Id = "{0.0.0}.{a}", FriendlyName = "Speakers" },
-            Invert = true,
         };
         config.Sliders[1] = new SliderConfig { Type = SliderMappingType.Processes, Processes = { "spotify.exe" } };
         config.Buttons[0].Actions[AppConfig.DefaultModeId] = new ButtonBindingConfig

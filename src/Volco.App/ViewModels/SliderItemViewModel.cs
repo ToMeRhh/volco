@@ -149,11 +149,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         _ => "Not set up",
     };
 
-    // ── Advanced ──────────────────────────────────────────────────────────────
-
-    [ObservableProperty]
-    private bool _invert;
-
     // ── View state ────────────────────────────────────────────────────────────
 
     /// <summary>The tile's captions on Hardware; null until the Controller page fills them.</summary>
@@ -201,7 +196,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
             SelectedDevice = Config.Device is { FriendlyName.Length: > 0 } configured
                 ? configured.FriendlyName
                 : CurrentDefaultOutput;
-            Invert = Config.Invert;
         }
         finally { _loading = false; }
         OnPropertyChanged(nameof(Summary));
@@ -239,13 +233,6 @@ public partial class SliderItemViewModel : ObservableObject, IDeviceLabeler
         // two-way-bound SelectedItem to null for a moment. That is never the user's choice.
         if (_loading || string.IsNullOrEmpty(value)) return;
         Config.Device = value == CurrentDefaultOutput ? null : DeviceRefLookup.DeviceRefFromName(_devices, value);
-        Persist();
-    }
-
-    partial void OnInvertChanged(bool value)
-    {
-        if (_loading) return;
-        Config.Invert = value;
         Persist();
     }
 

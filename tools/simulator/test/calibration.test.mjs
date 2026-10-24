@@ -190,3 +190,14 @@ test('Auto-calibrate learning the span is flagged once, never in a sweep', () =>
   s.reading(0, 170); s.reading(0, 2550);
   assert.equal(s.becameLearned(0), false);
 });
+
+test('a reversed slider sends 4095 minus the stretched reading, unlearned or learned', () => {
+  const s = C.createCalibrations({ send() {}, sendSlider() {}, raw: () => 0 });
+  s.configure([{ pin: 33, auto: true, reverse: true }, { pin: 32, auto: true }]);
+  assert.equal(s.sent(0, 1000), 3095);   // unlearned: the raw reading mirrored
+  assert.equal(s.sent(0, 0), 4095);
+  assert.equal(s.sent(1, 1000), s.map(1, 1000));   // not reversed: map's value
+  s.reading(0, 0); s.reading(0, 4000);
+  assert.equal(s.sent(0, 0), 4095 - s.map(0, 0));
+  assert.equal(s.sent(0, 4000), 0);
+});

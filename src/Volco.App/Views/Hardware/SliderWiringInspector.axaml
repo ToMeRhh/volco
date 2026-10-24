@@ -5,12 +5,23 @@
              x:Class="Volco.App.Views.Hardware.SliderWiringInspector"
              x:DataType="hw:SliderWiringViewModel">
   <!-- The body of a slider's Hardware section (controller-page spec §4.3, hardware-page spec §6.1):
-       its pin, Auto-calibrate and its calibration with Re-calibrate (slider-calibration spec), then
+       its pin, Reverse direction, Auto-calibrate and its calibration with Re-calibrate (slider-calibration spec), then
        Remove Slider N -->
   <StackPanel Classes="WiringBody">
     <Border Classes="InspectorRows">
       <controls:CardRows Name="Rows">
         <controls:PinField Name="PinField" DataContext="{Binding Pin}"/>
+
+        <!-- A draft field: the controller sends 4095 minus the reading -->
+        <Grid Name="ReverseRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <Grid Classes="HelpLabel" ColumnDefinitions="Auto,*">
+            <controls:HelpTip Name="ReverseHelp"
+                              Text="Turn this on if turning the volume up moves this slider the wrong way, for example a slider mounted upside down."/>
+            <TextBlock Name="ReverseLabel" Grid.Column="1" Classes="RowLabel" Text="Reverse direction"/>
+          </Grid>
+          <ToggleSwitch Name="ReverseToggle" Grid.Column="1" OnContent="" OffContent=""
+                        IsChecked="{Binding Reverse, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
+        </Grid>
 
         <!-- A draft field: until saved, the caption says that saving forgets the calibration -->
         <Grid Name="AutoCalibrateRow" Classes="InspectorRow" ColumnDefinitions="*,Auto" ColumnSpacing="12">

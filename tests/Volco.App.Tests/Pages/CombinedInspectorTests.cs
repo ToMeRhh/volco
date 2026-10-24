@@ -134,7 +134,6 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(In<Border>(inspector, "ControlsHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(inspector, "ControlsBody").IsEffectivelyVisible);
         Assert.True(In<Button>(inspector, "ControlsRow").IsEffectivelyVisible);
-        Assert.True(In<ToggleSwitch>(inspector, "InvertSwitch").IsEffectivelyVisible);
         var section = Section(inspector);
         Assert.True(In<Border>(section, "HardwareHeader").IsEffectivelyVisible);
         Assert.True(In<Panel>(section, "HardwareBody").IsEffectivelyVisible);

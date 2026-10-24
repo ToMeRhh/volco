@@ -21,6 +21,7 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
     internal static TimeSpan CancelTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
     private readonly int _slider;
+    private readonly bool _reversed;
     private readonly VolcoRuntime _runtime;
     private readonly IUiDispatcher _ui;
     private readonly Action _close;
@@ -33,9 +34,13 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
 
     /// <param name="sliderIndex">The slider's hardware input (0-based).</param>
     /// <param name="number">The slider's number in the drawing ("Slider N"); defaults to the input's.</param>
-    public CalibrationDialogViewModel(int sliderIndex, VolcoRuntime runtime, IUiDispatcher ui, Action close, int? number = null)
+    /// <param name="reversed">The slider is reversed on the controller (its saved setting): the bar is mirrored
+    /// so it moves with the slider; the reported ends, and their captions, stay the raw readings.</param>
+    public CalibrationDialogViewModel(int sliderIndex, VolcoRuntime runtime, IUiDispatcher ui, Action close, int? number = null,
+                                      bool reversed = false)
     {
         _slider = sliderIndex;
+        _reversed = reversed;
         _runtime = runtime;
         _ui = ui;
         _close = close;
@@ -159,8 +164,10 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
     private void Show(SliderCalibrationState state)
     {
         HasRange = state.High >= state.Low;
-        Low = HasRange ? Math.Clamp(state.Low / MaxRaw, 0, 1) : 0;
-        High = HasRange ? Math.Clamp(state.High / MaxRaw, 0, 1) : 0;
+        var low = Math.Clamp(state.Low / MaxRaw, 0, 1);
+        var high = Math.Clamp(state.High / MaxRaw, 0, 1);
+        Low = HasRange ? (_reversed ? 1 - high : low) : 0;
+        High = HasRange ? (_reversed ? 1 - low : high) : 0;
         LowText = HasRange ? $"{state.Low}" : "—";
         HighText = HasRange ? $"{state.High}" : "—";
         IsLearned = state.Learned;

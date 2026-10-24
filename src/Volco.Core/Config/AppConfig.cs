@@ -130,8 +130,6 @@ public partial class SliderConfig
         return true;
     }
 
-    public bool Invert { get; set; }
-
     /// <summary>Display name for the configured device; "" means the current default output.</summary>
     [JsonIgnore]
     public string DeviceName => Device?.FriendlyName ?? "";

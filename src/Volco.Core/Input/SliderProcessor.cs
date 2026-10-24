@@ -79,11 +79,7 @@ public class SliderProcessor : IDisposable
         }
     }
 
-    public static float MapAdcToVolume(ushort adcValue, bool invert)
-    {
-        float raw = adcValue / 4095f;
-        return invert ? 1f - raw : raw;
-    }
+    public static float MapAdcToVolume(ushort adcValue) => adcValue / 4095f;
 
     public static List<string> GetUnmappedProcesses(AppConfig config, IReadOnlySet<string> activeProcesses)
     {
@@ -239,7 +235,7 @@ public class SliderProcessor : IDisposable
                 continue;
 
             var sliderConfig = config.Sliders[sliderIndex];
-            var volume = MapAdcToVolume(value.Value, sliderConfig.Invert);
+            var volume = MapAdcToVolume(value.Value);
 
             lock (_lock)
             {
