@@ -162,6 +162,8 @@ public class SettingsCoverageTests
         vm.Controls.Select(vm.Sliders.Items[0]);
         Settle(window);
         PickPin(window, Named<PinField>(page, "PinField"), 39);                // sliders[0].pin
+        Named<ToggleSwitch>(page, "ReverseToggle").IsChecked = true;           // sliders[0].reverse
+        Settle(window);
 
         vm.Controls.Select(vm.Buttons.Items[0]);
         Settle(window);
@@ -215,6 +217,8 @@ public class SettingsCoverageTests
         Open(window, host, "SlidersFineHeader", "SlidersFineBody");
         Open(window, host, "ButtonsHeader", "ButtonsBody");
         Open(window, host, "ButtonsFineHeader", "ButtonsFineBody");
+        Named<NumericUpDown>(host, "HoldBox").Value = 700;                     // config.buttonTiming.longPressMs
+        Named<NumericUpDown>(host, "DoublePressBox").Value = 350;              // config.buttonTiming.doublePressWindowMs
         Named<NumericUpDown>(host, "DebounceBox").Value = 25;                  // input.debounce_ms
         Named<NumericUpDown>(host, "SmoothingBox").Value = 40;                 // input.filter_weight_pct
         Named<NumericUpDown>(host, "DeadbandBox").Value = 30;                  // input.slider_deadband
@@ -245,6 +249,10 @@ public class SettingsCoverageTests
         var saved = ControllerConfigCodec.Decode(Convert.FromBase64String(SaveAndReload(rig).ControllerConfigBlob!));
         Assert.Equal(ControllerConfigCodec.Decode(expected), saved);
         Assert.Equal(39u, saved.Sliders[0].Pin);
+        Assert.True(saved.Sliders[0].Reverse);
+        Assert.False(saved.Sliders[1].Reverse);
+        var timing = SaveAndReload(rig).ButtonTiming;
+        Assert.Equal((700, 350), (timing.LongPressMs, timing.DoublePressWindowMs));
         Assert.Equal(15u, saved.Buttons[0].Pin);
         Assert.Equal(22u, saved.Buttons[0].Led.Pin);
         Assert.NotEqual(diy.Buttons[0].Led.ActiveLow, saved.Buttons[0].Led.ActiveLow);
@@ -310,7 +318,7 @@ public class SettingsCoverageTests
     }
 
     [AvaloniaFact]
-    public void Sliders_NameTargetAndReverse()
+    public void Sliders_NameAndTarget()
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());

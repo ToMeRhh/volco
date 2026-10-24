@@ -102,7 +102,7 @@ Schema v8:
 
 - `buttonTiming: { longPressMs: 500, doublePressWindowMs: 300 }` at the top level (`ButtonTimingConfig`, part of `AppConfig`, so no own `[JsonSerializable]`).
 - Gone: `buttons[i].longPressMs`, `buttons[i].doublePressWindowMs`, `sliders[i].invert`, `sliders[i].curve`, `sliders[i].deadZonePercent`.
-- Migration from v7: `buttonTiming` takes the first button's values, else the defaults. `invert` is not carried over: it now lives on the controller, so a reversed slider has to be set again once (no backward compatibility). Curve and dead zone are dropped. Older versions pass through the existing chain first. No `.bak` beyond what the chain already writes.
+- Migration from v7: `buttonTiming` takes the first button's values, else the defaults. `invert` is not carried over: it now lives on the controller, so a reversed slider has to be set again once (no backward compatibility). Curve and dead zone are dropped. Older versions pass through the existing chain first. A v7 file is backed up as `config.v7.bak` before the migration, like v3–v6.
 
 ## Docs
 

@@ -2,6 +2,8 @@ using Volco.App.ViewModels;
 using Volco.Core.Audio;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Controller;
+using Volco.Core.Controller.Proto;
 using Volco.Core.Tests.Audio;
 using Xunit;
 
@@ -140,6 +142,24 @@ public sealed class SwapTests : IDisposable
         Assert.Equal(SliderMappingType.Device, b.Type);
         Assert.Equal("dev-1", b.Device?.Id);
         Assert.Equal("Music", item0.Label);
+    }
+
+    [Fact]
+    public void SliderSwap_LeavesTheControllerDraftsReverseAlone()
+    {
+        var preset = ControllerPresets.All.Single(x => x.Id == ControllerPresets.DiyReferenceId);
+        var blueprint = ControllerPresets.ApplyTo(new ControllerConfig(), preset);
+        blueprint.Sliders[0].Reverse = true;
+        _rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(ControllerConfigCodec.Encode(blueprint));
+        using var controller = new ControllerViewModel(_rig.Config, _rig.Runtime, new RecordingDispatcher());
+        Assert.True(controller.Draft.Sliders[0].Reverse);
+        Assert.False(controller.Draft.Sliders[1].Reverse);
+        var sliders = Vm().Sliders;
+
+        sliders.Swap(0, 1);
+
+        Assert.True(controller.Draft.Sliders[0].Reverse);
+        Assert.False(controller.Draft.Sliders[1].Reverse);
     }
 
     [Fact]

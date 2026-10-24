@@ -96,4 +96,16 @@ public class ConfigMigrationButtonTimingTests : IDisposable
         Assert.Equal(150, again.Config.ButtonTiming.DoublePressWindowMs);
         Assert.Contains("\"buttonTiming\"", File.ReadAllText(_configPath));
     }
+
+    [Fact]
+    public void V8File_ButtonTimingOutOfRange_IsClamped()
+    {
+        var (config, _, _) = Load("""
+        { "schemaVersion": 8, "buttonTiming": { "longPressMs": 50, "doublePressWindowMs": 5000 },
+          "sliders": [], "buttons": [], "modes": [ { "id": "default", "name": "Default" } ] }
+        """);
+
+        Assert.Equal(200, config.ButtonTiming.LongPressMs);
+        Assert.Equal(1000, config.ButtonTiming.DoublePressWindowMs);
+    }
 }

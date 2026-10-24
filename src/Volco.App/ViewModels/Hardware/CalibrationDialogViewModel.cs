@@ -168,8 +168,9 @@ public sealed partial class CalibrationDialogViewModel : ObservableObject, IDisp
         var high = Math.Clamp(state.High / MaxRaw, 0, 1);
         Low = HasRange ? (_reversed ? 1 - high : low) : 0;
         High = HasRange ? (_reversed ? 1 - low : high) : 0;
-        LowText = HasRange ? $"{state.Low}" : "—";
-        HighText = HasRange ? $"{state.High}" : "—";
+        // The bar is mirrored for a reversed slider, so its left caption is the raw high (values stay raw).
+        LowText = HasRange ? $"{(_reversed ? state.High : state.Low)}" : "—";
+        HighText = HasRange ? $"{(_reversed ? state.Low : state.High)}" : "—";
         IsLearned = state.Learned;
     }
 

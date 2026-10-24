@@ -167,7 +167,11 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// <summary>The draft holds changes the user made and hasn't saved (dirty, and not the
     /// placeholder): leaving the Controller page asks first, and the drawing shows the draft's
     /// controls (controller-page spec §4.1, §4.4).</summary>
-    public bool HasUnsavedChanges => (ControllerDirty && !IsPlaceholder) || TimingDirty;
+    public bool HasUnsavedChanges => HasUnsavedControllerChanges || TimingDirty;
+
+    /// <summary>The controller draft alone (not the button timing) holds unsaved changes: the
+    /// drawing shows the draft's controls then.</summary>
+    public bool HasUnsavedControllerChanges => ControllerDirty && !IsPlaceholder;
 
     public bool CanSave => CanEdit && IsDirty && !Busy;
 
@@ -269,6 +273,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         else ClearErrors();
         OnPropertyChanged(nameof(IsDirty));
         OnPropertyChanged(nameof(HasUnsavedChanges));
+        OnPropertyChanged(nameof(HasUnsavedControllerChanges));
         OnPropertyChanged(nameof(IsSettingUp));
         OnPropertyChanged(nameof(CanSave));
         OnPropertyChanged(nameof(ShowBehaviour));

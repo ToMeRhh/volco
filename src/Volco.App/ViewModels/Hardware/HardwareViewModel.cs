@@ -238,6 +238,10 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// leaving the Controller page asks first, and the drawing shows the draft's controls.</summary>
     public bool HasUnsavedChanges => _controller.HasUnsavedChanges;
 
+    /// <summary>The controller draft alone holds unsaved changes (not the button timing): the
+    /// drawing shows the draft's controls then.</summary>
+    public bool HasUnsavedControllerChanges => _controller.HasUnsavedControllerChanges;
+
     /// <summary>The open leave prompt, or null.</summary>
     [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
 
@@ -326,6 +330,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
             or nameof(ControllerViewModel.Notice) or null or "") UpdateSaveBar();
         if (e.PropertyName is nameof(ControllerViewModel.IsDirty) or null or "") OnPropertyChanged(nameof(IsDirty));
         if (e.PropertyName is nameof(ControllerViewModel.HasUnsavedChanges) or null or "") OnPropertyChanged(nameof(HasUnsavedChanges));
+        if (e.PropertyName is nameof(ControllerViewModel.HasUnsavedControllerChanges) or null or "") OnPropertyChanged(nameof(HasUnsavedControllerChanges));
         UpdateChooser();
         UpdateCalibrationRows();
     }

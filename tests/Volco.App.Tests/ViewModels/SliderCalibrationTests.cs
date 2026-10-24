@@ -248,7 +248,7 @@ public sealed class SliderCalibrationTests : IDisposable
 
         Assert.Equal((4095 - 3500) / 4095.0, dialog.Low, 3);
         Assert.Equal((4095 - 500) / 4095.0, dialog.High, 3);
-        Assert.Equal("500", dialog.LowText);   // the captions stay the raw readings
-        Assert.Equal("3500", dialog.HighText);
+        Assert.Equal("3500", dialog.LowText);  // the left caption is the raw high, mirrored with the bar
+        Assert.Equal("500", dialog.HighText);
     }
 }

@@ -116,8 +116,8 @@ public partial class SlidersViewModel : ObservableObject, ISliderCardOwner, IDis
 
     // ── Reordering ────────────────────────────────────────────────────────────
 
-    /// <summary>Swaps what two sliders control and their names. The response settings and the
-    /// live level stay with each physical slider.</summary>
+    /// <summary>Swaps what two sliders control and their names. Reverse (in the controller
+    /// config) and the live level stay with each physical slider.</summary>
     public void Swap(int a, int b)
     {
         if (a == b || a < 0 || b < 0 || a >= Items.Count || b >= Items.Count) return;

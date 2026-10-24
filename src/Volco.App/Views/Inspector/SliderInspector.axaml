@@ -8,7 +8,7 @@
              x:Class="Volco.App.Views.Inspector.SliderInspector"
              x:DataType="vm:SliderItemViewModel">
   <!-- The selected slider (controller-page spec §4.3): its name, then the Controls section (what
-       it controls, its response) over the Hardware section (its pin, Remove), scrolling as one
+       it controls) over the Hardware section (its pin, Remove), scrolling as one
        (TileInspector). -->
   <StackPanel>
     <!-- At least the page's InspectorTopHeight, so Hardware starts where it does for every tile -->
@@ -21,7 +21,7 @@
                    PlaceholderText="{Binding TargetLabel}" IsEnabled="{Binding !IsNew}"/>
         </StackPanel>
 
-        <!-- Controls: what it controls and its response; a slider only the draft has is set up
+        <!-- Controls: what it controls; a slider only the draft has is set up
              once the controller has it -->
         <StackPanel Name="ControlsSection">
           <Border Name="ControlsHeader" Classes="GroupHeader">
@@ -36,7 +36,7 @@
               </StackPanel>
             </Border>
             <StackPanel Name="ControlsContent" Classes="InspectorGroupBody" IsVisible="{Binding !IsNew}">
-              <!-- One card: the Controls row, then the Reverse row -->
+              <!-- One card: the Controls row -->
               <Border Classes="InspectorRows">
                 <controls:CardRows>
                   <Button Name="ControlsRow" Classes="InspectorRow"

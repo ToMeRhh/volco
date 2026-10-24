@@ -294,6 +294,8 @@ public class AppConfig
         Buttons ??= new();
         Modes ??= new();
         ButtonTiming ??= new();
+        ButtonTiming.LongPressMs = Math.Clamp(ButtonTiming.LongPressMs, 200, 2000);
+        ButtonTiming.DoublePressWindowMs = Math.Clamp(ButtonTiming.DoublePressWindowMs, 100, 1000);
         Devices ??= new();
         Devices.RemoveAll(d => d is null || string.IsNullOrEmpty(d.Id));
         if (Modes.Count == 0)

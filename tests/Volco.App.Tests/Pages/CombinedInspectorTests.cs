@@ -141,7 +141,7 @@ public sealed class CombinedInspectorTests : IDisposable
         Assert.True(field.IsEffectivelyVisible);
         Assert.Equal($"GPIO {DiyConfig.Sliders[0].Pin}", PinValue(field));
         Assert.Equal("Remove Slider 1", In<Button>(section, "HardwareRemoveButton").Content);
-        // No toggles: neither section collapses (Timing is a sub-section of Actions).
+        // No toggles: neither section collapses (each section is always open).
         Assert.DoesNotContain(inspector.GetVisualDescendants().OfType<ToggleButton>(), t => t.Name is "ControlsHeader" or "HardwareHeader");
         Assert.DoesNotContain(inspector.GetVisualDescendants(), v => v is Control { Name: "HardwareSummaryText" });
         // Hardware sits under Controls.
