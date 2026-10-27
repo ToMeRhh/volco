@@ -5,7 +5,8 @@ namespace Volco.Core.Communication;
 /// <summary>How long Automatic waits on each port, and how often it looks at the port list.</summary>
 /// <param name="PerPort">How long a port has to send its Hello: long enough for an ESP32 that the
 /// open resets to boot and say it.</param>
-/// <param name="PortListPoll">How often the port list is read while no port has answered.</param>
+/// <param name="PortListPoll">How often the port list is read while no port has answered (and a
+/// busy best candidate is tried again).</param>
 public sealed record AutoSerialOptions(TimeSpan PerPort, TimeSpan PortListPoll)
 {
     public static AutoSerialOptions Default { get; } = new(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
@@ -18,13 +19,20 @@ public sealed record AutoSerialOptions(TimeSpan PerPort, TimeSpan PortListPoll)
 /// A round opens each candidate in turn. A port that doesn't open (busy or gone) is dropped at
 /// once, so another app's port is never held; an open one carries messages and sends both ways
 /// until its Hello (locked: <see cref="PortFound"/>) or until <see cref="AutoSerialOptions.PerPort"/>
-/// passes (closed, next). A round with no answer keeps the best candidate open (settled; a later
-/// Hello still locks) or none. Each port is tried once per change of the port list, and again when
-/// the locked port goes, never in an endless cycle.
+/// passes (closed, next). A round with no answer closes every port and settles on the best
+/// candidate by name only (<see cref="CurrentPort"/>; nothing is open). Each port is tried once per
+/// change of the port list, and again when the locked port goes, never in an endless cycle; a new
+/// connection (Reconnect, a firmware action) starts a new round.
 ///
-/// <see cref="Status"/> is <see cref="TransportStatus.Closed"/> only with no candidates, else
-/// <see cref="TransportStatus.Open"/>: the runtime's HelloRequests and timeouts carry on across
-/// the ports, and it never sees a <see cref="TransportStatus.Failed"/>.
+/// One exception: when the best candidate didn't open (another app holds it, e.g. a serial
+/// monitor), the round ends busy: <see cref="Status"/> is <see cref="TransportStatus.Failed"/>
+/// with <see cref="CurrentPort"/> naming it, and that one port is tried again on each port-list
+/// poll until it opens; then it is probed as in a round (locked on its Hello, else closed and
+/// settled, not tried again).
+///
+/// Otherwise <see cref="Status"/> is <see cref="TransportStatus.Closed"/> only with no candidates,
+/// else <see cref="TransportStatus.Open"/>: the runtime's HelloRequests and timeouts carry on
+/// across the ports, and a settled round reads as no answer.
 ///
 /// Threading: a <see cref="SerialConnection"/> raises StatusChanged while holding its own lock and
 /// takes that lock in Connect and Dispose, so this class never calls into an inner connection, the
@@ -35,7 +43,7 @@ public sealed record AutoSerialOptions(TimeSpan PerPort, TimeSpan PortListPoll)
 /// </summary>
 public sealed class AutoSerialConnection : IControllerConnection
 {
-    private enum Mode { Idle, Probing, Settled, Locked }
+    private enum Mode { Idle, Probing, Settled, Busy, Locked }
 
     private readonly ISerialPortInfo _ports;
     private readonly bool _haveInfo;
@@ -60,6 +68,7 @@ public sealed class AutoSerialConnection : IControllerConnection
     private IControllerConnection? _current;
     private string? _currentName;
     private string? _settledName;
+    private bool _bestBusy;            // the best candidate didn't open in this round
     private Mode _mode = Mode.Idle;
     private ITimer? _perPortTimer;
     private ITimer? _pollTimer;
@@ -99,8 +108,8 @@ public sealed class AutoSerialConnection : IControllerConnection
 
     public TransportStatus Status { get; private set; } = TransportStatus.Closed;
 
-    /// <summary>The locked port, else the best candidate a round with no answer settled on, else
-    /// null (probing, or no best candidate).</summary>
+    /// <summary>The locked port, else the best candidate a round with no answer settled on (closed),
+    /// or the busy one it waits for, else null (probing, or no best candidate).</summary>
     public string? CurrentPort
     {
         get
@@ -109,7 +118,7 @@ public sealed class AutoSerialConnection : IControllerConnection
                 return _mode switch
                 {
                     Mode.Locked => _currentName,
-                    Mode.Settled => _settledName,
+                    Mode.Settled or Mode.Busy => _settledName,
                     _ => null,
                 };
         }
@@ -220,6 +229,7 @@ public sealed class AutoSerialConnection : IControllerConnection
             _candidates = [];
             _listed = [];
             _settledName = null;
+            _bestBusy = false;
             SetModeLocked(Mode.Idle);
             SetStatusLocked(TransportStatus.Closed);
         }
@@ -238,6 +248,7 @@ public sealed class AutoSerialConnection : IControllerConnection
             if (!_started) return;
             (perPort, current) = TakeCurrentLocked();
             _settledName = null;
+            _bestBusy = false;
             _listed = listed;
             _candidates = candidates;
             _next = 0;
@@ -269,7 +280,12 @@ public sealed class AutoSerialConnection : IControllerConnection
                 name = _candidates[_next++].Name;
             }
             var connection = OpenPort(name);
-            if (connection is null) continue;
+            if (connection is null)
+            {
+                lock (_gate)
+                    if (SerialPortOrder.BestCandidate(_candidates)?.Name == name) _bestBusy = true;
+                continue;
+            }
             var timer = _time.CreateTimer(_ => Post(() => PerPortStep(connection)), null,
                                           _options.PerPort, Timeout.InfiniteTimeSpan);
             bool stale;
@@ -289,36 +305,59 @@ public sealed class AutoSerialConnection : IControllerConnection
         EndRound();
     }
 
-    /// <summary>No port answered: keep the best candidate open, or none.</summary>
+    /// <summary>No port answered: every port is closed already. Settles on the best candidate by
+    /// name, or waits for it when it was busy (<see cref="Mode.Busy"/>).</summary>
     private void EndRound()
     {
         SerialPortDescription? best;
-        bool needOpen;
+        bool busy;
         lock (_gate)
         {
+            if (!_started) return;
             best = SerialPortOrder.BestCandidate(_candidates);
-            needOpen = best is not null && _current is null;
+            busy = best is not null && _bestBusy;
+            _settledName = best?.Name;
+            SetModeLocked(busy ? Mode.Busy : Mode.Settled);
+            SetStatusLocked(busy ? TransportStatus.Failed : TransportStatus.Open);
         }
-        var connection = needOpen ? OpenPort(best!.Name) : null;
+        AppLog.Info(best is null
+            ? "Automatic port: no controller answered"
+            : busy
+                ? $"Automatic port: {best.Name} is in use by another app, trying it again"
+                : $"Automatic port: no controller answered, closed every port (best candidate {best.Name})");
+    }
+
+    /// <summary>The busy best candidate, tried again on a poll: once it opens, it is probed (it is
+    /// the round's last try, so no answer settles).</summary>
+    private void RetryBusy()
+    {
+        string name;
+        lock (_gate)
+        {
+            if (!_started || _mode != Mode.Busy || _settledName is null) return;
+            name = _settledName;
+        }
+        var connection = OpenPort(name);
+        if (connection is null) return;
+        var timer = _time.CreateTimer(_ => Post(() => PerPortStep(connection)), null,
+                                      _options.PerPort, Timeout.InfiniteTimeSpan);
         bool stale;
         lock (_gate)
         {
-            stale = !_started;
+            stale = !_started || _mode != Mode.Busy;
             if (!stale)
             {
-                if (connection is not null)
-                {
-                    _current = connection;
-                    _currentName = best!.Name;
-                }
-                _settledName = best?.Name;
-                SetModeLocked(Mode.Settled);
+                AppLog.Info($"Automatic port: {name} is free now, trying it");
+                _current = connection;
+                _currentName = name;
+                _perPortTimer = timer;
+                _bestBusy = false;
+                _next = _candidates.Count;
+                SetModeLocked(Mode.Probing);
+                SetStatusLocked(TransportStatus.Open);
             }
         }
-        if (stale) { Retire(null, connection); return; }
-        AppLog.Info(best is null
-            ? "Automatic port: no controller answered"
-            : $"Automatic port: no controller answered, staying on {best.Name}");
+        if (stale) Retire(timer, connection);
     }
 
     private void PerPortStep(IControllerConnection connection)
@@ -328,20 +367,11 @@ public sealed class AutoSerialConnection : IControllerConnection
         lock (_gate)
         {
             if (_mode != Mode.Probing || !ReferenceEquals(connection, _current)) return;
-            // The last try is the best candidate: stay on it rather than close and reopen it.
-            if (_next >= _candidates.Count
-                && SerialPortOrder.BestCandidate(_candidates)?.Name == _currentName)
-            {
-                perPort = _perPortTimer;
-                _perPortTimer = null;
-                current = null;
-            }
-            else
-                (perPort, current) = TakeCurrentLocked();
+            // Spec §10.2: a port that doesn't answer is closed at once, the best candidate too.
+            (perPort, current) = TakeCurrentLocked();
         }
         Retire(perPort, current);
-        if (current is null) EndRound();
-        else TryNext();
+        TryNext();
     }
 
     private void PollStep()
@@ -353,7 +383,11 @@ public sealed class AutoSerialConnection : IControllerConnection
             listed = _listed;
         }
         var now = ListPorts();
-        if (now.SequenceEqual(listed)) return;
+        if (now.SequenceEqual(listed))
+        {
+            RetryBusy();
+            return;
+        }
         AppLog.Info("Automatic port: the port list changed, trying the ports again");
         StartRound(now);
     }

@@ -19,6 +19,7 @@ public sealed class AutomaticPortRuntimeTests : IDisposable
     private readonly FakeTimeProvider _time = new();
     private readonly FakePorts _ports = new();
     private readonly List<(string Name, FakeControllerConnection Fake)> _opened = new();
+    private readonly HashSet<string> _busy = new();
     private int _usbPortChanges;
     private VolcoRuntime? _runtime;
 
@@ -53,7 +54,7 @@ public sealed class AutomaticPortRuntimeTests : IDisposable
             {
                 var fake = new FakeControllerConnection(new ConnectionConfig { Serial = new SerialConfig { ComPort = name } })
                 {
-                    StatusOnConnect = TransportStatus.Open,
+                    StatusOnConnect = _busy.Contains(name) ? TransportStatus.Failed : TransportStatus.Open,
                 };
                 lock (_opened) _opened.Add((name, fake));
                 return fake;
@@ -112,6 +113,29 @@ public sealed class AutomaticPortRuntimeTests : IDisposable
 
         Assert.Equal(LinkState.NoAnswer, runtime.LinkStatus.State);
         Assert.Null(runtime.UsbPort);
+    }
+
+    /// <summary>Another app (a serial monitor) holds the CH340: "Can't use COM7", and Volco carries on
+    /// by itself once it is closed.</summary>
+    [Fact]
+    public async Task BusyCh340IsPortBusyOnItUntilFreed()
+    {
+        lock (_opened) _busy.Add("COM7");
+        var runtime = Start(null, Ch340("COM7"));
+
+        Assert.Equal(LinkState.PortBusy, runtime.LinkStatus.State);
+        Assert.Equal("COM7", runtime.UsbPort);
+
+        lock (_opened) _busy.Clear();
+        AdvanceSeconds(3);   // the next port-list poll opens it
+
+        var com7 = Opened("COM7");
+        Assert.Equal(TransportStatus.Open, com7.Status);
+        await ConfigServiceKit.Until(() => com7.SentFrames.Any(IsHelloRequest));
+        com7.RaiseMessage(Hello);
+
+        Assert.Equal(LinkState.Connected, runtime.LinkStatus.State);
+        Assert.Equal("COM7", runtime.UsbPort);
     }
 
     [Fact]

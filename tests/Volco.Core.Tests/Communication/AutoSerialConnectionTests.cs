@@ -137,7 +137,7 @@ public sealed class AutoSerialConnectionTests : IDisposable
     }
 
     [Fact]
-    public void NoAnswerSettlesOnCh340()
+    public void NoAnswerClosesEveryPort()
     {
         var auto = Start(Usb("COM1"), Ch340("COM7"));
         Assert.Null(auto.CurrentPort);
@@ -145,15 +145,93 @@ public sealed class AutoSerialConnectionTests : IDisposable
         _time.Advance(PerPort);
         _time.Advance(PerPort);
 
+        // Spec §10.2: closed at once when it doesn't answer, the best candidate too; it is still
+        // named, so the status reads "not responding" on it.
         Assert.False(auto.IsProbing);
         Assert.Equal("COM7", auto.CurrentPort);
-        Assert.Equal(0, Last("COM7").DisposeCount);
+        Assert.All(_opened, o => Assert.Equal(1, o.Fake.DisposeCount));
         Assert.Equal(TransportStatus.Open, auto.Status);
-        Assert.Equal(1, Last("COM1").DisposeCount);
+        Assert.Equal(new[] { "COM7", "COM1" }, OpenedNames);
 
-        // Settled, not locked: a Hello later still locks.
+        // Nothing is open, so nothing is sent; and nothing is tried again without a change.
+        auto.Send(new byte[] { 1 });
+        Assert.All(_opened, o => Assert.Empty(o.Fake.SentFrames));
+        _time.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(2, _opened.Count);
+        Assert.Empty(_found);
+    }
+
+    [Fact]
+    public void BusyCh340IsFailedAndRetriedUntilItOpens()
+    {
+        _statusOnConnect["COM7"] = TransportStatus.Failed;   // a serial monitor holds it
+        var statuses = new List<TransportStatus>();
+        _ports.Ports = new[] { Ch340("COM7") };
+        var auto = new AutoSerialConnection(_ports, haveInfo: true, () => null, Open, AutoSerialOptions.Default, _time);
+        _auto = auto;
+        auto.StatusChanged += (_, s) => statuses.Add(s);
+        auto.PortFound += (_, name) => _found.Add(name);
+        auto.Connect();
+
+        Assert.Equal(TransportStatus.Failed, auto.Status);
+        Assert.Equal("COM7", auto.CurrentPort);
+        Assert.False(auto.IsProbing);
+        Assert.Equal(1, Last("COM7").DisposeCount);
+
+        // Still busy: tried again on each poll, and closed again.
+        _time.Advance(AutoSerialOptions.Default.PortListPoll);
+        Assert.Equal(2, _opened.Count);
+        Assert.Equal(TransportStatus.Failed, auto.Status);
+
+        // Freed: it opens and is probed as usual.
+        _statusOnConnect.Remove("COM7");
+        _time.Advance(AutoSerialOptions.Default.PortListPoll);
+        Assert.Equal(3, _opened.Count);
+        Assert.Equal(TransportStatus.Open, auto.Status);
+        Assert.True(auto.IsProbing);
         Last("COM7").RaiseMessage(Hello);
+
+        Assert.Equal("COM7", auto.CurrentPort);
         Assert.Equal(new[] { "COM7" }, _found);
+        Assert.Equal(new[] { TransportStatus.Open, TransportStatus.Failed, TransportStatus.Open }, statuses);
+        _time.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(3, _opened.Count);
+    }
+
+    [Fact]
+    public void FreedBusyCandidateWithoutHelloSettlesAndIsNotRetried()
+    {
+        _statusOnConnect["COM7"] = TransportStatus.Failed;
+        var auto = Start(Usb("COM1"), Ch340("COM7"));
+        _time.Advance(PerPort);   // COM1 stays silent too
+        Assert.Equal(TransportStatus.Failed, auto.Status);
+        Assert.Equal("COM7", auto.CurrentPort);
+
+        _statusOnConnect.Remove("COM7");
+        _time.Advance(AutoSerialOptions.Default.PortListPoll);
+        Assert.True(auto.IsProbing);
+        _time.Advance(PerPort);
+
+        Assert.False(auto.IsProbing);
+        Assert.Equal(TransportStatus.Open, auto.Status);
+        Assert.Equal("COM7", auto.CurrentPort);
+        Assert.All(_opened, o => Assert.Equal(1, o.Fake.DisposeCount));
+        var count = _opened.Count;
+        _time.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(count, _opened.Count);
+    }
+
+    [Fact]
+    public void BusyPortThatIsNotTheBestIsNotRetried()
+    {
+        _statusOnConnect["COM1"] = TransportStatus.Failed;
+        var auto = Start(Usb("COM1"), Usb("COM2"));
+        _time.Advance(PerPort);
+
+        Assert.Equal(TransportStatus.Open, auto.Status);
+        Assert.Null(auto.CurrentPort);
+        _time.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(new[] { "COM1", "COM2" }, OpenedNames);
     }
 
     [Fact]
