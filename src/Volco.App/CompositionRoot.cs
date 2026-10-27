@@ -197,6 +197,7 @@ internal sealed class CompositionRoot : IDisposable
             _trayIcon = tray;
 
             _runtime!.LinkStatusChanged += OnTrayConnectionChanged;
+            _runtime.UsbPortChanged += OnTrayConnectionChanged;
             UpdateTray();
             AppLog.Info("Tray icon created");
         }
@@ -233,7 +234,7 @@ internal sealed class CompositionRoot : IDisposable
         _trayShowsAttention = banner.NeedsAttention;
         if (_trayIcon is not { } tray) return;
 
-        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection, banner);
+        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection, runtime.UsbPort, banner);
         var attention = _trayShowsAttention;
         tray.Icon = status.Down ? _disconnectedIcon : attention ? _attentionIcon : _connectedIcon;
         tray.ToolTipText = status.ToolTip;
@@ -328,6 +329,7 @@ internal sealed class CompositionRoot : IDisposable
         if (_runtime is not null)
         {
             _runtime.LinkStatusChanged -= OnTrayConnectionChanged;
+            _runtime.UsbPortChanged -= OnTrayConnectionChanged;
         }
 
         if (_trayIcon is { } tray)

@@ -140,7 +140,7 @@ public sealed partial class ControllerStatusViewModel : ObservableObject, IDispo
         var config = c.ConnectionConfig;
         var port = type switch
         {
-            ConnectionType.Serial => string.IsNullOrEmpty(Connection.ComPort) ? null : Connection.ComPort,
+            ConnectionType.Serial => Connection.UsbPort,
             ConnectionType.Udp => config.Udp.ListenPort.ToString(),
             _ => config.WebSocket.Port.ToString(),
         };

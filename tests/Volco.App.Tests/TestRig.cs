@@ -1,3 +1,4 @@
+using Volco.Core.Communication;
 using Volco.App.ViewModels;
 using Volco.Core.Audio;
 using Volco.Core.Config;
@@ -49,8 +50,11 @@ internal sealed class TestRig : IDisposable
     /// <param name="custom">Media, program and script services; null: none (those actions are
     /// unavailable, as on a platform without them).</param>
     /// <param name="configJson">config.json as it is on disk before the app starts; null: none.</param>
+    /// <param name="serialPorts">The seam behind the port list; null: names only.</param>
+    /// <param name="realTransports">True: the runtime builds its own transports (Automatic USB, with
+    /// <c>options.SerialFactory</c>), so <see cref="Connection"/> stays null.</param>
     public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null, CustomActionServices? custom = null,
-                   string? configJson = null)
+                   string? configJson = null, ISerialPortInfo? serialPorts = null, bool realTransports = false)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -58,8 +62,8 @@ internal sealed class TestRig : IDisposable
         Config = new ConfigManager(Path.Combine(dir, "config.json"));
         Config.Load();
         Engine = engine ?? new FakeAudioEngine();
-        Runtime = new VolcoRuntime(Config, Engine, audioReady: true, connectionFactory: cfg =>
-            Connection = new FakeControllerConnection(cfg), options: options ?? NoGrace, custom: custom);
+        Runtime = new VolcoRuntime(Config, Engine, audioReady: true, connectionFactory: realTransports ? null : cfg =>
+            Connection = new FakeControllerConnection(cfg), options: options ?? NoGrace, custom: custom, serialPorts: serialPorts);
         Runtime.Start();
     }
 

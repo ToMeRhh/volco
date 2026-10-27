@@ -32,8 +32,12 @@
         <TextBlock Text="Port" Classes="Secondary" VerticalAlignment="Center"/>
         <ComboBox Name="PortCombo" Grid.Column="1" Width="{StaticResource ComboBoxStandardWidth}"
                   PlaceholderText="Select port…"
-                  ItemsSource="{Binding Connection.ComPorts}"
-                  SelectedItem="{Binding Connection.ComPort, Mode=TwoWay}"/>
+                  ItemsSource="{Binding Connection.PortChoices}"
+                  SelectedItem="{Binding Connection.SelectedPort, Mode=TwoWay}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:PortChoice"><TextBlock Text="{Binding Label}"/></DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
         <Button Name="RefreshPortsButton" Grid.Column="2" Classes="Icon" Margin="4,0,0,0"
                 Command="{Binding Connection.RefreshComPortsCommand}" ToolTip.Tip="Refresh the port list">
           <PathIcon Data="{StaticResource Icon.Refresh}" Width="14" Height="14"/>
