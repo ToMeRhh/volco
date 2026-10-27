@@ -40,7 +40,15 @@ public sealed class FakeControllerConnection : IControllerConnection
         get { lock (_lock) return _sent.Count; }
     }
 
-    public void Connect() => Interlocked.Increment(ref _connectCount);
+    /// <summary>The status <see cref="Connect"/> moves to (raising <see cref="StatusChanged"/>);
+    /// null, the default, leaves it as it is.</summary>
+    public TransportStatus? StatusOnConnect { get; set; }
+
+    public void Connect()
+    {
+        Interlocked.Increment(ref _connectCount);
+        if (StatusOnConnect is { } status) SetStatus(status);
+    }
 
     public void Disconnect() { }
 
