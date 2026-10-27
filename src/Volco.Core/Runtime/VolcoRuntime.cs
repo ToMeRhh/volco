@@ -1208,8 +1208,8 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     public bool HasSerialPortInfo { get; }
 
     /// <summary>The USB port in use: the chosen one, else the port Automatic is on (the one that
-    /// answered, or the best candidate of a round with no answer); null while it tries the
-    /// ports, without a candidate, and for Wi-Fi and the simulator.</summary>
+    /// answered, the best candidate of a round with no answer, or the busy best candidate it waits
+    /// for); null while it tries the ports, without a candidate, and for Wi-Fi and the simulator.</summary>
     public string? UsbPort
     {
         get

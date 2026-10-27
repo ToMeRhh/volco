@@ -269,8 +269,8 @@ Title: "How Volco reaches the controller". Three cards stacked: **USB cable**, *
 ### 10.2 USB cable
 
 - **Port** list: **Automatic (COM3)** first and the default (the parenthesis is the port Automatic is using now, left out when there is none), then each port as `COM3 · USB-SERIAL CH340`, `COM5 · Standard Serial over Bluetooth link`: Windows' own description, unedited (user, 2026-10-25, over a plain-language rename). The refresh button stays.
-- **Automatic** (`connection.serial.comPort` empty): the app tries each port with a HelloRequest, the CH340 (`1a86:7523`) first, then `connection.serial.lastPort`, then the rest, and remembers the one that answered in `lastPort` (first next time). The status line and its tooltip name it ("Connected over USB (COM3)").
-- Automatic must not disturb other serial devices: it tries a port only while nothing else holds it, and closes it at once if it doesn't answer.
+- **Automatic** (`connection.serial.comPort` empty): the app tries each port with a HelloRequest, the CH340 (`1a86:7523`) first, then `connection.serial.lastPort`, then the rest, and remembers the one that answered in `lastPort` (first next time). The status line and its tooltip name it: the card's status line reads "Connected over USB (COM3)", the tray's tooltip "Connected (COM3)".
+- Automatic must not disturb other serial devices: it tries a port only while nothing else holds it, and closes it at once if it doesn't answer (the best candidate too: after a round with no answer no port stays open, and a new round runs on a port-list change, Reconnect or a firmware action). When the best candidate doesn't open because another app holds it (a serial monitor), the status is `PortBusy` on it ("Can't use COM7"), and Automatic tries that one port again every few seconds until it opens, then probes it as usual (final review ruling, 2026-10-27).
 - How hard Automatic probes (my calls): with `ISerialPortInfo` it tries only USB-backed ports (a Bluetooth COM port is listed but never opened by Automatic); without it, every port. Each port is tried once per change of the port list and on Reconnect, never in an endless cycle, and each try waits long enough for an ESP32 reset by the open to boot and send its Hello.
 - Picking a port for Check firmware (several candidates) makes it `lastPort`; `comPort` stays empty, so the setting stays Automatic (my call).
 - **A board that doesn't answer** (blank or foreign firmware) with Automatic: no serial ports → `Searching`. Ports but no answer → `NoAnswer` on the best candidate (the CH340 if there is one, else the only port). Several candidates and no CH340 → the status says "No controller answers" without a port, and Check firmware first asks which port (today's dialog port picker). Firmware actions use the candidate, and a successful install makes it `lastPort`.
@@ -304,7 +304,7 @@ Save and switch (Volco on USB):
 The draft-based Wi-Fi fields go: Controller settings › Wi-Fi is now a row that opens this card.
 
 **Two later rulings** (user, 2026-10-26):
-- **Turn Wi-Fi off** is a button on the Wi-Fi card while Volco is on USB, with no confirmation: it saves the controller config with Wi-Fi off (the same save as the turn-off in §10.2), which also drops the controller's kept copy.
+- **Turn Wi-Fi off** is a button on the Wi-Fi card while Volco is on USB, with no confirmation: it saves the controller config with Wi-Fi off (the same save as the turn-off in §10.2), which also drops the controller's kept copy, if any.
 - **A provisional write keeps the existing kept copy.** The kept copy is always settings a PC answered on: a write made while the settings are still provisional leaves the copy as it is, unless the write turns Wi-Fi off or goes back to the copy, which drops it.
 
 ### 10.4 Simulator
