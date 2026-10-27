@@ -17,6 +17,7 @@ public sealed class AutoSerialConnectionTests : IDisposable
     private readonly FakePorts _ports = new();
     private readonly List<(string Name, FakeControllerConnection Fake)> _opened = new();
     private readonly Dictionary<string, TransportStatus> _statusOnConnect = new();
+    private readonly Dictionary<string, (ManualResetEventSlim Entered, ManualResetEventSlim Release)> _blockOpen = new();
     private readonly List<string> _found = new();
     private readonly List<bool> _probing = new();
     private readonly List<ControllerMessage> _received = new();
@@ -43,6 +44,11 @@ public sealed class AutoSerialConnectionTests : IDisposable
 
     private IControllerConnection Open(string name)
     {
+        if (_blockOpen.TryGetValue(name, out var block))
+        {
+            block.Entered.Set();
+            block.Release.Wait(TimeSpan.FromSeconds(10));
+        }
         if (_opened.Any(o => o.Fake.DisposeCount == 0)) _priorDisposedAtEachOpen = false;
         var fake = new FakeControllerConnection(new ConnectionConfig())
         {
@@ -248,6 +254,37 @@ public sealed class AutoSerialConnectionTests : IDisposable
         Assert.Single(_opened);
         Assert.Equal(TransportStatus.Closed, auto.Status);
         Assert.False(auto.IsProbing);
+    }
+
+    /// <summary>VolcoRuntime's SuspendConnection hands the port to the flasher right after
+    /// Dispose returns: Dispose waits for a step another thread is running, then frees the port.</summary>
+    [Fact]
+    public void DisposeWhileAnotherThreadIsMidStepReturnsAfterTheInnerDispose()
+    {
+        var block = (Entered: new ManualResetEventSlim(), Release: new ManualResetEventSlim());
+        _blockOpen["COM1"] = block;
+        var auto = Start(Usb("COM1"), Ch340("COM7"));
+
+        // The per-port timer's thread: COM7 is closed and the open of COM1 is under way.
+        var timer = new Thread(() => _time.Advance(PerPort)) { IsBackground = true };
+        timer.Start();
+        Assert.True(block.Entered.Wait(TimeSpan.FromSeconds(5)));
+
+        int? com1DisposedAtReturn = null;
+        var disposer = new Thread(() =>
+        {
+            auto.Dispose();
+            var com1 = _opened.FirstOrDefault(o => o.Name == "COM1").Fake;
+            com1DisposedAtReturn = com1?.DisposeCount ?? -1;
+        }) { IsBackground = true };
+        disposer.Start();
+        Assert.False(disposer.Join(TimeSpan.FromMilliseconds(300)), "Dispose returned before the step ended");
+
+        block.Release.Set();
+        Assert.True(disposer.Join(TimeSpan.FromSeconds(5)));
+        Assert.True(timer.Join(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, com1DisposedAtReturn);
+        Assert.Equal(TransportStatus.Closed, auto.Status);
     }
 
     /// <summary>An inner connection that raises StatusChanged while holding its own lock, and

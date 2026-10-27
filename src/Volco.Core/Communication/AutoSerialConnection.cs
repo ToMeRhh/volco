@@ -48,6 +48,7 @@ public sealed class AutoSerialConnection : IControllerConnection
     private readonly object _queueGate = new();
     private readonly Queue<Action> _steps = new();
     private bool _draining;
+    private int _drainThread;
 
     // Guards the state below, only ever for reads and writes: no call out is made while it is held.
     // The steps are its only writers, apart from a Hello's lock-in (OnInnerMessage), which changes
@@ -128,9 +129,29 @@ public sealed class AutoSerialConnection : IControllerConnection
 
     public void Connect() => Post(StartStep);
 
-    public void Disconnect() => Post(() => StopStep(dispose: false));
+    /// <summary>Closes the port and stops trying; returns once the port is closed.</summary>
+    public void Disconnect() => Stop(dispose: false);
 
-    public void Dispose() => Post(() => StopStep(dispose: true));
+    /// <summary>Closes the port for good; returns once the port is closed (a firmware flash opens
+    /// it right after).</summary>
+    public void Dispose() => Stop(dispose: true);
+
+    /// <summary>Runs <see cref="StopStep"/> and waits for it when another thread is running the
+    /// queue (it never waits on this caller). A call from a handler that the queue's own thread
+    /// raised can't wait for itself: its stop runs as soon as that handler returns.</summary>
+    private void Stop(bool dispose)
+    {
+        var done = new ManualResetEventSlim();
+        Post(() =>
+        {
+            try { StopStep(dispose); }
+            finally { done.Set(); }
+        });
+        if (!done.IsSet && Volatile.Read(ref _drainThread) == Environment.CurrentManagedThreadId)
+            return;   // the step still sets it later, so it isn't disposed here
+        done.Wait();
+        done.Dispose();
+    }
 
     public void Send(byte[] data)
     {
@@ -149,13 +170,19 @@ public sealed class AutoSerialConnection : IControllerConnection
             _steps.Enqueue(step);
             if (_draining) return;
             _draining = true;
+            Volatile.Write(ref _drainThread, Environment.CurrentManagedThreadId);
         }
         while (true)
         {
             Action next;
             lock (_queueGate)
             {
-                if (_steps.Count == 0) { _draining = false; break; }
+                if (_steps.Count == 0)
+                {
+                    _draining = false;
+                    Volatile.Write(ref _drainThread, 0);
+                    break;
+                }
                 next = _steps.Dequeue();
             }
             try { next(); }
@@ -350,7 +377,12 @@ public sealed class AutoSerialConnection : IControllerConnection
         {
             ITimer? perPort;
             IControllerConnection? current;
-            lock (_gate) (perPort, current) = TakeCurrentLocked();
+            lock (_gate)
+            {
+                // A Hello may have locked it in since the first look.
+                if (!ReferenceEquals(connection, _current) || _mode != Mode.Probing) return;
+                (perPort, current) = TakeCurrentLocked();
+            }
             Retire(perPort, current);
             TryNext();
         }
