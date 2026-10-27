@@ -51,6 +51,8 @@ public sealed class CompareViewModelTests : IDisposable
         Conn.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
                                            ControllerConfigCodec.Crc32(TheirBlob), 5, DiyKinds));
         _ui.RunAll();
+        AnswerRead(1, TheirBlob);   // the automatic look for a Wi-Fi fallback: more differs, so nothing is adopted
+        Until(() => _rig.Runtime.ControllerConfig.Operation == ConfigOperation.Idle);
         Assert.Equal(BannerKind.DifferentSetup, _settings.Controller.Banner.Kind);
     }
 

@@ -1,3 +1,4 @@
+using Google.Protobuf;
 using System.Threading.Channels;
 using Volco.Core.Communication;
 using Volco.Core.Config;
@@ -83,6 +84,7 @@ public sealed class ControllerConfigService : IDisposable
     private byte _seq;
     private bool _readFailed;
     private bool _silent;
+    private bool _quietRead;   // the running read is a Wi-Fi fallback look: the banner stays as it was
     private (byte, ControllerConfigState, uint)? _autoReadKey;
     private ControllerBanner _banner = ControllerBanner.Empty;
     private bool _disposed;
@@ -238,9 +240,15 @@ public sealed class ControllerConfigService : IDisposable
 
     /// <summary>Reads the controller's stored config. With <paramref name="adopt"/>, a non-empty
     /// result becomes the mirror.</summary>
-    public async Task<ConfigReadResult> ReadAsync(bool adopt, CancellationToken ct = default)
+    public Task<ConfigReadResult> ReadAsync(bool adopt, CancellationToken ct = default)
+        => ReadCoreAsync(adopt, wifiFallback: false, ct);
+
+    /// <param name="wifiFallback">The automatic read of a stored config whose CRC isn't the mirror's:
+    /// nothing is adopted unless only the Wi-Fi section differs, and a failure leaves the banner as it
+    /// was (spec §10.3).</param>
+    private async Task<ConfigReadResult> ReadCoreAsync(bool adopt, bool wifiFallback, CancellationToken ct)
     {
-        if (!TryBegin(ConfigOperation.Reading, out var events, out var startHello)) return new(ReadStatus.Busy);
+        if (!TryBegin(ConfigOperation.Reading, out var events, out var startHello, quiet: wifiFallback)) return new(ReadStatus.Busy);
         ConfigReadResult result;
         try
         {
@@ -265,8 +273,32 @@ public sealed class ControllerConfigService : IDisposable
                 result = new(ReadStatus.Failed);
             }
         }
-        End(startHello, readStatus: result.Status);
+        else if (result.Status == ReadStatus.Ok && wifiFallback && result.Blob is { Length: > 0 } read
+                 && Mirror is { } mirror && DiffersOnlyInUdp(mirror, read))
+        {
+            AppLog.Info("Controller fell back to its previous Wi-Fi settings; adopting its config");
+            SetMirror(read);
+        }
+        End(startHello, readStatus: wifiFallback ? null : result.Status);
         return result;
+    }
+
+    /// <summary>True when <paramref name="a"/> and <paramref name="b"/> both decode and are the same
+    /// config but for the Wi-Fi (<c>Udp</c>) section. False when either doesn't decode.</summary>
+    internal static bool DiffersOnlyInUdp(byte[] a, byte[] b)
+    {
+        try
+        {
+            var x = ControllerConfigCodec.Decode(a);
+            var y = ControllerConfigCodec.Decode(b);
+            x.Udp = null;
+            y.Udp = null;
+            return x.ToByteArray().AsSpan().SequenceEqual(y.ToByteArray());
+        }
+        catch (ControllerConfigFormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The banner's Retry: a read that adopts.</summary>
@@ -388,7 +420,7 @@ public sealed class ControllerConfigService : IDisposable
 
     // ── Operation plumbing ───────────────────────────────────────────────────────────────────
 
-    private bool TryBegin(ConfigOperation operation, out Channel<Event> events, out HelloMessage? startHello)
+    private bool TryBegin(ConfigOperation operation, out Channel<Event> events, out HelloMessage? startHello, bool quiet = false)
     {
         lock (_gate)
         {
@@ -396,6 +428,7 @@ public sealed class ControllerConfigService : IDisposable
             startHello = _lastHello;
             if (_disposed || _operation != ConfigOperation.Idle) return false;
             _operation = operation;
+            _quietRead = quiet;
             _progress = null;
             events = _events = Channel.CreateUnbounded<Event>(new UnboundedChannelOptions
             {
@@ -414,6 +447,7 @@ public sealed class ControllerConfigService : IDisposable
         lock (_gate)
         {
             _operation = ConfigOperation.Idle;
+            _quietRead = false;
             _progress = null;
             _events = null;
             // A failed read marks the Hello it ran under, unless a different Hello arrived since.
@@ -467,24 +501,33 @@ public sealed class ControllerConfigService : IDisposable
     }
 
     /// <summary>Spec §8.3: reads start automatically only in the "stored, no mirror" row, once per
-    /// (version, configState, configCrc).</summary>
+    /// (version, configState, configCrc); plus one read per such key when the mirror's CRC differs.</summary>
     private void MaybeAutoRead()
     {
+        bool wifiFallback = false;
         lock (_gate)
         {
             if (_disposed || _operation != ConfigOperation.Idle || _lastHello is not { } h) return;
             if (h.Version != ProtocolVersion.Current || h.ConfigState != ControllerConfigState.Stored) return;
-            if (ControllerBannerLogic.Decodes(Mirror) || _autoReadKey == Key(h) || _readFailed) return;
+            if (_autoReadKey == Key(h) || _readFailed) return;
+            var mirror = Mirror;
+            // "Stored, no mirror" adopts the read; "stored, a different CRC" reads only to see whether
+            // the controller fell back to its old Wi-Fi settings (spec §10.3).
+            if (ControllerBannerLogic.Decodes(mirror))
+            {
+                if (ControllerConfigCodec.Crc32(mirror!) == h.ConfigCrc) return;
+                wifiFallback = true;
+            }
             _autoReadKey = Key(h);
         }
-        _ = AutoReadAsync();
+        _ = AutoReadAsync(wifiFallback);
     }
 
-    private async Task AutoReadAsync()
+    private async Task AutoReadAsync(bool wifiFallback)
     {
         try
         {
-            var r = await ReadAsync(adopt: true).ConfigureAwait(false);
+            var r = await ReadCoreAsync(adopt: !wifiFallback, wifiFallback, CancellationToken.None).ConfigureAwait(false);
             if (r.Status == ReadStatus.Busy)
             {
                 // A user operation started first: its End() re-runs MaybeAutoRead for this Hello.
@@ -511,7 +554,7 @@ public sealed class ControllerConfigService : IDisposable
             lock (_gate)
             {
                 if (_disposed) return;
-                inputs = inputs with { Hello = _lastHello, Operation = _operation, ReadFailed = _readFailed, Silent = _silent };
+                inputs = inputs with { Hello = _lastHello, Operation = _quietRead ? ConfigOperation.Idle : _operation, ReadFailed = _readFailed, Silent = _silent };
             }
             var banner = ControllerBannerLogic.Compute(inputs);
             lock (_gate)

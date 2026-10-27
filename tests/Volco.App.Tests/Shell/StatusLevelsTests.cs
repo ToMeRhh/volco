@@ -98,6 +98,15 @@ public sealed class StatusLevelsTests : IDisposable
             rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, firmwareId, state,
                                                          crc ?? ControllerConfigCodec.Crc32(DiyBlob), 5, DiyKinds));
             Until(window, () => vm.Controller.Banner.Kind is not (BannerKind.None or BannerKind.Reading) || vm.Controller.InSync);
+            if (state == ControllerConfigState.Stored && crc is { } other && other != ControllerConfigCodec.Crc32(DiyBlob))
+            {
+                // The automatic look for a Wi-Fi fallback: the controller answers with another setup.
+                Until(window, () => rig.Connection.SentFrames.Any(f => f.Length > 3 && f[2] == 0x87));
+                var seq = rig.Connection.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87)[3];
+                byte[] theirs = { 0x32, 0x02, 0x08, 0x64 };
+                rig.Connection.RaiseMessage(new ConfigDataMessage(seq, (ushort)theirs.Length, 0, ControllerConfigCodec.Crc32(theirs), theirs));
+                Until(window, () => rig.Runtime.ControllerConfig.Operation == ConfigOperation.Idle);
+            }
         }
         return new Shown(window, rig, vm, flasher);
     }

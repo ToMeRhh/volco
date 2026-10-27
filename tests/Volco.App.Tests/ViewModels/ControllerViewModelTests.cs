@@ -62,6 +62,17 @@ public sealed class ControllerViewModelTests : IDisposable
         }
     }
 
+    /// <summary>Answers the automatic look for a Wi-Fi fallback (a Hello with another CRC than the copy's)
+    /// with a different setup, so nothing is adopted.</summary>
+    private void AnswerAutoRead()
+    {
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x87));
+        var seq = Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87)[3];
+        byte[] theirs = { 0x32, 0x02, 0x08, 0x64 };
+        Conn.RaiseMessage(new ConfigDataMessage(seq, (ushort)theirs.Length, 0, ControllerConfigCodec.Crc32(theirs), theirs));
+        Until(() => _rig.Runtime.ControllerConfig.Operation == ConfigOperation.Idle);
+    }
+
     private byte[] LastWriteBurst() => Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
 
     /// <summary>Answers the last write burst with OK and a confirming Hello.</summary>
@@ -580,6 +591,7 @@ public sealed class ControllerViewModelTests : IDisposable
         var mirror = new byte[] { 0x98, 0x06, 0x01 }.Concat(DiyBlob).ToArray();
         var vm = Vm(mirror);
         Greet(Hello(ControllerConfigState.Stored, 0x1234));
+        AnswerAutoRead();
         vm.ApplyMineCommand.Execute(null);
         Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
         var burst = LastWriteBurst();

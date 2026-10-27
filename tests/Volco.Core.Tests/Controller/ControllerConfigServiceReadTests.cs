@@ -1,5 +1,6 @@
 using Volco.Core.Communication;
 using Volco.Core.Controller;
+using Volco.Core.Controller.Proto;
 using Xunit;
 using static Volco.Core.Tests.Controller.ConfigServiceKit;
 
@@ -135,16 +136,15 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
     [Fact]
     public async Task AHelloEqualToTheStartingOne_IsIgnored_ADifferentOneCancels()
     {
-        _k.SetMirror(Small);                                   // in "different setup": no automatic read
+        _k.SetMirror(Small);                                   // "different setup": the automatic read looks for a Wi-Fi fallback
         var start = Hello(ControllerConfigState.Stored, 0xAAAA);
         _k.Service.OnMessage(start);
-        Assert.Equal(ConfigOperation.Idle, _k.Service.Operation);
+        await Until(() => _k.Service.Operation == ConfigOperation.Reading);
 
-        var read = _k.Service.ReadAsync(adopt: false);
         await _k.Step(() => _k.Service.OnMessage(Hello(ControllerConfigState.Stored, 0xAAAA)));
-        Assert.False(read.IsCompleted);
+        Assert.Equal(ConfigOperation.Reading, _k.Service.Operation);
         _k.Service.OnMessage(Hello(ControllerConfigState.Stored, 0xBBBB));
-        Assert.Equal(ReadStatus.Cancelled, (await read).Status);
+        await Until(() => _k.Link.Bursts.Count == 2);   // cancelled; the new Hello's own automatic read
     }
 
     [Fact]
@@ -223,7 +223,10 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
         _k.SetMirror(Small);
         var before = _k.Config.Config.ControllerConfigBlob;
         _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(Undecodable)));
-        Assert.Equal(BannerKind.DifferentSetup, _k.Service.Banner.Kind);
+        await Until(() => _k.Link.Bursts.Count == 1);
+        _k.Deliver(Chunks(_k.LastSeq, Undecodable));      // the automatic Wi-Fi fallback look: nothing adopted
+        await Until(() => _k.Service.Operation == ConfigOperation.Idle);
+        await Until(() => _k.Service.Banner.Kind == BannerKind.DifferentSetup);
 
         var read = _k.Service.ReadAsync(adopt: true);   // "Use the controller's"
         _k.Deliver(Chunks(_k.LastSeq, Undecodable));
@@ -275,6 +278,67 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
         Assert.Equal(ReadStatus.Ok, (await retry).Status);
         Assert.Equal(Convert.ToBase64String(Small), _k.Config.Config.ControllerConfigBlob);
         Assert.Equal(BannerKind.None, _k.Service.Banner.Kind);
+    }
+
+    // ── A Wi-Fi fallback (spec §10.3) ───────────────────────────────────────────────────────
+
+    private static byte[] WithUdp(string ssid, int pin = 32)
+    {
+        var c = new ControllerConfig { Preset = "p", Udp = new Udp { Enabled = true, Ssid = ssid } };
+        c.Sliders.Add(new Slider { Pin = (uint)pin });
+        return ControllerConfigCodec.Encode(c);
+    }
+
+    [Fact]
+    public async Task AdoptsReadWhenOnlyWifiDiffers()
+    {
+        var a = WithUdp("OldNet");
+        _k.SetMirror(WithUdp("NewNet"));
+        var changes = 0;
+        _k.Service.MirrorChanged += (_, _) => Interlocked.Increment(ref changes);
+        _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(a)));
+        await Until(() => _k.Link.Bursts.Count == 1);
+        _k.Deliver(Chunks(_k.LastSeq, a));
+        await Until(() => _k.Service.Operation == ConfigOperation.Idle && changes == 1);
+        Assert.Equal(a, _k.Service.Mirror);
+        await Until(() => _k.Service.Banner.Kind == BannerKind.None);
+    }
+
+    [Fact]
+    public async Task KeepsMirrorWhenMoreDiffers()
+    {
+        var mirror = WithUdp("NewNet", pin: 32);
+        var read = WithUdp("OldNet", pin: 33);
+        _k.SetMirror(mirror);
+        _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(read)));
+        await Until(() => _k.Link.Bursts.Count == 1);
+        _k.Deliver(Chunks(_k.LastSeq, read));
+        await Until(() => _k.Service.Operation == ConfigOperation.Idle);
+        Assert.Equal(mirror, _k.Service.Mirror);
+        await Until(() => _k.Service.Banner.Kind == BannerKind.DifferentSetup);
+    }
+
+    [Fact]
+    public async Task ReadsOncePerCrc()
+    {
+        _k.SetMirror(WithUdp("NewNet", pin: 32));
+        var read = WithUdp("OldNet", pin: 33);
+        var hello = Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(read));
+        _k.Service.OnMessage(hello);
+        await Until(() => _k.Link.Bursts.Count == 1);
+        _k.Deliver(Chunks(_k.LastSeq, read));
+        await Until(() => _k.Service.Operation == ConfigOperation.Idle);
+        _k.Service.OnMessage(hello);
+        await Settle();
+        Assert.Single(_k.Link.Bursts);
+    }
+
+    [Fact]
+    public void DiffersOnlyInUdp_IgnoresTheWifiSectionOnly()
+    {
+        Assert.True(ControllerConfigService.DiffersOnlyInUdp(WithUdp("a"), WithUdp("b")));
+        Assert.False(ControllerConfigService.DiffersOnlyInUdp(WithUdp("a", 32), WithUdp("a", 33)));
+        Assert.False(ControllerConfigService.DiffersOnlyInUdp(WithUdp("a"), Undecodable));
     }
 
     [Fact]
