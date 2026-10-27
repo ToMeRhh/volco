@@ -351,6 +351,22 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.Equal("probe COM7", _autoFlasher.Calls.Single());
     }
 
+    /// <summary>Right after plug-in Automatic is still trying the ports (no UsbPort yet): the
+    /// firmware actions use the best candidate instead of asking.</summary>
+    [Fact]
+    public void CheckWhileProbingUsesTheCh340()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM3", "USB Serial Device", 0x10C4, 0xEA60),
+                                     new SerialPortDescription("COM7", "USB-SERIAL CH340", 0x1A86, 0x7523));
+        var vm = AutomaticVm(rig);
+        _autoFlasher!.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        Assert.Null(rig.Runtime.UsbPort);
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.False(vm.NeedsFirmwarePort);
+        Assert.Equal("probe COM7", _autoFlasher.Calls.Single());
+    }
+
     [Fact]
     public void CheckAsksPortWhenSeveralWithoutCh340()
     {

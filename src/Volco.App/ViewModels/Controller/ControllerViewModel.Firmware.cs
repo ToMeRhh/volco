@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Volco.Core.Communication;
 using Volco.Core.Config;
 using Volco.Core.Controller;
 using Volco.Core.Firmware;
@@ -70,8 +71,22 @@ public sealed partial class ControllerViewModel
                                   && !_runtime.IsUserDisconnected && !IsTesting && _service.Operation == ConfigOperation.Idle;
 
     /// <summary>Install, Update and Check use the port the Connection dialog picked, else the one
-    /// Automatic found; null when it couldn't tell (spec §10.2: the flow asks).</summary>
-    private string? FirmwarePort => _config.Config.Connection.Serial.ComPort is { Length: > 0 } manual ? manual : _runtime.UsbPort;
+    /// Automatic is on, else (while it is still trying the ports) the best candidate of the ports
+    /// now; null when it couldn't tell (spec §10.2: the flow asks).</summary>
+    private string? FirmwarePort
+    {
+        get
+        {
+            var serial = _config.Config.Connection.Serial;
+            if (serial.ComPort is { Length: > 0 } manual) return manual;
+            if (_runtime.UsbPort is { } found) return found;
+            IReadOnlyList<SerialPortDescription> ports;
+            try { ports = _runtime.ListSerialPorts(); }
+            catch { return null; }
+            return SerialPortOrder.BestCandidate(
+                SerialPortOrder.Candidates(ports, serial.LastPort, _runtime.HasSerialPortInfo))?.Name;
+        }
+    }
 
     private Action<string>? _pendingFirmware;
 
