@@ -72,9 +72,21 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
     public string Warning => WarningText;
 
     /// <summary>The operation ended: the result shows.</summary>
-    public bool IsDone => IsOpen && !IsRunning;
+    public bool IsDone => IsOpen && !IsRunning && !IsAskingPort;
 
     partial void OnIsOpenChanged(bool value) => OnPropertyChanged(nameof(IsDone));
+
+    /// <summary>A firmware operation waits to be told which port the controller is on (Automatic
+    /// couldn't tell, spec §10.2): the dialog lists the ports; Close abandons it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDone))]
+    private bool _isAskingPort;
+
+    /// <summary>The ports to pick from; each one runs the operation on it.</summary>
+    public IReadOnlyList<PortChoice> PortChoices => _controller.FirmwarePortChoices;
+
+    /// <summary>Picks a port: the operation starts on it (the dialog then follows the run).</summary>
+    public System.Windows.Input.ICommand ChoosePortCommand => _controller.ChooseFirmwarePortCommand;
 
     public bool HasMeasure => Progress is not null;
 
@@ -108,8 +120,30 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
     private void OnControllerChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_disposed) return;
+        if (e.PropertyName == nameof(ControllerViewModel.NeedsFirmwarePort)) OnPortQuestion();
         Update();
         NextCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnPortQuestion()
+    {
+        if (_controller.NeedsFirmwarePort)
+        {
+            _generation++;
+            _operation = Operation.None;
+            ResultText = null;
+            SetNext(ProgressNextStep.None, null, null);
+            Title = _controller.FirmwareQuestionTitle;
+            OnPropertyChanged(nameof(PortChoices));
+            IsRunning = false;
+            IsAskingPort = true;
+            IsOpen = true;
+        }
+        else if (IsAskingPort)
+        {
+            IsAskingPort = false;   // answered (the run opens the dialog again) or given up
+            if (!_controller.IsFirmwareRunning) Hide();
+        }
     }
 
     private Operation Running()
@@ -315,7 +349,7 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
         next();
     }
 
-    private bool CanClose => !IsRunning;
+    private bool CanClose => !IsRunning;   // asking can be abandoned
 
     /// <summary>Close (also Escape and the scrim once the operation ended): what still needs the
     /// user shows in the banner; an offered test is declined.</summary>
@@ -323,6 +357,11 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
     public void Close()
     {
         if (IsRunning || !IsOpen) return;
+        if (IsAskingPort)
+        {
+            _controller.CancelFirmwarePort();   // its change event hides the dialog
+            return;
+        }
         if (NextStep == ProgressNextStep.TestNow) _controller.DeclineTest();
         Hide();
     }

@@ -6,6 +6,7 @@ using Volco.Core.Config;
 using Volco.Core.Firmware;
 using Volco.Core.Runtime;
 using Volco.Core.Tests.Firmware;
+using Volco.Core.Tests.Runtime;
 using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
@@ -306,5 +307,115 @@ public sealed class ControllerFirmwareTests : IDisposable
         vm.CheckFirmwareCommand.Execute(null);
         Until(() => vm.FirmwareMessage is not null);
         Assert.Equal("probe COM8", _flasher.Calls.Last());
+    }
+
+    // ── Under Automatic (hardware-page spec §10.2) ──────────────────────────────────────────────
+
+    private sealed class Ports(params SerialPortDescription[] ports) : ISerialPortInfo
+    {
+        public IReadOnlyList<SerialPortDescription> List() => ports;
+    }
+
+    private TestRig AutomaticRig(params SerialPortDescription[] ports)
+    {
+        var options = new VolcoRuntimeOptions
+        {
+            Link = new ControllerLinkOptions(TimeSpan.FromHours(1), TimeSpan.FromHours(1), TimeSpan.FromHours(1)),
+            Firmware = Catalog,
+            Time = _time,
+            ConnectGrace = TimeSpan.Zero,
+            SerialFactory = name => new FakeControllerConnection(new ConnectionConfig { Serial = { ComPort = name } })
+            { StatusOnConnect = TransportStatus.Open },
+        };
+        return new TestRig(options: options, serialPorts: new Ports(ports), realTransports: true);
+    }
+
+    private ControllerViewModel AutomaticVm(TestRig rig)
+    {
+        _autoFlasher = new FakeFlasher(() => rig.Runtime.IsSuspended);
+        return _vm = new ControllerViewModel(rig.Config, rig.Runtime, _ui, new FirmwareService(rig.Runtime, _autoFlasher, Catalog, _time));
+    }
+
+    private FakeFlasher? _autoFlasher;
+
+    [Fact]
+    public void CheckUsesFoundPort()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM7", "USB-SERIAL CH340", 0x1A86, 0x7523));
+        for (int i = 0; i < 7; i++) _time.Advance(TimeSpan.FromSeconds(1));   // the round ends on the only candidate
+        var vm = AutomaticVm(rig);
+        _autoFlasher!.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        vm.CheckFirmwareCommand.Execute(null);
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.False(vm.NeedsFirmwarePort);
+        Assert.Equal("probe COM7", _autoFlasher.Calls.Single());
+    }
+
+    [Fact]
+    public void CheckAsksPortWhenSeveralWithoutCh340()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM1", "", 0, 0), new SerialPortDescription("COM2", "Some adapter", 0x1234, 0x5678));
+        var vm = AutomaticVm(rig);
+        _autoFlasher!.ProbeResult = new ProbeResult(ProbeKind.DifferentFirmware);
+        Assert.Null(rig.Runtime.UsbPort);
+        vm.CheckFirmwareCommand.Execute(null);
+        _ui.RunAll();
+        Assert.True(vm.NeedsFirmwarePort);
+        Assert.False(vm.IsFirmwareRunning);
+        Assert.Empty(_autoFlasher.Calls);   // nothing starts before a choice
+        Assert.Equal(new[] { "COM1", "COM2 · Some adapter" }, vm.FirmwarePortChoices.Select(c => c.Label));
+        Assert.All(vm.FirmwarePortChoices, c => Assert.NotNull(c.Port));
+
+        vm.ChooseFirmwarePortCommand.Execute(vm.FirmwarePortChoices[1]);
+        Until(() => vm.FirmwareMessage is not null);
+        Assert.False(vm.NeedsFirmwarePort);
+        Assert.Equal("probe COM2", _autoFlasher.Calls.Single());
+    }
+
+    [Fact]
+    public void CancellingThePortQuestionRunsNothing()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM1", "", 0, 0), new SerialPortDescription("COM2", "", 0, 0));
+        var vm = AutomaticVm(rig);
+        vm.CheckFirmwareCommand.Execute(null);
+        Assert.True(vm.NeedsFirmwarePort);
+        vm.CancelFirmwarePort();
+        Assert.False(vm.NeedsFirmwarePort);
+        Assert.Empty(_autoFlasher!.Calls);
+    }
+
+    [Fact]
+    public void InstallSetsLastPortNotComPort()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM1", "", 0, 0), new SerialPortDescription("COM2", "", 0, 0));
+        var vm = AutomaticVm(rig);
+        vm.InstallFirmwareCommand.Execute(null);
+        vm.ConfirmInstallCommand.Execute(null);
+        Assert.True(vm.NeedsFirmwarePort);
+        vm.ChooseFirmwarePortCommand.Execute(vm.FirmwarePortChoices[1]);
+        Until(() => _autoFlasher!.Calls.Count == 1);   // the Hello after the flash isn't needed here
+        Assert.Equal("flash COM2 Install", _autoFlasher!.Calls.Single());
+        Assert.Equal("COM2", rig.Config.Config.Connection.Serial.LastPort);
+        Assert.Equal("", rig.Config.Config.Connection.Serial.ComPort);
+    }
+
+    [Fact]
+    public void ProgressDialogAsksThePort_AndCloseAbandonsIt()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM1", "", 0, 0), new SerialPortDescription("COM2", "", 0, 0));
+        var vm = AutomaticVm(rig);
+        using var dialog = new Volco.App.ViewModels.Hardware.ProgressDialogViewModel(vm, () => { });
+        vm.CheckFirmwareCommand.Execute(null);
+        Assert.True(dialog.IsOpen);
+        Assert.True(dialog.IsAskingPort);
+        Assert.False(dialog.IsDone);
+        Assert.Equal("Which port is the controller on?", dialog.Title);
+        Assert.Equal(2, dialog.PortChoices.Count);
+
+        dialog.CloseCommand.Execute(null);
+        Assert.False(dialog.IsOpen);
+        Assert.False(dialog.IsAskingPort);
+        Assert.False(vm.NeedsFirmwarePort);
+        Assert.Empty(_autoFlasher!.Calls);
     }
 }

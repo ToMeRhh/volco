@@ -273,7 +273,8 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     private string AutomaticLabel() => UsbPort is { } port && string.IsNullOrEmpty(_config.Config.Connection.Serial.ComPort)
         ? $"Automatic ({port})" : "Automatic";
 
-    private static string PortLabel(SerialPortDescription port)
+    /// <summary>A port's list entry: its name and the system's description, "COM3 · USB-SERIAL CH340".</summary>
+    internal static string PortLabel(SerialPortDescription port)
         => string.IsNullOrEmpty(port.Description) ? port.Name : $"{port.Name} · {port.Description}";
 
     // Automatic's label names the port it found; only that entry changes.

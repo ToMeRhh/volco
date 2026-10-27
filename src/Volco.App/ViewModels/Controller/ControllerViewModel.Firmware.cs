@@ -69,8 +69,51 @@ public sealed partial class ControllerViewModel
     public bool CanUseFirmware => _firmware is { IsAvailable: true, IsBusy: false } && IsSerialConnection
                                   && !_runtime.IsUserDisconnected && !IsTesting && _service.Operation == ConfigOperation.Idle;
 
-    /// <summary>Install, Update and Check use the port the Connection dialog picked.</summary>
-    private string FirmwarePort => _config.Config.Connection.Serial.ComPort;
+    /// <summary>Install, Update and Check use the port the Connection dialog picked, else the one
+    /// Automatic found; null when it couldn't tell (spec §10.2: the flow asks).</summary>
+    private string? FirmwarePort => _config.Config.Connection.Serial.ComPort is { Length: > 0 } manual ? manual : _runtime.UsbPort;
+
+    private Action<string>? _pendingFirmware;
+
+    /// <summary>The firmware flow waits for the user to say which port the controller is on (Automatic
+    /// found none to use: several serial ports, none a CH340, none answering).</summary>
+    [ObservableProperty] private bool _needsFirmwarePort;
+
+    /// <summary>The question's title: "Which port is the controller on?"</summary>
+    internal string FirmwareQuestionTitle => "Which port is the controller on?";
+
+    /// <summary>The serial ports to ask about (never Automatic), described as the Connection dialog does.</summary>
+    public IReadOnlyList<PortChoice> FirmwarePortChoices { get; private set; } = Array.Empty<PortChoice>();
+
+    /// <summary>Starts the asked-about operation on <paramref name="choice"/>'s port.</summary>
+    [RelayCommand]
+    private void ChooseFirmwarePort(PortChoice? choice)
+    {
+        var run = _pendingFirmware;
+        if (run is null || choice?.Port is not { } port) return;
+        _pendingFirmware = null;
+        NeedsFirmwarePort = false;
+        run(port);
+    }
+
+    /// <summary>The user gave up on the question: nothing runs.</summary>
+    internal void CancelFirmwarePort()
+    {
+        _pendingFirmware = null;
+        NeedsFirmwarePort = false;
+    }
+
+    /// <summary>Asks which port when <see cref="FirmwarePort"/> is unknown; with no serial port at
+    /// all there is nothing to ask about and the operation doesn't run.</summary>
+    private void AskFirmwarePort(Action<string> run)
+    {
+        if (!CanUseFirmware || NeedsFirmwarePort) return;
+        var ports = _runtime.ListSerialPorts();
+        if (ports.Count == 0) return;
+        FirmwarePortChoices = ports.Select(p => new PortChoice(p.Name, ConnectionViewModel.PortLabel(p))).ToList();
+        _pendingFirmware = run;
+        NeedsFirmwarePort = true;
+    }
     [ObservableProperty] private bool _isFirmwareRunning;
     [ObservableProperty] private double _firmwareProgress;
     [ObservableProperty] private string? _firmwareMessage;
@@ -180,7 +223,7 @@ public sealed partial class ControllerViewModel
 
     private bool BeginFirmware(LinkActivity activity)
     {
-        if (!CanUseFirmware || string.IsNullOrEmpty(FirmwarePort)) return false;
+        if (!CanUseFirmware) return false;
         StopTest();
         FirmwareActivity = activity;
         if (!IsSaving) SetProgress(null);   // a save's result belongs to the operation before
@@ -205,10 +248,12 @@ public sealed partial class ControllerViewModel
         RefreshAll();
     }
 
-    private async Task RunProbe()
+    private async Task RunProbe(string? port = null)
     {
+        port ??= FirmwarePort;
+        if (port is null) { AskFirmwarePort(p => _ = RunProbe(p)); return; }
         if (!BeginFirmware(LinkActivity.CheckingFirmware)) return;
-        var outcome = await _firmware!.ProbeAsync(FirmwarePort, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
+        var outcome = await _firmware!.ProbeAsync(port, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {
             if (_disposed) return;
@@ -224,11 +269,13 @@ public sealed partial class ControllerViewModel
         });
     }
 
-    private async Task RunFlash(FlashMode mode)
+    private async Task RunFlash(FlashMode mode, string? port = null)
     {
         ConfirmInstallPending = false;
+        port ??= FirmwarePort;
+        if (port is null) { AskFirmwarePort(p => _ = RunFlash(mode, p)); return; }
         if (!BeginFirmware(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware)) return;
-        var outcome = await _firmware!.FlashAsync(FirmwarePort, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
+        var outcome = await _firmware!.FlashAsync(port, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
         {
             if (_disposed) return;
