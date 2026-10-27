@@ -138,6 +138,10 @@ public sealed class ConnectionViewModelTests : IDisposable
         Assert.Equal("Automatic (COM7)", vm.Connection.PortChoices[0].Label);
         Assert.Null(vm.Connection.PortChoices[0].Port);
         Assert.Same(vm.Connection.PortChoices[0], vm.Connection.SelectedPort);
+
+        // Named, but nothing answered there: the USB card doesn't say it found the controller.
+        vm.Hardware.OpenConnection(false);
+        Assert.Equal("Automatic", vm.Hardware.ConnectionDialog!.UsbCard.Summary);
     }
 
     [Fact]
@@ -195,6 +199,8 @@ public sealed class ConnectionViewModelTests : IDisposable
         ui.RunAll();
 
         Assert.Equal("Connected", vm.Connection.StatusText);
+        vm.Hardware.OpenConnection(false);
+        Assert.Equal("Automatic · found the controller on COM3", vm.Hardware.ConnectionDialog!.UsbCard.Summary);
         // The banner (not set up yet) is the controller's business; the port the status VM feeds the card is the found one.
         var inputs = vm.Hardware.Status.Inputs() with { Banner = Volco.Core.Controller.ControllerBanner.Empty };
         Assert.Equal("Connected over USB (COM3)", DeviceCard.From(inputs).Status);

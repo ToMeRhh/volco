@@ -175,7 +175,7 @@ public sealed partial class UsbCardViewModel : ConnectionCardViewModel
     }
 
     public override string Summary => Connection.ComPort is { Length: > 0 } port ? port
-        : Connection.UsbPort is { } found ? $"Automatic · found the controller on {found}" : "Automatic";
+        : Connection.IsConnected && Connection.UsbPort is { } found ? $"Automatic · found the controller on {found}" : "Automatic";
 
     /// <summary>Switch to USB (not shown in the card in use).</summary>
     public IRelayCommand SwitchCommand { get; }
