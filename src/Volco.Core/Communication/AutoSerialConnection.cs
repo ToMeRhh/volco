@@ -25,6 +25,13 @@ public sealed record AutoSerialOptions(TimeSpan PerPort, TimeSpan PortListPoll)
 /// <see cref="Status"/> is <see cref="TransportStatus.Closed"/> only with no candidates, else
 /// <see cref="TransportStatus.Open"/>: the runtime's HelloRequests and timeouts carry on across
 /// the ports, and it never sees a <see cref="TransportStatus.Failed"/>.
+///
+/// Threading: a <see cref="SerialConnection"/> raises StatusChanged while holding its own lock and
+/// takes that lock in Connect and Dispose, so this class never calls into an inner connection, the
+/// port list or the factory while holding <see cref="_gate"/>, and never waits on anything inside an
+/// inner callback. Every change of the round is a step on one serialised queue (<see cref="Post"/>),
+/// run by whichever thread posts to an idle queue; an inner StatusChanged posts from the thread pool,
+/// so it is never run on the inner connection's thread under its lock.
 /// </summary>
 public sealed class AutoSerialConnection : IControllerConnection
 {
@@ -37,12 +44,15 @@ public sealed class AutoSerialConnection : IControllerConnection
     private readonly AutoSerialOptions _options;
     private readonly TimeProvider _time;
 
-    // Guards everything below. Events are queued in _pending under it and raised by Flush once it
-    // is released, as SerialConnection raises its own outside its callbacks' work. Monitor is
-    // reentrant: an inner connection may raise StatusChanged from inside its Connect().
-    private readonly object _gate = new();
-    private readonly List<Action> _pending = new();
+    // The steps, run one at a time, in order. _draining is true while a thread runs them.
+    private readonly object _queueGate = new();
+    private readonly Queue<Action> _steps = new();
+    private bool _draining;
 
+    // Guards the state below, only ever for reads and writes: no call out is made while it is held.
+    // The steps are its only writers, apart from a Hello's lock-in (OnInnerMessage), which changes
+    // only the mode and the wait.
+    private readonly object _gate = new();
     private IReadOnlyList<SerialPortDescription> _listed = [];
     private IReadOnlyList<SerialPortDescription> _candidates = [];
     private int _next;
@@ -54,6 +64,10 @@ public sealed class AutoSerialConnection : IControllerConnection
     private ITimer? _pollTimer;
     private bool _started;
     private bool _disposed;
+
+    // Events queued under _gate and raised in order by one thread at a time (Flush).
+    private readonly List<Action> _pending = new();
+    private bool _flushing;
 
     /// <param name="ports">The system's serial ports.</param>
     /// <param name="haveInfo">Whether <paramref name="ports"/> knows the USB ids, so that only
@@ -106,38 +120,17 @@ public sealed class AutoSerialConnection : IControllerConnection
         get { lock (_gate) return _mode == Mode.Probing; }
     }
 
-    public void Connect()
+    /// <summary>Test seam: whether a step is queued or running.</summary>
+    internal bool IsBusy
     {
-        lock (_gate)
-        {
-            if (_disposed || _started) return;
-            _started = true;
-            _pollTimer = _time.CreateTimer(PollTick, null, _options.PortListPoll, _options.PortListPoll);
-            StartRoundLocked();
-        }
-        Flush();
+        get { lock (_queueGate) return _draining || _steps.Count > 0; }
     }
 
-    public void Disconnect()
-    {
-        lock (_gate)
-        {
-            if (_disposed) return;
-            StopLocked();
-        }
-        Flush();
-    }
+    public void Connect() => Post(StartStep);
 
-    public void Dispose()
-    {
-        lock (_gate)
-        {
-            if (_disposed) return;
-            StopLocked();
-            _disposed = true;
-        }
-        Flush();
-    }
+    public void Disconnect() => Post(() => StopStep(dispose: false));
+
+    public void Dispose() => Post(() => StopStep(dispose: true));
 
     public void Send(byte[] data)
     {
@@ -146,53 +139,259 @@ public sealed class AutoSerialConnection : IControllerConnection
         current?.Send(data);
     }
 
-    /// <summary>Reads the port list and tries its candidates from the first.</summary>
-    private void StartRoundLocked()
+    // ---- The queue ----
+
+    /// <summary>Queues a step, and runs the queue on this thread if no other thread is.</summary>
+    private void Post(Action step)
     {
-        RetireLocked();
-        _settledName = null;
-        _listed = ListPorts();
-        _candidates = SerialPortOrder.Candidates(_listed, _lastPort(), _haveInfo);
-        _next = 0;
-        if (_candidates.Count == 0)
+        lock (_queueGate)
         {
+            _steps.Enqueue(step);
+            if (_draining) return;
+            _draining = true;
+        }
+        while (true)
+        {
+            Action next;
+            lock (_queueGate)
+            {
+                if (_steps.Count == 0) { _draining = false; break; }
+                next = _steps.Dequeue();
+            }
+            try { next(); }
+            catch (Exception ex) { AppLog.Error($"Automatic port: {ex.Message}"); }
+            Flush();
+        }
+    }
+
+    // ---- Steps (run by Post only, one at a time) ----
+
+    private void StartStep()
+    {
+        lock (_gate)
+        {
+            if (_disposed || _started) return;
+            _started = true;
+        }
+        var poll = _time.CreateTimer(_ => Post(PollStep), null, _options.PortListPoll, _options.PortListPoll);
+        lock (_gate) _pollTimer = poll;
+        StartRound(ListPorts());
+    }
+
+    private void StopStep(bool dispose)
+    {
+        ITimer? poll, perPort;
+        IControllerConnection? current;
+        lock (_gate)
+        {
+            if (_disposed) return;
+            if (dispose) _disposed = true;
+            _started = false;
+            poll = _pollTimer;
+            _pollTimer = null;
+            (perPort, current) = TakeCurrentLocked();
+            _candidates = [];
+            _listed = [];
+            _settledName = null;
             SetModeLocked(Mode.Idle);
             SetStatusLocked(TransportStatus.Closed);
-            return;
         }
-        SetStatusLocked(TransportStatus.Open);
-        SetModeLocked(Mode.Probing);
-        TryNextLocked();
+        poll?.Dispose();
+        Retire(perPort, current);
+    }
+
+    /// <summary>Tries the candidates of <paramref name="listed"/> from the first.</summary>
+    private void StartRound(IReadOnlyList<SerialPortDescription> listed)
+    {
+        var candidates = SerialPortOrder.Candidates(listed, _lastPort(), _haveInfo);
+        ITimer? perPort;
+        IControllerConnection? current;
+        lock (_gate)
+        {
+            if (!_started) return;
+            (perPort, current) = TakeCurrentLocked();
+            _settledName = null;
+            _listed = listed;
+            _candidates = candidates;
+            _next = 0;
+            if (candidates.Count == 0)
+            {
+                SetModeLocked(Mode.Idle);
+                SetStatusLocked(TransportStatus.Closed);
+            }
+            else
+            {
+                SetStatusLocked(TransportStatus.Open);
+                SetModeLocked(Mode.Probing);
+            }
+        }
+        Retire(perPort, current);
+        if (candidates.Count > 0) TryNext();
     }
 
     /// <summary>Opens the next candidate that opens and starts its wait, or ends the round.</summary>
-    private void TryNextLocked()
+    private void TryNext()
     {
-        while (_next < _candidates.Count)
+        while (true)
         {
-            var connection = OpenLocked(_candidates[_next++].Name);
+            string name;
+            lock (_gate)
+            {
+                if (!_started || _mode != Mode.Probing) return;
+                if (_next >= _candidates.Count) break;
+                name = _candidates[_next++].Name;
+            }
+            var connection = OpenPort(name);
             if (connection is null) continue;
-            _perPortTimer = _time.CreateTimer(PerPortElapsed, connection, _options.PerPort, Timeout.InfiniteTimeSpan);
+            var timer = _time.CreateTimer(_ => Post(() => PerPortStep(connection)), null,
+                                          _options.PerPort, Timeout.InfiniteTimeSpan);
+            bool stale;
+            lock (_gate)
+            {
+                stale = !_started;
+                if (!stale)
+                {
+                    _current = connection;
+                    _currentName = name;
+                    _perPortTimer = timer;
+                }
+            }
+            if (stale) Retire(timer, connection);
             return;
         }
-        EndRoundLocked();
+        EndRound();
     }
 
     /// <summary>No port answered: keep the best candidate open, or none.</summary>
-    private void EndRoundLocked()
+    private void EndRound()
     {
-        var best = SerialPortOrder.BestCandidate(_candidates);
-        if (best is not null && _current is null) OpenLocked(best.Name);
-        _settledName = best?.Name;
-        SetModeLocked(Mode.Settled);
+        SerialPortDescription? best;
+        bool needOpen;
+        lock (_gate)
+        {
+            best = SerialPortOrder.BestCandidate(_candidates);
+            needOpen = best is not null && _current is null;
+        }
+        var connection = needOpen ? OpenPort(best!.Name) : null;
+        bool stale;
+        lock (_gate)
+        {
+            stale = !_started;
+            if (!stale)
+            {
+                if (connection is not null)
+                {
+                    _current = connection;
+                    _currentName = best!.Name;
+                }
+                _settledName = best?.Name;
+                SetModeLocked(Mode.Settled);
+            }
+        }
+        if (stale) { Retire(null, connection); return; }
         AppLog.Info(best is null
             ? "Automatic port: no controller answered"
             : $"Automatic port: no controller answered, staying on {best.Name}");
     }
 
-    /// <summary>Opens one port and makes it current, or closes it at once and returns null when it
-    /// doesn't open (another app holds it, or it's gone).</summary>
-    private IControllerConnection? OpenLocked(string name)
+    private void PerPortStep(IControllerConnection connection)
+    {
+        ITimer? perPort;
+        IControllerConnection? current;
+        lock (_gate)
+        {
+            if (_mode != Mode.Probing || !ReferenceEquals(connection, _current)) return;
+            // The last try is the best candidate: stay on it rather than close and reopen it.
+            if (_next >= _candidates.Count
+                && SerialPortOrder.BestCandidate(_candidates)?.Name == _currentName)
+            {
+                perPort = _perPortTimer;
+                _perPortTimer = null;
+                current = null;
+            }
+            else
+                (perPort, current) = TakeCurrentLocked();
+        }
+        Retire(perPort, current);
+        if (current is null) EndRound();
+        else TryNext();
+    }
+
+    private void PollStep()
+    {
+        IReadOnlyList<SerialPortDescription> listed;
+        lock (_gate)
+        {
+            if (!_started || _mode == Mode.Locked) return;
+            listed = _listed;
+        }
+        var now = ListPorts();
+        if (now.SequenceEqual(listed)) return;
+        AppLog.Info("Automatic port: the port list changed, trying the ports again");
+        StartRound(now);
+    }
+
+    private void InnerStatusStep(IControllerConnection connection, TransportStatus status)
+    {
+        Mode mode;
+        string? name;
+        lock (_gate)
+        {
+            if (!ReferenceEquals(connection, _current)) return;
+            mode = _mode;
+            name = _currentName;
+        }
+        if (mode == Mode.Locked && status == TransportStatus.Closed)
+        {
+            AppLog.Info($"Automatic port: {name} went away, trying the ports again");
+            StartRound(ListPorts());
+        }
+        else if (mode == Mode.Probing && status != TransportStatus.Open)
+        {
+            ITimer? perPort;
+            IControllerConnection? current;
+            lock (_gate) (perPort, current) = TakeCurrentLocked();
+            Retire(perPort, current);
+            TryNext();
+        }
+    }
+
+    // ---- Inner callbacks (any thread, maybe under the inner connection's lock) ----
+
+    private void OnInnerMessage(object? sender, ControllerMessage message)
+    {
+        ITimer? perPort = null;
+        lock (_gate)
+        {
+            if (_disposed || !ReferenceEquals(sender, _current)) return;
+            if (message is HelloMessage && _mode != Mode.Locked)
+            {
+                perPort = _perPortTimer;
+                _perPortTimer = null;
+                SetModeLocked(Mode.Locked);
+                var name = _currentName!;
+                AppLog.Info($"Automatic port: the controller answered on {name}");
+                _pending.Add(() => PortFound?.Invoke(this, name));
+            }
+        }
+        perPort?.Dispose();
+        Flush();
+        MessageReceived?.Invoke(this, message);
+    }
+
+    private void OnInnerStatus(object? sender, TransportStatus status)
+    {
+        // Open needs nothing: a probed port is open already, and a locked one stays.
+        if (sender is not IControllerConnection connection || status == TransportStatus.Open) return;
+        // Off this thread: it may hold the inner connection's lock, and the step may dispose it.
+        ThreadPool.QueueUserWorkItem(_ => Post(() => InnerStatusStep(connection, status)));
+    }
+
+    // ---- Helpers ----
+
+    /// <summary>Opens one port, or closes it at once and returns null when it doesn't open
+    /// (another app holds it, or it's gone). Called without <see cref="_gate"/>.</summary>
+    private IControllerConnection? OpenPort(string name)
     {
         IControllerConnection connection;
         try { connection = _open(name); }
@@ -207,125 +406,39 @@ public sealed class AutoSerialConnection : IControllerConnection
         try { connection.Connect(); }
         catch (Exception ex) { AppLog.Error($"Automatic port: can't open {name}: {ex.Message}"); }
 
-        if (connection.Status != TransportStatus.Open)
-        {
-            Close(connection);
-            return null;
-        }
-        _current = connection;
-        _currentName = name;
-        return connection;
+        if (connection.Status == TransportStatus.Open) return connection;
+        Retire(null, connection);
+        return null;
     }
 
-    private void PerPortElapsed(object? state)
+    /// <summary>Detaches the current port and its wait, for <see cref="Retire"/> after the lock.</summary>
+    private (ITimer? PerPort, IControllerConnection? Current) TakeCurrentLocked()
     {
-        lock (_gate)
-        {
-            if (_disposed || _mode != Mode.Probing || !ReferenceEquals(state, _current)) return;
-            StopPerPortLocked();
-            // The last try is the best candidate: stay on it rather than close and reopen it.
-            if (_next >= _candidates.Count
-                && SerialPortOrder.BestCandidate(_candidates)?.Name == _currentName)
-            {
-                EndRoundLocked();
-                return;
-            }
-            RetireLocked();
-            TryNextLocked();
-        }
-        Flush();
-    }
-
-    private void PollTick(object? state)
-    {
-        lock (_gate)
-        {
-            if (_disposed || !_started || _mode == Mode.Locked) return;
-            var listed = ListPorts();
-            if (listed.SequenceEqual(_listed)) return;
-            AppLog.Info("Automatic port: the port list changed, trying the ports again");
-            StartRoundLocked();
-        }
-        Flush();
-    }
-
-    private void OnInnerMessage(object? sender, ControllerMessage message)
-    {
-        lock (_gate)
-        {
-            if (_disposed || !ReferenceEquals(sender, _current)) return;
-            if (message is HelloMessage && _mode != Mode.Locked)
-            {
-                StopPerPortLocked();
-                SetModeLocked(Mode.Locked);
-                var name = _currentName!;
-                AppLog.Info($"Automatic port: the controller answered on {name}");
-                _pending.Add(() => PortFound?.Invoke(this, name));
-            }
-        }
-        Flush();
-        MessageReceived?.Invoke(this, message);
-    }
-
-    private void OnInnerStatus(object? sender, TransportStatus status)
-    {
-        lock (_gate)
-        {
-            if (_disposed || !ReferenceEquals(sender, _current)) return;
-            if (_mode == Mode.Locked && status == TransportStatus.Closed)
-            {
-                AppLog.Info($"Automatic port: {_currentName} went away, trying the ports again");
-                StartRoundLocked();
-            }
-            else if (_mode == Mode.Probing && status != TransportStatus.Open)
-            {
-                RetireLocked();
-                TryNextLocked();
-            }
-        }
-        Flush();
-    }
-
-    private void StopLocked()
-    {
-        _started = false;
-        _pollTimer?.Dispose();
-        _pollTimer = null;
-        RetireLocked();
-        _candidates = [];
-        _listed = [];
-        _settledName = null;
-        SetModeLocked(Mode.Idle);
-        SetStatusLocked(TransportStatus.Closed);
-    }
-
-    /// <summary>Stops the wait and closes the current port, if any.</summary>
-    private void RetireLocked()
-    {
-        StopPerPortLocked();
-        var current = _current;
+        var taken = (_perPortTimer, _current);
+        _perPortTimer = null;
         _current = null;
         _currentName = null;
-        if (current is not null) Close(current);
+        return taken;
     }
 
-    private void Close(IControllerConnection connection)
+    /// <summary>Stops a wait and closes a port. Called without <see cref="_gate"/>.</summary>
+    private void Retire(ITimer? perPort, IControllerConnection? connection)
     {
+        perPort?.Dispose();
+        if (connection is null) return;
         connection.MessageReceived -= OnInnerMessage;
         connection.StatusChanged -= OnInnerStatus;
         try { connection.Dispose(); } catch { /* already gone */ }
     }
 
-    private void StopPerPortLocked()
-    {
-        _perPortTimer?.Dispose();
-        _perPortTimer = null;
-    }
-
     private IReadOnlyList<SerialPortDescription> ListPorts()
     {
         try { return _ports.List(); }
-        catch { return []; }
+        catch (Exception ex)
+        {
+            AppLog.Error($"Automatic port: can't list the serial ports: {ex.Message}");
+            return [];
+        }
     }
 
     private void SetModeLocked(Mode mode)
@@ -343,20 +456,29 @@ public sealed class AutoSerialConnection : IControllerConnection
         _pending.Add(() => StatusChanged?.Invoke(this, status));
     }
 
-    /// <summary>Raises the queued events, once the outermost caller has released the lock.</summary>
+    /// <summary>Raises the queued events in order, on one thread at a time: a thread that finds
+    /// another one flushing leaves its events to it.</summary>
     private void Flush()
     {
-        if (Monitor.IsEntered(_gate)) return;
+        lock (_gate)
+        {
+            if (_flushing) return;
+            _flushing = true;
+        }
         while (true)
         {
             Action[] pending;
             lock (_gate)
             {
-                if (_pending.Count == 0) return;
+                if (_pending.Count == 0) { _flushing = false; return; }
                 pending = _pending.ToArray();
                 _pending.Clear();
             }
-            foreach (var raise in pending) raise();
+            foreach (var raise in pending)
+            {
+                try { raise(); }
+                catch (Exception ex) { AppLog.Error($"Automatic port: an event handler failed: {ex.Message}"); }
+            }
         }
     }
 }

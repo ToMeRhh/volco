@@ -209,6 +209,8 @@ public sealed class AutoSerialConnectionTests : IDisposable
         _ports.Ports = new[] { Ch340("COM4") };
         Last("COM3").SetStatus(TransportStatus.Closed);
 
+        // An inner connection's status is handled off its own thread (it may hold its lock).
+        Assert.True(SpinWait.SpinUntil(() => _opened.Count == 2 && !auto.IsBusy, TimeSpan.FromSeconds(5)));
         Assert.Equal(1, Last("COM3").DisposeCount);
         Assert.Equal("COM4", _opened[^1].Name);
         Assert.True(auto.IsProbing);
@@ -227,6 +229,7 @@ public sealed class AutoSerialConnectionTests : IDisposable
 
         retired.RaiseMessage(Hello);
         retired.SetStatus(TransportStatus.Closed);
+        Assert.True(SpinWait.SpinUntil(() => !_auto!.IsBusy, TimeSpan.FromSeconds(5)));
 
         Assert.Empty(_received);
         Assert.Empty(_found);
@@ -245,6 +248,84 @@ public sealed class AutoSerialConnectionTests : IDisposable
         Assert.Single(_opened);
         Assert.Equal(TransportStatus.Closed, auto.Status);
         Assert.False(auto.IsProbing);
+    }
+
+    /// <summary>An inner connection that raises StatusChanged while holding its own lock, and
+    /// whose Dispose takes that lock, as <see cref="SerialConnection"/> does: Automatic must not
+    /// hold its own lock while calling into it, nor take it inside its callbacks.</summary>
+    [Fact]
+    public void UnplugWhileRetiringDoesNotDeadlock()
+    {
+        var fake = new LockingConnection();
+        _ports.Ports = new[] { Usb("COM1") };
+        var auto = new AutoSerialConnection(_ports, haveInfo: true, () => null, _ => fake,
+            new AutoSerialOptions(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(3)), _time);
+        _auto = auto;
+        auto.Connect();
+        Assert.True(auto.IsProbing);
+
+        // The controller's own thread: unplugged, it reports Closed under its lock. The raise is
+        // already in flight (its handlers read) when the retire below unsubscribes and disposes.
+        var unplug = new Thread(() =>
+        {
+            lock (fake.Gate)
+            {
+                var raise = fake.StatusHandlers;
+                fake.Held.Set();
+                fake.DisposeEntered.Wait(TimeSpan.FromSeconds(5));
+                raise?.Invoke(fake, TransportStatus.Closed);
+            }
+        }) { IsBackground = true };
+        // The poll's thread: the port list changed, so the probed port is retired.
+        var poll = new Thread(() =>
+        {
+            fake.Held.Wait(TimeSpan.FromSeconds(5));
+            _ports.Ports = [];
+            _time.Advance(TimeSpan.FromSeconds(3));
+        }) { IsBackground = true };
+        unplug.Start();
+        poll.Start();
+
+        Assert.True(unplug.Join(TimeSpan.FromSeconds(5)), "the unplug callback deadlocked");
+        Assert.True(poll.Join(TimeSpan.FromSeconds(5)), "the retire deadlocked");
+        Assert.True(SpinWait.SpinUntil(() => !auto.IsBusy, TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, fake.DisposeCount);
+        Assert.Equal(TransportStatus.Closed, auto.Status);
+    }
+
+    private sealed class LockingConnection : IControllerConnection
+    {
+        public readonly object Gate = new();
+        public readonly ManualResetEventSlim Held = new();
+        public readonly ManualResetEventSlim DisposeEntered = new();
+        private int _disposeCount;
+
+        public event EventHandler<ControllerMessage>? MessageReceived;
+        public event EventHandler<TransportStatus>? StatusChanged;
+        public TransportStatus Status { get; private set; }
+        public int DisposeCount => Volatile.Read(ref _disposeCount);
+        public EventHandler<TransportStatus>? StatusHandlers => StatusChanged;
+
+        public void Connect()
+        {
+            lock (Gate) RaiseStatus(TransportStatus.Open);
+        }
+
+        public void Disconnect() { }
+        public void Send(byte[] data) { }
+
+        public void Dispose()
+        {
+            DisposeEntered.Set();
+            lock (Gate) Interlocked.Increment(ref _disposeCount);
+        }
+
+        public void RaiseStatus(TransportStatus status)
+        {
+            Status = status;
+            StatusChanged?.Invoke(this, status);
+            _ = MessageReceived;
+        }
     }
 
     private sealed class FakePorts : ISerialPortInfo
