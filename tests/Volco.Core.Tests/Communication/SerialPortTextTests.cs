@@ -16,6 +16,7 @@ public class SerialPortTextTests
     [Theory]
     [InlineData(@"USB\VID_1A86&PID_7523&REV_0264", 0x1A86, 0x7523)]
     [InlineData(@"usb\vid_10c4&pid_ea60", 0x10C4, 0xEA60)]
+    [InlineData(@"FTDIBUS\VID_0403+PID_6001+A50285BIA\0000", 0x0403, 0x6001)]
     public void TryParseUsbIds_reads_hex_ids(string id, int vid, int pid)
     {
         Assert.True(SerialPortText.TryParseUsbIds(id, out var v, out var p));

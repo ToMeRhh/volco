@@ -5,7 +5,7 @@ namespace Volco.Core.Communication;
 /// <summary>Pure text rules for a serial port's system description (used by the Windows SetupAPI reader).</summary>
 public static class SerialPortText
 {
-    private static readonly Regex UsbIds = new(@"VID_([0-9A-F]{4})&PID_([0-9A-F]{4})",
+    private static readonly Regex UsbIds = new(@"VID_([0-9A-F]{4})[&+]PID_([0-9A-F]{4})",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>The friendly name without its trailing " (COMn)" (the port's own name); the rest is kept as is.</summary>
@@ -17,7 +17,8 @@ public static class SerialPortText
             : friendly;
     }
 
-    /// <summary>The USB vendor and product ids in a hardware id such as <c>USB\VID_1A86&amp;PID_7523&amp;REV_0264</c>.</summary>
+    /// <summary>The USB vendor and product ids in a hardware id such as <c>USB\VID_1A86&amp;PID_7523&amp;REV_0264</c>,
+    /// or FTDI's <c>FTDIBUS\VID_0403+PID_6001+A50285BIA\0000</c>.</summary>
     public static bool TryParseUsbIds(string hardwareId, out int vid, out int pid)
     {
         vid = pid = 0;
