@@ -28,11 +28,16 @@ public enum WifiSwitchOutcome
     NoAnswer,
     /// <summary>The save didn't go through (or the settings are invalid); Volco's transport is unchanged.</summary>
     SaveFailed,
+    /// <summary>The connected controller's setup isn't the one Volco has saved (its Hello's CRC
+    /// differs from the mirror's): saving the mirror with new Wi-Fi settings would replace it
+    /// (spec §8.4). Nothing was sent.</summary>
+    DifferentSetup,
     /// <summary>Save and switch needs a controller connected over USB; a save over Wi-Fi needs one
     /// connected over Wi-Fi. Nothing was sent.</summary>
     NeedsUsb,
-    /// <summary>Cancelled, disposed, or another Wi-Fi operation is running. The transport is left
-    /// as it was at that moment.</summary>
+    /// <summary>Cancelled, disposed, another Wi-Fi operation is running, or (turning Wi-Fi off)
+    /// Volco isn't on Wi-Fi or the transport was changed meanwhile. The transport is left as it
+    /// was at that moment.</summary>
     Cancelled,
 }
 
@@ -50,14 +55,19 @@ public enum WifiSwitchStep
 /// The Connection dialog's Wi-Fi operations (spec §10.2, §10.3): Save and switch (send the Wi-Fi
 /// settings over USB, then move Volco to Wi-Fi and wait for the controller there), Save over
 /// Wi-Fi (Volco moves its listen port with the controller, and back if the controller falls back
-/// to its old settings), and turning Wi-Fi off (switch to USB, then, on the first USB Hello of
-/// this run, save the config with Wi-Fi off). One at a time. Owned for the whole run, not by the
-/// dialog, so closing the dialog never drops a pending turn-off; <see cref="Dispose"/> cancels
-/// whatever runs and leaves the transport as it is.
+/// to its old settings), and turning Wi-Fi off (switch from Wi-Fi to USB, then, on the first USB
+/// Hello of this run, save the config with Wi-Fi off). One at a time. Owned for the whole run, not
+/// by the dialog, so closing the dialog never drops a pending turn-off; <see cref="Dispose"/>
+/// cancels whatever runs and leaves the transport as it is.
+/// <para>
+/// Every save is the mirror with only its Wi-Fi section replaced, so it is made only while the
+/// connected controller runs the mirror's setup (its last Hello's CRC); otherwise the outcome is
+/// <see cref="WifiSwitchOutcome.DifferentSetup"/>.
+/// </para>
 /// <para>
 /// Threading: the public methods may be awaited from any thread; config edits run on the config
-/// thread. Hellos are taken from <see cref="VolcoRuntime.HelloReceived"/> only while the current
-/// transport is of the kind the step waits for.
+/// thread. A wait after a transport edit takes only Hellos from a transport built after that edit
+/// (<see cref="VolcoRuntime.TransportHelloReceived"/>).
 /// </para>
 /// </summary>
 public sealed class WifiSwitch : IDisposable
@@ -77,7 +87,7 @@ public sealed class WifiSwitch : IDisposable
     private readonly TimeProvider _time;
     private readonly CancellationTokenSource _disposed = new();
     private int _busy;
-    private int _turnOffPending;
+    private CancellationTokenSource? _turnOff;   // the pending turn-off's own cancellation; null when none
 
     /// <param name="configThread">Runs a config edit on the thread that owns the config (the UI
     /// thread in the app).</param>
@@ -92,20 +102,22 @@ public sealed class WifiSwitch : IDisposable
     public bool IsBusy => Volatile.Read(ref _busy) != 0;
 
     /// <summary>Turning Wi-Fi off waits for the controller's first Hello over USB.</summary>
-    public bool TurnOffPending => Volatile.Read(ref _turnOffPending) != 0;
+    public bool TurnOffPending => Volatile.Read(ref _turnOff) is not null;
 
     /// <summary><see cref="IsBusy"/> or <see cref="TurnOffPending"/> changed. Any thread.</summary>
     public event EventHandler? BusyChanged;
+
+    /// <summary>Drops a pending turn-off (its <see cref="TurnOffAsync"/> returns
+    /// <see cref="WifiSwitchOutcome.Cancelled"/>); a save it already started still ends on its own.</summary>
+    public void CancelTurnOff() => Cancel(Volatile.Read(ref _turnOff));
 
     /// <summary>The Wi-Fi fields' starting values: the controller's saved Wi-Fi settings, with
     /// Volco's <paramref name="listenPort"/>. Null when the mirror has Wi-Fi off, has none, or
     /// doesn't decode.</summary>
     public static WifiSettings? FromMirror(byte[]? mirror, int listenPort)
     {
-        if (mirror is null || mirror.Length == 0) return null;
-        ControllerConfig config;
-        try { config = ControllerConfigCodec.Decode(mirror); }
-        catch (ControllerConfigFormatException) { return null; }
+        if (!Decodes(mirror)) return null;
+        var config = ControllerConfigCodec.Decode(mirror!);
         if (config.Udp is not { Enabled: true } udp) return null;
         return new WifiSettings(udp.Ssid, udp.Password, udp.PcIp, listenPort, (int)udp.LocalPort);
     }
@@ -124,24 +136,24 @@ public sealed class WifiSwitch : IDisposable
         try
         {
             if (!ConnectedOver(ConnectionType.Serial)) return WifiSwitchOutcome.NeedsUsb;
-            if (Blob(_runtime.ControllerConfig.Mirror, WifiOn(settings)) is not { } blob) return WifiSwitchOutcome.SaveFailed;
-            var crc = ControllerConfigCodec.Crc32(blob);
 
             progress?.Report((WifiSwitchStep.Saving, null));
-            if (await BeginSaveAsync(blob, token).ConfigureAwait(false) is not { } run) return WifiSwitchOutcome.SaveFailed;
-            if (await Task.WhenAny(run.Save, run.Accepted).WaitAsync(token).ConfigureAwait(false) == run.Accepted)
-                progress?.Report((WifiSwitchStep.Restarting, null));
+            var begun = await BeginSaveAsync(mirror => Blob(mirror, WifiOn(settings)), token).ConfigureAwait(false);
+            if (begun.Run is not { } run) return begun.Failure;
+            var crc = ControllerConfigCodec.Crc32(begun.Blob!);
+            await Task.WhenAny(run.Save, run.Accepted).WaitAsync(token).ConfigureAwait(false);
+            if (run.Accepted.IsCompleted) progress?.Report((WifiSwitchStep.Restarting, null));   // both may be done
             var saved = await run.Save.WaitAsync(token).ConfigureAwait(false);
             if (saved.Status != SaveStatus.Confirmed) return Failed(saved);
 
-            using var hellos = WatchHellos(ConnectionType.Udp);   // before the switch: its Hello can't be missed
+            using var hellos = new HelloWatch(_runtime, ConnectionType.Udp, _time);   // before the switch: its Hello can't be missed
             var oldPort = _runtime.Config.Config.Connection.Udp.ListenPort;
             AppLog.Info($"Wi-Fi switch: saved, switching to Wi-Fi on port {settings.ListenPort}");
-            await OnConfigThreadAsync(c =>
+            hellos.After(await OnConfigThreadAsync(c =>
             {
                 c.Type = ConnectionType.Udp;
                 c.Udp.ListenPort = settings.ListenPort;
-            }, token).ConfigureAwait(false);
+            }, token).ConfigureAwait(false));
 
             var end = _time.GetUtcNow() + FallbackWindow + AnswerWait;
             using (_runtime.ExpectInterruption(LinkActivity.Connecting))
@@ -172,9 +184,11 @@ public sealed class WifiSwitch : IDisposable
     }
 
     /// <summary>Save (Volco already on Wi-Fi, spec §10.3): saves <paramref name="settings"/> over
-    /// Wi-Fi and, once the controller accepts them, moves Volco's listen port with it. Waits
-    /// <see cref="FallbackWindow"/> for the controller on the new settings; then returns to the old
-    /// listen port and waits <see cref="AnswerWait"/> for it there (it fell back). Volco stays on Wi-Fi.</summary>
+    /// Wi-Fi and, once the controller accepts them, moves Volco's listen port with it (the restarted
+    /// controller sends its Hello there, so the save's own confirmation can't come on the old one).
+    /// Waits <see cref="FallbackWindow"/> from the controller's OK for it on the new settings; then
+    /// returns to the old listen port and waits <see cref="AnswerWait"/> for it there (it fell
+    /// back). Volco stays on Wi-Fi.</summary>
     public async Task<WifiSwitchOutcome> SaveOverWifiAsync(WifiSettings settings, IProgress<(WifiSwitchStep Step, TimeSpan? Left)>? progress = null,
                                                            CancellationToken ct = default)
     {
@@ -185,32 +199,33 @@ public sealed class WifiSwitch : IDisposable
         try
         {
             if (!ConnectedOver(ConnectionType.Udp)) return WifiSwitchOutcome.NeedsUsb;
-            if (Blob(_runtime.ControllerConfig.Mirror, WifiOn(settings)) is not { } blob) return WifiSwitchOutcome.SaveFailed;
-            var crc = ControllerConfigCodec.Crc32(blob);
 
             progress?.Report((WifiSwitchStep.Saving, null));
-            if (await BeginSaveAsync(blob, token).ConfigureAwait(false) is not { } run) return WifiSwitchOutcome.SaveFailed;
-            if (await Task.WhenAny(run.Save, run.Accepted).WaitAsync(token).ConfigureAwait(false) != run.Accepted)
+            var begun = await BeginSaveAsync(mirror => Blob(mirror, WifiOn(settings)), token).ConfigureAwait(false);
+            if (begun.Run is not { } run) return begun.Failure;
+            var blob = begun.Blob!;
+            var crc = ControllerConfigCodec.Crc32(blob);
+            await Task.WhenAny(run.Save, run.Accepted).WaitAsync(token).ConfigureAwait(false);
+            if (!run.Accepted.IsCompleted)   // WhenAny may pick the save when both are done
             {
                 // Ended before an OK: an implied OK (a confirming Hello) or a failure.
                 var early = await run.Save.ConfigureAwait(false);
                 return early.Status == SaveStatus.Confirmed ? WifiSwitchOutcome.OnWifi : Failed(early);
             }
 
-            // The controller accepted the write and restarts into the new settings, which send its
-            // Hello to the new listen port: Volco moves there now. The save itself then ends as
-            // ConnectionLost (the transport is replaced); the Hello below is the confirmation.
+            // The controller accepted the write and restarts into the new settings. With a new
+            // listen port Volco moves there now; the save itself then ends as ConnectionLost (the
+            // transport is replaced), and the Hello below is the confirmation.
             progress?.Report((WifiSwitchStep.Restarting, null));
-            var accepted = _time.GetUtcNow();
-            var newSettingsEnd = accepted + FallbackWindow;
+            var newSettingsEnd = _time.GetUtcNow() + FallbackWindow;
             var end = newSettingsEnd + AnswerWait;
-            using var hellos = WatchHellos(ConnectionType.Udp);
+            using var hellos = new HelloWatch(_runtime, ConnectionType.Udp, _time);
             var oldPort = _runtime.Config.Config.Connection.Udp.ListenPort;
             var moved = settings.ListenPort != oldPort;
             if (moved)
             {
                 AppLog.Info($"Wi-Fi save: accepted, listening on port {settings.ListenPort}");
-                await OnConfigThreadAsync(c => c.Udp.ListenPort = settings.ListenPort, token).ConfigureAwait(false);
+                hellos.After(await OnConfigThreadAsync(c => c.Udp.ListenPort = settings.ListenPort, token).ConfigureAwait(false));
             }
 
             using (_runtime.ExpectInterruption(LinkActivity.Connecting))
@@ -219,22 +234,33 @@ public sealed class WifiSwitch : IDisposable
                 await run.Save.WaitAsync(token).ConfigureAwait(false);   // its confirming Hello, if any, is in hellos too
                 if (await hellos.NextAsync(newSettingsEnd, token).ConfigureAwait(false) is { } hello)
                 {
-                    var outcome = IsNew(hello, crc) ? WifiSwitchOutcome.OnWifi : WifiSwitchOutcome.FellBack;
-                    AppLog.Info($"Wi-Fi save: {outcome} (config crc {hello.ConfigCrc:X8})");
-                    return outcome;
+                    if (!IsNew(hello, crc))
+                    {
+                        AppLog.Info($"Wi-Fi save: fell back (config crc {hello.ConfigCrc:X8})");
+                        return WifiSwitchOutcome.FellBack;
+                    }
+                    // A replaced transport cut the save short: this Hello is its confirmation.
+                    _runtime.ControllerConfig.AdoptConfirmed(blob);
+                    AppLog.Info("Wi-Fi save: on the new settings");
+                    return WifiSwitchOutcome.OnWifi;
                 }
 
                 // Not on the new settings within the window: the controller goes back to its old ones.
                 if (moved)
                 {
                     AppLog.Info($"Wi-Fi save: no answer on the new settings, back to port {oldPort}");
-                    await OnConfigThreadAsync(c => c.Udp.ListenPort = oldPort, token).ConfigureAwait(false);
+                    hellos.After(await OnConfigThreadAsync(c => c.Udp.ListenPort = oldPort, token).ConfigureAwait(false));
                 }
                 if (await hellos.NextAsync(end, token).ConfigureAwait(false) is { } late)
                 {
-                    var outcome = !moved && IsNew(late, crc) ? WifiSwitchOutcome.OnWifi : WifiSwitchOutcome.FellBack;
-                    AppLog.Info($"Wi-Fi save: {outcome} (config crc {late.ConfigCrc:X8})");
-                    return outcome;
+                    if (!moved && IsNew(late, crc))
+                    {
+                        _runtime.ControllerConfig.AdoptConfirmed(blob);
+                        AppLog.Info("Wi-Fi save: on the new settings");
+                        return WifiSwitchOutcome.OnWifi;
+                    }
+                    AppLog.Info($"Wi-Fi save: fell back (config crc {late.ConfigCrc:X8})");
+                    return WifiSwitchOutcome.FellBack;
                 }
             }
             AppLog.Info("Wi-Fi save: no answer over Wi-Fi");
@@ -248,39 +274,50 @@ public sealed class WifiSwitch : IDisposable
         finally { Exit(); }
     }
 
-    /// <summary>Switch to USB and turn Wi-Fi off (spec §10.2): switches Volco to USB at once, waits
-    /// for the controller's first Hello over USB (no timeout: until <paramref name="ct"/> or
-    /// <see cref="Dispose"/>), then saves the controller's config with Wi-Fi off. Volco stays on USB
-    /// whatever the outcome.</summary>
+    /// <summary>Switch to USB and turn Wi-Fi off (spec §10.2), from Wi-Fi only: switches Volco to
+    /// USB at once, waits for the controller's first Hello over USB (no timeout), then saves the
+    /// controller's config with Wi-Fi off. Volco stays on USB whatever the outcome. Not on Wi-Fi →
+    /// <see cref="WifiSwitchOutcome.Cancelled"/> and nothing changes. The wait ends with
+    /// Cancelled on <paramref name="ct"/>, <see cref="CancelTurnOff"/>, <see cref="Dispose"/>, or
+    /// when the transport is changed to anything but USB meanwhile (the user picks the simulator).</summary>
     public async Task<WifiSwitchOutcome> TurnOffAsync(CancellationToken ct = default)
     {
+        if (_runtime.Config.Config.Connection.Type != ConnectionType.Udp) return WifiSwitchOutcome.Cancelled;
         if (!TryEnter()) return WifiSwitchOutcome.Cancelled;
-        using var op = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposed.Token);
+        using var own = new CancellationTokenSource();
+        using var op = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposed.Token, own.Token);
         var token = op.Token;
-        SetTurnOffPending(true);
-        try
+        void OnConnectionChanged(object? s, EventArgs e)
         {
-            using var hellos = WatchHellos(ConnectionType.Serial);
             if (_runtime.Config.Config.Connection.Type != ConnectionType.Serial)
             {
-                AppLog.Info("Wi-Fi off: switching to USB; Wi-Fi goes off at the first USB Hello");
-                await OnConfigThreadAsync(c => c.Type = ConnectionType.Serial, token).ConfigureAwait(false);
-                await hellos.NextAsync(null, token).ConfigureAwait(false);
+                AppLog.Info("Wi-Fi off: the transport changed; Wi-Fi stays as it is");
+                Cancel(own);
             }
-            else if (!ConnectedOver(ConnectionType.Serial))
-            {
-                await hellos.NextAsync(null, token).ConfigureAwait(false);
-            }
-            SetTurnOffPending(false);
+        }
+        _runtime.Config.ConnectionConfigChanged += OnConnectionChanged;
+        SetTurnOff(own);
+        try
+        {
+            using var hellos = new HelloWatch(_runtime, ConnectionType.Serial, _time);
+            AppLog.Info("Wi-Fi off: switching to USB; Wi-Fi goes off at the first USB Hello");
+            hellos.After(await OnConfigThreadAsync(c => c.Type = ConnectionType.Serial, token).ConfigureAwait(false));
+            await hellos.NextAsync(null, token).ConfigureAwait(false);
+            _runtime.Config.ConnectionConfigChanged -= OnConnectionChanged;
+            SetTurnOff(null);
 
-            var mirror = _runtime.ControllerConfig.Mirror;
-            if (FromMirror(mirror, 0) is null && Decodes(mirror)) return WifiSwitchOutcome.BackOnUsb;   // already off
-            var udp = Decodes(mirror) ? ControllerConfigCodec.Decode(mirror!).EffectiveUdp().Clone() : new Udp();
-            udp.Enabled = false;
-            if (Blob(mirror, udp) is not { } blob) return WifiSwitchOutcome.SaveFailed;
+            var ready = await ReadySetupAsync(token).ConfigureAwait(false);
+            if (ready.Mirror is not { } mirror) return ready.Failure;
+            if (FromMirror(mirror, 0) is null) return WifiSwitchOutcome.BackOnUsb;   // already off
 
             AppLog.Info("Wi-Fi off: the controller answered over USB, saving with Wi-Fi off");
-            if (await BeginSaveAsync(blob, token).ConfigureAwait(false) is not { } run) return WifiSwitchOutcome.SaveFailed;
+            var begun = await BeginSaveAsync(m =>
+            {
+                var udp = ControllerConfigCodec.Decode(m).EffectiveUdp().Clone();
+                udp.Enabled = false;
+                return Blob(m, udp);
+            }, token).ConfigureAwait(false);
+            if (begun.Run is not { } run) return begun.Failure;
             var saved = await run.Save.WaitAsync(token).ConfigureAwait(false);
             return saved.Status == SaveStatus.Confirmed ? WifiSwitchOutcome.BackOnUsb : Failed(saved);
         }
@@ -291,7 +328,8 @@ public sealed class WifiSwitch : IDisposable
         }
         finally
         {
-            SetTurnOffPending(false);
+            _runtime.Config.ConnectionConfigChanged -= OnConnectionChanged;
+            SetTurnOff(null);
             Exit();
         }
     }
@@ -314,14 +352,12 @@ public sealed class WifiSwitch : IDisposable
     private static bool Decodes(byte[]? mirror) => ControllerBannerLogic.Decodes(mirror);
 
     /// <summary>The mirror with its Wi-Fi section replaced by <paramref name="udp"/>, encoded; null
-    /// when there is no mirror, it doesn't decode, or the result isn't a valid config (nothing is
-    /// sent then).</summary>
-    private static byte[]? Blob(byte[]? mirror, Udp udp)
+    /// when the result isn't a valid config (nothing is sent then).</summary>
+    private static byte[]? Blob(byte[] mirror, Udp udp)
     {
-        if (!Decodes(mirror)) return null;
         try
         {
-            var config = ControllerConfigCodec.Decode(mirror!);
+            var config = ControllerConfigCodec.Decode(mirror);
             config.Udp = udp;
             var v = ControllerConfigValidator.Validate(config, ChipInfo.Esp32);
             if (!v.IsOk)
@@ -347,17 +383,23 @@ public sealed class WifiSwitch : IDisposable
         return WifiSwitchOutcome.SaveFailed;
     }
 
-    /// <summary>Edits the connection config on the config thread and restarts the connection. Does
-    /// nothing once <paramref name="token"/> is cancelled, even if the edit was already posted.</summary>
-    private async Task OnConfigThreadAsync(Action<ConnectionConfig> edit, CancellationToken token)
+    /// <summary>Edits the connection config on the config thread and restarts the connection.
+    /// Returns <see cref="VolcoRuntime.TransportGeneration"/> as it was just before the edit:
+    /// the transports the edit brings are newer. Does nothing once <paramref name="token"/> is
+    /// cancelled, even if the edit was already posted.</summary>
+    private async Task<long> OnConfigThreadAsync(Action<ConnectionConfig> edit, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
+        long before = 0;
         await _configThread(() =>
         {
             if (token.IsCancellationRequested) return;
+            before = _runtime.TransportGeneration;
             edit(_runtime.Config.Config.Connection);
             _runtime.Config.RequestSave(connectionChanged: true);
         }).WaitAsync(token).ConfigureAwait(false);
+        token.ThrowIfCancellationRequested();
+        return before;
     }
 
     /// <summary>A save this switch owns, and when the controller accepted it (its OK: the
@@ -383,16 +425,40 @@ public sealed class WifiSwitch : IDisposable
         }
     }
 
-    /// <summary>Starts the save. While another config operation runs (the quiet read a Hello
-    /// starts, spec §10.3) it waits for it to end, up to <see cref="BusyWait"/>; null when it
-    /// doesn't.</summary>
-    private async Task<SaveRun?> BeginSaveAsync(byte[] blob, CancellationToken token)
+    /// <summary>Waits for a running config operation (the quiet read a Hello starts, which may
+    /// adopt the controller's Wi-Fi fallback into the mirror) to end, up to <see cref="BusyWait"/>,
+    /// then returns the mirror when the connected controller runs it.</summary>
+    private async Task<(byte[]? Mirror, WifiSwitchOutcome Failure)> ReadySetupAsync(CancellationToken token)
     {
         var service = _runtime.ControllerConfig;
-        var giveUp = _time.GetUtcNow() + BusyWait;
+        if (service.Operation != ConfigOperation.Idle && !await WaitForIdleAsync(service, _time.GetUtcNow() + BusyWait, token).ConfigureAwait(false))
+            return (null, WifiSwitchOutcome.SaveFailed);
+        var mirror = service.Mirror;
+        if (!Decodes(mirror))
+        {
+            AppLog.Info("Wi-Fi: Volco has no saved setup of this controller; nothing sent");
+            return (null, WifiSwitchOutcome.SaveFailed);
+        }
+        if (service.LastHello is not { ConfigState: ControllerConfigState.Stored } hello || hello.ConfigCrc != ControllerConfigCodec.Crc32(mirror!))
+        {
+            AppLog.Info("Wi-Fi: the controller's setup differs from Volco's saved copy; nothing sent");
+            return (null, WifiSwitchOutcome.DifferentSetup);
+        }
+        return (mirror, default);
+    }
+
+    /// <summary>Starts the save of <paramref name="build"/>(mirror) once <see cref="ReadySetupAsync"/>
+    /// allows it; an operation that starts in between (Busy) is waited out the same way.</summary>
+    private async Task<(SaveRun? Run, byte[]? Blob, WifiSwitchOutcome Failure)> BeginSaveAsync(Func<byte[], byte[]?> build, CancellationToken token)
+    {
+        var service = _runtime.ControllerConfig;
         while (true)
         {
             token.ThrowIfCancellationRequested();
+            var ready = await ReadySetupAsync(token).ConfigureAwait(false);
+            if (ready.Mirror is not { } mirror) return (null, null, ready.Failure);
+            if (build(mirror) is not { } blob) return (null, null, WifiSwitchOutcome.SaveFailed);
+
             var run = new SaveRun();
             void OnOperation(object? s, EventArgs e) => run.Check(service);
             service.OperationChanged += OnOperation;
@@ -402,13 +468,14 @@ public sealed class WifiSwitch : IDisposable
             {
                 service.OperationChanged -= OnOperation;
                 AppLog.Info("Wi-Fi: a config operation is running; the save waits for it");
-                if (!await WaitForIdleAsync(service, giveUp, token).ConfigureAwait(false)) return null;
+                if (!await WaitForIdleAsync(service, _time.GetUtcNow() + BusyWait, token).ConfigureAwait(false))
+                    return (null, null, WifiSwitchOutcome.SaveFailed);
                 continue;
             }
             run.Own(save);
             run.Check(service);
             _ = save.ContinueWith(_ => service.OperationChanged -= OnOperation, TaskScheduler.Default);
-            return run;
+            return (run, blob, default);
         }
     }
 
@@ -440,16 +507,16 @@ public sealed class WifiSwitch : IDisposable
         finally { service.OperationChanged -= OnOperation; }
     }
 
-    /// <summary>Collects the runtime's Hellos (this protocol version) that come while the current
-    /// transport is a <paramref name="type"/>, until disposed.</summary>
-    private HelloWatch WatchHellos(ConnectionType type) => new(_runtime, type, _time);
-
+    /// <summary>Collects the Hellos (this protocol version) that come over a transport of the
+    /// watched kind, from its creation until disposed; after <see cref="After"/>, only those of a
+    /// transport built after that start number count.</summary>
     private sealed class HelloWatch : IDisposable
     {
         private readonly VolcoRuntime _runtime;
         private readonly ConnectionType _type;
         private readonly TimeProvider _time;
-        private readonly Channel<HelloMessage> _hellos = Channel.CreateUnbounded<HelloMessage>(new UnboundedChannelOptions
+        private long _after;
+        private readonly Channel<TransportHello> _hellos = Channel.CreateUnbounded<TransportHello>(new UnboundedChannelOptions
         {
             SingleReader = true,
             AllowSynchronousContinuations = false,
@@ -460,17 +527,31 @@ public sealed class WifiSwitch : IDisposable
             _runtime = runtime;
             _type = type;
             _time = time;
-            _runtime.HelloReceived += OnHello;
+            _runtime.TransportHelloReceived += OnHello;
         }
 
-        private void OnHello(object? sender, HelloMessage hello)
+        /// <summary>From now on only transports with a start number above <paramref name="generation"/> count.</summary>
+        public void After(long generation) => Interlocked.Exchange(ref _after, generation);
+
+        private bool Counts(TransportHello h) => h.Generation > Interlocked.Read(ref _after);
+
+        private void OnHello(object? sender, TransportHello hello)
         {
-            // Raised synchronously for the current transport, so its kind is the Hello's.
-            if (hello.Version == ProtocolVersion.Current && _runtime.TransportType == _type) _hellos.Writer.TryWrite(hello);
+            if (hello.Hello.Version == ProtocolVersion.Current && hello.Type == _type && Counts(hello)) _hellos.Writer.TryWrite(hello);
         }
 
-        /// <summary>The next Hello, or null at <paramref name="deadline"/> (null: no deadline).</summary>
+        /// <summary>The next Hello that counts, or null at <paramref name="deadline"/> (null: no deadline).</summary>
         public async Task<HelloMessage?> NextAsync(DateTimeOffset? deadline, CancellationToken token)
+        {
+            while (true)
+            {
+                var next = await ReadAsync(deadline, token).ConfigureAwait(false);
+                if (next is null) return null;
+                if (Counts(next)) return next.Hello;   // queued before an After: skipped
+            }
+        }
+
+        private async Task<TransportHello?> ReadAsync(DateTimeOffset? deadline, CancellationToken token)
         {
             if (deadline is not { } end) return await _hellos.Reader.ReadAsync(token).ConfigureAwait(false);
             var remaining = end - _time.GetUtcNow();
@@ -487,7 +568,7 @@ public sealed class WifiSwitch : IDisposable
             }
         }
 
-        public void Dispose() => _runtime.HelloReceived -= OnHello;
+        public void Dispose() => _runtime.TransportHelloReceived -= OnHello;
     }
 
     /// <summary>Reports <see cref="WifiSwitchStep.WaitingForWifi"/> with the time left to
@@ -517,17 +598,19 @@ public sealed class WifiSwitch : IDisposable
         if (!_disposed.IsCancellationRequested) BusyChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void SetTurnOffPending(bool pending)
+    private void SetTurnOff(CancellationTokenSource? turnOff)
     {
-        if (Interlocked.Exchange(ref _turnOffPending, pending ? 1 : 0) == (pending ? 1 : 0)) return;
+        if (Interlocked.Exchange(ref _turnOff, turnOff) == turnOff) return;
         if (!_disposed.IsCancellationRequested) BusyChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static void Cancel(CancellationTokenSource? cts)
+    {
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException) { /* that operation has ended */ }
     }
 
     /// <summary>Cancels the running operation (a pending turn-off included). The transport is left
     /// as it is; nothing is edited afterwards.</summary>
-    public void Dispose()
-    {
-        try { _disposed.Cancel(); }
-        catch (ObjectDisposedException) { /* already disposed */ }
-    }
+    public void Dispose() => Cancel(_disposed);
 }

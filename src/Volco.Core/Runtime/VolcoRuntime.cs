@@ -12,6 +12,10 @@ using Volco.Core.Scripts;
 
 namespace Volco.Core.Runtime;
 
+/// <summary>A Hello and the transport it came over: its kind and its start number
+/// (<see cref="VolcoRuntime.TransportGeneration"/>).</summary>
+public sealed record TransportHello(HelloMessage Hello, ConnectionType Type, long Generation);
+
 /// <summary>
 /// Everything Volco does that is not a window: transport construction and restart, inbound
 /// message routing to <see cref="SliderProcessor"/> / <see cref="ButtonPressDetector"/>,
@@ -54,9 +58,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// programs and scripts (custom-actions spec §7). Written with the transport's publish.</summary>
     private IControllerConnection? _serialTransport;
 
-    /// <summary>The kind of transport each start built, with it: <see cref="TransportType"/>
-    /// counts only while that transport is still the published one.</summary>
-    private (IControllerConnection Connection, ConnectionType Type)? _transportKind;
+    /// <summary>The kind and start number of each transport a start built (<see cref="TransportType"/>,
+    /// <see cref="TransportHelloReceived"/>).</summary>
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<IControllerConnection, TransportInfo> _transportInfo = new();
+    private long _transportGeneration;
+
+    private sealed record TransportInfo(ConnectionType Type, long Generation);
 
     /// <summary>Per button input: whether its last press frame came over USB serial. Read when the
     /// detector fires the gesture (after the release, maybe after a double-press wait).</summary>
@@ -684,16 +691,15 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// <summary>The kind of the current transport; null when there is none. A Hello handler reads
     /// it to tell which transport the Hello came over (the Wi-Fi switch).</summary>
     public ConnectionType? TransportType
-    {
-        get
-        {
-            var current = Volatile.Read(ref _connection);
-            lock (_transportKindGate)
-                return current is not null && _transportKind is { } k && ReferenceEquals(k.Connection, current) ? k.Type : null;
-        }
-    }
+        => Volatile.Read(ref _connection) is { } current && _transportInfo.TryGetValue(current, out var info) ? info.Type : null;
 
-    private readonly object _transportKindGate = new();
+    /// <summary>The start number of the newest transport built so far (0 before the first). A
+    /// transport built after a config edit has a higher one than this read just before the edit.</summary>
+    public long TransportGeneration => Interlocked.Read(ref _transportGeneration);
+
+    /// <summary>Every <see cref="HelloReceived"/>, with the kind and start number of the transport
+    /// it came over. Any thread.</summary>
+    public event EventHandler<TransportHello>? TransportHelloReceived;
 
     /// <summary>The clock the runtime's timers run on (<see cref="VolcoRuntimeOptions.Time"/>).</summary>
     public TimeProvider Time => _options.Time;
@@ -1110,7 +1116,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         }
         // Before the publish: a frame from the new transport is never judged against the old kind.
         Volatile.Write(ref _serialTransport, config.Type == ConnectionType.Serial ? connection : null);
-        lock (_transportKindGate) _transportKind = (connection, config.Type);
+        _transportInfo.AddOrUpdate(connection, new TransportInfo(config.Type, Interlocked.Increment(ref _transportGeneration)));
 
         // Publish. Anything displaced is a transport a concurrent StartConnection published in
         // the meantime; by the ownership rule, removing it makes it ours to retire.
@@ -1437,6 +1443,8 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                     AppLog.Info($"Hello: v{hello.Version}, {hello.Chip}, firmware '{hello.FirmwareVersion}', config {hello.ConfigState} " +
                                 $"crc {hello.ConfigCrc:X8}, {hello.SliderCount} sliders, buttons [{string.Join(",", hello.Buttons)}]");
                     HelloReceived?.Invoke(this, hello);
+                    if (TransportHelloReceived is { } th && _transportInfo.TryGetValue((IControllerConnection)sender!, out var info))
+                        th(this, new TransportHello(hello, info.Type, info.Generation));
                     if (hello.Version == ProtocolVersion.Current)
                     {
                         QueryCalibrations(hello.SliderCount);

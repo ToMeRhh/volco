@@ -492,6 +492,20 @@ public sealed class ControllerConfigService : IDisposable
         RaiseOperationChanged();
     }
 
+    /// <summary>A save the transport replacement cut short (the Wi-Fi switch moves Volco's listen
+    /// port when the controller accepts the write) is confirmed by a later Hello: the mirror becomes
+    /// <paramref name="blob"/> when the last Hello runs it. False, and nothing changes, otherwise.</summary>
+    internal bool AdoptConfirmed(byte[] blob)
+    {
+        lock (_gate)
+        {
+            if (_disposed || _lastHello is not { ConfigState: ControllerConfigState.Stored } h
+                || h.ConfigCrc != ControllerConfigCodec.Crc32(blob)) return false;
+        }
+        SetMirror(blob);
+        return true;
+    }
+
     private void SetMirror(byte[] blob)
     {
         _config.Config.ControllerConfigBlob = Convert.ToBase64String(blob);

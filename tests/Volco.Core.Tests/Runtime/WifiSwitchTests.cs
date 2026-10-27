@@ -241,8 +241,9 @@ public sealed class WifiSwitchTests : IDisposable
     [Fact]
     public async Task SaveWaitsOutTheQuietRead()
     {
-        // A Hello whose CRC differs from the mirror starts the quiet fallback read: the save
-        // started right after it waits for the read instead of failing as Busy.
+        // A Hello whose CRC differs from the mirror only in Wi-Fi (the controller fell back)
+        // starts the quiet read: the save started right after it waits for the read, which adopts
+        // the controller's config, instead of failing as Busy.
         Greet(Last, ControllerConfigCodec.Crc32(WifiOnHome));
         await ConfigServiceKit.Until(() => _runtime.ControllerConfig.Operation == ConfigOperation.Reading);
         var run = _switch.SaveAndSwitchAsync(Office);
@@ -250,12 +251,30 @@ public sealed class WifiSwitchTests : IDisposable
         Assert.Equal(0, Writes(Last));
 
         var read = Last.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87);
-        foreach (var chunk in ConfigServiceKit.Chunks(read[3], WifiOff)) Last.RaiseMessage(chunk);
+        foreach (var chunk in ConfigServiceKit.Chunks(read[3], WifiOnHome)) Last.RaiseMessage(chunk);
 
         await AnswerWrite(Last, helloCrc: CrcOf(Office));
         await ConfigServiceKit.Until(() => Count == 2);
         Greet(Last, CrcOf(Office));
         Assert.Equal(WifiSwitchOutcome.OnWifi, await Within(run));
+    }
+
+    /// <summary>A board whose setup isn't the mirror's (another controller, or one changed
+    /// elsewhere): the read finds more than Wi-Fi differs, so nothing is adopted or sent.</summary>
+    [Fact]
+    public async Task SwitchUnderAnotherSetupSendsNothing()
+    {
+        var other = ControllerConfigCodec.Encode(new ControllerConfig { Screens = new ScreenBehaviour { Brightness = 50 } });
+        Greet(Last, ControllerConfigCodec.Crc32(other));
+        await ConfigServiceKit.Until(() => _runtime.ControllerConfig.Operation == ConfigOperation.Reading);
+        var run = _switch.SaveAndSwitchAsync(Office);
+        var read = Last.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87);
+        foreach (var chunk in ConfigServiceKit.Chunks(read[3], other)) Last.RaiseMessage(chunk);
+
+        Assert.Equal(WifiSwitchOutcome.DifferentSetup, await Within(run));
+        Assert.Equal(0, Writes(Last));
+        Assert.Equal(Convert.ToBase64String(WifiOff), _config.Config.ControllerConfigBlob);
+        Assert.Equal(ConnectionType.Serial, Connection.Type);
     }
 
     [Fact]
@@ -323,6 +342,26 @@ public sealed class WifiSwitchTests : IDisposable
         Assert.Equal(WifiSwitchOutcome.OnWifi, await Within(run));
         Assert.Equal(ConnectionType.Udp, t.Connection.Type);
         Assert.Equal(12400, t.Connection.Udp.ListenPort);
+        Assert.Equal(crc, ControllerConfigCodec.Crc32(t._runtime.ControllerConfig.Mirror!));   // the cut-short save, confirmed
+    }
+
+    [Fact]
+    public async Task OverWifiIgnoresAHelloOnTheOldPort()
+    {
+        using var t = OnWifi();
+        var crc = CrcOf(Office);
+        var run = t._switch.SaveOverWifiAsync(Office);
+        await AnswerWrite(t.Last);
+        await ConfigServiceKit.Until(() => t.Connection.Udp.ListenPort == 12400);
+        Assert.Equal(1, t.Count);                        // the restart waits for the debounce
+        var old = t.Last;
+        old.RaiseMessage(StoredHello(crc));               // a stale Hello on the old listener
+
+        await ConfigServiceKit.Until(() => t.Count == 2);
+        await ConfigServiceKit.Settle();
+        Assert.False(run.IsCompleted);
+        Greet(t.Last, ControllerConfigCodec.Crc32(WifiOnHome));
+        Assert.Equal(WifiSwitchOutcome.FellBack, await Within(run));
     }
 
     [Fact]
@@ -396,6 +435,75 @@ public sealed class WifiSwitchTests : IDisposable
         Assert.Equal(WifiSwitchOutcome.BackOnUsb, await Within(run));
         Assert.False(t._switch.TurnOffPending);
         Assert.False(ControllerConfigCodec.Decode(t._runtime.ControllerConfig.Mirror!).Udp.Enabled);
+        Assert.Equal(ConnectionType.Serial, t.Connection.Type);
+    }
+
+    [Fact]
+    public async Task TurnOffUnderAnotherSetupSendsNothing()
+    {
+        using var t = OnWifi();
+        var run = t._switch.TurnOffAsync();
+        await ConfigServiceKit.Until(() => t.Count == 2);
+        var other = ControllerConfigCodec.Encode(new ControllerConfig { Screens = new ScreenBehaviour { Brightness = 50 } });
+        Greet(t.Last, ControllerConfigCodec.Crc32(other));   // another board on USB
+        await ConfigServiceKit.Until(() => t.Last.SentFrames.Any(f => f.Length > 3 && f[2] == 0x87));
+        var read = t.Last.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87);
+        foreach (var chunk in ConfigServiceKit.Chunks(read[3], other)) t.Last.RaiseMessage(chunk);
+
+        Assert.Equal(WifiSwitchOutcome.DifferentSetup, await Within(run));
+        Assert.Equal(0, Writes(t.Last));
+        Assert.Equal(ConnectionType.Serial, t.Connection.Type);
+    }
+
+    [Fact]
+    public async Task TurnOffOnlyFromWifi()
+    {
+        // From USB (or the simulator) there is no Wi-Fi to turn off: nothing changes.
+        Greet(Last, ControllerConfigCodec.Crc32(WifiOff));
+        Assert.Equal(WifiSwitchOutcome.Cancelled, await Within(_switch.TurnOffAsync()));
+        Assert.False(_switch.TurnOffPending);
+        _config.Config.Connection.Type = ConnectionType.WebSocket;
+        Assert.Equal(WifiSwitchOutcome.Cancelled, await Within(_switch.TurnOffAsync()));
+        Assert.Equal(ConnectionType.WebSocket, Connection.Type);
+        await Task.Delay(500);
+        Assert.Equal(1, Count);
+        Assert.Equal(0, Writes(Last));
+    }
+
+    [Fact]
+    public async Task PickingTheSimulatorDropsAPendingTurnOff()
+    {
+        using var t = OnWifi();
+        var run = t._switch.TurnOffAsync();
+        await ConfigServiceKit.Until(() => t.Count == 2);
+
+        t.Connection.Type = ConnectionType.WebSocket;     // the user picks the simulator
+        t._config.RequestSave(connectionChanged: true);
+        Assert.Equal(WifiSwitchOutcome.Cancelled, await Within(run));
+        Assert.False(t._switch.TurnOffPending);
+
+        t.Connection.Type = ConnectionType.Serial;        // then USB again
+        t._config.RequestSave(connectionChanged: true);
+        await ConfigServiceKit.Until(() => t.Count == 4);
+        Greet(t.Last, ControllerConfigCodec.Crc32(WifiOnHome));
+        await ConfigServiceKit.Settle();
+        Assert.Equal(0, Writes(t.Last));
+    }
+
+    [Fact]
+    public async Task CancelTurnOffDropsIt()
+    {
+        using var t = OnWifi();
+        var run = t._switch.TurnOffAsync();
+        await ConfigServiceKit.Until(() => t.Count == 2);
+        Assert.True(t._switch.TurnOffPending);
+        t._switch.CancelTurnOff();
+
+        Assert.Equal(WifiSwitchOutcome.Cancelled, await Within(run));
+        Assert.False(t._switch.TurnOffPending);
+        Greet(t.Last, ControllerConfigCodec.Crc32(WifiOnHome));
+        await ConfigServiceKit.Settle();
+        Assert.Equal(0, Writes(t.Last));
         Assert.Equal(ConnectionType.Serial, t.Connection.Type);
     }
 
