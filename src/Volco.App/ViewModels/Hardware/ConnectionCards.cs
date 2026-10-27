@@ -253,6 +253,7 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
     public const string NoAnswerText = "The controller didn't answer over Wi-Fi. Check the network name and password.";
     public const string FellBackText = "The controller couldn't use the new Wi-Fi settings and went back to the old ones. Check the network name and password.";
     internal const string NotOnWifiText = "The controller isn't connected over Wi-Fi.";
+    internal const string TurnOffPendingText = "Waiting to turn the controller's Wi-Fi off over USB.";
 
     private string? _problem;   // the fields' problems, from the validator
     private string? _outcome;   // the last save's failure
@@ -272,6 +273,7 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
         _selectedAddress = addresses.FirstOrDefault(a => saved.HasPcIp && a.Value == saved.PcIp) ?? addresses.FirstOrDefault();
         SaveCommand = new RelayCommand(Save, () => CanSave);
         TurnOffCommand = new RelayCommand(() => Dialog.TurnWifiOff?.Invoke(), () => Dialog.WifiSwitch is { IsBusy: false });
+        CancelTurnOffCommand = new RelayCommand(() => Dialog.WifiSwitch?.CancelTurnOff(), () => TurnOffPending);
         TogglePortsCommand = new RelayCommand(() => PortsOpen = !PortsOpen);
         Validate();
     }
@@ -331,7 +333,9 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
     {
         get
         {
-            if (Dialog.WifiSwitch is not { } wifi || wifi.IsBusy) return null;
+            if (Dialog.WifiSwitch is not { } wifi) return null;
+            if (wifi.TurnOffPending) return TurnOffPendingText;
+            if (wifi.IsBusy) return null;
             if (MirrorBytes() is null) return "Set up the controller first; its Wi-Fi settings are saved with its setup.";
             if (OnWifi) return Connection.IsConnected ? null : NotOnWifiText;
             return Connection.ConnectionType == ConnectionType.Serial && Connection.IsConnected ? null : UsbFirstText;
@@ -339,6 +343,13 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
     }
 
     public bool HasDisabledReason => DisabledReason is not null;
+
+    /// <summary>A turn-off of the controller's Wi-Fi waits for its first USB Hello (Switch to USB from
+    /// Wi-Fi): the card says so, with Cancel.</summary>
+    public bool TurnOffPending => Dialog.WifiSwitch is { TurnOffPending: true };
+
+    /// <summary>Cancel: drops the pending turn-off (<see cref="WifiSwitch.CancelTurnOff"/>); Wi-Fi stays as it is.</summary>
+    public IRelayCommand CancelTurnOffCommand { get; }
 
     /// <summary>The fields' problems, else the last save's failure; null for none.</summary>
     public string? Error => _problem ?? _outcome;
@@ -399,6 +410,8 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
         OnPropertyChanged(nameof(HasError));
         OnPropertyChanged(nameof(DisabledReason));
         OnPropertyChanged(nameof(HasDisabledReason));
+        OnPropertyChanged(nameof(TurnOffPending));
+        CancelTurnOffCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanSave));
         OnPropertyChanged(nameof(ButtonLabel));
         OnPropertyChanged(nameof(ShowsNote));

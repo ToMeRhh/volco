@@ -411,6 +411,40 @@ public sealed class ConnectionDialogTests : IDisposable
         Assert.Equal(ConnectionType.Serial, s.Rig.Config.Config.Connection.Type);
     }
 
+    /// <summary>A turn-off waiting for the USB Hello holds the Wi-Fi card's save: the card says why,
+    /// and its Cancel drops the turn-off.</summary>
+    [AvaloniaFact]
+    public void PendingTurnOffShowsOnTheWifiCardWithCancel()
+    {
+        using var s = Opened(mirror: DiyWifiBlob, type: ConnectionType.Udp);
+        var udp = s.Rig.Connection!;
+        Click(s, "UsbCardHeader");
+        Click(s, "SwitchToUsbButton");
+        Click(s, "ConfirmSwitchButton");
+        Until(s.Window, () => s.Rig.Connection != udp && s.Rig.Connection!.Config.Type == ConnectionType.Serial);
+        Until(s.Window, () => s.Dialog.UsbCard.IsInUse);
+
+        Click(s, "WifiCardHeader");
+        Assert.False(In<Button>(s.Window, "WifiSaveButton").IsEffectivelyEnabled);
+        Assert.Equal("Waiting to turn the controller's Wi-Fi off over USB.", In<TextBlock>(s.Window, "WifiDisabledReason").Text);
+        Assert.True(Visible(s, "WifiDisabledReason"));
+        Assert.Equal("Cancel", In<Button>(s.Window, "CancelTurnOffButton").Content);
+
+        Click(s, "CancelTurnOffButton");
+        Until(s.Window, () => !s.Dialog.WifiCard.TurnOffPending);
+        Assert.False(Visible(s, "CancelTurnOffButton"));
+        Assert.Equal(UsbFirst, s.Dialog.WifiCard.DisabledReason);   // no USB Hello yet
+
+        // The controller answers over USB: nothing is saved, Wi-Fi stays on.
+        var usb = s.Rig.Connection!;
+        Greet(usb, ControllerConfigCodec.Crc32(DiyWifiBlob));
+        Until(s.Window, () => s.Vm.Connection.IsConnected);
+        Settle(s.Window);
+        Assert.DoesNotContain(usb.SentFrames, IsWrite);
+        Assert.False(s.Vm.Hardware.Status.Progress.IsOpen);
+        Assert.Null(s.Dialog.WifiCard.DisabledReason);
+    }
+
     // ── Wi-Fi ────────────────────────────────────────────────────────────────────────────────
 
     [AvaloniaFact]

@@ -159,6 +159,9 @@
                     Command="{Binding SaveCommand}"/>
             <TextBlock Name="WifiDisabledReason" Classes="Caption" TextWrapping="Wrap" Text="{Binding DisabledReason}"
                        IsVisible="{Binding HasDisabledReason}"/>
+            <!-- A turn-off waiting for the USB Hello holds the save: it can be dropped from here -->
+            <Button Name="CancelTurnOffButton" HorizontalAlignment="Left" Content="Cancel"
+                    Command="{Binding CancelTurnOffCommand}" IsVisible="{Binding TurnOffPending}"/>
             <!-- On USB with Wi-Fi on in the controller's setup: it can be turned off from here -->
             <Button Name="TurnWifiOffButton" HorizontalAlignment="Left" Content="Turn Wi-Fi off"
                     Command="{Binding TurnOffCommand}" IsVisible="{Binding ShowsTurnOff}"/>
