@@ -54,6 +54,10 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// programs and scripts (custom-actions spec §7). Written with the transport's publish.</summary>
     private IControllerConnection? _serialTransport;
 
+    /// <summary>The kind of transport each start built, with it: <see cref="TransportType"/>
+    /// counts only while that transport is still the published one.</summary>
+    private (IControllerConnection Connection, ConnectionType Type)? _transportKind;
+
     /// <summary>Per button input: whether its last press frame came over USB serial. Read when the
     /// detector fires the gesture (after the release, maybe after a double-press wait).</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _pressOverUsb = new();
@@ -677,6 +681,23 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// fact only: the UI reads <see cref="LinkStatus"/>.</summary>
     public TransportStatus TransportStatus => Volatile.Read(ref _connection)?.Status ?? TransportStatus.Closed;
 
+    /// <summary>The kind of the current transport; null when there is none. A Hello handler reads
+    /// it to tell which transport the Hello came over (the Wi-Fi switch).</summary>
+    public ConnectionType? TransportType
+    {
+        get
+        {
+            var current = Volatile.Read(ref _connection);
+            lock (_transportKindGate)
+                return current is not null && _transportKind is { } k && ReferenceEquals(k.Connection, current) ? k.Type : null;
+        }
+    }
+
+    private readonly object _transportKindGate = new();
+
+    /// <summary>The clock the runtime's timers run on (<see cref="VolcoRuntimeOptions.Time"/>).</summary>
+    public TimeProvider Time => _options.Time;
+
     /// <summary>The address the controller talks from, when the transport knows one (UDP).</summary>
     public string? PeerAddress => Volatile.Read(ref _connection)?.PeerAddress;
 
@@ -1089,6 +1110,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         }
         // Before the publish: a frame from the new transport is never judged against the old kind.
         Volatile.Write(ref _serialTransport, config.Type == ConnectionType.Serial ? connection : null);
+        lock (_transportKindGate) _transportKind = (connection, config.Type);
 
         // Publish. Anything displaced is a transport a concurrent StartConnection published in
         // the meantime; by the ownership rule, removing it makes it ours to retire.

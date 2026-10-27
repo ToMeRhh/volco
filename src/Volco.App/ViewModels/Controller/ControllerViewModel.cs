@@ -38,11 +38,18 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     private readonly bool _ownsConnection;
 
+    /// <summary>The Connection dialog's Wi-Fi operations (spec §10.3); one per run, owned by the
+    /// composition root. Null without one (tests).</summary>
+    public WifiSwitch? Wifi { get; }
+
     /// <param name="connection">The window's connection view model, shared with the sidebar's
     /// status; the page makes (and disposes) its own when none is given.</param>
+    /// <param name="wifi">The run's Wi-Fi switch; the page never disposes it.</param>
     public ControllerViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui,
-                               FirmwareService? firmware = null, ConnectionViewModel? connection = null)
+                               FirmwareService? firmware = null, ConnectionViewModel? connection = null,
+                               WifiSwitch? wifi = null)
     {
+        Wifi = wifi;
         _config = config;
         _runtime = runtime;
         _service = runtime.ControllerConfig;
