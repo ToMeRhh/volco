@@ -142,7 +142,7 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
         else if (IsAskingPort)
         {
             IsAskingPort = false;   // answered (the run opens the dialog again) or given up
-            if (!_controller.IsFirmwareRunning) Hide();
+            if (!_controller.IsFirmwareRunning && !_controller.IsSaving) Hide();
         }
     }
 
@@ -164,6 +164,7 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
     {
         var now = Running();
         if (now == Operation.None) return;   // the end is the operation's finished event
+        IsAskingPort = false;   // an operation that runs took the dialog over
         if (!IsRunning || now != _operation)
         {
             _generation++;

@@ -91,9 +91,10 @@ public sealed partial class ControllerViewModel
     {
         var run = _pendingFirmware;
         if (run is null || choice?.Port is not { } port) return;
+        if (!CanUseFirmware) { CancelFirmwarePort(); return; }
         _pendingFirmware = null;
+        run(port);                    // the run's start takes the dialog over: no close and reopen
         NeedsFirmwarePort = false;
-        run(port);
     }
 
     /// <summary>The user gave up on the question: nothing runs.</summary>
@@ -104,12 +105,19 @@ public sealed partial class ControllerViewModel
     }
 
     /// <summary>Asks which port when <see cref="FirmwarePort"/> is unknown; with no serial port at
-    /// all there is nothing to ask about and the operation doesn't run.</summary>
-    private void AskFirmwarePort(Action<string> run)
+    /// all it ends at once with a result saying so.</summary>
+    private void AskFirmwarePort(LinkActivity activity, Action<string> run)
     {
         if (!CanUseFirmware || NeedsFirmwarePort) return;
         var ports = _runtime.ListSerialPorts();
-        if (ports.Count == 0) return;
+        if (ports.Count == 0)
+        {
+            // Under Automatic this is the ordinary "not plugged in": say so in the progress dialog.
+            if (!BeginFirmware(activity)) return;
+            EndFirmware("No USB port found. Plug the controller in.", LinkTone.Warning);
+            FirmwareFinished?.Invoke(this, EventArgs.Empty);
+            return;
+        }
         FirmwarePortChoices = ports.Select(p => new PortChoice(p.Name, ConnectionViewModel.PortLabel(p))).ToList();
         _pendingFirmware = run;
         NeedsFirmwarePort = true;
@@ -251,7 +259,7 @@ public sealed partial class ControllerViewModel
     private async Task RunProbe(string? port = null)
     {
         port ??= FirmwarePort;
-        if (port is null) { AskFirmwarePort(p => _ = RunProbe(p)); return; }
+        if (port is null) { AskFirmwarePort(LinkActivity.CheckingFirmware, p => _ = RunProbe(p)); return; }
         if (!BeginFirmware(LinkActivity.CheckingFirmware)) return;
         var outcome = await _firmware!.ProbeAsync(port, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
@@ -273,7 +281,7 @@ public sealed partial class ControllerViewModel
     {
         ConfirmInstallPending = false;
         port ??= FirmwarePort;
-        if (port is null) { AskFirmwarePort(p => _ = RunFlash(mode, p)); return; }
+        if (port is null) { AskFirmwarePort(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware, p => _ = RunFlash(mode, p)); return; }
         if (!BeginFirmware(mode == FlashMode.Install ? LinkActivity.InstallingFirmware : LinkActivity.UpdatingFirmware)) return;
         var outcome = await _firmware!.FlashAsync(port, mode, FirmwareProgressReporter(), _firmwareCts!.Token).ConfigureAwait(false);
         _ui.Post(() =>
@@ -292,6 +300,9 @@ public sealed partial class ControllerViewModel
 
     private void RefreshFirmware()
     {
+        // The question is only valid while the page could still act on it (a save, a test or a
+        // connection change took the port away).
+        if (NeedsFirmwarePort && !CanUseFirmware) CancelFirmwarePort();
         OnPropertyChanged(nameof(CanUseFirmware));
         InstallFirmwareCommand.NotifyCanExecuteChanged();
     }

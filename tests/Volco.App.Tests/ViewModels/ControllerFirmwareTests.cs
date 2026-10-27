@@ -393,7 +393,7 @@ public sealed class ControllerFirmwareTests : IDisposable
         vm.ConfirmInstallCommand.Execute(null);
         Assert.True(vm.NeedsFirmwarePort);
         vm.ChooseFirmwarePortCommand.Execute(vm.FirmwarePortChoices[1]);
-        Until(() => _autoFlasher!.Calls.Count == 1);   // the Hello after the flash isn't needed here
+        Until(() => rig.Config.Config.Connection.Serial.LastPort == "COM2" && _autoFlasher!.Calls.Count == 1);   // the Hello after the flash isn't needed here
         Assert.Equal("flash COM2 Install", _autoFlasher!.Calls.Single());
         Assert.Equal("COM2", rig.Config.Config.Connection.Serial.LastPort);
         Assert.Equal("", rig.Config.Config.Connection.Serial.ComPort);
@@ -416,6 +416,58 @@ public sealed class ControllerFirmwareTests : IDisposable
         Assert.False(dialog.IsOpen);
         Assert.False(dialog.IsAskingPort);
         Assert.False(vm.NeedsFirmwarePort);
+        Assert.Empty(_autoFlasher!.Calls);
+    }
+
+    [Fact]
+    public void NoSerialPorts_EndsWithAVisibleResult()
+    {
+        using var rig = AutomaticRig();
+        var vm = AutomaticVm(rig);
+        using var dialog = new Volco.App.ViewModels.Hardware.ProgressDialogViewModel(vm, () => { });
+        vm.CheckFirmwareCommand.Execute(null);
+        Assert.False(vm.NeedsFirmwarePort);
+        Assert.Equal("No USB port found. Plug the controller in.", vm.FirmwareMessage);
+        Assert.Equal(LinkTone.Warning, vm.FirmwareMessageTone);
+        Assert.True(dialog.IsOpen);
+        Assert.True(dialog.IsDone);
+        Assert.Equal("No USB port found. Plug the controller in.", dialog.ResultText);
+        Assert.Empty(_autoFlasher!.Calls);
+    }
+
+    [Fact]
+    public void ConnectionChangingWhileAsking_CancelsTheQuestion()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM1", "", 0, 0), new SerialPortDescription("COM2", "", 0, 0));
+        var vm = AutomaticVm(rig);
+        using var dialog = new Volco.App.ViewModels.Hardware.ProgressDialogViewModel(vm, () => { });
+        vm.CheckFirmwareCommand.Execute(null);
+        Assert.True(dialog.IsAskingPort);
+        var choice = vm.FirmwarePortChoices[0];
+
+        rig.Config.Config.Connection.Type = ConnectionType.WebSocket;
+        rig.Config.RequestSave(connectionChanged: true);
+        Until(() => !vm.NeedsFirmwarePort);
+        Assert.False(dialog.IsOpen);
+        Assert.False(dialog.IsAskingPort);
+        vm.ChooseFirmwarePortCommand.Execute(choice);   // stale: nothing runs
+        Assert.Empty(_autoFlasher!.Calls);
+    }
+
+    [Fact]
+    public void TestStartingWhileAsking_CancelsTheQuestion()
+    {
+        using var rig = AutomaticRig(new SerialPortDescription("COM1", "", 0, 0), new SerialPortDescription("COM2", "", 0, 0));
+        var vm = AutomaticVm(rig);
+        using var dialog = new Volco.App.ViewModels.Hardware.ProgressDialogViewModel(vm, () => { });
+        vm.CheckFirmwareCommand.Execute(null);
+        Assert.True(dialog.IsAskingPort);
+        var choice = vm.FirmwarePortChoices[0];
+
+        vm.IsTesting = true;   // a test (or a save) took over: the page can't run firmware now
+        Assert.False(vm.NeedsFirmwarePort);
+        Assert.False(dialog.IsAskingPort);
+        vm.ChooseFirmwarePortCommand.Execute(choice);
         Assert.Empty(_autoFlasher!.Calls);
     }
 }
