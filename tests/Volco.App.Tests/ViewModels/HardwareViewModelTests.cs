@@ -533,11 +533,23 @@ public sealed class HardwareViewModelTests : IDisposable
         Assert.Equal(title, progress.Title);
         Assert.Equal(result, progress.ResultText);
 
+        // A good result may close itself at once (SavedHold), so what it showed is recorded.
+        var shown = Record(progress);
         progress.Close();
-        Until(() => progress.IsOpen);
-        Assert.Equal("Turning Wi-Fi off", progress.Title);
-        Assert.Equal("Saved. The controller's Wi-Fi is off.", progress.ResultText);
+        Until(() => { lock (shown) return shown.Contains(("Turning Wi-Fi off", "Saved. The controller's Wi-Fi is off.")); });
         Assert.Equal(LinkTone.Good, progress.ResultTone);
+    }
+
+    /// <summary>Each result the progress dialog shows, with its title.</summary>
+    private static List<(string Title, string? Result)> Record(ProgressDialogViewModel progress)
+    {
+        var shown = new List<(string, string?)>();
+        progress.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ProgressDialogViewModel.ResultText) && progress.ResultText is { } r)
+                lock (shown) shown.Add((progress.Title, r));
+        };
+        return shown;
     }
 
     /// <summary>The CRC of the last config write burst's blob.</summary>
@@ -570,6 +582,7 @@ public sealed class HardwareViewModelTests : IDisposable
         _ui.RunAll();
         Assert.Equal("Updating firmware", progress.Title);
 
+        var shown = Record(progress);
         progress.Close();
         Until(() => progress.IsOpen);
         Assert.Equal("Turning Wi-Fi off", progress.Title);
@@ -577,8 +590,7 @@ public sealed class HardwareViewModelTests : IDisposable
 
         Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Ok, 0xFF, 0xFF));
         Conn.RaiseMessage(Hello(ControllerConfigState.Stored, WrittenCrc()));
-        Until(() => progress.IsDone || !progress.IsOpen);
-        Assert.Equal("Saved. The controller's Wi-Fi is off.", progress.ResultText);
+        Until(() => { lock (shown) return shown.Contains(("Turning Wi-Fi off", "Saved. The controller's Wi-Fi is off.")); });
     }
 
     [Fact]
