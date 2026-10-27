@@ -12,6 +12,7 @@
 #define KEEPALIVE_MS 1000        // send Alive when nothing else was sent for this long
 #define COMMIT_FALLBACK_MS 500   // apply held updates if a Begin's Commit never arrives
 #define WIFI_RETRY_MS 10000      // at most this often, re-join a Wi-Fi that failed or dropped
+constexpr uint32_t WIFI_FALLBACK_MS = 30000;  // new Wi-Fi settings need a UDP frame from the PC this soon after boot, else the old ones return
 
 #define SLIDER_SEED_READS 8      // reads averaged for each slider's starting value at boot
 #define SLIDER_ENDS_SAVE_MS 5000 // store the learned slider ends at most this often while learning (flash wear)
