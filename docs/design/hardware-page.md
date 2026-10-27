@@ -299,9 +299,13 @@ Save and switch (Volco on USB):
 - **Failed** means either case (user, 2026-10-26): it couldn't join the network, or it joined but no frame from Volco came. Either way, if no such frame comes within the fallback window (30 s from boot, my call), it writes the kept Wi-Fi section back into its stored config (the rest of the config unchanged) and reboots on it. USB keeps working throughout.
 - A write that turns Wi-Fi off, or a write while Wi-Fi was off, keeps no copy.
 - After a fallback the controller's config CRC differs from Volco's mirror. On the next Hello, Volco reads the controller's config and adopts it into the mirror without asking, when only the Wi-Fi section differs (my call; anything else is the usual different-setup banner).
-- The simulator's `config.js` does the same, so the flow can be tried without hardware.
+- ~~The simulator's `config.js` does the same, so the flow can be tried without hardware.~~ (dropped at planning, 2026-10-26: the simulator speaks only WebSocket, so there is no UDP to fall back on.)
 
 The draft-based Wi-Fi fields go: Controller settings › Wi-Fi is now a row that opens this card.
+
+**Two later rulings** (user, 2026-10-26):
+- **Turn Wi-Fi off** is a button on the Wi-Fi card while Volco is on USB, with no confirmation: it saves the controller config with Wi-Fi off (the same save as the turn-off in §10.2), which also drops the controller's kept copy.
+- **A provisional write keeps the existing kept copy.** The kept copy is always settings a PC answered on: a write made while the settings are still provisional leaves the copy as it is, unless the write turns Wi-Fi off or goes back to the copy, which drops it.
 
 ### 10.4 Simulator
 
@@ -375,7 +379,7 @@ Separate PRs, in this order, each green on CI:
 1. **The shared stage.** Controls' drawing moves into the window's stage; Controls looks and behaves the same; Hardware still shows today's page beside it.
 2. **The Hardware page on the stage:** card and ⋯ menu, tile captions, inspector with the pin dropdown (no Detect yet), bus chips, save bar, Controller settings, the chooser and Compare, test on the drawing, live input, the crossfade. Today's page goes. The Connection section moves into the dialog with today's fields (port list without Automatic).
 3. **#108:** Controls › Response loses Smoothing (no schema bump; Response itself was removed later, `slider-feel-settings.md`).
-4. **Connection dialog proper:** the cards, Automatic port, port descriptions (Windows seam), the Wi-Fi flow, and the controller's Wi-Fi fallback (firmware, simulator).
+4. **Connection dialog proper** (delivered, #119): the cards, Automatic port, port descriptions (Windows seam, SetupAPI), the Wi-Fi flow (Save and switch, Save over Wi-Fi, Turn Wi-Fi off) and the controller's Wi-Fi fallback in the firmware. The simulator part was dropped (§10.3).
 5. **Firmware helpers:** PinWatch (Detect), I2cScan (Find screens), PinDrive (Try on unsaved pins); app wiring; simulator.
 6. **Docs:** CLAUDE.md (Hardware page paragraph, wire table, firmware), `firmware/README.md`, controller-config §8.7 points here, README screenshots.
 
