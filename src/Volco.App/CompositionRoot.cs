@@ -81,7 +81,8 @@ internal sealed class CompositionRoot : IDisposable
         // Scripts run through .NET's Process anywhere; media and programs need the platform's.
         var custom = new CustomActionServices(_platform.Media, _platform.Launcher, new SystemProcessStarter());
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
-                                    new VolcoRuntimeOptions { Firmware = catalog }, custom);
+                                    new VolcoRuntimeOptions { Firmware = catalog }, custom,
+                                    _platform.SerialPorts);
         // The port a flash or probe settles on is saved on the UI thread, which owns the config.
         _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThread: a =>
         {

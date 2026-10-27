@@ -52,7 +52,7 @@ internal static class Program
             return new PlatformServices(engine, ready, new Win32WindowEffects(),
                                         new EspDotNetFirmwareFlasher(), new EmbeddedFirmwareSource(),
                                         new MediaSessions(), new ProgramLauncher(), startWithSystem,
-                                        new ShellAppIcons());
+                                        new ShellAppIcons(), new SetupApiSerialPorts());
         });
     }
 

@@ -1,5 +1,6 @@
 using Volco.App.Platform;
 using Volco.Core.Audio;
+using Volco.Core.Communication;
 using Volco.Core.Firmware;
 using Volco.Core.Media;
 using Volco.Core.Programs;
@@ -12,8 +13,10 @@ namespace Volco.App;
 /// <param name="Launcher">Starts and finds programs (Open a program); null = none.</param>
 /// <param name="StartWithSystem">Starts Volco at sign-in (General page); null = none, the toggle is hidden.</param>
 /// <param name="AppIcons">App icons for the target dialog; null = none, apps show a letter tile.</param>
+/// <param name="SerialPorts">Serial port descriptions and USB ids (SetupAPI); null = port names only.</param>
 public sealed record PlatformServices(IAudioEngine Audio, bool AudioReady, IWindowEffects WindowEffects,
                                       IFirmwareFlasher? Flasher = null, IFirmwareSource? Firmware = null,
                                       IMediaSessions? Media = null, IProgramLauncher? Launcher = null,
                                       IStartWithSystem? StartWithSystem = null,
-                                      IAppIcons? AppIcons = null);
+                                      IAppIcons? AppIcons = null,
+                                      ISerialPortInfo? SerialPorts = null);
