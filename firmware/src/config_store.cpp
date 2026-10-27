@@ -85,11 +85,12 @@ bool config_store_keep_wifi(const uint8_t* udp, size_t len) {
   return written == len;
 }
 
-void config_store_drop_wifi() {
+bool config_store_drop_wifi() {
   Preferences prefs;
-  if (!prefs.begin("volco", false)) return;
-  if (prefs.isKey(kWifiPrevKey)) prefs.remove(kWifiPrevKey);
+  if (!prefs.begin("volco", false)) return false;
+  const bool dropped = !prefs.isKey(kWifiPrevKey) || prefs.remove(kWifiPrevKey);
   prefs.end();
+  return dropped;
 }
 
 bool config_store_wifi_provisional() {
@@ -122,6 +123,6 @@ bool config_store_restore_wifi() {
   const bool ok = n && volco::decodeConfig(restored, n, decoded) &&
                   volco::validateConfig(decoded, volco::esp32Chip()).code == volco::CFG_OK &&
                   config_store_save(restored, n);
-  config_store_drop_wifi();
-  return ok;
+  const bool dropped = config_store_drop_wifi();
+  return ok && dropped;
 }

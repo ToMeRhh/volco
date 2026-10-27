@@ -56,7 +56,8 @@ void finishWrite(uint8_t transport, uint8_t seq) {
     sendResult(transport, seq, volco::CFG_STORAGE_FAILED, volco::kNoItem, volco::kNoItem);
     return;
   }
-  if (copy == volco::WIFI_COPY_DROP) config_store_drop_wifi();
+  // A copy left behind is dropped at the next boot when Wi-Fi is off, else confirmed or restored there.
+  if (copy == volco::WIFI_COPY_DROP && !config_store_drop_wifi()) DEBUG_LOG("[DBG] Wi-Fi: the kept copy could not be dropped");
   sendResult(transport, seq, volco::CFG_OK, volco::kNoItem, volco::kNoItem);
   DEBUG_LOG("[DBG] Config: saved, restarting");
   Serial.flush();

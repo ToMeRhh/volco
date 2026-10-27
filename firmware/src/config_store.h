@@ -33,8 +33,9 @@ bool config_store_wifi_enabled();
 // changes them. True when NVS took every byte.
 bool config_store_keep_wifi(const uint8_t* udp, size_t len);
 
-// Drops the kept copy: the new settings were confirmed, or a save kept none.
-void config_store_drop_wifi();
+// Drops the kept copy: the new settings were confirmed, or a save kept none. True when no copy is
+// left in NVS (none was there, or it was removed).
+bool config_store_drop_wifi();
 
 // The kept copy's bytes (valid until the next call), or null when there is none or it can't be read.
 const uint8_t* config_store_kept_wifi(size_t& len);
@@ -43,6 +44,8 @@ const uint8_t* config_store_kept_wifi(size_t& len);
 bool config_store_wifi_provisional();
 
 // Puts the kept copy back as the stored config's udp section (the rest unchanged), checks the result
-// decodes and validates, saves it and drops the copy. On any failure it drops the copy too and
-// returns false: the controller keeps running the stored config.
+// decodes and validates, saves it and drops the copy. True only when the save and the drop both
+// worked: a copy left in NVS would make the restored boot provisional again and restore it again,
+// a reboot every 30 s. On any failure it still tries to drop the copy and returns false: the
+// controller keeps running the config it booted on, without restarting.
 bool config_store_restore_wifi();

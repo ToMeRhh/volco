@@ -166,8 +166,8 @@ static void sendHelloOnUdp() {
 static void runFallback(uint32_t now) {
   switch (fallback.tick(now)) {
     case volco::WifiFallback::CONFIRM:
-      config_store_drop_wifi();
-      DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP");
+      if (config_store_drop_wifi()) DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP");
+      else DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP, but the kept copy could not be dropped");
       break;
     case volco::WifiFallback::RESTORE:
       if (config_store_restore_wifi()) {
@@ -176,7 +176,9 @@ static void runFallback(uint32_t now) {
         delay(200);
         ESP.restart();
       }
-      DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, the previous settings could not be restored; keeping these");
+      // Not restarted: a copy that couldn't be dropped would restore again after the next boot.
+      DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, the previous settings could not be restored (or the kept copy "
+                "dropped); keeping these, no restart");
       break;
     case volco::WifiFallback::NONE:
       break;
@@ -229,7 +231,15 @@ void setup() {
                           sink);
   pcLink = &link;
   config_session_begin(link);
-  fallback.begin(config_store_wifi_provisional(), millis(), WIFI_FALLBACK_MS);
+  // A kept copy is only valid next to a stored config with Wi-Fi on: a power cut between a Wi-Fi-off
+  // save and the copy's drop leaves one behind, which must not splice the old Wi-Fi back in later.
+  bool provisional = config_store_wifi_provisional();
+  if (provisional && (loaded.state != CONFIG_STORED || !config_store_wifi_enabled())) {
+    DEBUG_LOG(config_store_drop_wifi() ? "[DBG] Wi-Fi: dropped a kept copy left by an interrupted save"
+                                       : "[DBG] Wi-Fi: a kept copy left by an interrupted save could not be dropped");
+    provisional = false;
+  }
+  fallback.begin(provisional, millis(), WIFI_FALLBACK_MS);
   if (fallback.provisional()) DEBUG_LOG("[DBG] Wi-Fi: new settings, waiting for the PC over UDP");
   pcLink->begin(millis());  // Hello: the ESP32 may have just reset because the PC opened the port
   DEBUG_LOG("[DBG] Setup complete");
