@@ -136,15 +136,16 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
     [Fact]
     public async Task AHelloEqualToTheStartingOne_IsIgnored_ADifferentOneCancels()
     {
-        _k.SetMirror(Small);                                   // "different setup": the automatic read looks for a Wi-Fi fallback
-        var start = Hello(ControllerConfigState.Stored, 0xAAAA);
+        _k.SetMirror(Small);                                   // the mirror's CRC: no automatic read
+        var start = Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(Small));
         _k.Service.OnMessage(start);
-        await Until(() => _k.Service.Operation == ConfigOperation.Reading);
+        Assert.Equal(ConfigOperation.Idle, _k.Service.Operation);
 
-        await _k.Step(() => _k.Service.OnMessage(Hello(ControllerConfigState.Stored, 0xAAAA)));
-        Assert.Equal(ConfigOperation.Reading, _k.Service.Operation);
+        var read = _k.Service.ReadAsync(adopt: false);
+        await _k.Step(() => _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(Small))));
+        Assert.False(read.IsCompleted);
         _k.Service.OnMessage(Hello(ControllerConfigState.Stored, 0xBBBB));
-        await Until(() => _k.Link.Bursts.Count == 2);   // cancelled; the new Hello's own automatic read
+        Assert.Equal(ReadStatus.Cancelled, (await read).Status);
     }
 
     [Fact]
@@ -296,12 +297,16 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
         _k.SetMirror(WithUdp("NewNet"));
         var changes = 0;
         _k.Service.MirrorChanged += (_, _) => Interlocked.Increment(ref changes);
+        var kinds = new List<BannerKind>();
+        _k.Service.BannerChanged += (_, _) => { lock (kinds) kinds.Add(_k.Service.Banner.Kind); };
         _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(a)));
         await Until(() => _k.Link.Bursts.Count == 1);
+        Assert.Equal(BannerKind.None, _k.Service.Banner.Kind);
         _k.Deliver(Chunks(_k.LastSeq, a));
         await Until(() => _k.Service.Operation == ConfigOperation.Idle && changes == 1);
         Assert.Equal(a, _k.Service.Mirror);
         await Until(() => _k.Service.Banner.Kind == BannerKind.None);
+        lock (kinds) Assert.DoesNotContain(BannerKind.DifferentSetup, kinds);
     }
 
     [Fact]
@@ -310,8 +315,13 @@ public sealed class ControllerConfigServiceReadTests : IDisposable
         var mirror = WithUdp("NewNet", pin: 32);
         var read = WithUdp("OldNet", pin: 33);
         _k.SetMirror(mirror);
+        var kinds = new List<BannerKind>();
+        _k.Service.BannerChanged += (_, _) => { lock (kinds) kinds.Add(_k.Service.Banner.Kind); };
         _k.Service.OnMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(read)));
         await Until(() => _k.Link.Bursts.Count == 1);
+        // The quiet look: no "different setup" (nor the tray's attention) until it has found more.
+        Assert.Equal(BannerKind.None, _k.Service.Banner.Kind);
+        lock (kinds) Assert.DoesNotContain(BannerKind.DifferentSetup, kinds);
         _k.Deliver(Chunks(_k.LastSeq, read));
         await Until(() => _k.Service.Operation == ConfigOperation.Idle);
         Assert.Equal(mirror, _k.Service.Mirror);

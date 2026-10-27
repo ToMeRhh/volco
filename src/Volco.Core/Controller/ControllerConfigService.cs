@@ -514,6 +514,14 @@ public sealed class ControllerConfigService : IDisposable
         UpdateBanner();
     }
 
+    /// <summary>Under <c>_gate</c>: the last Hello will start the automatic Wi-Fi fallback read
+    /// (<see cref="MaybeAutoRead"/>'s second case) once nothing else runs.</summary>
+    private bool WifiLookDueLocked(byte[]? mirror)
+        => _operation == ConfigOperation.Idle && !_disposed && _lastHello is { } h
+           && h.Version == ProtocolVersion.Current && h.ConfigState == ControllerConfigState.Stored
+           && _autoReadKey != Key(h) && !_readFailed
+           && ControllerBannerLogic.Decodes(mirror) && ControllerConfigCodec.Crc32(mirror!) != h.ConfigCrc;
+
     /// <summary>Spec §8.3: reads start automatically only in the "stored, no mirror" row, once per
     /// (version, configState, configCrc); plus one read per such key when the mirror's CRC differs.</summary>
     private void MaybeAutoRead()
@@ -564,13 +572,20 @@ public sealed class ControllerConfigService : IDisposable
         bool changed;
         lock (_bannerGate)
         {
-            var inputs = new BannerInputs(null, Mirror, ConfigOperation.Idle, false, _link.ConnectionType, _bundledFirmware());
+            var mirror = Mirror;
+            var inputs = new BannerInputs(null, mirror, ConfigOperation.Idle, false, _link.ConnectionType, _bundledFirmware());
+            bool looking;
             lock (_gate)
             {
                 if (_disposed) return;
                 inputs = inputs with { Hello = _lastHello, Operation = _quietRead ? ConfigOperation.Idle : _operation, ReadFailed = _readFailed, Silent = _silent };
+                looking = _quietRead || WifiLookDueLocked(mirror);
             }
             var banner = ControllerBannerLogic.Compute(inputs);
+            // Spec §10.3: while the read looks for a Wi-Fi fallback (or is about to), the different CRC
+            // isn't news yet: no banner, until the look fails or finds more than the Wi-Fi changed.
+            if (looking && banner.Kind == BannerKind.DifferentSetup)
+                banner = banner with { Kind = BannerKind.None, Actions = BannerActions.None };
             lock (_gate)
             {
                 changed = banner != _banner;
