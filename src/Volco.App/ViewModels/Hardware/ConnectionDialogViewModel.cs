@@ -25,10 +25,14 @@ public sealed partial class ConnectionDialogViewModel : ObservableObject, IDispo
     /// <param name="open">The card the dialog opens on.</param>
     /// <param name="close">Closes the dialog (Close, Escape, a click outside).</param>
     /// <param name="progress">The window's progress dialog, which shows the Wi-Fi saves.</param>
+    /// <param name="turnWifiOff">Turns the controller's Wi-Fi off through an owner that outlives the
+    /// dialog (<see cref="HardwareViewModel.TurnWifiOff"/>); null: not offered.</param>
     public ConnectionDialogViewModel(ControllerViewModel controller, WifiSwitch? wifi, Func<IReadOnlyList<LocalAddress>> addresses,
-                                     ConnectionCardKind open, Action close, ProgressDialogViewModel? progress = null)
+                                     ConnectionCardKind open, Action close, ProgressDialogViewModel? progress = null,
+                                     Action? turnWifiOff = null)
     {
         Controller = controller;
+        TurnWifiOff = wifi is null ? null : turnWifiOff;
         WifiSwitch = wifi;
         Progress = progress;
         _close = close;
@@ -52,6 +56,9 @@ public sealed partial class ConnectionDialogViewModel : ObservableObject, IDispo
     internal WifiSwitch? WifiSwitch { get; }
 
     internal ProgressDialogViewModel? Progress { get; }
+
+    /// <summary>Turns the controller's Wi-Fi off (from Wi-Fi: switch to USB first); null: not offered.</summary>
+    internal Action? TurnWifiOff { get; }
 
     internal IUiDispatcher Ui => Controller.Ui;
 

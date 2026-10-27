@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Config;
 using Volco.Core.Controller;
 using Volco.Core.Controller.Proto;
+using Volco.Core.Diagnostics;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels.Hardware;
@@ -66,8 +67,17 @@ public abstract partial class ConnectionCardViewModel : ObservableObject
     /// <summary>Dotted IPv4 of a pc_ip.</summary>
     private protected static string FormatIp(uint ip) => new IPAddress(new[] { (byte)(ip >> 24), (byte)(ip >> 16), (byte)(ip >> 8), (byte)ip }).ToString();
 
-    /// <summary>What a Wi-Fi operation that didn't go through says on its card.</summary>
-    private protected static string? FailureText(WifiSwitchOutcome outcome, bool overWifi) => outcome switch
+}
+
+/// <summary>What the Connection dialog's Wi-Fi operations say (spec §10.2, §10.3), and how their
+/// results reach the UI thread.</summary>
+internal static class WifiOutcomes
+{
+    public const string TurnOffTitle = "Turning Wi-Fi off";
+    public const string TurnedOffText = "Saved. The controller's Wi-Fi is off.";
+
+    /// <summary>What a Wi-Fi operation that didn't go through says; null for success or Cancelled.</summary>
+    public static string? FailureText(WifiSwitchOutcome outcome, bool overWifi) => outcome switch
     {
         WifiSwitchOutcome.FellBack => WifiCardViewModel.FellBackText,
         WifiSwitchOutcome.NoAnswer => WifiCardViewModel.NoAnswerText,
@@ -77,39 +87,61 @@ public abstract partial class ConnectionCardViewModel : ObservableObject
         _ => null,
     };
 
-    /// <summary>Reports a <see cref="WifiSwitch"/> step to the progress dialog, on the UI thread.</summary>
-    private protected sealed class StepProgress : IProgress<(WifiSwitchStep Step, TimeSpan? Left)>
+    /// <summary>An ended operation's outcome; one that faulted (or was cancelled as a task) counts as
+    /// SaveFailed and is logged, so whatever waits for it (the modal progress dialog) always ends.</summary>
+    public static WifiSwitchOutcome Of(Task<WifiSwitchOutcome> task)
     {
-        private readonly ConnectionDialogViewModel _dialog;
+        if (task.IsCompletedSuccessfully) return task.Result;
+        AppLog.Error($"Wi-Fi operation failed: {task.Exception?.GetBaseException().ToString() ?? "cancelled"}");
+        return WifiSwitchOutcome.SaveFailed;
+    }
 
-        public StepProgress(ConnectionDialogViewModel dialog) => _dialog = dialog;
-
-        public void Report((WifiSwitchStep Step, TimeSpan? Left) value)
-            => _dialog.Ui.Post(() => _dialog.Progress?.WifiStep(Text(value.Step, value.Left)));
-
-        internal static string Text(WifiSwitchStep step, TimeSpan? left) => step switch
+    /// <summary>Runs <paramref name="then"/> with <paramref name="task"/>'s outcome on the UI thread.</summary>
+    public static void OnEnd(Task<WifiSwitchOutcome> task, IUiDispatcher ui, Action<WifiSwitchOutcome> then)
+        => _ = task.ContinueWith(t =>
         {
-            WifiSwitchStep.Restarting => "Saved to the controller · restarting",
-            WifiSwitchStep.WaitingForWifi => $"Waiting for the controller over Wi-Fi… {Math.Ceiling(Math.Max(0, left?.TotalSeconds ?? 0)):0} s",
-            _ => "Sending…",
-        };
+            var outcome = Of(t);
+            ui.Post(() => then(outcome));
+        }, TaskScheduler.Default);
+
+    /// <summary>The progress dialog's line for a <see cref="WifiSwitch"/> step.</summary>
+    public static string StepText(WifiSwitchStep step, TimeSpan? left) => step switch
+    {
+        WifiSwitchStep.Restarting => "Saved to the controller · restarting",
+        WifiSwitchStep.WaitingForWifi => $"Waiting for the controller over Wi-Fi… {Math.Ceiling(Math.Max(0, left?.TotalSeconds ?? 0)):0} s",
+        _ => "Sending…",
+    };
+}
+
+/// <summary>Reports a <see cref="WifiSwitch"/> step's text on the UI thread.</summary>
+internal sealed class WifiStepProgress : IProgress<(WifiSwitchStep Step, TimeSpan? Left)>
+{
+    private readonly IUiDispatcher _ui;
+    private readonly Action<WifiSwitchStep, string> _report;
+
+    public WifiStepProgress(IUiDispatcher ui, Action<WifiSwitchStep, string> report)
+    {
+        _ui = ui;
+        _report = report;
+    }
+
+    public void Report((WifiSwitchStep Step, TimeSpan? Left) value)
+    {
+        var text = WifiOutcomes.StepText(value.Step, value.Left);
+        _ui.Post(() => _report(value.Step, text));
     }
 }
 
 /// <summary>
 /// The USB cable card (spec §10.2): the port list (Automatic first) with its refresh, and Switch to
 /// USB. From Wi-Fi the switch asks first, inside the card, then switches at once and turns the
-/// controller's Wi-Fi off at its first USB Hello (<see cref="WifiSwitch.TurnOffAsync"/>, in the
-/// progress dialog while this dialog is open); from the simulator it switches at once.
+/// controller's Wi-Fi off at its first USB Hello (<see cref="HardwareViewModel.TurnWifiOff"/>, which
+/// outlives the dialog); from the simulator it switches at once.
 /// </summary>
 public sealed partial class UsbCardViewModel : ConnectionCardViewModel
 {
     private bool _hasPendingPort;
     private string? _pendingPort;   // the port picked while the card isn't in use; null is Automatic
-    private Task<WifiSwitchOutcome>? _turnOff;
-    private bool _sawPending;
-    private bool _showsProgress;
-    private bool _disposed;
 
     internal UsbCardViewModel(ConnectionDialogViewModel dialog) : base(dialog, ConnectionCardKind.Usb, "USB cable")
     {
@@ -169,13 +201,10 @@ public sealed partial class UsbCardViewModel : ConnectionCardViewModel
     /// <summary>Volco is on USB and turns the controller's Wi-Fi off once it answers there.</summary>
     public bool TurnOffPending => Dialog.WifiSwitch?.TurnOffPending == true;
 
-    /// <summary>The last turn-off's save didn't go through; null otherwise.</summary>
-    [ObservableProperty] private string? _error;
-
     private void Switch()
     {
         if (IsInUse) return;
-        if (Connection.ConnectionType == ConnectionType.Udp && Dialog.WifiSwitch is not null)
+        if (Connection.ConnectionType == ConnectionType.Udp && Dialog.TurnWifiOff is not null)
         {
             ConfirmingWifiOff = true;
             return;
@@ -194,16 +223,11 @@ public sealed partial class UsbCardViewModel : ConnectionCardViewModel
     private void ConfirmSwitch()
     {
         ConfirmingWifiOff = false;
-        if (IsInUse || Dialog.WifiSwitch is not { } wifi) return;
-        Error = null;
+        if (IsInUse || Dialog.TurnWifiOff is not { } turnOff) return;
         ApplyPort();
-        _sawPending = false;
-        _showsProgress = false;
-        var turnOff = wifi.TurnOffAsync();
-        _turnOff = turnOff;
+        turnOff();
         // The switch to USB is posted to the config thread (the UI thread) by now: show it after it.
         Dialog.Ui.Post(Dialog.TransportEdited);
-        _ = turnOff.ContinueWith(t => Dialog.Ui.Post(() => TurnedOff(t.Result)), TaskScheduler.Default);
     }
 
     internal override void Refresh()
@@ -214,38 +238,7 @@ public sealed partial class UsbCardViewModel : ConnectionCardViewModel
         OnPropertyChanged(nameof(TurnOffPending));
         SwitchCommand.NotifyCanExecuteChanged();
         if (IsInUse && ConfirmingWifiOff) ConfirmingWifiOff = false;
-        WatchTurnOff();
     }
-
-    /// <summary>The turn-off's save starts once the USB Hello came (the pending wait ended while the
-    /// operation still runs): it shows in the progress dialog while this dialog is open.</summary>
-    private void WatchTurnOff()
-    {
-        if (_disposed || _turnOff is not { IsCompleted: false } || Dialog.WifiSwitch is not { } wifi) return;
-        if (wifi.TurnOffPending)
-        {
-            _sawPending = true;
-            return;
-        }
-        if (!_sawPending || _showsProgress || !wifi.IsBusy) return;
-        // Already off in Volco's copy: nothing is saved.
-        if (WifiSwitch.FromMirror(Dialog.Controller.Mirror, 0) is null) return;
-        _showsProgress = true;
-        Dialog.Progress?.BeginWifi("Turning Wi-Fi off", "Saving to the controller…");
-    }
-
-    private void TurnedOff(WifiSwitchOutcome outcome)
-    {
-        var shown = _showsProgress;
-        _showsProgress = false;
-        _turnOff = null;
-        if (shown) Dialog.Progress?.EndWifi(outcome == WifiSwitchOutcome.BackOnUsb ? "Saved. The controller's Wi-Fi is off." : null);
-        if (_disposed) return;
-        Error = FailureText(outcome, overWifi: false);
-        Dialog.TransportEdited();
-    }
-
-    internal override void Dispose() => _disposed = true;
 }
 
 /// <summary>
@@ -268,16 +261,17 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
     internal WifiCardViewModel(ConnectionDialogViewModel dialog, IReadOnlyList<LocalAddress> addresses)
         : base(dialog, ConnectionCardKind.Wifi, "Wi-Fi")
     {
-        var listenPort = dialog.Connection.UdpListenPort;
-        var saved = WifiSwitch.FromMirror(MirrorBytes(), listenPort);
-        _ssid = saved?.Ssid ?? "";
-        _password = saved?.Password ?? "";
-        _listenPort = listenPort;
-        _controllerPort = saved?.ControllerPort ?? (int)new Udp().LocalPort;
+        // The controller's saved Wi-Fi section, on or off (a network typed before stays).
+        var saved = dialog.Controller.DecodeMirror()?.EffectiveUdp() ?? new Udp();
+        _ssid = saved.Ssid;
+        _password = saved.Password;
+        _listenPort = dialog.Connection.UdpListenPort;
+        _controllerPort = saved.LocalPort;
         // The saved address while this PC still has it, else the first.
         Addresses = addresses;
-        _selectedAddress = addresses.FirstOrDefault(a => saved is not null && a.Value == saved.PcIp) ?? addresses.FirstOrDefault();
+        _selectedAddress = addresses.FirstOrDefault(a => saved.HasPcIp && a.Value == saved.PcIp) ?? addresses.FirstOrDefault();
         SaveCommand = new RelayCommand(Save, () => CanSave);
+        TurnOffCommand = new RelayCommand(() => Dialog.TurnWifiOff?.Invoke(), () => Dialog.WifiSwitch is { IsBusy: false });
         TogglePortsCommand = new RelayCommand(() => PortsOpen = !PortsOpen);
         Validate();
     }
@@ -356,6 +350,14 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
 
     public IRelayCommand SaveCommand { get; }
 
+    /// <summary>Turn Wi-Fi off is offered: Volco is on USB with the controller answering, and its
+    /// saved setup has Wi-Fi on (say after a Save and switch that didn't answer).</summary>
+    public bool ShowsTurnOff => Dialog.TurnWifiOff is not null && Connection.ConnectionType == ConnectionType.Serial
+                                && Connection.IsConnected && WifiSwitch.FromMirror(MirrorBytes(), 0) is not null;
+
+    /// <summary>Turn Wi-Fi off: saves the controller's setup with Wi-Fi off, over USB.</summary>
+    public IRelayCommand TurnOffCommand { get; }
+
     public override string Summary => WifiSwitch.FromMirror(MirrorBytes(), 0) is { } s
         ? $"On {s.Ssid} · sending to {FormatIp(s.PcIp)}" : "Off";
 
@@ -372,7 +374,8 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
         _problem = null;
         if (Dialog.Controller.DecodeMirror() is { } config)
         {
-            var before = DraftProblems.Find(config, ChipInfo.Esp32).Select(p => (p.Field, p.Item)).ToHashSet();
+            // The setup's own problems are the page's, except the Wi-Fi fields' (the card's).
+            var before = DraftProblems.Find(config, ChipInfo.Esp32).Where(p => !IsWifiField(p.Field)).Select(p => (p.Field, p.Item)).ToHashSet();
             var s = Settings();
             config.Udp = new Udp
             {
@@ -385,8 +388,13 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
         RaiseState();
     }
 
+    private static bool IsWifiField(ConfigField field)
+        => field is ConfigField.UdpSsid or ConfigField.UdpPassword or ConfigField.UdpPcIp or ConfigField.UdpPort;
+
     private void RaiseState()
     {
+        OnPropertyChanged(nameof(ShowsTurnOff));
+        TurnOffCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(Error));
         OnPropertyChanged(nameof(HasError));
         OnPropertyChanged(nameof(DisabledReason));
@@ -409,18 +417,19 @@ public sealed partial class WifiCardViewModel : ConnectionCardViewModel
         if (!CanSave || Dialog.WifiSwitch is not { } wifi) return;
         var overWifi = OnWifi;
         _outcome = null;
-        var progress = new StepProgress(Dialog);
-        Dialog.Progress?.BeginWifi("Saving to the controller", StepProgress.Text(WifiSwitchStep.Saving, null));
+        var progressDialog = Dialog.Progress;
+        var progress = new WifiStepProgress(Dialog.Ui, (_, text) => progressDialog?.WifiStep(text));
+        progressDialog?.BeginWifi("Saving to the controller", WifiOutcomes.StepText(WifiSwitchStep.Saving, null));
         var run = overWifi ? wifi.SaveOverWifiAsync(Settings(), progress) : wifi.SaveAndSwitchAsync(Settings(), progress);
         RaiseState();
-        _ = run.ContinueWith(t => Dialog.Ui.Post(() => Saved(t.Result, overWifi)), TaskScheduler.Default);
+        WifiOutcomes.OnEnd(run, Dialog.Ui, outcome => Saved(outcome, overWifi));
     }
 
     private void Saved(WifiSwitchOutcome outcome, bool overWifi)
     {
-        Dialog.Progress?.EndWifi(outcome == WifiSwitchOutcome.OnWifi ? "Saved. Volco is on Wi-Fi." : null);
+        Dialog.Progress?.EndWifi(outcome == WifiSwitchOutcome.OnWifi ? "Saved. Volco is on Wi-Fi." : null);   // a failure shows on the card
         if (_disposed) return;
-        _outcome = FailureText(outcome, overWifi);
+        _outcome = WifiOutcomes.FailureText(outcome, overWifi);
         Dialog.TransportEdited();
         if (outcome == WifiSwitchOutcome.OnWifi) IsOpen = false;   // In use, closed with its summary
         RaiseState();

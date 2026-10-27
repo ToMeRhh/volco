@@ -261,22 +261,31 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
         if (!_disposed && _operation == Operation.Wifi && IsRunning) Step = step;
     }
 
-    /// <summary>The Wi-Fi save ended. A success shows <paramref name="success"/> briefly, as a
-    /// plain save's "Saved." does; a failure (null) closes the dialog at once, since the Connection
-    /// dialog's card says what went wrong.</summary>
-    internal void EndWifi(string? success)
+    /// <summary>The Wi-Fi save ended with <paramref name="result"/>: a good one shows briefly, as a
+    /// plain save's "Saved." does; a danger one stays until Close (a turn-off whose result has no
+    /// other place); null closes the dialog at once (the Connection dialog's card says what went
+    /// wrong).</summary>
+    internal void EndWifi(string? result, LinkTone tone = LinkTone.Good)
     {
         if (_disposed || _operation != Operation.Wifi || !IsRunning) return;
         IsRunning = false;
         Step = null;
-        if (success is null)
+        if (result is null)
         {
             Hide();
             return;
         }
-        ResultTone = LinkTone.Good;
-        ResultText = success;
-        CloseSoon();
+        ResultTone = tone;
+        ResultText = result;
+        if (tone == LinkTone.Good) CloseSoon();
+    }
+
+    /// <summary>A Wi-Fi operation that ended before it showed anything failed: its result shows
+    /// under <paramref name="title"/> until Close.</summary>
+    internal void ShowWifiFailure(string title, string result)
+    {
+        BeginWifi(title, "");
+        EndWifi(result, LinkTone.Danger);
     }
 
     private void OfferTest()

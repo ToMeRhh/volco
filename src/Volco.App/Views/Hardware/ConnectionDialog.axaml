@@ -77,8 +77,6 @@
             </StackPanel>
             <TextBlock Name="TurnOffPendingText" Classes="Caption" TextWrapping="Wrap" IsVisible="{Binding TurnOffPending}"
                        Text="The controller's Wi-Fi goes off once it answers over USB."/>
-            <controls:StatusLine Name="UsbErrorText" Classes="Caption" Tone="Danger" Text="{Binding Error}"
-                                 IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}"/>
             <Button Name="SwitchToUsbButton" HorizontalAlignment="Left" Content="{Binding SwitchLabel}"
                     Command="{Binding SwitchCommand}" IsVisible="{Binding ShowsSwitch}"/>
             <!-- From Wi-Fi, Switch to USB asks first, here in the card -->
@@ -161,6 +159,9 @@
                     Command="{Binding SaveCommand}"/>
             <TextBlock Name="WifiDisabledReason" Classes="Caption" TextWrapping="Wrap" Text="{Binding DisabledReason}"
                        IsVisible="{Binding HasDisabledReason}"/>
+            <!-- On USB with Wi-Fi on in the controller's setup: it can be turned off from here -->
+            <Button Name="TurnWifiOffButton" HorizontalAlignment="Left" Content="Turn Wi-Fi off"
+                    Command="{Binding TurnOffCommand}" IsVisible="{Binding ShowsTurnOff}"/>
           </StackPanel>
         </controls:CardRows>
       </Border>

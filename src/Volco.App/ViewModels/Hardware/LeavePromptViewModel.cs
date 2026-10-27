@@ -98,7 +98,7 @@ public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
         IsSaving = true;
         RaiseCommands();
         _controller.SaveCommand.Execute(null);
-        // The save didn't start: a question (the Wi-Fi warning) or a reason now shows on Hardware.
+        // The save didn't start: a question or a reason now shows on Hardware.
         if (!_controller.IsSaving && IsSaving) Stay();
     }
 

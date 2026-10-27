@@ -384,7 +384,73 @@ public sealed class ConnectionDialogTests : IDisposable
         Assert.Equal(ConnectionType.Serial, s.Rig.Config.Config.Connection.Type);
     }
 
+    [AvaloniaFact]
+    public void TurnOffResultShowsAfterTheDialogClosed()
+    {
+        using var s = Opened(mirror: DiyWifiBlob, type: ConnectionType.Udp);
+        var udp = s.Rig.Connection!;
+        Click(s, "UsbCardHeader");
+        Click(s, "SwitchToUsbButton");
+        Click(s, "ConfirmSwitchButton");
+        Click(s, "ConnectionClose");
+        Assert.False(s.Vm.Hardware.IsConnectionDialogOpen);
+        Until(s.Window, () => s.Rig.Connection != udp && s.Rig.Connection!.Config.Type == ConnectionType.Serial);
+        Assert.False(s.Vm.Hardware.Status.Progress.IsOpen);
+
+        var usb = s.Rig.Connection!;
+        Greet(usb, ControllerConfigCodec.Crc32(DiyWifiBlob));
+        Until(s.Window, () => s.Vm.Hardware.Status.Progress.IsRunning);
+        Assert.Equal("Turning Wi-Fi off", s.Vm.Hardware.Status.Progress.Title);
+        Assert.True(In<Border>(s.Window, "ProgressOverlay").IsVisible);
+        Until(s.Window, () => usb.SentFrames.Any(IsWrite));
+        usb.RaiseMessage(new ConfigResultMessage(usb.SentFrames.Last(IsWrite)[3], ConfigResultCode.StorageFailed, 0xFF, 0xFF));
+
+        Until(s.Window, () => s.Vm.Hardware.Status.Progress.IsDone);
+        Assert.Equal("The controller didn't save the Wi-Fi settings. Try again.", s.Vm.Hardware.Status.Progress.ResultText);
+        Assert.Equal(LinkTone.Danger, s.Vm.Hardware.Status.Progress.ResultTone);
+        Assert.Equal(ConnectionType.Serial, s.Rig.Config.Config.Connection.Type);
+    }
+
     // ── Wi-Fi ────────────────────────────────────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void TurnWifiOffFromUsb()
+    {
+        using var s = Opened(wifi: true, mirror: DiyWifiBlob);
+        Assert.Equal("Turn Wi-Fi off", In<Button>(s.Window, "TurnWifiOffButton").Content);
+        Assert.True(Visible(s, "TurnWifiOffButton"));
+        var usb = s.Rig.Connection!;
+        Click(s, "TurnWifiOffButton");
+        Until(s.Window, () => s.Vm.Hardware.Status.Progress.IsRunning);
+        var sent = AnswerWrite(s, usb);
+        Assert.False(ControllerConfigCodec.Decode(sent).Udp.Enabled);
+        Assert.Equal("HomeNet", ControllerConfigCodec.Decode(sent).Udp.Ssid);
+        Until(s.Window, () => !s.Vm.Hardware.Status.Progress.IsOpen && s.Dialog.WifiCard.Summary == "Off");
+        Assert.False(Visible(s, "TurnWifiOffButton"));
+        Assert.Same(usb, s.Rig.Connection);   // the transport stays as it is
+        Assert.Equal("HomeNet", In<TextBox>(s.Window, "SsidBox").Text);   // the network stays filled in
+    }
+
+    [AvaloniaFact]
+    public void WifiFieldsStartFromTheSavedSectionEvenWhenOff()
+    {
+        var off = Encode(c => c.Udp = new Udp { Enabled = false, Ssid = "OldNet", Password = "short", LocalPort = 12399 });
+        using var s = Opened(wifi: true, mirror: off);
+        Assert.Equal("OldNet", In<TextBox>(s.Window, "SsidBox").Text);
+        Assert.Equal(12399m, s.Dialog.WifiCard.ControllerPort);
+        Assert.False(Visible(s, "TurnWifiOffButton"));   // already off
+        Assert.Equal("The password must be 8 to 64 characters, or empty for an open network.", s.Dialog.WifiCard.Error);
+    }
+
+    [AvaloniaFact]
+    public void ASavedWifiProblemIsTheCards()
+    {
+        // The saved setup itself has the bad password: the card still says so.
+        var bad = Encode(c => c.Udp = new Udp { Enabled = true, Ssid = "HomeNet", Password = "short", PcIp = 0xC0A80114 });
+        using var s = Opened(wifi: true, mirror: bad);
+        Assert.Equal("The password must be 8 to 64 characters, or empty for an open network.", s.Dialog.WifiCard.Error);
+        Assert.False(s.Dialog.WifiCard.CanSave);
+    }
 
     [AvaloniaFact]
     public void NoNumberedHeadings()
@@ -410,6 +476,7 @@ public sealed class ConnectionDialogTests : IDisposable
         Settle(s.Window);
         Assert.True(In<Button>(s.Window, "WifiSaveButton").IsEffectivelyEnabled);
         Assert.False(Visible(s, "WifiDisabledReason"));
+        Assert.False(Visible(s, "TurnWifiOffButton"));   // the saved setup has Wi-Fi off
 
         s.Rig.Connection!.SetStatus(TransportStatus.Closed);
         Until(s.Window, () => !s.Vm.Connection.IsConnected);

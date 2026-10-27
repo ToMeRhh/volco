@@ -447,11 +447,50 @@ public sealed class HardwareViewModelTests : IDisposable
         Hardware.OpenConnection(false);
         var dialog = Hardware.ConnectionDialog!;
         var raised = 0;
-        dialog.PropertyChanged += (_, _) => raised++;
+        dialog.UsbCard.PropertyChanged += (_, _) => raised++;
+        Controller.Connection.ConnectionTypeIndex = 2;   // open, the card follows
+        Assert.NotEqual(0, raised);
         Hardware.CloseConnection();
+        raised = 0;
 
-        Controller.Connection.ConnectionTypeIndex = 2;
+        Controller.Connection.ConnectionTypeIndex = 0;
         Assert.Equal(0, raised);
+    }
+
+    [Fact]
+    public void SaveAndContinueThenOpensConnection()
+    {
+        SetUpInSync();
+        Controller.DebounceMs = 25;
+        Hardware.OpenConnection(false);
+        var blob = ControllerConfigCodec.Encode(Controller.Draft);
+        Hardware.LeavePrompt!.SaveAndContinueCommand.Execute(null);
+        WaitForWrite();
+        Assert.False(Hardware.IsConnectionDialogOpen);   // not before the controller confirms
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(blob), sliders: Controller.Draft.Sliders.Count));
+        Until(() => !Controller.IsSaving);
+        _ui.RunAll();
+        Assert.Null(Hardware.LeavePrompt);
+        Assert.True(Hardware.IsConnectionDialogOpen);
+        Assert.False(Hardware.HasUnsavedControllerChanges);
+    }
+
+    [Fact]
+    public void AFaultedWifiOperationCountsAsSaveFailed()
+    {
+        Assert.Equal(WifiSwitchOutcome.SaveFailed, WifiOutcomes.Of(Task.FromException<WifiSwitchOutcome>(new InvalidOperationException("boom"))));
+        Assert.Equal(WifiSwitchOutcome.SaveFailed, WifiOutcomes.Of(Task.FromCanceled<WifiSwitchOutcome>(new CancellationToken(true))));
+        Assert.Equal(WifiSwitchOutcome.OnWifi, WifiOutcomes.Of(Task.FromResult(WifiSwitchOutcome.OnWifi)));
+
+        // The progress dialog a faulted save opened still ends.
+        SetUpInSync();
+        var progress = Hardware.Status.Progress;
+        progress.BeginWifi("Saving to the controller", "Sending…");
+        WifiOutcomes.OnEnd(Task.FromException<WifiSwitchOutcome>(new InvalidOperationException("boom")), _ui,
+                           o => progress.EndWifi(WifiOutcomes.FailureText(o, false), LinkTone.Danger));
+        Until(() => { _ui.RunAll(); return progress.IsDone; });
+        Assert.Equal("The controller didn't save the Wi-Fi settings. Try again.", progress.ResultText);
     }
 
     [Fact]

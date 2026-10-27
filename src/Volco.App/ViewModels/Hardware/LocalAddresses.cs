@@ -30,19 +30,29 @@ public static class LocalAddresses
     /// system's adapter order. Empty when the adapters can't be read.</summary>
     public static IReadOnlyList<LocalAddress> Read()
     {
-        try
-        {
-            return NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                .SelectMany(n => n.GetIPProperties().UnicastAddresses
-                    .Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a.Address))
-                    .Select(a => new LocalAddress(a.Address, n.Name)))
-                .ToList();
-        }
-        catch (NetworkInformationException e)
+        NetworkInterface[] adapters;
+        try { adapters = NetworkInterface.GetAllNetworkInterfaces(); }
+        catch (Exception e)
         {
             AppLog.Info($"Couldn't read this PC's addresses: {e.Message}");
             return Array.Empty<LocalAddress>();
         }
+        var addresses = new List<LocalAddress>();
+        foreach (var n in adapters)
+        {
+            // One adapter that can't be read leaves the others listed.
+            try
+            {
+                if (n.OperationalStatus != OperationalStatus.Up || n.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                addresses.AddRange(n.GetIPProperties().UnicastAddresses
+                    .Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a.Address))
+                    .Select(a => new LocalAddress(a.Address, n.Name)));
+            }
+            catch (Exception e)
+            {
+                AppLog.Info($"Couldn't read the addresses of adapter {n.Name}: {e.Message}");
+            }
+        }
+        return addresses;
     }
 }

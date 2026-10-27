@@ -159,8 +159,57 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         ConnectionDialogOnWifi = wifi;
         ConnectionDialog?.Dispose();
         var open = wifi ? ConnectionCardKind.Wifi : ConnectionDialogViewModel.KindOf(_controller.Connection.ConnectionType);
-        ConnectionDialog = new ConnectionDialogViewModel(_controller, _controller.Wifi, ReadAddresses, open, CloseConnection, Status.Progress);
+        ConnectionDialog = new ConnectionDialogViewModel(_controller, _controller.Wifi, ReadAddresses, open, CloseConnection, Status.Progress,
+                                                         TurnWifiOff);
         IsConnectionDialogOpen = true;
+    }
+
+    // ── Turning the controller's Wi-Fi off (spec §10.2) ──────────────────────────────────────
+
+    private Task<WifiSwitchOutcome>? _turnOff;
+    private bool _turnOffShown;
+
+    /// <summary>The Connection dialog's Switch to USB and turn Wi-Fi off, or its Wi-Fi card's Turn
+    /// Wi-Fi off: <see cref="WifiSwitch.TurnOffAsync"/>, watched here rather than by the dialog, so
+    /// its save (at the first USB Hello, whenever that comes) runs in the progress dialog and its
+    /// result shows there whether or not the Connection dialog is still open.</summary>
+    internal void TurnWifiOff()
+    {
+        if (_disposed || _turnOff is not null || _controller.Wifi is not { } wifi) return;
+        _turnOffShown = false;
+        var progress = new WifiStepProgress(_ui, (_, text) =>
+        {
+            if (_disposed) return;
+            if (_turnOffShown) Status.Progress.WifiStep(text);
+            else
+            {
+                _turnOffShown = true;
+                Status.Progress.BeginWifi(WifiOutcomes.TurnOffTitle, text);
+            }
+        });
+        var run = wifi.TurnOffAsync(progress);
+        _turnOff = run;
+        WifiOutcomes.OnEnd(run, _ui, TurnedWifiOff);
+    }
+
+    private void TurnedWifiOff(WifiSwitchOutcome outcome)
+    {
+        _turnOff = null;
+        if (_disposed) return;
+        var shown = _turnOffShown;
+        _turnOffShown = false;
+        var failure = WifiOutcomes.FailureText(outcome, overWifi: false);
+        if (outcome == WifiSwitchOutcome.BackOnUsb)
+        {
+            if (shown) Status.Progress.EndWifi(WifiOutcomes.TurnedOffText);
+        }
+        else if (failure is not null)
+        {
+            if (shown) Status.Progress.EndWifi(failure, LinkTone.Danger);
+            else Status.Progress.ShowWifiFailure(WifiOutcomes.TurnOffTitle, failure);
+        }
+        else if (shown) Status.Progress.EndWifi(null);   // dropped mid-save
+        ConnectionDialog?.TransportEdited();
     }
 
     /// <summary>Closes the Connection dialog (Done, Escape, or a click outside).</summary>
