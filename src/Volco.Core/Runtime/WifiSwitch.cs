@@ -18,7 +18,8 @@ public enum WifiSwitchOutcome
 {
     /// <summary>The controller answered over Wi-Fi on the new settings; Volco is on Wi-Fi.</summary>
     OnWifi,
-    /// <summary>Turning Wi-Fi off: the controller answered over USB and saved its config with Wi-Fi off.</summary>
+    /// <summary>Turning Wi-Fi off: the controller saved its config with Wi-Fi off over USB (or Volco's
+    /// copy already had it off); Volco is on USB.</summary>
     BackOnUsb,
     /// <summary>The controller answered over Wi-Fi on settings other than the new ones: it went
     /// back to its previous Wi-Fi settings. Volco stays on Wi-Fi.</summary>
@@ -274,15 +275,21 @@ public sealed class WifiSwitch : IDisposable
         finally { Exit(); }
     }
 
-    /// <summary>Switch to USB and turn Wi-Fi off (spec §10.2), from Wi-Fi only: switches Volco to
-    /// USB at once, waits for the controller's first Hello over USB (no timeout), then saves the
-    /// controller's config with Wi-Fi off. Volco stays on USB whatever the outcome. Not on Wi-Fi →
-    /// <see cref="WifiSwitchOutcome.Cancelled"/> and nothing changes. The wait ends with
-    /// Cancelled on <paramref name="ct"/>, <see cref="CancelTurnOff"/>, <see cref="Dispose"/>, or
-    /// when the transport is changed to anything but USB meanwhile (the user picks the simulator).</summary>
-    public async Task<WifiSwitchOutcome> TurnOffAsync(CancellationToken ct = default)
+    /// <summary>Turn the controller's Wi-Fi off (spec §10.2). From Wi-Fi (Switch to USB and turn
+    /// Wi-Fi off): switches Volco to USB at once, waits for the controller's first Hello over USB
+    /// (no timeout), then saves the controller's config with Wi-Fi off; Volco stays on USB whatever
+    /// the outcome. The wait ends with Cancelled on <paramref name="ct"/>, <see cref="CancelTurnOff"/>,
+    /// <see cref="Dispose"/>, or when the transport is changed to anything but USB meanwhile (the
+    /// user picks the simulator). From USB with a controller connected (the Wi-Fi card's Turn Wi-Fi
+    /// off): saves at once; with none connected, <see cref="WifiSwitchOutcome.NeedsUsb"/>. From the
+    /// simulator: <see cref="WifiSwitchOutcome.Cancelled"/> and nothing changes. The save reports
+    /// <see cref="WifiSwitchStep.Saving"/> and <see cref="WifiSwitchStep.Restarting"/>; it ends with
+    /// <see cref="WifiSwitchOutcome.BackOnUsb"/> (also when Volco's copy already has Wi-Fi off).</summary>
+    public async Task<WifiSwitchOutcome> TurnOffAsync(IProgress<(WifiSwitchStep Step, TimeSpan? Left)>? progress = null,
+                                                      CancellationToken ct = default)
     {
-        if (_runtime.Config.Config.Connection.Type != ConnectionType.Udp) return WifiSwitchOutcome.Cancelled;
+        var type = _runtime.Config.Config.Connection.Type;
+        if (type is not (ConnectionType.Udp or ConnectionType.Serial)) return WifiSwitchOutcome.Cancelled;
         if (!TryEnter()) return WifiSwitchOutcome.Cancelled;
         using var own = new CancellationTokenSource();
         using var op = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposed.Token, own.Token);
@@ -295,31 +302,27 @@ public sealed class WifiSwitch : IDisposable
                 Cancel(own);
             }
         }
-        _runtime.Config.ConnectionConfigChanged += OnConnectionChanged;
-        SetTurnOff(own);
         try
         {
-            using var hellos = new HelloWatch(_runtime, ConnectionType.Serial, _time);
-            AppLog.Info("Wi-Fi off: switching to USB; Wi-Fi goes off at the first USB Hello");
-            hellos.After(await OnConfigThreadAsync(c => c.Type = ConnectionType.Serial, token).ConfigureAwait(false));
-            await hellos.NextAsync(null, token).ConfigureAwait(false);
+            if (type == ConnectionType.Serial)
+            {
+                if (!ConnectedOver(ConnectionType.Serial)) return WifiSwitchOutcome.NeedsUsb;
+                AppLog.Info("Wi-Fi off: saving over USB with Wi-Fi off");
+                return await SaveWifiOffAsync(progress, token).ConfigureAwait(false);
+            }
+
+            _runtime.Config.ConnectionConfigChanged += OnConnectionChanged;
+            SetTurnOff(own);
+            using (var hellos = new HelloWatch(_runtime, ConnectionType.Serial, _time))
+            {
+                AppLog.Info("Wi-Fi off: switching to USB; Wi-Fi goes off at the first USB Hello");
+                hellos.After(await OnConfigThreadAsync(c => c.Type = ConnectionType.Serial, token).ConfigureAwait(false));
+                await hellos.NextAsync(null, token).ConfigureAwait(false);
+            }
             _runtime.Config.ConnectionConfigChanged -= OnConnectionChanged;
             SetTurnOff(null);
-
-            var ready = await ReadySetupAsync(token).ConfigureAwait(false);
-            if (ready.Mirror is not { } mirror) return ready.Failure;
-            if (FromMirror(mirror, 0) is null) return WifiSwitchOutcome.BackOnUsb;   // already off
-
-            AppLog.Info("Wi-Fi off: the controller answered over USB, saving with Wi-Fi off");
-            var begun = await BeginSaveAsync(m =>
-            {
-                var udp = ControllerConfigCodec.Decode(m).EffectiveUdp().Clone();
-                udp.Enabled = false;
-                return Blob(m, udp);
-            }, token).ConfigureAwait(false);
-            if (begun.Run is not { } run) return begun.Failure;
-            var saved = await run.Save.WaitAsync(token).ConfigureAwait(false);
-            return saved.Status == SaveStatus.Confirmed ? WifiSwitchOutcome.BackOnUsb : Failed(saved);
+            AppLog.Info("Wi-Fi off: the controller answered over USB");
+            return await SaveWifiOffAsync(progress, token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -332,6 +335,27 @@ public sealed class WifiSwitch : IDisposable
             SetTurnOff(null);
             Exit();
         }
+    }
+
+    /// <summary>Saves the mirror with Wi-Fi off (nothing when it already has Wi-Fi off).</summary>
+    private async Task<WifiSwitchOutcome> SaveWifiOffAsync(IProgress<(WifiSwitchStep Step, TimeSpan? Left)>? progress, CancellationToken token)
+    {
+        var ready = await ReadySetupAsync(token).ConfigureAwait(false);
+        if (ready.Mirror is not { } mirror) return ready.Failure;
+        if (FromMirror(mirror, 0) is null) return WifiSwitchOutcome.BackOnUsb;   // already off
+
+        progress?.Report((WifiSwitchStep.Saving, null));
+        var begun = await BeginSaveAsync(m =>
+        {
+            var udp = ControllerConfigCodec.Decode(m).EffectiveUdp().Clone();
+            udp.Enabled = false;
+            return Blob(m, udp);
+        }, token).ConfigureAwait(false);
+        if (begun.Run is not { } run) return begun.Failure;
+        await Task.WhenAny(run.Save, run.Accepted).WaitAsync(token).ConfigureAwait(false);
+        if (run.Accepted.IsCompleted) progress?.Report((WifiSwitchStep.Restarting, null));
+        var saved = await run.Save.WaitAsync(token).ConfigureAwait(false);
+        return saved.Status == SaveStatus.Confirmed ? WifiSwitchOutcome.BackOnUsb : Failed(saved);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────

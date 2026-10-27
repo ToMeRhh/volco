@@ -456,18 +456,68 @@ public sealed class WifiSwitchTests : IDisposable
     }
 
     [Fact]
-    public async Task TurnOffOnlyFromWifi()
+    public async Task TurnOffRefusedFromTheSimulator()
     {
-        // From USB (or the simulator) there is no Wi-Fi to turn off: nothing changes.
         Greet(Last, ControllerConfigCodec.Crc32(WifiOff));
-        Assert.Equal(WifiSwitchOutcome.Cancelled, await Within(_switch.TurnOffAsync()));
-        Assert.False(_switch.TurnOffPending);
         _config.Config.Connection.Type = ConnectionType.WebSocket;
         Assert.Equal(WifiSwitchOutcome.Cancelled, await Within(_switch.TurnOffAsync()));
+        Assert.False(_switch.TurnOffPending);
+        Assert.False(_switch.IsBusy);
         Assert.Equal(ConnectionType.WebSocket, Connection.Type);
         await Task.Delay(500);
         Assert.Equal(1, Count);
         Assert.Equal(0, Writes(Last));
+    }
+
+    [Fact]
+    public async Task TurnOffOverUsbSavesAtOnce()
+    {
+        using var t = new WifiSwitchTests(ConnectionType.Serial, WifiOnHome);
+        Greet(t.Last, ControllerConfigCodec.Crc32(WifiOnHome));
+        var steps = new List<WifiSwitchStep>();
+        var run = t._switch.TurnOffAsync(new SyncProgress(p => { lock (steps) steps.Add(p.Step); }));
+        Assert.False(t._switch.TurnOffPending);   // nothing to wait for
+        var expected = ControllerConfigCodec.Decode(WifiOnHome);
+        expected.Udp.Enabled = false;
+        var blob = await AnswerWrite(t.Last, helloCrc: ControllerConfigCodec.Crc32(ControllerConfigCodec.Encode(expected)));
+        Assert.False(ControllerConfigCodec.Decode(blob).Udp.Enabled);
+        Assert.Equal("HomeNet", ControllerConfigCodec.Decode(blob).Udp.Ssid);
+
+        Assert.Equal(WifiSwitchOutcome.BackOnUsb, await Within(run));
+        Assert.False(ControllerConfigCodec.Decode(t._runtime.ControllerConfig.Mirror!).Udp.Enabled);
+        Assert.Equal(ConnectionType.Serial, t.Connection.Type);
+        Assert.Equal(1, t.Count);   // the transport was never touched
+        lock (steps) Assert.Equal(new[] { WifiSwitchStep.Saving, WifiSwitchStep.Restarting }, steps.Distinct());
+    }
+
+    [Fact]
+    public async Task TurnOffOverUsbNeedsAController()
+    {
+        using var t = new WifiSwitchTests(ConnectionType.Serial, WifiOnHome);   // no Hello
+        Assert.Equal(WifiSwitchOutcome.NeedsUsb, await Within(t._switch.TurnOffAsync()));
+        Assert.Equal(0, Writes(t.Last));
+        Assert.False(t._switch.IsBusy);
+    }
+
+    [Fact]
+    public async Task TurnOffOverUsbAlreadyOffSendsNothing()
+    {
+        Greet(Last, ControllerConfigCodec.Crc32(WifiOff));
+        Assert.Equal(WifiSwitchOutcome.BackOnUsb, await Within(_switch.TurnOffAsync()));
+        Assert.Equal(0, Writes(Last));
+    }
+
+    [Fact]
+    public async Task TurnOffOverUsbUnderAnotherSetupSendsNothing()
+    {
+        using var t = new WifiSwitchTests(ConnectionType.Serial, WifiOnHome);
+        var other = ControllerConfigCodec.Encode(new ControllerConfig { Screens = new ScreenBehaviour { Brightness = 50 } });
+        Greet(t.Last, ControllerConfigCodec.Crc32(other));
+        await ConfigServiceKit.Until(() => t.Last.SentFrames.Any(f => f.Length > 3 && f[2] == 0x87));
+        var read = t.Last.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87);
+        foreach (var chunk in ConfigServiceKit.Chunks(read[3], other)) t.Last.RaiseMessage(chunk);
+        Assert.Equal(WifiSwitchOutcome.DifferentSetup, await Within(t._switch.TurnOffAsync()));
+        Assert.Equal(0, Writes(t.Last));
     }
 
     [Fact]
