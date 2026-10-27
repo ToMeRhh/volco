@@ -12,12 +12,14 @@
 #include "volco_calibration.h"
 #include "volco_protocol.h"
 #include "volco_runtime.h"
+#include "volco_wifi_fallback.h"
 
 // The firmware build id Hello reports (spec §9.2); CI sets it, local builds are "dev".
 #ifndef VOLCO_FW_VERSION
 #define VOLCO_FW_VERSION "dev"
 #endif
 static_assert(sizeof(VOLCO_FW_VERSION) - 1 <= volco::kMaxFirmwareId, "VOLCO_FW_VERSION is longer than 32 bytes");
+static_assert(TRANSPORT_UDP == 1, "volco_wifi_fallback.cpp's kTransportUdp must match TRANSPORT_UDP");
 
 // ============================================================
 // State. Everything about the hardware comes from the stored config (config_store).
@@ -45,6 +47,7 @@ static uint8_t ledValues[volco::kMaxButtons];
 
 static volco::ActiveTransport active;  // spec §5.5
 static volco::FrameParser parsers[2];  // one per transport, so their bytes never mix
+static volco::WifiFallback fallback;   // new Wi-Fi settings: confirmed by the PC over UDP, or the old ones return
 
 static volco::Link* pcLink = nullptr;
 
@@ -204,6 +207,8 @@ void setup() {
                           sink);
   pcLink = &link;
   config_session_begin(link);
+  fallback.begin(config_store_wifi_provisional(), millis(), WIFI_FALLBACK_MS);
+  if (fallback.provisional()) DEBUG_LOG("[DBG] Wi-Fi: new settings, waiting for the PC over UDP");
   pcLink->begin(millis());  // Hello: the ESP32 may have just reset because the PC opened the port
   DEBUG_LOG("[DBG] Setup complete");
 }
@@ -286,6 +291,7 @@ void loop() {
       for (int i = 0; i < n; i++)
         if (parsers[t].feed(buf[i])) {
           active.onValidFrame(t);
+          fallback.onValidFrame(t);
           pcLink->onPayload(parsers[t].payload(), parsers[t].length(), now, t);
         }
   }
@@ -297,6 +303,25 @@ void loop() {
   // 5. Screens: power state, then redraw at most one panel.
   screens_tick(now);
 
-  // 6. Wi-Fi: retry, and Hello on UDP each time it connects.
+  // 6. Wi-Fi: retry, and Hello on UDP each time it connects. New settings no PC answered on within
+  //    WIFI_FALLBACK_MS of boot give way to the kept ones: store them and reboot
+  //    (docs/design/hardware-page.md §10.3).
   if (transport_maintain(now)) sendHelloOnUdp();
+  switch (fallback.tick(now)) {
+    case volco::WifiFallback::CONFIRM:
+      config_store_drop_wifi();
+      DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP");
+      break;
+    case volco::WifiFallback::RESTORE:
+      if (config_store_restore_wifi()) {
+        DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, restored the previous settings, restarting");
+        Serial.flush();
+        delay(200);
+        ESP.restart();
+      }
+      DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, the previous settings could not be restored; keeping these");
+      break;
+    case volco::WifiFallback::NONE:
+      break;
+  }
 }

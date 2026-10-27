@@ -9,6 +9,7 @@
 #include "volco_config.h"
 #include "volco_crc32.h"
 #include "volco_read_reply.h"
+#include "volco_wifi_fallback.h"
 
 namespace {
 
@@ -33,10 +34,23 @@ void finishWrite(uint8_t transport, uint8_t seq) {
     sendResult(transport, seq, v.code, v.item, v.field);
     return;
   }
-  if (!config_store_save(receiver.data(), receiver.size())) {
+  // New Wi-Fi settings over old ones that were on: keep the old ones first, so the controller can
+  // fall back to them (docs/design/hardware-page.md §10.3). A power cut before the save below only
+  // leaves a provisional boot on the old settings, which confirms or restores them unchanged.
+  uint16_t oldLen;
+  const uint8_t* oldBlob = config_store_blob(oldLen);
+  const uint8_t* oldUdp = nullptr;
+  const uint8_t* newUdp = nullptr;
+  size_t oldUdpLen = 0, newUdpLen = 0;
+  volco::findField(oldBlob, oldLen, volco::kUdpField, oldUdp, oldUdpLen);  // left null/0 when absent
+  volco::findField(receiver.data(), receiver.size(), volco::kUdpField, newUdp, newUdpLen);
+  const bool keep = volco::keepsWifiCopy(config_store_wifi_enabled(), candidate.has_udp && candidate.udp.enabled,
+                                         oldUdp, oldUdpLen, newUdp, newUdpLen);
+  if ((keep && !config_store_keep_wifi(oldUdp, oldUdpLen)) || !config_store_save(receiver.data(), receiver.size())) {
     sendResult(transport, seq, volco::CFG_STORAGE_FAILED, volco::kNoItem, volco::kNoItem);
     return;
   }
+  if (!keep) config_store_drop_wifi();
   sendResult(transport, seq, volco::CFG_OK, volco::kNoItem, volco::kNoItem);
   DEBUG_LOG("[DBG] Config: saved, restarting");
   Serial.flush();
