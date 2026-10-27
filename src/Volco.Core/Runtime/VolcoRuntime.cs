@@ -123,9 +123,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// <param name="options">Null → <see cref="VolcoRuntimeOptions.Default"/>.</param>
     /// <param name="custom">Media sessions, program launcher and process starter; null or a null
     /// member → those actions are not available.</param>
+    /// <param name="serialPorts">The ports' descriptions and USB ids (SetupAPI on Windows); null →
+    /// names only, and Automatic tries every port.</param>
     public VolcoRuntime(ConfigManager config, IAudioEngine audio, bool audioReady,
                         Func<ConnectionConfig, IControllerConnection?>? connectionFactory = null,
-                        VolcoRuntimeOptions? options = null, CustomActionServices? custom = null)
+                        VolcoRuntimeOptions? options = null, CustomActionServices? custom = null,
+                        ISerialPortInfo? serialPorts = null)
     {
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Audio = audio ?? throw new ArgumentNullException(nameof(audio));
@@ -133,6 +136,9 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         _connectionFactory = connectionFactory
                              ?? new Func<ConnectionConfig, IControllerConnection?>(CreateDefaultConnection);
         _options = options ?? VolcoRuntimeOptions.Default;
+        HasSerialPortInfo = serialPorts is not null;
+        _serialPorts = new SystemSerialPorts(serialPorts);
+        _openSerial = _options.SerialFactory ?? (name => new SerialConnection(new SerialConfig { ComPort = name }));
         _media = custom?.Media;
         _programs = custom?.Launcher is { } launcher ? new ProgramOpener(launcher, _options.Time) : null;
         _scripts = custom?.Processes is { } processes ? new ScriptRunner(processes, _options.Time) : null;
@@ -1042,9 +1048,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         StartConnection();
     }
 
-    private static IControllerConnection? CreateDefaultConnection(ConnectionConfig config) => config.Type switch
+    private IControllerConnection? CreateDefaultConnection(ConnectionConfig config) => config.Type switch
     {
-        ConnectionType.Serial => new SerialConnection(config.Serial),
+        ConnectionType.Serial when string.IsNullOrEmpty(config.Serial.ComPort) =>
+            new AutoSerialConnection(_serialPorts, HasSerialPortInfo, () => Config.Config.Connection.Serial.LastPort,
+                                     _openSerial, _options.AutoSerial, _options.Time),
+        ConnectionType.Serial => _openSerial(config.Serial.ComPort),
         ConnectionType.Udp => new UdpConnection(config.Udp),
         ConnectionType.WebSocket => new WebSocketConnection(config.WebSocket),
         _ => null
@@ -1073,6 +1082,11 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
 
         connection.MessageReceived += OnMessageReceived;
         connection.StatusChanged += OnTransportStatusChanged;
+        if (connection is AutoSerialConnection auto)
+        {
+            auto.ProbingChanged += OnProbingChanged;
+            auto.PortFound += OnPortFound;
+        }
         // Before the publish: a frame from the new transport is never judged against the old kind.
         Volatile.Write(ref _serialTransport, config.Type == ConnectionType.Serial ? connection : null);
 
@@ -1110,6 +1124,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
 
         connection.Connect();
         UpdateLink();
+        NotifyUsbPort();
     }
 
     /// <summary>A transport Volco is starting isn't a failure until it has had a moment to find the
@@ -1147,6 +1162,116 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                 TransportStatusChanged?.Invoke(this, TransportStatus.Closed);
         }
         UpdateLink();
+        NotifyUsbPort();
+    }
+
+    // ── The USB port (spec §10.2) ────────────────────────────────────────────────────────────
+
+    private readonly ISerialPortInfo _serialPorts;
+    private readonly Func<string, IControllerConnection> _openSerial;
+
+    private readonly object _usbPortGate = new();
+    private string? _lastUsbPort;                       // guarded by _usbPortGate: last raised
+    private IDisposable? _probing;                      // guarded by _usbPortGate
+    private AutoSerialConnection? _probingOwner;        // guarded by _usbPortGate
+
+    /// <summary>Whether the system describes its ports (USB ids, friendly names), so Automatic
+    /// tries only USB ports and the port list shows descriptions.</summary>
+    public bool HasSerialPortInfo { get; }
+
+    /// <summary>The USB port in use: the chosen one, else the port Automatic is on (the one that
+    /// answered, or the best candidate of a round with no answer); null while it tries the
+    /// ports, without a candidate, and for Wi-Fi and the simulator.</summary>
+    public string? UsbPort
+    {
+        get
+        {
+            var connection = Config.Config.Connection;
+            if (connection.Type != ConnectionType.Serial) return null;
+            if (!string.IsNullOrEmpty(connection.Serial.ComPort)) return connection.Serial.ComPort;
+            return (Volatile.Read(ref _connection) as AutoSerialConnection)?.CurrentPort;
+        }
+    }
+
+    /// <summary><see cref="UsbPort"/> changed. Any thread; a handler reads <see cref="UsbPort"/>.</summary>
+    public event EventHandler? UsbPortChanged;
+
+    /// <summary>This machine's serial ports, with their descriptions where the system has them.</summary>
+    public IReadOnlyList<SerialPortDescription> ListSerialPorts() => _serialPorts.List();
+
+    /// <summary>Raises <see cref="UsbPortChanged"/> when <see cref="UsbPort"/> differs from the
+    /// last one raised.</summary>
+    private void NotifyUsbPort()
+    {
+        if (IsDisposed) return;
+        var port = UsbPort;
+        lock (_usbPortGate)
+        {
+            if (port == _lastUsbPort) return;
+            _lastUsbPort = port;
+        }
+        UsbPortChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Automatic is trying the ports: an expected wait ("Connecting…"), so the silence of a
+    /// port it tries counts only once the round is over. Raised on the transport's threads; takes
+    /// no lock held around a transport's Dispose.</summary>
+    private void OnProbingChanged(object? sender, bool probing)
+    {
+        if (sender is not AutoSerialConnection auto) return;
+        var created = probing && !IsDisposed ? ExpectInterruption(LinkActivity.Connecting) : null;
+        IDisposable? ended = null;
+        lock (_usbPortGate)
+        {
+            // Read under the gate: a retire takes the transport out of _connection before it
+            // releases its wait here (ReleaseProbing), so a wait set now is always released.
+            if (created is not null && ReferenceEquals(auto, Volatile.Read(ref _connection)))
+            {
+                ended = _probing;
+                _probing = created;
+                _probingOwner = auto;
+                created = null;
+            }
+            else if (!probing && ReferenceEquals(auto, _probingOwner))
+            {
+                ended = _probing;
+                _probing = null;
+                _probingOwner = null;
+            }
+        }
+        ended?.Dispose();
+        created?.Dispose();
+        NotifyUsbPort();
+    }
+
+    /// <summary>Ends the wait of a retired Automatic transport.</summary>
+    private void ReleaseProbing(AutoSerialConnection auto)
+    {
+        IDisposable? ended = null;
+        lock (_usbPortGate)
+        {
+            if (ReferenceEquals(auto, _probingOwner))
+            {
+                ended = _probing;
+                _probing = null;
+                _probingOwner = null;
+            }
+        }
+        ended?.Dispose();
+    }
+
+    /// <summary>A port answered: it is tried early next time. Written in memory and saved through
+    /// the debounce, as the Hello's controller summary is (no connection restart).</summary>
+    private void OnPortFound(object? sender, string port)
+    {
+        if (IsDisposed || !ReferenceEquals(sender, Volatile.Read(ref _connection))) return;
+        var serial = Config.Config.Connection.Serial;
+        if (serial.LastPort != port)
+        {
+            serial.LastPort = port;
+            Config.RequestSave();
+        }
+        NotifyUsbPort();
     }
 
     // ── A silent controller ──────────────────────────────────────────────────────────────────
@@ -1189,14 +1314,14 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
 
     private void CheckSilence()
     {
-        if (_link.State == ControllerState.AwaitingHello && !IsSuspended
+        if (!IsDisposed && _link.State == ControllerState.AwaitingHello && !IsSuspended
             && Config.Config.Connection.Type == ConnectionType.Serial) SetSilent(true);
     }
 
     private void SetSilent(bool silent)
     {
         if (Interlocked.Exchange(ref _silent, silent ? 1 : 0) == (silent ? 1 : 0)) return;
-        if (silent) AppLog.Info($"No Hello on {Config.Config.Connection.Serial.ComPort} for {_options.SilentAfter.TotalSeconds:F0} s");
+        if (silent) AppLog.Info($"No Hello on {UsbPort ?? "the USB ports"} for {_options.SilentAfter.TotalSeconds:F0} s");
         ControllerConfig.OnControllerSilent(silent);
         if (!IsDisposed) ControllerSilentChanged?.Invoke(this, silent);
         UpdateLink();
@@ -1244,6 +1369,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     {
         connection.MessageReceived -= OnMessageReceived;
         connection.StatusChanged -= OnTransportStatusChanged;
+        if (connection is AutoSerialConnection auto)
+        {
+            auto.ProbingChanged -= OnProbingChanged;
+            auto.PortFound -= OnPortFound;
+            ReleaseProbing(auto);
+        }
         connection.Dispose();
     }
 

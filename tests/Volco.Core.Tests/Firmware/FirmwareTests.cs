@@ -369,6 +369,24 @@ public sealed class FirmwareServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task InstallUnderAutomaticSetsLastPort()
+    {
+        _config.Config.Connection.Serial.ComPort = "";
+        var flash = _service.FlashAsync("COM4", FlashMode.Install, NoProgress);
+        await Until(() => Count == 2);
+        Last.SetStatus(TransportStatus.Open);
+        Last.RaiseMessage(Hello("3f9c2a1b5d07"));
+        Assert.True((await flash).Succeeded);
+
+        Assert.Equal("", Last.Config.Serial.ComPort);       // still Automatic
+        Assert.Equal("COM4", Last.Config.Serial.LastPort);  // tried early by the resumed connection
+        var reloaded = new ConfigManager(_config.ConfigPath);
+        reloaded.Load();
+        Assert.Equal("", reloaded.Config.Connection.Serial.ComPort);
+        Assert.Equal("COM4", reloaded.Config.Connection.Serial.LastPort);
+    }
+
+    [Fact]
     public async Task NotSerial_IsRefusedWithoutSuspending()
     {
         _config.Config.Connection.Type = ConnectionType.WebSocket;   // not saved: no restart
