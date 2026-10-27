@@ -12,7 +12,8 @@ public enum ProgressNextStep { None, TestNow, TryAgain, InstallFirmware, Reinsta
 
 /// <summary>
 /// The status's third level (controller-page spec §5, "Running, don't interrupt"): a modal dialog
-/// over the window while a firmware install, update or check, or a save to the controller, runs.
+/// over the window while a firmware install, update or check, or a save to the controller, runs
+/// (the Connection dialog's Wi-Fi saves too, through <see cref="BeginWifi"/>).
 /// It shows the operation's name, its step and progress and "Don't unplug the controller.", and
 /// can't be closed while it writes. At the end it shows the result and its next step (Test your
 /// controller now after an update or a first save, Try again after a failure, Install firmware
@@ -27,7 +28,7 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
     /// <summary>How long a confirmed save's "Saved." stays before the dialog closes itself.</summary>
     internal static TimeSpan SavedHold { get; set; } = TimeSpan.FromSeconds(1);
 
-    private enum Operation { None, Install, Update, Check, Save }
+    private enum Operation { None, Install, Update, Check, Save, Wifi }
 
     private readonly ControllerViewModel _controller;
     private readonly Action _toController;
@@ -210,22 +211,72 @@ public sealed partial class ProgressDialogViewModel : ObservableObject, IDisposa
                 return;
             }
             ResultText = "Saved.";
-            // A plain save needs nothing more: the dialog goes by itself after a moment.
-            if (SavedHold <= TimeSpan.Zero)
-            {
-                Close();
-                return;
-            }
-            var generation = _generation;
-            _ = Task.Delay(SavedHold).ContinueWith(_ => c.Ui.Post(() =>
-            {
-                if (!_disposed && generation == _generation && IsDone) Close();
-            }), TaskScheduler.Default);
+            CloseSoon();
             return;
         }
         ResultText = c.ProgressText;
         ResultTone = LinkTone.Danger;
         if (c.LastSaveCanRetry) SetNext(ProgressNextStep.TryAgain, c.RetrySave, () => c.CanRetrySave);
+    }
+
+    /// <summary>A plain success needs nothing more: the dialog goes by itself after a moment.</summary>
+    private void CloseSoon()
+    {
+        if (SavedHold <= TimeSpan.Zero)
+        {
+            Close();
+            return;
+        }
+        var generation = _generation;
+        _ = Task.Delay(SavedHold).ContinueWith(_ => _controller.Ui.Post(() =>
+        {
+            if (!_disposed && generation == _generation && IsDone) Close();
+        }), TaskScheduler.Default);
+    }
+
+    // ── The Connection dialog's Wi-Fi operations (hardware-page spec §10.2, §10.3) ─────────────
+
+    /// <summary>A Wi-Fi save starts (Save and switch, Save over Wi-Fi, or turning Wi-Fi off once the
+    /// controller answers over USB): the dialog opens with <paramref name="title"/> and
+    /// <paramref name="step"/>, and nothing closes it until <see cref="EndWifi"/>.</summary>
+    internal void BeginWifi(string title, string step)
+    {
+        if (_disposed) return;
+        _generation++;
+        _operation = Operation.Wifi;
+        ResultText = null;
+        ResultTone = LinkTone.Neutral;
+        SetNext(ProgressNextStep.None, null, null);
+        Title = title;
+        Step = step;
+        Progress = null;
+        IsRunning = true;
+        IsOpen = true;
+    }
+
+    /// <summary>The running Wi-Fi save's step ("Saved to the controller · restarting", "Waiting for
+    /// the controller over Wi-Fi… 9 s").</summary>
+    internal void WifiStep(string step)
+    {
+        if (!_disposed && _operation == Operation.Wifi && IsRunning) Step = step;
+    }
+
+    /// <summary>The Wi-Fi save ended. A success shows <paramref name="success"/> briefly, as a
+    /// plain save's "Saved." does; a failure (null) closes the dialog at once, since the Connection
+    /// dialog's card says what went wrong.</summary>
+    internal void EndWifi(string? success)
+    {
+        if (_disposed || _operation != Operation.Wifi || !IsRunning) return;
+        IsRunning = false;
+        Step = null;
+        if (success is null)
+        {
+            Hide();
+            return;
+        }
+        ResultTone = LinkTone.Good;
+        ResultText = success;
+        CloseSoon();
     }
 
     private void OfferTest()

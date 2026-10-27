@@ -223,12 +223,33 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
 
     private void OnConfigSaved(object? sender, EventArgs e) => _ui.Post(() =>
     {
-        if (_disposed) return;
-        var saved = _config.Config.Connection.Serial.ComPort;
-        if (saved == ComPort) return;
-        if (saved != "" && !PortChoices.Any(p => p.Port == saved)) PortChoices.Add(new PortChoice(saved, saved));
-        ComPort = saved;   // already the saved port: OnComPortChanged neither saves nor restarts
+        if (!_disposed) SyncFromConfig();
     });
+
+    /// <summary>True while <see cref="SyncFromConfig"/> sets the properties: nothing is written back.</summary>
+    private bool _syncing;
+
+    /// <summary>Shows the connection config as it is now, without saving it again: a firmware install
+    /// may save another port (spec §8.6), and the Connection dialog's Wi-Fi switch edits the
+    /// transport and the listen port itself (spec §10.2, §10.3). UI thread.</summary>
+    internal void SyncFromConfig()
+    {
+        var c = _config.Config.Connection;
+        var saved = c.Serial.ComPort;
+        if (saved != ComPort)
+        {
+            if (saved != "" && !PortChoices.Any(p => p.Port == saved)) PortChoices.Add(new PortChoice(saved, saved));
+            ComPort = saved;   // already the saved port: OnComPortChanged neither saves nor restarts
+        }
+        _syncing = true;
+        try
+        {
+            ConnectionType = c.Type;
+            UdpListenPort = c.Udp.ListenPort;
+            WebSocketPort = c.WebSocket.Port;
+        }
+        finally { _syncing = false; }
+    }
 
     // ── COM-port refresh command ───────────────────────────────────────────────
 
@@ -281,12 +302,18 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
 
     partial void OnConnectionTypeChanged(ConnectionType value)
     {
-        _config.Config.Connection.Type = value;
         OnPropertyChanged(nameof(IsSerial));
         OnPropertyChanged(nameof(IsUdp));
         OnPropertyChanged(nameof(IsWebSocket));
         OnPropertyChanged(nameof(ConnectionTypeIndex));
         RefreshStatus();
+        Write(c => c.Type = value);
+    }
+
+    private void Write(Action<ConnectionConfig> edit)
+    {
+        if (_syncing) return;
+        edit(_config.Config.Connection);
         Persist();
     }
 
@@ -307,16 +334,14 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
 
     partial void OnUdpListenPortChanged(int value)
     {
-        _config.Config.Connection.Udp.ListenPort = value;
         RefreshStatus();
-        Persist();
+        Write(c => c.Udp.ListenPort = value);
     }
 
     partial void OnWebSocketPortChanged(int value)
     {
-        _config.Config.Connection.WebSocket.Port = value;
         RefreshStatus();
-        Persist();
+        Write(c => c.WebSocket.Port = value);
     }
 
     private void Persist() => _config.RequestSave(connectionChanged: true);

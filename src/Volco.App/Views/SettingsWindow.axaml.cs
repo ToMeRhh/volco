@@ -514,7 +514,7 @@ public partial class SettingsWindow : Window
         if (_hardware.HasUnsavedChanges)
         {
             ShowPage("controller");
-            _hardware.AskToLeave(HideWindow, closing: true);
+            _hardware.AskToLeave(HideWindow, LeaveKind.Close);
             return;
         }
         HideWindow();

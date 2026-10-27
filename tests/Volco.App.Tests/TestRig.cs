@@ -67,8 +67,28 @@ internal sealed class TestRig : IDisposable
         Runtime.Start();
     }
 
-    public SettingsViewModel CreateSettings(IUiDispatcher ui, Volco.App.Platform.IAppIcons? appIcons = null)
-        => new(Config, Engine, Runtime, ui, appIcons: appIcons);
+    /// <summary>The run's Wi-Fi switch (the Connection dialog's Wi-Fi card), made with the first
+    /// settings view model; its config edits are posted to that view model's dispatcher.</summary>
+    public WifiSwitch? Wifi { get; private set; }
 
-    public void Dispose() => Runtime.Dispose();
+    public SettingsViewModel CreateSettings(IUiDispatcher ui, Volco.App.Platform.IAppIcons? appIcons = null)
+    {
+        Wifi ??= new WifiSwitch(Runtime, a =>
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            ui.Post(() =>
+            {
+                try { a(); done.SetResult(); }
+                catch (Exception e) { done.SetException(e); }
+            });
+            return done.Task;
+        });
+        return new(Config, Engine, Runtime, ui, appIcons: appIcons, wifi: Wifi);
+    }
+
+    public void Dispose()
+    {
+        Wifi?.Dispose();
+        Runtime.Dispose();
+    }
 }

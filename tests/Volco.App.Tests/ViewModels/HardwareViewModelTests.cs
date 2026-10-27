@@ -450,8 +450,58 @@ public sealed class HardwareViewModelTests : IDisposable
         dialog.PropertyChanged += (_, _) => raised++;
         Hardware.CloseConnection();
 
-        Controller.Connection.ConnectionTypeIndex = 1;
+        Controller.Connection.ConnectionTypeIndex = 2;
         Assert.Equal(0, raised);
+    }
+
+    [Fact]
+    public void TheConnectionDialogOpensOnTheCardInUse()
+    {
+        SetUpInSync();
+        Hardware.OpenConnection(false);
+        var dialog = Hardware.ConnectionDialog!;
+        Assert.Equal(new[] { true, false, false }, dialog.Cards.Select(c => c.IsOpen));
+        Assert.Equal(new[] { true, false, false }, dialog.Cards.Select(c => c.IsInUse));
+
+        dialog.Open(ConnectionCardKind.Simulator);
+        Assert.Equal(new[] { false, false, true }, dialog.Cards.Select(c => c.IsOpen));
+        Assert.Equal(ConnectionType.Serial, Controller.Connection.ConnectionType);   // opening switches nothing
+
+        Hardware.OpenConnection(true);
+        Assert.True(Hardware.ConnectionDialog!.WifiCard.IsOpen);
+        Assert.False(Hardware.ConnectionDialog.UsbCard.IsOpen);
+    }
+
+    [Fact]
+    public void OpenConnectionAsksFirstWithUnsavedControllerChanges()
+    {
+        SetUpInSync();
+        Controller.DebounceMs = 25;
+        Hardware.OpenConnection(true);
+        Assert.False(Hardware.IsConnectionDialogOpen);
+        var prompt = Hardware.LeavePrompt!;
+        Assert.Equal("Your controller changes aren't saved. Save them before opening Connection?", prompt.Message);
+        Assert.Equal(("Save and continue", "Discard and continue", "Stay"), (prompt.SaveLabel, prompt.DiscardLabel, prompt.StayLabel));
+
+        prompt.StayCommand.Execute(null);
+        Assert.Null(Hardware.LeavePrompt);
+        Assert.False(Hardware.IsConnectionDialogOpen);
+        Assert.True(Hardware.HasUnsavedControllerChanges);
+
+        Hardware.OpenConnection(true);
+        Hardware.LeavePrompt!.DiscardAndContinueCommand.Execute(null);
+        Assert.True(Hardware.IsConnectionDialogOpen);
+        Assert.True(Hardware.ConnectionDialog!.WifiCard.IsOpen);
+    }
+
+    [Fact]
+    public void ButtonTimingAloneDoesNotAskBeforeConnection()
+    {
+        SetUpInSync();
+        Controller.HoldMs = 700;   // Volco's own setting, not the controller's
+        Hardware.OpenConnection(false);
+        Assert.Null(Hardware.LeavePrompt);
+        Assert.True(Hardware.IsConnectionDialogOpen);
     }
 
     // ── Raw input and read-only ──────────────────────────────────────────────────────────────

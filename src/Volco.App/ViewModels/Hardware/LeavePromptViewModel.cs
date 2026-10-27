@@ -4,30 +4,42 @@ using Volco.Core.Controller;
 
 namespace Volco.App.ViewModels.Hardware;
 
+/// <summary>Where the user was going when the leave prompt asked: its words follow.</summary>
+public enum LeaveKind
+{
+    /// <summary>Another page ("Save and continue", "Discard and continue", "Stay").</summary>
+    Leave,
+    /// <summary>The window closes to the tray ("Save and close", "Discard and close", "Cancel").</summary>
+    Close,
+    /// <summary>The Connection dialog opens (hardware-page spec §10), with the Leave buttons.</summary>
+    Connection,
+}
+
 /// <summary>
 /// Leaving Hardware with unsaved changes asks first (hardware-page spec §3.3): Save and continue
 /// (waits for the controller's confirmation, with its progress here; a failure keeps the user on
 /// Hardware with the error on the card), Discard and continue, or Stay. Save is disabled while the
-/// draft has problems. Raised by the settings window for any page, and by its close button (the
-/// window hides to the tray), when the buttons say "close" and Stay is Cancel.
+/// draft has problems. Raised by the settings window for any page, by its close button (the
+/// window hides to the tray), when the buttons say "close" and Stay is Cancel, and before the
+/// Connection dialog opens (<see cref="LeaveKind"/>).
 /// A save already running (the save bar's) is adopted: the prompt waits for it as for its own.
 /// </summary>
 public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
 {
     private readonly ControllerViewModel _controller;
     private Action _proceed;
-    private bool _closing;
+    private LeaveKind _kind;
     private readonly Action _close;
     private bool _disposed;
 
     /// <param name="proceed">Goes where the user was going; runs after the prompt closed.</param>
     /// <param name="close">Closes the prompt (the user stays on Hardware).</param>
-    /// <param name="closing">The window is closing rather than another page opening.</param>
-    public LeavePromptViewModel(ControllerViewModel controller, Action proceed, Action close, bool closing = false)
+    /// <param name="kind">Where the user was going: another page, closing the window, or the Connection dialog.</param>
+    public LeavePromptViewModel(ControllerViewModel controller, Action proceed, Action close, LeaveKind kind = LeaveKind.Leave)
     {
         _controller = controller;
         _proceed = proceed;
-        _closing = closing;
+        _kind = kind;
         _close = close;
         _isSaving = controller.IsSaving;
         SaveAndContinueCommand = new RelayCommand(SaveAndContinue, () => CanSaveAndContinue);
@@ -39,21 +51,26 @@ public sealed partial class LeavePromptViewModel : ObservableObject, IDisposable
 
     public string Title => "Unsaved changes";
 
-    public string Message => _closing
-        ? "Your controller changes aren't saved. Save them before closing?"
-        : "Your controller changes aren't saved. Save them before leaving?";
+    public string Message => _kind switch
+    {
+        LeaveKind.Close => "Your controller changes aren't saved. Save them before closing?",
+        LeaveKind.Connection => "Your controller changes aren't saved. Save them before opening Connection?",
+        _ => "Your controller changes aren't saved. Save them before leaving?",
+    };
 
-    public string SaveLabel => _closing ? "Save and close" : "Save and continue";
-    public string DiscardLabel => _closing ? "Discard and close" : "Discard and continue";
-    public string StayLabel => _closing ? "Cancel" : "Stay";
+    private bool Closing => _kind == LeaveKind.Close;
 
-    /// <summary>Another page was chosen, or the window closed, while the prompt is open: the prompt
-    /// (and a save it runs) stays, and continuing goes there instead.</summary>
-    public void Retarget(Action proceed, bool closing = false)
+    public string SaveLabel => Closing ? "Save and close" : "Save and continue";
+    public string DiscardLabel => Closing ? "Discard and close" : "Discard and continue";
+    public string StayLabel => Closing ? "Cancel" : "Stay";
+
+    /// <summary>Another page was chosen, the window closed, or Connection was opened while the
+    /// prompt is open: the prompt (and a save it runs) stays, and continuing goes there instead.</summary>
+    public void Retarget(Action proceed, LeaveKind kind = LeaveKind.Leave)
     {
         _proceed = proceed;
-        if (_closing == closing) return;
-        _closing = closing;
+        if (_kind == kind) return;
+        _kind = kind;
         OnPropertyChanged(nameof(Message));
         OnPropertyChanged(nameof(SaveLabel));
         OnPropertyChanged(nameof(DiscardLabel));

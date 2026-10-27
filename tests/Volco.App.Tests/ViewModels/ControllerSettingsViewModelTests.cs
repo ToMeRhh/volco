@@ -34,17 +34,18 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
 
     private ControllerViewModel Controller => _settings!.Controller;
 
-    private ControllerSettingsViewModel SetUp(bool screen = true)
+    private ControllerSettingsViewModel SetUp(bool screen = true, byte[]? mirror = null)
     {
+        mirror ??= DiyBlob;
         _rig.Config.Config.Sliders = Enumerable.Range(0, 5).Select(i => new Volco.Core.Config.SliderConfig { Index = i, Name = $"s{i}" }).ToList();
         _rig.Config.Config.Buttons = Enumerable.Range(0, 3).Select(i => new Volco.Core.Config.ButtonConfig { Index = i }).ToList();
-        _rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
+        _rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(mirror);
         _settings = _rig.CreateSettings(_ui);
         _ = _settings.Controls;
         var conn = _rig.Connection!;
         conn.SetStatus(TransportStatus.Open);
         conn.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
-            ControllerConfigCodec.Crc32(DiyBlob), 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
+            ControllerConfigCodec.Crc32(mirror), 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
         _ui.RunAll();
         Assert.True(Controller.CanEdit);
         if (screen)
@@ -187,14 +188,24 @@ public sealed class ControllerSettingsViewModelTests : IDisposable
         Controller.OffAfterS = 1800;
         Assert.Equal("80%, off after 30 min", vm.ScreensSummary);
         Assert.Equal("Off", vm.WifiSummary);
-        Controller.UdpEnabled = true;
-        Controller.Ssid = "HomeNet";
-        Assert.Equal("On · HomeNet", vm.WifiSummary);
         Controller.DimBrightness = 8;
         Assert.Equal(0, vm.DimmedToIndex);
         Controller.DimBrightness = 100;
         Assert.Equal("Custom (100)", vm.DimmedTo[vm.DimmedToIndex]);
         Assert.Equal(100m, Controller.DimBrightness);
+    }
+
+    [Fact]
+    public void WifiSummaryFromMirror()
+    {
+        var config = ControllerPresets.ApplyTo(new ControllerConfig(), Diy);
+        config.Udp = new Udp { Enabled = true, Ssid = "HomeNet", Password = "password1", PcIp = 0xC0A80114 };
+        var vm = SetUp(mirror: ControllerConfigCodec.Encode(config));
+        Assert.Equal("On · HomeNet", vm.WifiSummary);
+        // The draft's Wi-Fi isn't edited on the page: the summary is the controller's saved setup.
+        Controller.Draft.Udp.Enabled = false;
+        Controller.OnDraftEdited();
+        Assert.Equal("On · HomeNet", vm.WifiSummary);
     }
 
     [Fact]

@@ -61,8 +61,13 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The Connection dialog (spec §10) is open.</summary>
     [ObservableProperty] private bool _isConnectionDialogOpen;
 
-    /// <summary>The Connection dialog opens on its Wi-Fi tab, else on USB.</summary>
+    /// <summary>The Connection dialog opened on its Wi-Fi card (Controller settings › Wi-Fi), else
+    /// on the card in use.</summary>
     [ObservableProperty] private bool _connectionDialogOnWifi;
+
+    /// <summary>This PC's addresses for the Wi-Fi card, read each time the dialog opens (tests
+    /// replace it).</summary>
+    internal Func<IReadOnlyList<LocalAddress>> ReadAddresses { get; set; } = LocalAddresses.Read;
 
     /// <summary>The open Connection dialog's view model, or null.</summary>
     [ObservableProperty] private ConnectionDialogViewModel? _connectionDialog;
@@ -139,14 +144,22 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         Compare = null;
     }
 
-    /// <summary>The status menu's Connection…: the Connection dialog, on the Wi-Fi tab
-    /// when <paramref name="wifi"/>.</summary>
+    /// <summary>The status menu's Connection… (and Controller settings › Wi-Fi, with
+    /// <paramref name="wifi"/>): the Connection dialog, on the card in use or on Wi-Fi. Unsaved
+    /// controller changes are saved or discarded first (spec §10), so every save the dialog makes
+    /// starts from the controller's saved setup.</summary>
     public void OpenConnection(bool wifi)
     {
         if (_disposed) return;
+        if (HasUnsavedControllerChanges)
+        {
+            AskToLeave(() => OpenConnection(wifi), LeaveKind.Connection);
+            return;
+        }
         ConnectionDialogOnWifi = wifi;
         ConnectionDialog?.Dispose();
-        ConnectionDialog = new ConnectionDialogViewModel(_controller, wifi, CloseConnection);
+        var open = wifi ? ConnectionCardKind.Wifi : ConnectionDialogViewModel.KindOf(_controller.Connection.ConnectionType);
+        ConnectionDialog = new ConnectionDialogViewModel(_controller, _controller.Wifi, ReadAddresses, open, CloseConnection, Status.Progress);
         IsConnectionDialogOpen = true;
     }
 
@@ -245,15 +258,15 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The open leave prompt, or null.</summary>
     [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
 
-    /// <summary>Asks before leaving Hardware (or, with <paramref name="closing"/>, closing the
-    /// window) with unsaved changes; <paramref name="proceed"/> goes on once the draft was saved
-    /// (and confirmed) or discarded. While a prompt is open it stays (a save it runs goes on) and
-    /// only where it continues to changes.</summary>
-    public void AskToLeave(Action proceed, bool closing = false)
+    /// <summary>Asks before leaving Hardware (or, by <paramref name="kind"/>, closing the window or
+    /// opening Connection) with unsaved changes; <paramref name="proceed"/> goes on once the draft
+    /// was saved (and confirmed) or discarded. While a prompt is open it stays (a save it runs goes
+    /// on) and only where it continues to changes.</summary>
+    public void AskToLeave(Action proceed, LeaveKind kind = LeaveKind.Leave)
     {
         if (_disposed) return;
-        if (LeavePrompt is { } open) open.Retarget(proceed, closing);
-        else LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt, closing);
+        if (LeavePrompt is { } open) open.Retarget(proceed, kind);
+        else LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt, kind);
     }
 
     /// <summary>Closes the leave prompt: the user stays on Hardware.</summary>
