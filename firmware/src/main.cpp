@@ -161,6 +161,28 @@ static void sendHelloOnUdp() {
     transport_send(TRANSPORT_UDP, f, volco::encodeSlider(i, sink.sliderValue(i), f));
 }
 
+// New Wi-Fi settings (docs/design/hardware-page.md §10.3): a UDP frame from the PC confirms them;
+// none within WIFI_FALLBACK_MS of boot puts the kept ones back, stored, and reboots on them.
+static void runFallback(uint32_t now) {
+  switch (fallback.tick(now)) {
+    case volco::WifiFallback::CONFIRM:
+      config_store_drop_wifi();
+      DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP");
+      break;
+    case volco::WifiFallback::RESTORE:
+      if (config_store_restore_wifi()) {
+        DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, restored the previous settings, restarting");
+        Serial.flush();
+        delay(200);
+        ESP.restart();
+      }
+      DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, the previous settings could not be restored; keeping these");
+      break;
+    case volco::WifiFallback::NONE:
+      break;
+  }
+}
+
 // ============================================================
 // Setup (spec §7 order): serial, config, pins, transports, screens, link.
 // ============================================================
@@ -292,6 +314,7 @@ void loop() {
         if (parsers[t].feed(buf[i])) {
           active.onValidFrame(t);
           fallback.onValidFrame(t);
+          runFallback(now);  // confirmed before the payload: a config write in it sees proven settings
           pcLink->onPayload(parsers[t].payload(), parsers[t].length(), now, t);
         }
   }
@@ -303,25 +326,7 @@ void loop() {
   // 5. Screens: power state, then redraw at most one panel.
   screens_tick(now);
 
-  // 6. Wi-Fi: retry, and Hello on UDP each time it connects. New settings no PC answered on within
-  //    WIFI_FALLBACK_MS of boot give way to the kept ones: store them and reboot
-  //    (docs/design/hardware-page.md §10.3).
+  // 6. Wi-Fi: retry, and Hello on UDP each time it connects. Then the fallback's window.
   if (transport_maintain(now)) sendHelloOnUdp();
-  switch (fallback.tick(now)) {
-    case volco::WifiFallback::CONFIRM:
-      config_store_drop_wifi();
-      DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP");
-      break;
-    case volco::WifiFallback::RESTORE:
-      if (config_store_restore_wifi()) {
-        DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, restored the previous settings, restarting");
-        Serial.flush();
-        delay(200);
-        ESP.restart();
-      }
-      DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, the previous settings could not be restored; keeping these");
-      break;
-    case volco::WifiFallback::NONE:
-      break;
-  }
+  runFallback(now);
 }

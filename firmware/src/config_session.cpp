@@ -34,23 +34,29 @@ void finishWrite(uint8_t transport, uint8_t seq) {
     sendResult(transport, seq, v.code, v.item, v.field);
     return;
   }
-  // New Wi-Fi settings over old ones that were on: keep the old ones first, so the controller can
-  // fall back to them (docs/design/hardware-page.md §10.3). A power cut before the save below only
-  // leaves a provisional boot on the old settings, which confirms or restores them unchanged.
+  // The kept copy is always Wi-Fi settings a PC has answered on (docs/design/hardware-page.md §10.3):
+  // new settings over proven ones that were on keep the old ones first, so the controller can fall
+  // back to them. A power cut before the save below only leaves a provisional boot on the old
+  // settings, which confirms or restores them unchanged. A save over provisional settings leaves
+  // the copy, unless its Wi-Fi is off or is the copy.
   uint16_t oldLen;
   const uint8_t* oldBlob = config_store_blob(oldLen);
   const uint8_t* oldUdp = nullptr;
   const uint8_t* newUdp = nullptr;
-  size_t oldUdpLen = 0, newUdpLen = 0;
+  size_t oldUdpLen = 0, newUdpLen = 0, keptLen = 0;
   volco::findField(oldBlob, oldLen, volco::kUdpField, oldUdp, oldUdpLen);  // left null/0 when absent
   volco::findField(receiver.data(), receiver.size(), volco::kUdpField, newUdp, newUdpLen);
-  const bool keep = volco::keepsWifiCopy(config_store_wifi_enabled(), candidate.has_udp && candidate.udp.enabled,
-                                         oldUdp, oldUdpLen, newUdp, newUdpLen);
-  if ((keep && !config_store_keep_wifi(oldUdp, oldUdpLen)) || !config_store_save(receiver.data(), receiver.size())) {
+  const bool hasKept = config_store_wifi_provisional();
+  const uint8_t* kept = hasKept ? config_store_kept_wifi(keptLen) : nullptr;
+  const volco::WifiCopy copy =
+      volco::wifiCopyOnSave(hasKept, kept, keptLen, config_store_wifi_enabled(),
+                            candidate.has_udp && candidate.udp.enabled, oldUdp, oldUdpLen, newUdp, newUdpLen);
+  if ((copy == volco::WIFI_COPY_STORE_OLD && !config_store_keep_wifi(oldUdp, oldUdpLen)) ||
+      !config_store_save(receiver.data(), receiver.size())) {
     sendResult(transport, seq, volco::CFG_STORAGE_FAILED, volco::kNoItem, volco::kNoItem);
     return;
   }
-  if (!keep) config_store_drop_wifi();
+  if (copy == volco::WIFI_COPY_DROP) config_store_drop_wifi();
   sendResult(transport, seq, volco::CFG_OK, volco::kNoItem, volco::kNoItem);
   DEBUG_LOG("[DBG] Config: saved, restarting");
   Serial.flush();

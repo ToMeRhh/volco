@@ -83,6 +83,24 @@ void test_keeps_copy_only_when_udp_changes() {
   TEST_ASSERT_FALSE(keepsWifiCopy(false, true, A, 3, B, 3));
 }
 
+void test_copy_on_save_without_a_copy() {
+  const uint8_t A[] = {1, 2, 3}, B[] = {1, 2, 4};
+  TEST_ASSERT_EQUAL(WIFI_COPY_STORE_OLD, wifiCopyOnSave(false, nullptr, 0, true, true, A, 3, B, 3));
+  TEST_ASSERT_EQUAL(WIFI_COPY_NONE, wifiCopyOnSave(false, nullptr, 0, true, true, A, 3, A, 3));
+  TEST_ASSERT_EQUAL(WIFI_COPY_NONE, wifiCopyOnSave(false, nullptr, 0, false, true, A, 3, B, 3));
+  TEST_ASSERT_EQUAL(WIFI_COPY_NONE, wifiCopyOnSave(false, nullptr, 0, true, false, A, 3, B, 3));
+}
+
+// The stored settings P are provisional over the kept K: the copy stays K or goes, never becomes P.
+void test_copy_on_save_while_provisional() {
+  const uint8_t K[] = {1, 2, 3}, P[] = {1, 2, 4}, N[] = {1, 2, 5};
+  TEST_ASSERT_EQUAL(WIFI_COPY_KEEP_EXISTING, wifiCopyOnSave(true, K, 3, true, true, P, 3, N, 3));
+  TEST_ASSERT_EQUAL(WIFI_COPY_KEEP_EXISTING, wifiCopyOnSave(true, K, 3, true, true, P, 3, P, 3));
+  TEST_ASSERT_EQUAL(WIFI_COPY_KEEP_EXISTING, wifiCopyOnSave(true, K, 3, true, true, P, 3, N, 2));
+  TEST_ASSERT_EQUAL(WIFI_COPY_DROP, wifiCopyOnSave(true, K, 3, true, true, P, 3, K, 3));
+  TEST_ASSERT_EQUAL(WIFI_COPY_DROP, wifiCopyOnSave(true, K, 3, true, false, P, 3, N, 3));
+}
+
 void test_fallback_confirms_on_udp_frame() {
   WifiFallback f;
   f.begin(true, 0, 30000);
@@ -117,6 +135,8 @@ int main(int, char**) {
   RUN_TEST(test_replace_field_rejects_malformed);
   RUN_TEST(test_find_field_absent);
   RUN_TEST(test_keeps_copy_only_when_udp_changes);
+  RUN_TEST(test_copy_on_save_without_a_copy);
+  RUN_TEST(test_copy_on_save_while_provisional);
   RUN_TEST(test_fallback_confirms_on_udp_frame);
   RUN_TEST(test_fallback_restores_after_window);
   RUN_TEST(test_not_provisional_does_nothing);

@@ -100,18 +100,24 @@ bool config_store_wifi_provisional() {
   return kept;
 }
 
-bool config_store_restore_wifi() {
+const uint8_t* config_store_kept_wifi(size_t& len) {
+  len = 0;
   Preferences prefs;
-  size_t keptLen = 0;
-  bool readOk = false;
-  if (prefs.begin("volco", true)) {
-    keptLen = prefs.getBytesLength(kWifiPrevKey);
-    readOk = keptLen > 0 && keptLen <= sizeof keptUdp && prefs.getBytes(kWifiPrevKey, keptUdp, keptLen) == keptLen;
-    prefs.end();
-  }
+  if (!prefs.begin("volco", true)) return nullptr;
+  const size_t n = prefs.isKey(kWifiPrevKey) ? prefs.getBytesLength(kWifiPrevKey) : 0;
+  const bool ok = n > 0 && n <= sizeof keptUdp && prefs.getBytes(kWifiPrevKey, keptUdp, n) == n;
+  prefs.end();
+  if (!ok) return nullptr;
+  len = n;
+  return keptUdp;
+}
+
+bool config_store_restore_wifi() {
+  size_t keptLen;
+  const uint8_t* kept = config_store_kept_wifi(keptLen);
   // The stored config as loaded at boot (none, oversized or unreadable: blobLen 0); the rest of it is kept.
-  const size_t n = readOk && blobLen
-                       ? volco::replaceField(blob, blobLen, volco::kUdpField, keptUdp, keptLen, restored, sizeof restored)
+  const size_t n = kept && blobLen
+                       ? volco::replaceField(blob, blobLen, volco::kUdpField, kept, keptLen, restored, sizeof restored)
                        : 0;
   const bool ok = n && volco::decodeConfig(restored, n, decoded) &&
                   volco::validateConfig(decoded, volco::esp32Chip()).code == volco::CFG_OK &&

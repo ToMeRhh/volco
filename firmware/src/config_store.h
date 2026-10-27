@@ -36,6 +36,9 @@ bool config_store_keep_wifi(const uint8_t* udp, size_t len);
 // Drops the kept copy: the new settings were confirmed, or a save kept none.
 void config_store_drop_wifi();
 
+// The kept copy's bytes (valid until the next call), or null when there is none or it can't be read.
+const uint8_t* config_store_kept_wifi(size_t& len);
+
 // The stored Wi-Fi settings are provisional: a kept copy exists.
 bool config_store_wifi_provisional();
 

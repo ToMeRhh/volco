@@ -131,6 +131,14 @@ bool keepsWifiCopy(bool oldEnabled, bool newEnabled, const uint8_t* oldUdp, size
   return oldLen > 0 && memcmp(oldUdp, newUdp, oldLen) != 0;
 }
 
+WifiCopy wifiCopyOnSave(bool hasKept, const uint8_t* kept, size_t keptLen, bool oldEnabled, bool newEnabled,
+                        const uint8_t* oldUdp, size_t oldLen, const uint8_t* newUdp, size_t newLen) {
+  if (!hasKept) return keepsWifiCopy(oldEnabled, newEnabled, oldUdp, oldLen, newUdp, newLen) ? WIFI_COPY_STORE_OLD
+                                                                                              : WIFI_COPY_NONE;
+  const bool sameAsKept = newLen == keptLen && (keptLen == 0 || memcmp(newUdp, kept, keptLen) == 0);
+  return newEnabled && !sameAsKept ? WIFI_COPY_KEEP_EXISTING : WIFI_COPY_DROP;
+}
+
 void WifiFallback::begin(bool provisional, uint32_t now, uint32_t windowMs) {
   provisional_ = provisional;
   confirmed_ = false;

@@ -25,6 +25,19 @@ size_t replaceField(const uint8_t* blob, size_t len, uint32_t field, const uint8
 bool keepsWifiCopy(bool oldEnabled, bool newEnabled, const uint8_t* oldUdp, size_t oldLen, const uint8_t* newUdp,
                    size_t newLen);
 
+// What a save does with the kept copy, which is always Wi-Fi settings a PC has answered on.
+enum WifiCopy : uint8_t {
+  WIFI_COPY_NONE,           // no copy, and none is needed
+  WIFI_COPY_STORE_OLD,      // keep the old settings before the save
+  WIFI_COPY_KEEP_EXISTING,  // a copy exists and the new settings are unproven too: leave it as it is
+  WIFI_COPY_DROP,           // a copy exists, and the new settings are it, or have Wi-Fi off
+};
+
+// hasKept: a copy exists (the stored settings are provisional), with bytes kept/keptLen. Without
+// one, keepsWifiCopy decides; with one, the copy stays unless the new settings are off or equal it.
+WifiCopy wifiCopyOnSave(bool hasKept, const uint8_t* kept, size_t keptLen, bool oldEnabled, bool newEnabled,
+                        const uint8_t* oldUdp, size_t oldLen, const uint8_t* newUdp, size_t newLen);
+
 // The window after a boot on new Wi-Fi settings. Only a valid frame over UDP (transport 1)
 // proves them; USB serial says nothing about the network. CONFIRM and RESTORE are each returned once.
 class WifiFallback {
