@@ -70,7 +70,9 @@ public sealed class ControllerViewModelTests : IDisposable
         var seq = Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87)[3];
         byte[] theirs = { 0x32, 0x02, 0x08, 0x64 };
         Conn.RaiseMessage(new ConfigDataMessage(seq, (ushort)theirs.Length, 0, ControllerConfigCodec.Crc32(theirs), theirs));
-        Until(() => _rig.Runtime.ControllerConfig.Operation == ConfigOperation.Idle);
+        // The banner follows the look's end: DifferentSetup.
+        Until(() => _rig.Runtime.ControllerConfig.Operation == ConfigOperation.Idle
+                    && _rig.Runtime.ControllerConfig.Banner.Kind == BannerKind.DifferentSetup);
     }
 
     private byte[] LastWriteBurst() => Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
@@ -108,7 +110,10 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.Stored, 0x1234));
-        Assert.Equal(BannerKind.DifferentSetup, vm.Banner.Kind);
+        Assert.Equal(BannerKind.None, vm.Banner.Kind);   // first the quiet look for a Wi-Fi fallback
+        Assert.False(vm.CanEdit);
+        AnswerAutoRead();                                // more than the Wi-Fi differs
+        Until(() => vm.Banner.Kind == BannerKind.DifferentSetup);
         Assert.False(vm.CanEdit);
     }
 
