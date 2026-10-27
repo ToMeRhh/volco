@@ -45,6 +45,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _runtime.CalibrationChanged += OnCalibrationChanged;
         _runtime.PinActivity += OnPinActivity;
         Status = new ControllerStatusViewModel(controller, this);
+        Status.Progress.PropertyChanged += OnProgressChanged;
         SaveCommand = new RelayCommand(() => _controller.SaveCommand.Execute(null), () => _controller.CanSave && _controller.Problems.Count == 0);
         Chooser = new SetupChooserViewModel(controller, OnChooserPicked, CancelStartOver);
         Refresh();
@@ -169,18 +170,35 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     private Task<WifiSwitchOutcome>? _turnOff;
     private bool _turnOffShown;
 
+    // The turn-off's display waits while the progress dialog shows another operation or its result
+    // (say a firmware update, whose Hello is the USB Hello the turn-off waited for): its latest
+    // step, or its outcome once it ended, shows when that dialog is free.
+    private bool _turnOffQueued;
+    private string? _queuedStep;
+    private WifiSwitchOutcome? _queuedOutcome;
+
     /// <summary>The Connection dialog's Switch to USB and turn Wi-Fi off, or its Wi-Fi card's Turn
     /// Wi-Fi off: <see cref="WifiSwitch.TurnOffAsync"/>, watched here rather than by the dialog, so
     /// its save (at the first USB Hello, whenever that comes) runs in the progress dialog and its
-    /// result shows there whether or not the Connection dialog is still open.</summary>
+    /// result shows there whether or not the Connection dialog is still open. The save never takes
+    /// the progress dialog from another operation: its display waits for it (only the display; the
+    /// save runs).</summary>
     internal void TurnWifiOff()
     {
         if (_disposed || _turnOff is not null || _controller.Wifi is not { } wifi) return;
         _turnOffShown = false;
+        _turnOffQueued = false;
+        _queuedStep = null;
+        _queuedOutcome = null;
         var progress = new WifiStepProgress(_ui, (_, text) =>
         {
             if (_disposed) return;
             if (_turnOffShown) Status.Progress.WifiStep(text);
+            else if (_turnOffQueued || Status.Progress.IsOpen)
+            {
+                _turnOffQueued = true;
+                _queuedStep = text;
+            }
             else
             {
                 _turnOffShown = true;
@@ -199,7 +217,12 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         var shown = _turnOffShown;
         _turnOffShown = false;
         var failure = WifiOutcomes.FailureText(outcome, overWifi: false);
-        if (outcome == WifiSwitchOutcome.BackOnUsb)
+        if (!shown && (_turnOffQueued || (failure is not null && Status.Progress.IsOpen)))
+        {
+            _turnOffQueued = true;
+            _queuedOutcome = outcome;   // shown once the progress dialog is free
+        }
+        else if (outcome == WifiSwitchOutcome.BackOnUsb)
         {
             if (shown) Status.Progress.EndWifi(WifiOutcomes.TurnedOffText);
         }
@@ -210,6 +233,36 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         }
         else if (shown) Status.Progress.EndWifi(null);   // dropped mid-save
         ConnectionDialog?.TransportEdited();
+    }
+
+    private void OnProgressChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // Posted: whatever closed the dialog (Next's Try again) may open it again at once.
+        if (e.PropertyName == nameof(ProgressDialogViewModel.IsOpen) && _turnOffQueued && !Status.Progress.IsOpen)
+            _ui.Post(ShowQueuedTurnOff);
+    }
+
+    /// <summary>The progress dialog is free: the waiting turn-off shows its step, or its result.</summary>
+    private void ShowQueuedTurnOff()
+    {
+        if (_disposed || !_turnOffQueued || Status.Progress.IsOpen) return;
+        _turnOffQueued = false;
+        var step = _queuedStep;
+        _queuedStep = null;
+        if (_queuedOutcome is not { } outcome)
+        {
+            _turnOffShown = true;   // still running: the rest of its steps follow here
+            Status.Progress.BeginWifi(WifiOutcomes.TurnOffTitle, step ?? "");
+            return;
+        }
+        _queuedOutcome = null;
+        if (outcome == WifiSwitchOutcome.BackOnUsb)
+        {
+            Status.Progress.BeginWifi(WifiOutcomes.TurnOffTitle, "");
+            Status.Progress.EndWifi(WifiOutcomes.TurnedOffText);
+        }
+        else if (WifiOutcomes.FailureText(outcome, overWifi: false) is { } failure)
+            Status.Progress.ShowWifiFailure(WifiOutcomes.TurnOffTitle, failure);
     }
 
     /// <summary>Closes the Connection dialog (Done, Escape, or a click outside).</summary>
@@ -1001,6 +1054,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _runtime.CalibrationChanged -= OnCalibrationChanged;
         _runtime.PinActivity -= OnPinActivity;
         ClosePinDialog();
+        Status.Progress.PropertyChanged -= OnProgressChanged;
         Status.Dispose();
         CloseCalibration();
         CloseBuses();
