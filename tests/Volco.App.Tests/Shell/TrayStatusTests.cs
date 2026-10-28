@@ -17,7 +17,7 @@ public class TrayStatusTests
     [InlineData(LinkState.Incompatible, "Volco — Firmware update needed")]
     public void NotConnected_IsRed_AndSaysWhy(LinkState state, string toolTip)
     {
-        var tray = TrayStatus.For(audioEngineFailed: false, new LinkStatus(state), Usb);
+        var tray = TrayStatus.For(audioEngineFailed: false, new LinkStatus(state), Usb, "COM3");
 
         Assert.True(tray.Down);
         Assert.Equal(toolTip, tray.ToolTip);
@@ -29,7 +29,7 @@ public class TrayStatusTests
     [InlineData(LinkActivity.Restarting, "Volco — Controller restarting…")]
     public void AnExpectedWait_IsNotRed(LinkActivity activity, string toolTip)
     {
-        var tray = TrayStatus.For(audioEngineFailed: false, new LinkStatus(LinkState.Waiting, activity), Usb);
+        var tray = TrayStatus.For(audioEngineFailed: false, new LinkStatus(LinkState.Waiting, activity), Usb, "COM3");
 
         Assert.False(tray.Down);
         Assert.Equal(toolTip, tray.ToolTip);
@@ -39,7 +39,7 @@ public class TrayStatusTests
     [Fact]
     public void Connected_IsNormal_AndOffersDisconnect()
     {
-        var tray = TrayStatus.For(audioEngineFailed: false, new LinkStatus(LinkState.Connected), Usb);
+        var tray = TrayStatus.For(audioEngineFailed: false, new LinkStatus(LinkState.Connected), Usb, "COM3");
 
         Assert.False(tray.Down);
         Assert.StartsWith("Volco ", tray.ToolTip);
@@ -49,11 +49,11 @@ public class TrayStatusTests
 
     [Fact]
     public void UserDisconnected_OffersConnect()
-        => Assert.Equal("Connect", TrayStatus.For(false, LinkStatus.Disconnected, Usb).ConnectionMenuText);
+        => Assert.Equal("Connect", TrayStatus.For(false, LinkStatus.Disconnected, Usb, "COM3").ConnectionMenuText);
 
     [Fact]
     public void AudioEngineFailure_KeepsItsTooltip()
-        => Assert.Contains("audio engine failed", TrayStatus.For(true, new LinkStatus(LinkState.Searching), Usb).ToolTip);
+        => Assert.Contains("audio engine failed", TrayStatus.For(true, new LinkStatus(LinkState.Searching), Usb, "COM3").ToolTip);
 
     [Theory]
     [InlineData(BannerKind.None, true, "Volco controller firmware update available")]
@@ -62,7 +62,7 @@ public class TrayStatusTests
     public void TooltipNamesTheVolcoController(BannerKind kind, bool notice, string line)
     {
         var banner = new ControllerBanner(kind, BannerActions.None, notice, false);
-        var tray = TrayStatus.For(false, new LinkStatus(LinkState.Connected), Usb, banner);
+        var tray = TrayStatus.For(false, new LinkStatus(LinkState.Connected), Usb, "COM3", banner);
 
         Assert.EndsWith("\n" + line, tray.ToolTip);
     }
@@ -71,7 +71,7 @@ public class TrayStatusTests
     public void NoControllerLineWhenTheHeadlineSaysIt()
     {
         var banner = new ControllerBanner(BannerKind.NoAnswer, BannerActions.CheckFirmware, false, false);
-        Assert.Equal("Volco — Controller not responding", TrayStatus.For(false, new LinkStatus(LinkState.NoAnswer), Usb, banner).ToolTip);
-        Assert.DoesNotContain("\n", TrayStatus.For(false, new LinkStatus(LinkState.Connected), Usb, ControllerBanner.Empty).ToolTip);
+        Assert.Equal("Volco — Controller not responding", TrayStatus.For(false, new LinkStatus(LinkState.NoAnswer), Usb, "COM3", banner).ToolTip);
+        Assert.DoesNotContain("\n", TrayStatus.For(false, new LinkStatus(LinkState.Connected), Usb, "COM3", ControllerBanner.Empty).ToolTip);
     }
 }

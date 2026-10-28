@@ -447,11 +447,200 @@ public sealed class HardwareViewModelTests : IDisposable
         Hardware.OpenConnection(false);
         var dialog = Hardware.ConnectionDialog!;
         var raised = 0;
-        dialog.PropertyChanged += (_, _) => raised++;
+        dialog.UsbCard.PropertyChanged += (_, _) => raised++;
+        Controller.Connection.ConnectionTypeIndex = 2;   // open, the card follows
+        Assert.NotEqual(0, raised);
         Hardware.CloseConnection();
+        raised = 0;
 
-        Controller.Connection.ConnectionTypeIndex = 1;
+        Controller.Connection.ConnectionTypeIndex = 0;
         Assert.Equal(0, raised);
+    }
+
+    [Fact]
+    public void SaveAndContinueThenOpensConnection()
+    {
+        SetUpInSync();
+        Controller.DebounceMs = 25;
+        Hardware.OpenConnection(false);
+        var blob = ControllerConfigCodec.Encode(Controller.Draft);
+        Hardware.LeavePrompt!.SaveAndContinueCommand.Execute(null);
+        WaitForWrite();
+        Assert.False(Hardware.IsConnectionDialogOpen);   // not before the controller confirms
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, ControllerConfigCodec.Crc32(blob), sliders: Controller.Draft.Sliders.Count));
+        Until(() => !Controller.IsSaving);
+        _ui.RunAll();
+        Assert.Null(Hardware.LeavePrompt);
+        Assert.True(Hardware.IsConnectionDialogOpen);
+        Assert.False(Hardware.HasUnsavedControllerChanges);
+    }
+
+    [Fact]
+    public void AFaultedWifiOperationCountsAsSaveFailed()
+    {
+        Assert.Equal(WifiSwitchOutcome.SaveFailed, WifiOutcomes.Of(Task.FromException<WifiSwitchOutcome>(new InvalidOperationException("boom"))));
+        Assert.Equal(WifiSwitchOutcome.SaveFailed, WifiOutcomes.Of(Task.FromCanceled<WifiSwitchOutcome>(new CancellationToken(true))));
+        Assert.Equal(WifiSwitchOutcome.OnWifi, WifiOutcomes.Of(Task.FromResult(WifiSwitchOutcome.OnWifi)));
+
+        // The progress dialog a faulted save opened still ends.
+        SetUpInSync();
+        var progress = Hardware.Status.Progress;
+        progress.BeginWifi("Saving to the controller", "Sending…");
+        WifiOutcomes.OnEnd(Task.FromException<WifiSwitchOutcome>(new InvalidOperationException("boom")), _ui,
+                           o => progress.EndWifi(WifiOutcomes.FailureText(o, false), LinkTone.Danger));
+        Until(() => { _ui.RunAll(); return progress.IsDone; });
+        Assert.Equal("The controller didn't save the Wi-Fi settings. Try again.", progress.ResultText);
+    }
+
+    private static readonly byte[] DiyWifiBlob = ControllerConfigCodec.Encode(WithWifi(ControllerPresets.ApplyTo(new ControllerConfig(), Diy)));
+
+    private static ControllerConfig WithWifi(ControllerConfig c)
+    {
+        c.Udp = new Udp { Enabled = true, Ssid = "HomeNet", Password = "password1", PcIp = 0xC0A80114, PcPort = 12345, LocalPort = 12346 };
+        return c;
+    }
+
+    /// <summary>Another operation's result in the progress dialog (here a failed save) keeps it:
+    /// the turn-off's save runs, and its display waits until that dialog is closed.</summary>
+    [Fact]
+    public void ATurnOffWaitsForTheProgressDialogShowingAnotherResult()
+    {
+        Settings(DiyWifiBlob);
+        GreetInSync(DiyWifiBlob);
+        var progress = Hardware.Status.Progress;
+        Controller.RemoveSlider(2);
+        Controller.SaveCommand.Execute(null);
+        WaitForWrite();
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.StorageFailed, 0xFF, 0xFF));
+        Until(() => !Controller.IsSaving && progress.IsDone);
+        var title = progress.Title;
+        var result = progress.ResultText;
+        Assert.Equal(LinkTone.Danger, progress.ResultTone);
+
+        var writes = Conn.SentFrames.Count(f => f.Length > 3 && f[2] == 0x88);
+        Hardware.TurnWifiOff();
+        Until(() => Conn.SentFrames.Count(f => f.Length > 3 && f[2] == 0x88) > writes);   // the save runs
+        var burst = LastWriteBurst();
+        Conn.RaiseMessage(new ConfigResultMessage(burst[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        var sent = WrittenCrc();
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, sent));
+        Until(() => Controller.Mirror is { } m && !ControllerConfigCodec.Decode(m).Udp.Enabled);
+        _ui.RunAll();
+
+        // Still the failed save's result: nothing took it over.
+        Assert.True(progress.IsDone);
+        Assert.Equal(title, progress.Title);
+        Assert.Equal(result, progress.ResultText);
+
+        // A good result may close itself at once (SavedHold), so what it showed is recorded.
+        var shown = Record(progress);
+        progress.Close();
+        Until(() => { lock (shown) return shown.Contains(("Turning Wi-Fi off", "Saved. The controller's Wi-Fi is off.")); });
+        Assert.Equal(LinkTone.Good, progress.ResultTone);
+    }
+
+    /// <summary>Each result the progress dialog shows, with its title.</summary>
+    private static List<(string Title, string? Result)> Record(ProgressDialogViewModel progress)
+    {
+        var shown = new List<(string, string?)>();
+        progress.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ProgressDialogViewModel.ResultText) && progress.ResultText is { } r)
+                lock (shown) shown.Add((progress.Title, r));
+        };
+        return shown;
+    }
+
+    /// <summary>The CRC of the last config write burst's blob.</summary>
+    private uint WrittenCrc()
+    {
+        var burst = LastWriteBurst();
+        var length = (burst[4] << 8) | burst[5];
+        var blob = new List<byte>();
+        var at = burst[1] + 3;
+        while (at < burst.Length && blob.Count < length)
+        {
+            var len = burst[at + 1];
+            if (burst[at + 2] == 0x89) blob.AddRange(burst.Skip(at + 2 + 4).Take(len - 4));
+            at += len + 3;
+        }
+        return ControllerConfigCodec.Crc32(blob.ToArray());
+    }
+
+    /// <summary>A turn-off still running when the other operation's dialog closes shows its progress there.</summary>
+    [Fact]
+    public void ARunningTurnOffShowsOnceTheProgressDialogIsFree()
+    {
+        Settings(DiyWifiBlob);
+        GreetInSync(DiyWifiBlob);
+        var progress = Hardware.Status.Progress;
+        progress.ShowWifiFailure("Updating firmware", "Something else's result");   // another result shows
+        var writes = Conn.SentFrames.Count(f => f.Length > 3 && f[2] == 0x88);
+        Hardware.TurnWifiOff();
+        Until(() => Conn.SentFrames.Count(f => f.Length > 3 && f[2] == 0x88) > writes);
+        _ui.RunAll();
+        Assert.Equal("Updating firmware", progress.Title);
+
+        var shown = Record(progress);
+        progress.Close();
+        Until(() => progress.IsOpen);
+        Assert.Equal("Turning Wi-Fi off", progress.Title);
+        Assert.True(progress.IsRunning);
+
+        Conn.RaiseMessage(new ConfigResultMessage(LastWriteBurst()[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        Conn.RaiseMessage(Hello(ControllerConfigState.Stored, WrittenCrc()));
+        Until(() => { lock (shown) return shown.Contains(("Turning Wi-Fi off", "Saved. The controller's Wi-Fi is off.")); });
+    }
+
+    [Fact]
+    public void TheConnectionDialogOpensOnTheCardInUse()
+    {
+        SetUpInSync();
+        Hardware.OpenConnection(false);
+        var dialog = Hardware.ConnectionDialog!;
+        Assert.Equal(new[] { true, false, false }, dialog.Cards.Select(c => c.IsOpen));
+        Assert.Equal(new[] { true, false, false }, dialog.Cards.Select(c => c.IsInUse));
+
+        dialog.Open(ConnectionCardKind.Simulator);
+        Assert.Equal(new[] { false, false, true }, dialog.Cards.Select(c => c.IsOpen));
+        Assert.Equal(ConnectionType.Serial, Controller.Connection.ConnectionType);   // opening switches nothing
+
+        Hardware.OpenConnection(true);
+        Assert.True(Hardware.ConnectionDialog!.WifiCard.IsOpen);
+        Assert.False(Hardware.ConnectionDialog.UsbCard.IsOpen);
+    }
+
+    [Fact]
+    public void OpenConnectionAsksFirstWithUnsavedControllerChanges()
+    {
+        SetUpInSync();
+        Controller.DebounceMs = 25;
+        Hardware.OpenConnection(true);
+        Assert.False(Hardware.IsConnectionDialogOpen);
+        var prompt = Hardware.LeavePrompt!;
+        Assert.Equal("Your controller changes aren't saved. Save them before opening Connection?", prompt.Message);
+        Assert.Equal(("Save and continue", "Discard and continue", "Stay"), (prompt.SaveLabel, prompt.DiscardLabel, prompt.StayLabel));
+
+        prompt.StayCommand.Execute(null);
+        Assert.Null(Hardware.LeavePrompt);
+        Assert.False(Hardware.IsConnectionDialogOpen);
+        Assert.True(Hardware.HasUnsavedControllerChanges);
+
+        Hardware.OpenConnection(true);
+        Hardware.LeavePrompt!.DiscardAndContinueCommand.Execute(null);
+        Assert.True(Hardware.IsConnectionDialogOpen);
+        Assert.True(Hardware.ConnectionDialog!.WifiCard.IsOpen);
+    }
+
+    [Fact]
+    public void ButtonTimingAloneDoesNotAskBeforeConnection()
+    {
+        SetUpInSync();
+        Controller.HoldMs = 700;   // Volco's own setting, not the controller's
+        Hardware.OpenConnection(false);
+        Assert.Null(Hardware.LeavePrompt);
+        Assert.True(Hardware.IsConnectionDialogOpen);
     }
 
     // ── Raw input and read-only ──────────────────────────────────────────────────────────────

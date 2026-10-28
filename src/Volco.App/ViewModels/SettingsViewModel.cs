@@ -21,6 +21,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly IAudioEngine _audio;
     private readonly VolcoRuntime _runtime;
     private readonly FirmwareService? _firmware;
+    private readonly WifiSwitch? _wifi;
     private readonly IStartWithSystem? _startWithSystem;
     private readonly IAppIcons? _appIcons;
     private readonly AppIconLookup? _appIconLookup;
@@ -108,7 +109,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         {
             if (_controllerViewModel is null)
             {
-                _controllerViewModel = new ControllerViewModel(_config, _runtime, _ui, _firmware, Connection);
+                _controllerViewModel = new ControllerViewModel(_config, _runtime, _ui, _firmware, Connection, _wifi);
                 _controllerViewModel.ControlsShifted += OnControlsShifted;
             }
             return _controllerViewModel;
@@ -126,8 +127,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     public SettingsViewModel(ConfigManager config, IAudioEngine audio, VolcoRuntime runtime, IUiDispatcher ui,
                              FirmwareService? firmware = null, IStartWithSystem? startWithSystem = null,
-                             IAppIcons? appIcons = null, AppIconLookup? appIconLookup = null)
+                             IAppIcons? appIcons = null, AppIconLookup? appIconLookup = null, WifiSwitch? wifi = null)
     {
+        _wifi = wifi;
         _appIconLookup = appIconLookup;
         _firmware = firmware;
         _startWithSystem = startWithSystem;

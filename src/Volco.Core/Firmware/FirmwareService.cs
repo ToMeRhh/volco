@@ -205,16 +205,19 @@ public sealed class FirmwareService
     }
 
     /// <summary>The dialog's port becomes the configured one (spec §8.6 step 3), saved while the
-    /// connection is suspended; the resume then opens it.</summary>
+    /// connection is suspended; the resume then opens it. Under Automatic it becomes the last
+    /// port instead, which the resumed round tries early, and the port stays Automatic.</summary>
     private async Task SavePortAsync(string port)
     {
         var serial = _runtime.Config.Config.Connection.Serial;
-        if (serial.ComPort == port) return;
+        var automatic = string.IsNullOrEmpty(serial.ComPort);
+        if (automatic ? serial.LastPort == port : serial.ComPort == port) return;
         try
         {
             await _configThread(() =>
             {
-                serial.ComPort = port;
+                if (automatic) serial.LastPort = port;
+                else serial.ComPort = port;
                 _runtime.Config.Save();
             }).ConfigureAwait(false);
         }

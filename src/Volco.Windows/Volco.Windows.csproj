@@ -5,6 +5,8 @@
     <RootNamespace>Volco.Windows</RootNamespace>
     <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- SetupAPI structs (SP_DEVINFO_DATA) differ by architecture, so CsWin32 needs a specific one; Volco ships win-x64 only. -->
+    <PlatformTarget>x64</PlatformTarget>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>

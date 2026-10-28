@@ -78,7 +78,11 @@ public class CommandConfig
 
 public class SerialConfig
 {
-    public string ComPort { get; set; } = "COM3";
+    /// <summary>"" is Automatic: Volco picks the port (CH340 first, then <see cref="LastPort"/>).</summary>
+    public string ComPort { get; set; } = "";
+
+    /// <summary>The last port a controller's Hello came over, tried early by Automatic.</summary>
+    public string? LastPort { get; set; }
 }
 
 public class UdpConfig

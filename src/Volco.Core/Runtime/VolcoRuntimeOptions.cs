@@ -1,3 +1,4 @@
+using Volco.Core.Communication;
 using Volco.Core.Firmware;
 
 namespace Volco.Core.Runtime;
@@ -40,6 +41,13 @@ public sealed record VolcoRuntimeOptions
     /// <summary>How long <see cref="VolcoRuntime.ScanI2cAsync"/> waits for the controller's result
     /// (firmware helpers, Find screens).</summary>
     public TimeSpan I2cScanTimeout { get; init; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>Opens one USB port by name (a manual port, or each port Automatic tries). Null: a
+    /// <see cref="SerialConnection"/>. Tests pass fakes.</summary>
+    public Func<string, IControllerConnection>? SerialFactory { get; init; }
+
+    /// <summary>How long Automatic waits on each port, and how often it reads the port list.</summary>
+    public AutoSerialOptions AutoSerial { get; init; } = AutoSerialOptions.Default;
 
     /// <summary>HelloRequest retry, heartbeat and tick intervals.</summary>
     public ControllerLinkOptions Link { get; init; } = ControllerLinkOptions.Default;

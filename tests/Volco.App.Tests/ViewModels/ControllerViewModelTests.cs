@@ -62,6 +62,19 @@ public sealed class ControllerViewModelTests : IDisposable
         }
     }
 
+    /// <summary>Answers the automatic look for a Wi-Fi fallback (a Hello with another CRC than the copy's)
+    /// with a different setup, so nothing is adopted.</summary>
+    private void AnswerAutoRead()
+    {
+        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x87));
+        var seq = Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x87)[3];
+        byte[] theirs = { 0x32, 0x02, 0x08, 0x64 };
+        Conn.RaiseMessage(new ConfigDataMessage(seq, (ushort)theirs.Length, 0, ControllerConfigCodec.Crc32(theirs), theirs));
+        // The banner follows the look's end: DifferentSetup.
+        Until(() => _rig.Runtime.ControllerConfig.Operation == ConfigOperation.Idle
+                    && _rig.Runtime.ControllerConfig.Banner.Kind == BannerKind.DifferentSetup);
+    }
+
     private byte[] LastWriteBurst() => Conn.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
 
     /// <summary>Answers the last write burst with OK and a confirming Hello.</summary>
@@ -97,7 +110,10 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         Greet(Hello(ControllerConfigState.Stored, 0x1234));
-        Assert.Equal(BannerKind.DifferentSetup, vm.Banner.Kind);
+        Assert.Equal(BannerKind.None, vm.Banner.Kind);   // first the quiet look for a Wi-Fi fallback
+        Assert.False(vm.CanEdit);
+        AnswerAutoRead();                                // more than the Wi-Fi differs
+        Until(() => vm.Banner.Kind == BannerKind.DifferentSetup);
         Assert.False(vm.CanEdit);
     }
 
@@ -376,13 +392,14 @@ public sealed class ControllerViewModelTests : IDisposable
         Greet(Hello(ControllerConfigState.None, 0));
         vm.StartFromScratchCommand.Execute(null);
         vm.Brightness = 40;
-        vm.UdpEnabled = true;
+        vm.Draft.Udp = new Udp { Enabled = true, Ssid = "home" };
+        vm.OnDraftEdited();
 
         vm.LoadPreset(Diy);                            // a blank draft: no question
         Assert.Null(vm.Confirmation);
         Assert.Equal(5, vm.Draft.Sliders.Count);
         Assert.Equal(40m, vm.Brightness);
-        Assert.True(vm.UdpEnabled);
+        Assert.True(vm.Draft.Udp.Enabled);
 
         vm.LoadPreset(Blank);                          // replaces hardware: asks, not in red
         Assert.Equal("Replace the current hardware with Blank?", vm.Confirmation!.Message);
@@ -537,49 +554,13 @@ public sealed class ControllerViewModelTests : IDisposable
         Until(() => read.IsCompleted);
     }
 
-    /// <summary>A valid Wi-Fi setup. The DIY sliders on 32-36 are ADC1, so Wi-Fi doesn't block them.</summary>
-    private static void EnableWifi(ControllerViewModel vm)
-    {
-        vm.UdpEnabled = true;
-        vm.Ssid = "home";
-        vm.Password = "password1";
-        vm.PcIp = "192.168.1.10";
-        Assert.Null(vm.WifiError);
-    }
-
-    [Fact]
-    public void ChangingWifiOverAUdpConnection_AsksFirst()
-    {
-        var vm = Vm(DiyBlob);
-        GreetInSync(DiyBlob);
-        _rig.Config.Config.Connection.Type = ConnectionType.Udp;   // not saved: no restart
-        EnableWifi(vm);
-        vm.SaveCommand.Execute(null);
-        Assert.StartsWith("Changing the Wi-Fi settings may disconnect the controller.", vm.Confirmation!.Message);
-        Assert.False(vm.Confirmation.IsDestructive);   // a warning, not in red
-        Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
-        vm.Confirmation.ConfirmCommand.Execute(null);
-        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
-    }
-
-    [Fact]
-    public void ChangingWifiOverSerial_DoesNotAsk()
-    {
-        var vm = Vm(DiyBlob);
-        GreetInSync(DiyBlob);
-        EnableWifi(vm);
-        Assert.Equal((decimal)_rig.Config.Config.Connection.Udp.ListenPort, vm.PcPort);   // pre-filled
-        vm.SaveCommand.Execute(null);
-        Assert.Null(vm.Confirmation);
-        Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
-    }
-
     [Fact]
     public void ApplyMine_SendsTheMirrorBytesUnchanged()
     {
         var mirror = new byte[] { 0x98, 0x06, 0x01 }.Concat(DiyBlob).ToArray();
         var vm = Vm(mirror);
         Greet(Hello(ControllerConfigState.Stored, 0x1234));
+        AnswerAutoRead();
         vm.ApplyMineCommand.Execute(null);
         Until(() => Conn.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
         var burst = LastWriteBurst();
@@ -604,18 +585,16 @@ public sealed class ControllerViewModelTests : IDisposable
     }
 
     [Fact]
-    public void Revert_ClosesAPendingQuestion_AndResetsTheIpBox()
+    public void Revert_ClosesAPendingQuestion()
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
         vm.AddSliderCommand.Execute(null);
-        vm.PcIp = "192.168.1.5";
         vm.AskRemoveSlider(4);                       // asks
         var stale = vm.Confirmation!;
 
         vm.RevertCommand.Execute(null);
         Assert.Null(vm.Confirmation);
-        Assert.Equal("", vm.PcIp);
         stale.ConfirmCommand.Execute(null);          // a stale button does nothing
         Assert.Equal(5, vm.Draft.Sliders.Count);
     }
@@ -638,9 +617,9 @@ public sealed class ControllerViewModelTests : IDisposable
     {
         var vm = Vm(DiyBlob);
         GreetInSync(DiyBlob);
-        vm.UdpEnabled = true;
-        vm.Ssid = new string('x', 40);   // over the limit; the box caps it, this is the model path
-        vm.UdpEnabled = false;           // the validator skips Wi-Fi now
+        // Wi-Fi off with a network name over the limit: the validator skips Wi-Fi, the encoder doesn't.
+        vm.Draft.Udp = new Udp { Enabled = false, Ssid = new string('x', 40) };
+        vm.OnDraftEdited();
         vm.SaveCommand.Execute(null);
         Assert.StartsWith("This setup can't be saved:", vm.ProgressText);
         Assert.DoesNotContain(Conn.SentFrames, f => f.Length > 3 && f[2] == 0x88);
@@ -719,7 +698,5 @@ public sealed class ControllerViewModelTests : IDisposable
         Assert.False(vm.Draft.Screens.HasBrightness);
         vm.DebounceMs = null;
         Assert.Equal(30m, vm.DebounceMs);
-        vm.PcPort = null;
-        Assert.Equal(12345m, vm.PcPort);
     }
 }

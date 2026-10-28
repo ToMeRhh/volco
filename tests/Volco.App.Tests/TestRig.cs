@@ -1,3 +1,4 @@
+using Volco.Core.Communication;
 using Volco.App.ViewModels;
 using Volco.Core.Audio;
 using Volco.Core.Config;
@@ -49,8 +50,11 @@ internal sealed class TestRig : IDisposable
     /// <param name="custom">Media, program and script services; null: none (those actions are
     /// unavailable, as on a platform without them).</param>
     /// <param name="configJson">config.json as it is on disk before the app starts; null: none.</param>
+    /// <param name="serialPorts">The seam behind the port list; null: names only.</param>
+    /// <param name="realTransports">True: the runtime builds its own transports (Automatic USB, with
+    /// <c>options.SerialFactory</c>), so <see cref="Connection"/> stays null.</param>
     public TestRig(FakeAudioEngine? engine = null, VolcoRuntimeOptions? options = null, CustomActionServices? custom = null,
-                   string? configJson = null)
+                   string? configJson = null, ISerialPortInfo? serialPorts = null, bool realTransports = false)
     {
         var dir = Path.Combine(Path.GetTempPath(), "volco-app-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -58,13 +62,33 @@ internal sealed class TestRig : IDisposable
         Config = new ConfigManager(Path.Combine(dir, "config.json"));
         Config.Load();
         Engine = engine ?? new FakeAudioEngine();
-        Runtime = new VolcoRuntime(Config, Engine, audioReady: true, connectionFactory: cfg =>
-            Connection = new FakeControllerConnection(cfg), options: options ?? NoGrace, custom: custom);
+        Runtime = new VolcoRuntime(Config, Engine, audioReady: true, connectionFactory: realTransports ? null : cfg =>
+            Connection = new FakeControllerConnection(cfg), options: options ?? NoGrace, custom: custom, serialPorts: serialPorts);
         Runtime.Start();
     }
 
-    public SettingsViewModel CreateSettings(IUiDispatcher ui, Volco.App.Platform.IAppIcons? appIcons = null)
-        => new(Config, Engine, Runtime, ui, appIcons: appIcons);
+    /// <summary>The run's Wi-Fi switch (the Connection dialog's Wi-Fi card), made with the first
+    /// settings view model; its config edits are posted to that view model's dispatcher.</summary>
+    public WifiSwitch? Wifi { get; private set; }
 
-    public void Dispose() => Runtime.Dispose();
+    public SettingsViewModel CreateSettings(IUiDispatcher ui, Volco.App.Platform.IAppIcons? appIcons = null)
+    {
+        Wifi ??= new WifiSwitch(Runtime, a =>
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            ui.Post(() =>
+            {
+                try { a(); done.SetResult(); }
+                catch (Exception e) { done.SetException(e); }
+            });
+            return done.Task;
+        });
+        return new(Config, Engine, Runtime, ui, appIcons: appIcons, wifi: Wifi);
+    }
+
+    public void Dispose()
+    {
+        Wifi?.Dispose();
+        Runtime.Dispose();
+    }
 }

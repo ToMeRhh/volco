@@ -50,6 +50,7 @@ internal sealed class CompositionRoot : IDisposable
     private bool _trayShowsUpdate;
     private bool _trayShowsAttention;
     private FirmwareService? _firmware;
+    private WifiSwitch? _wifi;
     private EventHandler<VolumeChangeNotification>? _osdHandler;
     private bool _shutDown;
 
@@ -81,9 +82,11 @@ internal sealed class CompositionRoot : IDisposable
         // Scripts run through .NET's Process anywhere; media and programs need the platform's.
         var custom = new CustomActionServices(_platform.Media, _platform.Launcher, new SystemProcessStarter());
         _runtime = new VolcoRuntime(_config, _platform.Audio, _platform.AudioReady, _connectionFactory,
-                                    new VolcoRuntimeOptions { Firmware = catalog }, custom);
-        // The port a flash or probe settles on is saved on the UI thread, which owns the config.
-        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThread: a =>
+                                    new VolcoRuntimeOptions { Firmware = catalog }, custom,
+                                    _platform.SerialPorts);
+        // The port a flash or probe settles on, and the Wi-Fi switch's transport, are saved on the
+        // UI thread, which owns the config.
+        Func<Action, Task> uiThread = a =>
         {
             var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             Dispatcher.UIThread.Post(() =>
@@ -92,7 +95,10 @@ internal sealed class CompositionRoot : IDisposable
                 catch (Exception e) { done.SetException(e); }
             });
             return done.Task;
-        });
+        };
+        _firmware = new FirmwareService(_runtime, _platform.Flasher, catalog, configThread: uiThread);
+        // One per run, so closing the Connection dialog never drops a pending Wi-Fi turn-off.
+        _wifi = new WifiSwitch(_runtime, uiThread);
         var firmware = _firmware;
         // Exit and the updater's restart wait for a firmware write and for a config save.
         VolcoApplication.Gate = ExitGate.For(firmware, _runtime.ControllerConfig, a => Dispatcher.UIThread.Post(a));
@@ -191,6 +197,7 @@ internal sealed class CompositionRoot : IDisposable
             _trayIcon = tray;
 
             _runtime!.LinkStatusChanged += OnTrayConnectionChanged;
+            _runtime.UsbPortChanged += OnTrayConnectionChanged;
             UpdateTray();
             AppLog.Info("Tray icon created");
         }
@@ -227,7 +234,7 @@ internal sealed class CompositionRoot : IDisposable
         _trayShowsAttention = banner.NeedsAttention;
         if (_trayIcon is not { } tray) return;
 
-        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection, banner);
+        var status = TrayStatus.For(runtime.AudioEngineFailed, runtime.LinkStatus, runtime.Config.Config.Connection, runtime.UsbPort, banner);
         var attention = _trayShowsAttention;
         tray.Icon = status.Down ? _disconnectedIcon : attention ? _attentionIcon : _connectedIcon;
         tray.ToolTipText = status.ToolTip;
@@ -250,7 +257,7 @@ internal sealed class CompositionRoot : IDisposable
             if (_settingsWindow is null)
             {
                 _settingsViewModel = new SettingsViewModel(_config!, _runtime.Audio, _runtime, new AvaloniaUiDispatcher(), _firmware,
-                                                           _platform?.StartWithSystem, _platform?.AppIcons, _appIcons);
+                                                           _platform?.StartWithSystem, _platform?.AppIcons, _appIcons, _wifi);
                 _settingsWindow = new SettingsWindow(_settingsViewModel, _runtime);
                 _settingsWindow.Closed += (_, _) =>
                 {
@@ -293,6 +300,10 @@ internal sealed class CompositionRoot : IDisposable
 
         if (_runtime is not null) _runtime.ControllerConfig.BannerChanged -= OnBannerChanged;
 
+        // Before the runtime: a Wi-Fi switch in progress is cancelled and edits nothing more.
+        _wifi?.Dispose();
+        _wifi = null;
+
         // Runtime first: it owns the transport and input pipeline and must stop touching the
         // engine before the engine is disposed. It does not dispose the engine itself.
         _runtime?.Dispose();
@@ -318,6 +329,7 @@ internal sealed class CompositionRoot : IDisposable
         if (_runtime is not null)
         {
             _runtime.LinkStatusChanged -= OnTrayConnectionChanged;
+            _runtime.UsbPortChanged -= OnTrayConnectionChanged;
         }
 
         if (_trayIcon is { } tray)

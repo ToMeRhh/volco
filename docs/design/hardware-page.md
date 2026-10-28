@@ -250,28 +250,66 @@ Drives an output-capable pin that is free or a configured LED pin, then restores
 
 ## 10. Connection dialog
 
-Opened from the card's status line or the ⋯ menu. "Connection", "Stored in Volco on this PC; applies at once." A segment **USB / Wi-Fi / Simulator** (decision 4: one transport at a time). For now (interim rule, until the Wi-Fi steps of §10.2 are built) the segment only selects a tab; a tab that isn't the transport in use says **Use USB** / **Use Wi-Fi** / **Use the simulator**, which switches Volco's transport at once, and the one in use says "In use".
+Rewritten 2026-10-25 for #119 (user review of the mocks: choice cards, Windows' port descriptions, no numbered Wi-Fi headings). It replaces the interim version, whose tab strip only switched the view, with a separate **Use …** button and Wi-Fi fields that waited for the save bar, so it was unclear what switching tabs did.
 
-### 10.1 USB
+Opened from the sidebar status menu's **Connection…**, and from Controller settings › Wi-Fi (on the Wi-Fi card; the row's summary reads "Off" or "On · HomeNet").
 
-- **Port:** **Automatic (COM3)** by default, then each port with its Windows description ("COM3 · USB-SERIAL CH340", "COM5 · Bluetooth link"). Done applies.
-- **Automatic** (`connection.serial.comPort` empty): the app tries each port with a HelloRequest, the CH340 (`1a86:7523`) first, and remembers the one that answered (`connection.serial.lastPort`, used first next time). The card names the port it found.
-- **A board that doesn't answer** (blank or foreign firmware) with Automatic (my call): with no serial ports, the state is `Searching`. With ports but no answer, it is `NoAnswer` on the best candidate (the CH340 if there is one, else the only port); with several candidates and no CH340 the card says "No controller answers" without a port, and Check firmware first asks which port (today's dialog port picker). Firmware actions use that candidate, and a successful install makes it `lastPort`.
-- Port descriptions and USB ids come from a new optional seam (`ISerialPortInfo` in `PlatformServices`, Windows: SetupAPI or WMI); without it the list shows names only and Automatic tries them in order.
+**Unsaved controller changes come first** (user, 2026-10-26): opening the dialog with unsaved changes shows the leave prompt (`LeavePromptViewModel`: Save and continue / Discard and continue / Stay), worded for opening Connection, and the dialog opens only once the draft is clean. So every save the dialog makes (§10.2, §10.3) starts from the controller's saved config with no draft to merge or leave stale. Asking on open rather than only on the Wi-Fi card is my call: it keeps one rule for the whole dialog.
 
-### 10.2 Wi-Fi
+### 10.1 Layout: one card per transport
 
-"1. The controller joins your network": Network, Password. "2. It sends to this PC": this PC's address, picked from its IPv4 addresses with their adapter names. **Ports ›** folds the three ports (filled from Volco's listen port). "Sent over USB, then Volco switches to Wi-Fi." **Cancel**, **Save and switch**:
-1. Requires a USB connection to the controller (else the button says why).
-2. Writes the Wi-Fi settings into the controller config and saves it (the usual save, restart included).
-3. Switches Volco's transport to Wi-Fi and waits up to 15 s for a Hello.
-4. No Hello: switches back to USB and says "The controller didn't answer over Wi-Fi. Check the network name and password." The controller keeps the Wi-Fi settings.
+Title: "How Volco reaches the controller". Three cards stacked: **USB cable**, **Wi-Fi**, **Simulator** (decision 4: one transport at a time). The footer has only **Close**; the old "Stored in Volco on this PC; applies at once." line goes.
 
-Turning Wi-Fi off from the dialog (choosing USB while on Wi-Fi) saves the config with UDP off once back on USB, after asking.
+- The card of the transport in use has an **In use** badge.
+- Clicking a card opens it and closes the one that was open. Opening a card **never switches** anything. The dialog opens on the card in use, or on Wi-Fi when opened from Controller settings › Wi-Fi.
+- **Only a button inside a card switches,** and its text says what it does: **Switch to USB**, **Save and switch** (Wi-Fi, §10.3), **Switch to the simulator**.
+- Inside the card in use, edits apply at once (the USB port, the simulator's port). A card that is not in use keeps its edits until its switch button, and drops them on Close (my call).
+- A closed card shows a one-line summary: USB "Automatic · found the controller on COM3" or "COM5"; Wi-Fi "On HomeNet · sending to 192.168.1.20" or "Off"; Simulator "Port 8765".
 
-### 10.3 Simulator
+### 10.2 USB cable
 
-Today's WebSocket option, renamed, with its port.
+- **Port** list: **Automatic (COM3)** first and the default (the parenthesis is the port Automatic is using now, left out when there is none), then each port as `COM3 · USB-SERIAL CH340`, `COM5 · Standard Serial over Bluetooth link`: Windows' own description, unedited (user, 2026-10-25, over a plain-language rename). The refresh button stays.
+- **Automatic** (`connection.serial.comPort` empty): the app tries each port with a HelloRequest, the CH340 (`1a86:7523`) first, then `connection.serial.lastPort`, then the rest, and remembers the one that answered in `lastPort` (first next time). The status line and its tooltip name it: the card's status line reads "Connected over USB (COM3)", the tray's tooltip "Connected (COM3)".
+- Automatic must not disturb other serial devices: it tries a port only while nothing else holds it, and closes it at once if it doesn't answer (the best candidate too: after a round with no answer no port stays open, and a new round runs on a port-list change, Reconnect or a firmware action). When the best candidate doesn't open because another app holds it (a serial monitor), the status is `PortBusy` on it ("Can't use COM7"), and Automatic tries that one port again every few seconds until it opens, then probes it as usual (final review ruling, 2026-10-27).
+- How hard Automatic probes (my calls): with `ISerialPortInfo` it tries only USB-backed ports (a Bluetooth COM port is listed but never opened by Automatic); without it, every port. Each port is tried once per change of the port list and on Reconnect, never in an endless cycle, and each try waits long enough for an ESP32 reset by the open to boot and send its Hello.
+- Picking a port for Check firmware (several candidates) makes it `lastPort`; `comPort` stays empty, so the setting stays Automatic (my call).
+- **A board that doesn't answer** (blank or foreign firmware) with Automatic: no serial ports → `Searching`. Ports but no answer → `NoAnswer` on the best candidate (the CH340 if there is one, else the only port). Several candidates and no CH340 → the status says "No controller answers" without a port, and Check firmware first asks which port (today's dialog port picker). Firmware actions use the candidate, and a successful install makes it `lastPort`.
+- Port descriptions and USB ids come from a new optional seam, `ISerialPortInfo` in `PlatformServices` (Windows: SetupAPI or WMI). Without it the list shows names only and Automatic tries the ports in name order.
+- **Switch to USB** from Wi-Fi asks first, inside the card: "Plug the controller in, then switch. Volco turns its Wi-Fi off." with **Cancel** and **Switch to USB and turn Wi-Fi off**. Once a Hello arrives over USB, Volco saves the controller config with UDP off (the usual save, in the progress dialog). From the simulator it switches at once and the controller's config is untouched. If no USB Hello comes, Volco stays on USB, and the pending "turn Wi-Fi off" waits for the first USB Hello of this run of Volco and is dropped at exit (my call).
+
+### 10.3 Wi-Fi: Save and switch
+
+Fields, with no numbered headings (user, 2026-10-25):
+- **Network**, **Password** (with Show), filled from the controller's saved config.
+- **This PC's address**: a dropdown of this PC's IPv4 addresses, each with its adapter name ("192.168.1.20 · Ethernet"); the saved one is picked when it is still there.
+- **Ports ›** folds the ports: the one Volco listens on (`connection.udp.listenPort`, also the controller's PC port) and the controller's own port.
+- The line "Sent over USB, then Volco switches to Wi-Fi.", then **Save and switch**.
+
+Save and switch (Volco on USB):
+1. Requires a Hello over USB. Otherwise the button is disabled and a line under it says why ("Connect the controller over USB first; the Wi-Fi settings are sent through it.").
+2. Writes the Wi-Fi settings into the controller config and saves it through `ControllerConfigService` (restart included), in the progress dialog: "Saved to the controller · restarting", then "Waiting for the controller over Wi-Fi… 9 s".
+3. Switches Volco's transport to Wi-Fi and waits for a Hello (up to the fallback window below plus 15 s). On one, the Wi-Fi card is **In use** and closed with its summary.
+4. No Hello: switches back to USB, and the open Wi-Fi card shows, in the danger colour, "The controller didn't answer over Wi-Fi. Check the network name and password." If the controller had Wi-Fi off before, it keeps the new settings; if it had other Wi-Fi settings, it has gone back to them (below).
+
+**Save (Volco already on Wi-Fi)** (user, 2026-10-26): the same fields, the button reads **Save**, and the save goes over Wi-Fi. Volco moves its own listen port with it, waits as in step 3, and on success stays on Wi-Fi. If the controller doesn't come back on the new settings it falls back to the old ones; Volco returns to its old listen port, picks up the controller there, and says "The controller couldn't use the new Wi-Fi settings and went back to the old ones. Check the network name and password." If it answers on neither, the status shows `NoAnswer` as usual and USB is the way back.
+
+**The controller's fallback** (firmware; user, 2026-10-26, details my call):
+- When a config write changes the Wi-Fi section and the previous config had Wi-Fi on, the firmware keeps the previous Wi-Fi section in NVS (a new key next to the config) and marks the new one provisional.
+- Booting on provisional Wi-Fi settings, the controller **confirms** them on the first valid frame from the PC over UDP. That proves the network, the password, the PC's address and the ports, not only that it joined the network. Confirming drops the kept copy.
+- **Failed** means either case (user, 2026-10-26): it couldn't join the network, or it joined but no frame from Volco came. Either way, if no such frame comes within the fallback window (30 s from boot, my call), it writes the kept Wi-Fi section back into its stored config (the rest of the config unchanged) and reboots on it. USB keeps working throughout.
+- A write that turns Wi-Fi off, or a write while Wi-Fi was off, keeps no copy.
+- After a fallback the controller's config CRC differs from Volco's mirror. On the next Hello, Volco reads the controller's config and adopts it into the mirror without asking, when only the Wi-Fi section differs (my call; anything else is the usual different-setup banner).
+- ~~The simulator's `config.js` does the same, so the flow can be tried without hardware.~~ (dropped at planning, 2026-10-26: the simulator speaks only WebSocket, so there is no UDP to fall back on.)
+
+The draft-based Wi-Fi fields go: Controller settings › Wi-Fi is now a row that opens this card.
+
+**Two later rulings** (user, 2026-10-26):
+- **Turn Wi-Fi off** is a button on the Wi-Fi card while Volco is on USB, with no confirmation: it saves the controller config with Wi-Fi off (the same save as the turn-off in §10.2), which also drops the controller's kept copy, if any.
+- **A provisional write keeps the existing kept copy.** The kept copy is always settings a PC answered on: a write made while the settings are still provisional leaves the copy as it is, unless the write turns Wi-Fi off or goes back to the copy, which drops it.
+
+### 10.4 Simulator
+
+Today's WebSocket option, named Simulator, with its port and **Switch to the simulator**.
 
 ## 11. Removed and moved
 
@@ -326,13 +364,13 @@ Headless (`Volco.App.Tests`), replacing `ControllerPage` tests where they test r
 - **Controller settings:** list values map to and from config fields; Custom kept; the Sliders card's three pairs and Custom.
 - **Chooser and Compare:** cards per mirror and presets; Keep adopts without writing; Send writes the mirror bytes.
 - **Test on the drawing:** enters and leaves test mode; lights cycle; leaving the page ends it.
-- **Connection dialog:** Automatic and manual ports; the Wi-Fi flow with a fake transport (Hello within 15 s; none → back to USB).
-- **Core:** encoder/parser and golden frames for §9; pin rows helper; Automatic port order; schema bump for #108.
-- **Firmware native tests:** the pin watch's report rules and timeout; I2C scan result encoding; PinDrive refusals.
+- **Connection dialog:** the cards (opening one switches nothing; In use; edits in a card not in use are dropped on Close); Automatic and manual ports in the list, with and without `ISerialPortInfo`; the Wi-Fi flow with a fake transport (Hello within 15 s stays on Wi-Fi; none → back to USB with the message); Save and switch disabled without USB; Save over Wi-Fi with the controller falling back (Volco returns to the old listen port and adopts the fallen-back config); opening the dialog with unsaved changes shows the leave prompt; Switch to USB from Wi-Fi asks, then saves with UDP off.
+- **Core:** encoder/parser and golden frames for §9; pin rows helper; Automatic port order (CH340, then `lastPort`, then the rest), `lastPort` written on an answer and on a successful install, and the `Searching` / `NoAnswer` / several-candidates cases of §10.2; schema bump for #108.
+- **Firmware native tests:** the Wi-Fi fallback (a copy kept only when Wi-Fi was on, confirmed by a UDP frame, restored after the window, nothing else in the config touched); the pin watch's report rules and timeout; I2C scan result encoding; PinDrive refusals.
 - **Simulator tests:** the three messages.
 - **`SettingsCoverageTests`:** every controller setting stays editable and survives a save and reload.
 
-Windows and hardware manual checklist: Detect on a real board (no floating pin lights up; ADC2 with Wi-Fi), Find screens on buses 0–3, Try the lights on unsaved pins, Automatic port with the CH340 and another serial device plugged in, the Wi-Fi flow and its fallback, the crossfade at 820 × 520 and 1100 × 720.
+Windows and hardware manual checklist: Detect on a real board (no floating pin lights up; ADC2 with Wi-Fi), Find screens on buses 0–3, Try the lights on unsaved pins, Automatic port with the CH340 and another serial device plugged in (a Bluetooth COM port), the Wi-Fi flow with the right and a wrong password and its fallback, the crossfade at 820 × 520 and 1100 × 720.
 
 ## 14. Delivery
 
@@ -341,7 +379,7 @@ Separate PRs, in this order, each green on CI:
 1. **The shared stage.** Controls' drawing moves into the window's stage; Controls looks and behaves the same; Hardware still shows today's page beside it.
 2. **The Hardware page on the stage:** card and ⋯ menu, tile captions, inspector with the pin dropdown (no Detect yet), bus chips, save bar, Controller settings, the chooser and Compare, test on the drawing, live input, the crossfade. Today's page goes. The Connection section moves into the dialog with today's fields (port list without Automatic).
 3. **#108:** Controls › Response loses Smoothing (no schema bump; Response itself was removed later, `slider-feel-settings.md`).
-4. **Connection dialog proper:** Automatic port, port descriptions (Windows seam), the Wi-Fi flow.
+4. **Connection dialog proper** (delivered, #119): the cards, Automatic port, port descriptions (Windows seam, SetupAPI), the Wi-Fi flow (Save and switch, Save over Wi-Fi, Turn Wi-Fi off) and the controller's Wi-Fi fallback in the firmware. The simulator part was dropped (§10.3).
 5. **Firmware helpers:** PinWatch (Detect), I2cScan (Find screens), PinDrive (Try on unsaved pins); app wiring; simulator.
 6. **Docs:** CLAUDE.md (Hardware page paragraph, wire table, firmware), `firmware/README.md`, controller-config §8.7 points here, README screenshots.
 

@@ -329,9 +329,10 @@ public sealed partial class ControllerSettingsViewModel : ObservableObject, IDis
 
     // ── Wi-Fi ────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>"Off" or "On · HomeNet".</summary>
-    public string WifiSummary => !_controller.UdpEnabled ? "Off"
-        : string.IsNullOrEmpty(_controller.Ssid) ? "On" : $"On · {_controller.Ssid}";
+    /// <summary>"Off" or "On · HomeNet": the controller's saved Wi-Fi (Volco's copy), which only the
+    /// Connection dialog changes.</summary>
+    public string WifiSummary => _controller.DecodeMirror()?.Udp is not { Enabled: true } udp ? "Off"
+        : string.IsNullOrEmpty(udp.Ssid) ? "On" : $"On · {udp.Ssid}";
 
     /// <summary>Opens the Connection dialog on Wi-Fi.</summary>
     public IRelayCommand OpenWifiCommand { get; }

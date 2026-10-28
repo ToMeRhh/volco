@@ -116,8 +116,23 @@ public class SettingsCoverageTests
 
     private static void OtherChoice(ComboBox box) => box.SelectedIndex = box.SelectedIndex == 0 ? 1 : 0;
 
+    /// <summary>The blob of a ConfigWrite burst (begin, chunks, end).</summary>
+    private static byte[] WrittenBlob(byte[] burst)
+    {
+        var length = (burst[4] << 8) | burst[5];
+        var blob = new List<byte>();
+        var at = burst[1] + 3;
+        while (at < burst.Length && blob.Count < length)
+        {
+            var len = burst[at + 1];
+            if (burst[at + 2] == 0x89) blob.AddRange(burst.Skip(at + 2 + 4).Take(len - 4));
+            at += len + 3;
+        }
+        return blob.ToArray();
+    }
+
     [AvaloniaFact]
-    public void Connection_TypePortUdpWebSocket()
+    public void Connection_TypePortWebSocket()
     {
         using var rig = new TestRig(Engine());
         using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
@@ -127,29 +142,76 @@ public class SettingsCoverageTests
         Settle(window);
 
         vm.Connection.ComPort = "COM9";                                        // Connection.Serial.ComPort (no real ports on CI)
-        Named<RadioButton>(page, "WifiOption").IsChecked = true;
-        Settle(window);
-        Named<NumericUpDown>(page, "UdpPortBox").Value = 23456;                // Connection.Udp.ListenPort
-        Click(Named<Button>(page, "UseButton"));                               // Connection.Type
-        Settle(window);
-        Assert.Equal(ConnectionType.Udp, rig.Config.Config.Connection.Type);
-        Named<RadioButton>(page, "SimulatorOption").IsChecked = true;
+        Click(Named<Button>(page, "SimulatorCardHeader"));
         Settle(window);
         Named<NumericUpDown>(page, "WebSocketPortBox").Value = 9876;           // Connection.WebSocket.Port
-        Click(Named<Button>(page, "UseButton"));
+        Click(Named<Button>(page, "SwitchToSimulatorButton"));                 // Connection.Type
         Settle(window);
 
         var c = SaveAndReload(rig).Connection;
         Assert.Equal(ConnectionType.WebSocket, c.Type);
         Assert.Equal("COM9", c.Serial.ComPort);
-        Assert.Equal(23456, c.Udp.ListenPort);
         Assert.Equal(9876, c.WebSocket.Port);
         window.Close();
     }
 
-    /// <summary>Every field of the controller's config is edited through the Hardware page (the pin
-    /// fields, the button and bus inspectors, Controller settings and the Connection dialog's Wi-Fi
-    /// tab), saved to the controller, and survives in Volco's copy (controllerConfigBlob) after a reload.</summary>
+    /// <summary>The controller's Wi-Fi and Volco's listen port, edited on the Connection dialog's
+    /// Wi-Fi card (opened from Controller settings › Wi-Fi) and sent with Save and switch through
+    /// <see cref="WifiSwitch"/>: they survive in Volco's copy and config.json after a reload.</summary>
+    [AvaloniaFact]
+    public void Wifi_SaveAndSwitchSurvivesSaveAndReload()
+    {
+        using var rig = new TestRig(Engine(), new VolcoRuntimeOptions { ConnectGrace = TimeSpan.Zero, Time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider() });
+        rig.Config.Config.ControllerConfigBlob = Convert.ToBase64String(DiyBlob);
+        using var vm = rig.CreateSettings(new AvaloniaUiDispatcher());
+        var (page, host, window) = HardwareStage(rig, vm);
+        vm.Hardware.ReadAddresses = () => new[]
+        {
+            new LocalAddress(System.Net.IPAddress.Parse("10.0.0.5"), "Wi-Fi"),
+            new LocalAddress(System.Net.IPAddress.Parse("192.168.1.10"), "Ethernet"),
+        };
+        Click(Named<Button>(page, "ControllerSettingsChip"));
+        Settle(window);
+        Click(Named<Button>(host, "WifiHeader"));                              // Controller settings › Wi-Fi
+        Settle(window);
+
+        Named<TextBox>(page, "SsidBox").Text = "home";                         // udp.ssid
+        Named<TextBox>(page, "PasswordBox").Text = "password1";                // udp.password
+        Named<ComboBox>(page, "AddressCombo").SelectedIndex = 1;               // udp.pc_ip
+        Click(Named<Button>(page, "PortsHeader"));
+        Settle(window);
+        Named<NumericUpDown>(page, "ListenPortBox").Value = 23456;             // udp.pc_port, Connection.Udp.ListenPort
+        Named<NumericUpDown>(page, "ControllerPortBox").Value = 23457;         // udp.local_port
+        Settle(window);
+        var usb = rig.Connection!;
+        Click(Named<Button>(page, "WifiSaveButton"));                          // udp.enabled, Connection.Type
+        Until(window, () => usb.SentFrames.Any(f => f.Length > 3 && f[2] == 0x88));
+        var burst = usb.SentFrames.Last(f => f.Length > 3 && f[2] == 0x88);
+        var vmDialog = vm.Hardware.ConnectionDialog!;
+        usb.RaiseMessage(new ConfigResultMessage(burst[3], ConfigResultCode.Ok, 0xFF, 0xFF));
+        var crc = ControllerConfigCodec.Crc32(WrittenBlob(burst));
+        usb.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
+            crc, 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
+        Until(window, () => rig.Connection != usb && rig.Connection!.Config.Type == ConnectionType.Udp);
+        rig.Connection!.SetStatus(TransportStatus.Open);
+        rig.Connection.RaiseMessage(new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.Stored,
+            crc, 5, new[] { IndicatorKind.Led, IndicatorKind.Led, IndicatorKind.LedPair }));
+        Until(window, () => vmDialog.WifiCard.IsInUse && !vm.Hardware.Status.Progress.IsOpen);
+
+        var reloaded = SaveAndReload(rig);
+        Assert.Equal(ConnectionType.Udp, reloaded.Connection.Type);
+        Assert.Equal(23456, reloaded.Connection.Udp.ListenPort);
+        var saved = ControllerConfigCodec.Decode(Convert.FromBase64String(reloaded.ControllerConfigBlob!));
+        Assert.True(saved.Udp.Enabled);
+        Assert.Equal(("home", "password1", 0xC0A8010Au, 23456u, 23457u),
+                     (saved.Udp.Ssid, saved.Udp.Password, saved.Udp.PcIp, saved.Udp.PcPort, saved.Udp.LocalPort));
+        window.Close();
+    }
+
+    /// <summary>Every field of the controller's config but its Wi-Fi (<see cref="Wifi_SaveAndSwitchSurvivesSaveAndReload"/>)
+    /// is edited through the Hardware page (the pin fields, the button and bus inspectors and
+    /// Controller settings), saved to the controller, and survives in Volco's copy
+    /// (controllerConfigBlob) after a reload.</summary>
     [AvaloniaFact]
     public void Controller_EverySettingSurvivesSaveAndReload()
     {
@@ -224,18 +286,6 @@ public class SettingsCoverageTests
         Named<NumericUpDown>(host, "DeadbandBox").Value = 30;                  // input.slider_deadband
         Settle(window);
 
-        vm.Hardware.OpenConnection(true);                                      // Controller settings › Wi-Fi
-        Settle(window);
-        Named<ToggleSwitch>(page, "UdpToggle").IsChecked = true;               // udp.enabled
-        Settle(window);
-        Named<TextBox>(page, "SsidBox").Text = "home";                         // udp.ssid
-        Named<TextBox>(page, "PasswordBox").Text = "password1";                // udp.password
-        Named<TextBox>(page, "PcIpBox").Text = "192.168.1.10";                 // udp.pc_ip
-        Named<NumericUpDown>(page, "PcPortBox").Value = 23456;                 // udp.pc_port
-        Named<NumericUpDown>(page, "LocalPortBox").Value = 23457;              // udp.local_port
-        Click(Named<Button>(page, "ConnectionDone"));
-        Settle(window);
-
         Assert.Empty(vm.Controller.Problems.Select(p => p.Message));
         var expected = ControllerConfigCodec.Encode(vm.Controller.Draft);
         Click(Named<Button>(page, "SaveButton"));                              // the save bar
@@ -275,9 +325,6 @@ public class SettingsCoverageTests
                      (screens.ScrollHoldMs, screens.ScrollSpeedPxS, screens.ScrollEndHoldMs, screens.TransitionMs, screens.PixelShiftEveryS));
         Assert.Equal((25u, 40u, 30u),
                      (saved.Input.DebounceMs, saved.Input.FilterWeightPct, saved.Input.SliderDeadband));
-        Assert.True(saved.Udp.Enabled);
-        Assert.Equal(("home", "password1", 0xC0A8010Au, 23456u, 23457u),
-                     (saved.Udp.Ssid, saved.Udp.Password, saved.Udp.PcIp, saved.Udp.PcPort, saved.Udp.LocalPort));
         window.Close();
     }
 

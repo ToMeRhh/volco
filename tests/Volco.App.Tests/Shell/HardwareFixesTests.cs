@@ -423,7 +423,12 @@ public sealed class HardwareFixesTests : IDisposable
             ? new HelloMessage(ProtocolVersion.Current, ChipFamily.Esp32, "dev", ControllerConfigState.None, 0, 0, Array.Empty<IndicatorKind>())
             : Hello(ControllerConfigCodec.Crc32(blob), controller!.Sliders.Count, KindsOf(controller)));
         Pump(window, 50);
-        if (blob is not null && mirror is null) AnswerRead(s, 1, blob);   // the automatic read adopts it
+        // The automatic read adopts it with no copy in Volco, and looks for a Wi-Fi fallback when the copy differs.
+        if (blob is not null && (mirror is null || ControllerConfigCodec.Crc32(ControllerConfigCodec.Encode(mirror)) != ControllerConfigCodec.Crc32(blob)))
+        {
+            AnswerRead(s, 1, blob);
+            Until(window, () => rig.Runtime.ControllerConfig.Operation == ConfigOperation.Idle);
+        }
         window.ShowPage("controller");
         Pump(window, 100);
         return s;

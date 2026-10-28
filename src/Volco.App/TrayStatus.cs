@@ -12,13 +12,14 @@ namespace Volco.App;
 /// </summary>
 internal sealed record TrayStatus(bool Down, string ToolTip, string ConnectionMenuText)
 {
+    /// <param name="usbPort"><c>VolcoRuntime.UsbPort</c>: the port the tooltip names.</param>
     /// <param name="banner">The controller's §8.3 banner: while it needs the user, the tooltip says
     /// so on a second line, naming the "Volco controller".</param>
-    public static TrayStatus For(bool audioEngineFailed, LinkStatus link, ConnectionConfig connection, ControllerBanner? banner = null)
+    public static TrayStatus For(bool audioEngineFailed, LinkStatus link, ConnectionConfig connection, string? usbPort, ControllerBanner? banner = null)
     {
         var toolTip = audioEngineFailed ? "Volco — audio engine failed to start; see volco.log"
-            : link.IsConnected ? $"Volco {BuildInfo.DisplayVersion} — Connected ({LinkText.TransportShort(connection)})"
-            : $"Volco — {LinkText.Headline(link, connection)}";
+            : link.IsConnected ? $"Volco {BuildInfo.DisplayVersion} — Connected ({LinkText.TransportShort(connection, usbPort)})"
+            : $"Volco — {LinkText.Headline(link, connection, usbPort)}";
         if (ControllerLine(banner) is { } line) toolTip += "\n" + line;
         return new TrayStatus(link.IsDown, toolTip, link.State == LinkState.Disconnected ? "Connect" : "Disconnect");
     }

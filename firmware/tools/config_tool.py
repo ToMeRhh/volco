@@ -14,6 +14,9 @@ protobuf JSON mapping of ControllerConfig, like proto/presets/diy-reference.json
     $PY firmware/tools/config_tool.py --udp 192.168.1.50 --listen 12345 read                # from the PC set as pc_ip
     $PY firmware/tools/config_tool.py --selftest
 
+A Wi-Fi change written over USB (while the stored Wi-Fi was on) is provisional: without a valid UDP frame from
+Volco within 30 s of the reboot, the controller restores its previous Wi-Fi settings and reboots.
+
 Serial ports go through hello_check's USB-ID guard. Opening a serial port resets the board, so the
 tool waits for its boot Hello first. Every frame sent and received is printed in hex.
 """

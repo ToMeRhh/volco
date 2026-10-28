@@ -1,4 +1,3 @@
-using System.Net;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Google.Protobuf;
@@ -34,15 +33,21 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     private (byte, ControllerConfigState, uint)? _permission;
     private bool _hasPermission;
     private IDisposable? _testHandle;
-    private bool _udpChangedInSave;
 
     private readonly bool _ownsConnection;
 
+    /// <summary>The Connection dialog's Wi-Fi operations (spec §10.3); one per run, owned by the
+    /// composition root. Null without one (tests).</summary>
+    public WifiSwitch? Wifi { get; }
+
     /// <param name="connection">The window's connection view model, shared with the sidebar's
     /// status; the page makes (and disposes) its own when none is given.</param>
+    /// <param name="wifi">The run's Wi-Fi switch; the page never disposes it.</param>
     public ControllerViewModel(ConfigManager config, VolcoRuntime runtime, IUiDispatcher ui,
-                               FirmwareService? firmware = null, ConnectionViewModel? connection = null)
+                               FirmwareService? firmware = null, ConnectionViewModel? connection = null,
+                               WifiSwitch? wifi = null)
     {
+        Wifi = wifi;
         _config = config;
         _runtime = runtime;
         _service = runtime.ControllerConfig;
@@ -107,7 +112,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ApplyMine()
     {
-        if (_service.Mirror is { Length: > 0 } mirror) SaveBytes(mirror, udpChanged: false, layout: null);
+        if (_service.Mirror is { Length: > 0 } mirror) SaveBytes(mirror, layout: null);
     }
 
     /// <summary>The card's Fix it: Volco's saved setup as a new draft, with its problems marked.</summary>
@@ -224,6 +229,9 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         SetDraft(draft, keepFixIt: true);
     }
 
+    /// <summary>Volco's copy of the controller's config (the mirror), as saved; null for none.</summary>
+    internal byte[]? Mirror => _service.Mirror is { Length: > 0 } m ? m : null;
+
     internal ControllerConfig? DecodeMirror()
     {
         var mirror = _service.Mirror;
@@ -246,7 +254,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     {
         if (!keepFixIt) _fixIt = false;
         _remoteError = null;
-        _pcIpText = null;          // Important 3: the box shows the new draft's address
         Confirmation = null;       // a question about the old draft must not act on the new one
         _draft = draft;
         Layout = ControlLayout.Identity(draft.Sliders.Count, draft.Buttons.Count);
@@ -356,13 +363,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
 
     // ── Problems ─────────────────────────────────────────────────────────────────────────────
 
-    private void ClearErrors()
-    {
-        WifiError = null;
-        _problems = Array.Empty<DraftProblem>();
-        _wifiFields.Clear();
-        OnWifiFieldsChanged();
-    }
+    private void ClearErrors() => _problems = Array.Empty<DraftProblem>();
 
     /// <summary>The problems the save would stop on (all of them, so both ends of a pin conflict
     /// are marked).</summary>
@@ -376,31 +377,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             problems.Add(new DraftProblem((ConfigField)r.Field, r.Item,
                 $"The controller didn't accept {ControllerDraft.FieldDescription((ConfigField)r.Field)}."));
         _problems = problems;
-        foreach (var p in problems.Where(p => p.Field is ConfigField.UdpSsid or ConfigField.UdpPassword
-                                                       or ConfigField.UdpPcIp or ConfigField.UdpPort))
-        {
-            // The Connection dialog's Wi-Fi tab marks its fields; the tiles and fields read the rest.
-            WifiError = WifiError is null ? p.Message : WifiError + "\n" + p.Message;
-            _wifiFields.Add(p.Field);
-        }
-        OnWifiFieldsChanged();
     }
-
-    private readonly HashSet<ConfigField> _wifiFields = new();
-    public bool SsidInvalid => _wifiFields.Contains(ConfigField.UdpSsid);
-    public bool PasswordInvalid => _wifiFields.Contains(ConfigField.UdpPassword);
-    public bool PcIpInvalid => _wifiFields.Contains(ConfigField.UdpPcIp);
-    public bool PortsInvalid => _wifiFields.Contains(ConfigField.UdpPort);
-
-    private void OnWifiFieldsChanged()
-    {
-        OnPropertyChanged(nameof(SsidInvalid));
-        OnPropertyChanged(nameof(PasswordInvalid));
-        OnPropertyChanged(nameof(PcIpInvalid));
-        OnPropertyChanged(nameof(PortsInvalid));
-    }
-
-    [ObservableProperty] private string? _wifiError;
 
     // ── Save and Revert ──────────────────────────────────────────────────────────────────────
 
@@ -482,16 +459,12 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
                                              : $"Fix the {_problems.Count} problems marked in red first.", LinkTone.Danger);
             return;
         }
-        bool udpChanged = !UdpBytes(_draft).AsSpan().SequenceEqual(UdpBytes(BaselineConfig()));
-        if (udpChanged && _config.Config.Connection.Type == ConnectionType.Udp)
-            Ask("Changing the Wi-Fi settings may disconnect the controller. If it doesn't come back, plug it in with USB.",
-                "Save", () => { if (CanSave) EncodeAndSave(udpChanged); });
-        else EncodeAndSave(udpChanged);
+        EncodeAndSave();
     }
 
     /// <summary>Encode can still refuse what the validator skips (Wi-Fi strings over their limit
     /// while Wi-Fi is off): say so instead of failing silently.</summary>
-    private void EncodeAndSave(bool udpChanged)
+    private void EncodeAndSave()
     {
         byte[] blob;
         try { blob = ControllerConfigCodec.Encode(_draft); }
@@ -500,7 +473,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
             SetProgress($"This setup can't be saved: {ex.Message}", LinkTone.Danger);
             return;
         }
-        SaveBytes(blob, udpChanged, Layout.Clone());
+        SaveBytes(blob, Layout.Clone());
     }
 
     private bool DraftEquals(byte[] blob)
@@ -516,8 +489,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
         catch (InvalidProtocolBufferException) { return new ControllerConfig(); }
     }
 
-    private static byte[] UdpBytes(ControllerConfig c) => c.Udp?.ToByteArray() ?? Array.Empty<byte>();
-
     private bool _savingSetup;
 
     /// <summary>A copy of the layout of the draft being saved; applied to Volco's settings once the
@@ -531,9 +502,8 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     /// controller confirms; null for a save that isn't from the draft (Send Volco's).</summary>
     private (int HoldMs, int DoublePressMs)? _savingTiming;
 
-    private void SaveBytes(byte[] blob, bool udpChanged, ControlLayout? layout)
+    private void SaveBytes(byte[] blob, ControlLayout? layout)
     {
-        _udpChangedInSave = udpChanged;
         _savingLayout = layout;
         _savingBlob = blob;
         _savingTiming = layout is not null ? (_holdMs, _doublePressMs) : null;
@@ -566,9 +536,7 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
                 => "The controller couldn't save the setup. Its previous setup is unchanged.",
             SaveStatus.Rejected => "The controller couldn't read the setup. Update the firmware and try again.",
             SaveStatus.NotRunningNewSetup => "The controller restarted but isn't running the new setup.",
-            SaveStatus.DidNotComeBack => _udpChangedInSave
-                ? "The controller didn't come back after restarting. If you changed the Wi-Fi settings, plug it in with USB to check them."
-                : "The controller didn't come back after restarting.",
+            SaveStatus.DidNotComeBack => "The controller didn't come back after restarting.",
             SaveStatus.NoAnswer => "The controller didn't answer.",
             SaveStatus.ConnectionLost => "The controller disconnected while saving. Once it's connected again, check which setup it has.",
             SaveStatus.Busy => "Another operation is running. Try again in a moment.",
@@ -752,62 +720,6 @@ public sealed partial class ControllerViewModel : ObservableObject, IDisposable
     public decimal? DebounceMs { get => In.DebounceMs; set => EditIn(i => { if (value is { } n) i.DebounceMs = (uint)n; else i.ClearDebounceMs(); }); }
     public decimal? SmoothingPct { get => In.FilterWeightPct; set => EditIn(i => { if (value is { } n) i.FilterWeightPct = (uint)n; else i.ClearFilterWeightPct(); }); }
     public decimal? Deadband { get => In.SliderDeadband; set => EditIn(i => { if (value is { } n) i.SliderDeadband = (uint)n; else i.ClearSliderDeadband(); }); }
-
-    private Udp U => _draft.EffectiveUdp();
-    private void EditU(Action<Udp> edit, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
-    {
-        if (!CanEdit) { OnPropertyChanged(name); return; }
-        _draft.Udp ??= new Udp();
-        edit(_draft.Udp);
-        OnPropertyChanged(name);
-        OnDraftEdited();
-    }
-
-    public bool UdpEnabled
-    {
-        get => U.Enabled;
-        set => EditU(u =>
-        {
-            u.Enabled = value;
-            // Pre-filled from Volco's own UDP listen port (spec §8.4).
-            if (value && !u.HasPcPort) u.PcPort = (uint)_config.Config.Connection.Udp.ListenPort;
-            OnPropertyChanged(nameof(PcPort));
-        });
-    }
-
-    public string Ssid { get => U.Ssid; set => EditU(u => u.Ssid = value ?? ""); }
-    public string Password { get => U.Password; set => EditU(u => u.Password = value ?? ""); }
-
-    [ObservableProperty] private bool _showPassword;
-    public char PasswordChar => ShowPassword ? '\0' : '•';
-    partial void OnShowPasswordChanged(bool value) => OnPropertyChanged(nameof(PasswordChar));
-
-    private string? _pcIpText;
-
-    /// <summary>Dotted IPv4. Text that isn't an address clears the field, which the validator reports.</summary>
-    public string PcIp
-    {
-        get => _pcIpText ?? (U.HasPcIp ? FormatIp(U.PcIp) : "");
-        set
-        {
-            _pcIpText = value;
-            EditU(u =>
-            {
-                if (IPAddress.TryParse(value ?? "", out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                    && (value ?? "").Count(ch => ch == '.') == 3)
-                {
-                    var b = ip.GetAddressBytes();
-                    u.PcIp = (uint)(b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3]);
-                }
-                else u.ClearPcIp();
-            });
-        }
-    }
-
-    private static string FormatIp(uint ip) => $"{ip >> 24}.{(ip >> 16) & 255}.{(ip >> 8) & 255}.{ip & 255}";
-
-    public decimal? PcPort { get => U.PcPort; set => EditU(u => { if (value is { } n) u.PcPort = (uint)n; else u.ClearPcPort(); }); }
-    public decimal? LocalPort { get => U.LocalPort; set => EditU(u => { if (value is { } n) u.LocalPort = (uint)n; else u.ClearLocalPort(); }); }
 
     // ── Test (hardware-page spec §8): on the drawing ─────────────────────────────────────────
 

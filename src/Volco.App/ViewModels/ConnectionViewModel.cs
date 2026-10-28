@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.IO.Ports;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Volco.Core.Communication;
@@ -7,6 +6,9 @@ using Volco.Core.Config;
 using Volco.Core.Runtime;
 
 namespace Volco.App.ViewModels;
+
+/// <summary>One entry of the port list; <c>Port</c> null is Automatic.</summary>
+public sealed record PortChoice(string? Port, string Label);
 
 /// <summary>
 /// ViewModel for the Connection settings tab.
@@ -56,20 +58,24 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     public bool IsConnected => Link.IsConnected;
 
     /// <summary>The status headline: "Connected", "Controller not responding", …</summary>
-    public string StatusText => LinkText.Headline(Link, _config.Config.Connection);
+    public string StatusText => LinkText.Headline(Link, _config.Config.Connection, UsbPort);
+
+    /// <summary>The USB port in use (<see cref="VolcoRuntime.UsbPort"/>): the chosen one, or the one
+    /// Automatic found; null for none.</summary>
+    public string? UsbPort => _runtime.UsbPort;
 
     /// <summary>The dot's colour (and the explanation's).</summary>
     public LinkTone StatusTone => LinkText.Tone(Link.State);
 
     /// <summary>What the status panel says next to the state, e.g. "COM3 · USB cable", "192.168.1.40 · Wi-Fi".</summary>
-    public string TransportDetails => LinkText.Transport(_config.Config.Connection, Link.IsConnected ? _runtime.PeerAddress : null);
+    public string TransportDetails => LinkText.Transport(_config.Config.Connection, Link.IsConnected ? _runtime.PeerAddress : null, UsbPort);
 
     /// <summary>"5 sliders · 3 buttons (2 LED, 1 LED pair)", while connected; "" otherwise.</summary>
     public string HardwareSummary => Link.IsConnected ? Summarize(_config.Config.Controller) : "";
     public bool HasHardwareSummary => HardwareSummary.Length > 0;
 
     /// <summary>What a status other than Connected means and what to do about it; "" when connected.</summary>
-    public string StatusExplanation => LinkText.Explanation(Link, _config.Config.Connection);
+    public string StatusExplanation => LinkText.Explanation(Link, _config.Config.Connection, UsbPort);
     public bool HasStatusExplanation => StatusExplanation.Length > 0;
 
     internal static string Summarize(ControllerInfoConfig? c)
@@ -98,6 +104,15 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
             if (!_disposed) Link = _runtime.LinkStatus;
         });
 
+    // UsbPortChanged fires on any thread too.
+    private void OnRuntimeUsbPortChanged(object? sender, EventArgs e)
+        => _ui.Post(() =>
+        {
+            if (_disposed) return;
+            RefreshStatus();
+            RefreshAutomaticLabel();
+        });
+
     private void OnControllerInfo(object? sender, EventArgs e)
         => _ui.Post(() =>
         {
@@ -108,7 +123,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
 
     private void RefreshStatus()
     {
-        foreach (var name in new[] { nameof(IsConnected), nameof(IsUserDisconnected), nameof(StatusText), nameof(StatusTone),
+        foreach (var name in new[] { nameof(IsConnected), nameof(IsUserDisconnected), nameof(UsbPort), nameof(StatusText), nameof(StatusTone),
                                      nameof(TransportDetails), nameof(HardwareSummary),
                                      nameof(HasHardwareSummary), nameof(StatusExplanation), nameof(HasStatusExplanation) })
             OnPropertyChanged(name);
@@ -158,7 +173,17 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _comPort = "";
 
-    public ObservableCollection<string> ComPorts { get; } = new();
+    /// <summary>The port list: Automatic first, then the system's ports (with their descriptions
+    /// where it has them), and the chosen port when it isn't plugged in.</summary>
+    public ObservableCollection<PortChoice> PortChoices { get; } = new();
+
+    /// <summary>The picked entry of <see cref="PortChoices"/>; setting it writes <see cref="ComPort"/>
+    /// ("" for Automatic). A null (the ComboBox clearing during a refresh) is ignored.</summary>
+    public PortChoice? SelectedPort
+    {
+        get => PortChoices.FirstOrDefault(p => (p.Port ?? "") == ComPort);
+        set { if (value is not null) ComPort = value.Port ?? ""; }
+    }
 
     // ── UDP settings ───────────────────────────────────────────────────────────
 
@@ -192,37 +217,74 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         // Survives transport restarts: the runtime derives the link state across them.
         _runtime.LinkStatusChanged += OnRuntimeLinkChanged;
         _runtime.ControllerInfoChanged += OnControllerInfo;
+        _runtime.UsbPortChanged += OnRuntimeUsbPortChanged;
         _link = _runtime.LinkStatus;
     }
 
     private void OnConfigSaved(object? sender, EventArgs e) => _ui.Post(() =>
     {
-        if (_disposed) return;
-        var saved = _config.Config.Connection.Serial.ComPort;
-        if (saved == ComPort || string.IsNullOrEmpty(saved)) return;
-        if (!ComPorts.Contains(saved)) ComPorts.Add(saved);
-        ComPort = saved;   // already the saved port: OnComPortChanged neither saves nor restarts
+        if (!_disposed) SyncFromConfig();
     });
+
+    /// <summary>True while <see cref="SyncFromConfig"/> sets the properties: nothing is written back.</summary>
+    private bool _syncing;
+
+    /// <summary>Shows the connection config as it is now, without saving it again: a firmware install
+    /// may save another port (spec §8.6), and the Connection dialog's Wi-Fi switch edits the
+    /// transport and the listen port itself (spec §10.2, §10.3). UI thread.</summary>
+    internal void SyncFromConfig()
+    {
+        var c = _config.Config.Connection;
+        var saved = c.Serial.ComPort;
+        if (saved != ComPort)
+        {
+            if (saved != "" && !PortChoices.Any(p => p.Port == saved)) PortChoices.Add(new PortChoice(saved, saved));
+            ComPort = saved;   // already the saved port: OnComPortChanged neither saves nor restarts
+        }
+        _syncing = true;
+        try
+        {
+            ConnectionType = c.Type;
+            UdpListenPort = c.Udp.ListenPort;
+            WebSocketPort = c.WebSocket.Port;
+        }
+        finally { _syncing = false; }
+    }
 
     // ── COM-port refresh command ───────────────────────────────────────────────
 
     [RelayCommand]
     private void RefreshComPorts()
     {
-        var previous = ComPort;
+        PortChoices.Clear();
+        PortChoices.Add(new PortChoice(null, AutomaticLabel()));
+        foreach (var port in _runtime.ListSerialPorts())
+            PortChoices.Add(new PortChoice(port.Name, PortLabel(port)));
+        // The chosen port stays listed while it is unplugged.
+        if (ComPort != "" && !PortChoices.Any(p => p.Port == ComPort))
+            PortChoices.Add(new PortChoice(ComPort, ComPort));
 
-        ComPorts.Clear();
-        foreach (var port in SerialPort.GetPortNames())
-            ComPorts.Add(port);
+        // PortChoices.Clear() drives the two-way-bound ComboBox.SelectedItem — and therefore
+        // SelectedPort — to null; the setter ignores that. Announce the selection again so the
+        // ComboBox picks the saved entry back up (ComPort itself never changed).
+        OnPropertyChanged(nameof(SelectedPort));
+    }
 
-        // ComPorts.Clear() drives the two-way-bound ComboBox.SelectedItem — and therefore
-        // ComPort — to null via OnComPortChanged before the list is repopulated. The guard in
-        // OnComPortChanged stops that from persisting a blank port or restarting the connection,
-        // but it still leaves the property blank. Put the previous selection back when it is
-        // still present; it is already the saved port, so OnComPortChanged neither saves nor
-        // restarts the connection for it.
-        if (!string.IsNullOrEmpty(previous) && ComPorts.Contains(previous))
-            ComPort = previous;
+    private string AutomaticLabel() => UsbPort is { } port && string.IsNullOrEmpty(_config.Config.Connection.Serial.ComPort)
+        ? $"Automatic ({port})" : "Automatic";
+
+    /// <summary>A port's list entry: its name and the system's description, "COM3 · USB-SERIAL CH340".</summary>
+    internal static string PortLabel(SerialPortDescription port)
+        => string.IsNullOrEmpty(port.Description) ? port.Name : $"{port.Name} · {port.Description}";
+
+    // Automatic's label names the port it found; only that entry changes.
+    private void RefreshAutomaticLabel()
+    {
+        if (PortChoices.Count == 0 || PortChoices[0].Port is not null) return;
+        var label = AutomaticLabel();
+        if (PortChoices[0].Label == label) return;
+        PortChoices[0] = new PortChoice(null, label);
+        OnPropertyChanged(nameof(SelectedPort));
     }
 
     /// <summary>Unsubscribes from the runtime (carried rule d).</summary>
@@ -232,6 +294,7 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         _disposed = true;
         _runtime.LinkStatusChanged -= OnRuntimeLinkChanged;
         _runtime.ControllerInfoChanged -= OnControllerInfo;
+        _runtime.UsbPortChanged -= OnRuntimeUsbPortChanged;
         _config.ConnectionConfigChanged -= OnConfigSaved;
         _config.ConfigChanged -= OnConfigSaved;
     }
@@ -240,24 +303,25 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
 
     partial void OnConnectionTypeChanged(ConnectionType value)
     {
-        _config.Config.Connection.Type = value;
         OnPropertyChanged(nameof(IsSerial));
         OnPropertyChanged(nameof(IsUdp));
         OnPropertyChanged(nameof(IsWebSocket));
         OnPropertyChanged(nameof(ConnectionTypeIndex));
         RefreshStatus();
+        Write(c => c.Type = value);
+    }
+
+    private void Write(Action<ConnectionConfig> edit)
+    {
+        if (_syncing) return;
+        edit(_config.Config.Connection);
         Persist();
     }
 
     partial void OnComPortChanged(string value)
     {
-        // A null/empty port only ever arises from the bound ObservableCollection being cleared
-        // during RefreshComPorts (Bug 2 - clearing ComPorts drives the two-way-bound ComboBox
-        // selection, and therefore ComPort, to null) — never real user intent, since the picker
-        // has no blank/"None" entry. Ignore it: no persist, no connection restart.
-        if (string.IsNullOrEmpty(value)) return;
-        // Already the saved port (RefreshComPorts restoring the selection the clear wiped):
-        // nothing to save, and no reason to restart the connection.
+        OnPropertyChanged(nameof(SelectedPort));
+        // Already the saved port ("" is Automatic): nothing to save, and no reason to restart the connection.
         if (value == _config.Config.Connection.Serial.ComPort)
         {
             RefreshStatus();
@@ -265,21 +329,20 @@ public sealed partial class ConnectionViewModel : ObservableObject, IDisposable
         }
         _config.Config.Connection.Serial.ComPort = value;
         RefreshStatus();
+        RefreshAutomaticLabel();
         Persist();
     }
 
     partial void OnUdpListenPortChanged(int value)
     {
-        _config.Config.Connection.Udp.ListenPort = value;
         RefreshStatus();
-        Persist();
+        Write(c => c.Udp.ListenPort = value);
     }
 
     partial void OnWebSocketPortChanged(int value)
     {
-        _config.Config.Connection.WebSocket.Port = value;
         RefreshStatus();
-        Persist();
+        Write(c => c.WebSocket.Port = value);
     }
 
     private void Persist() => _config.RequestSave(connectionChanged: true);

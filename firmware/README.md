@@ -18,7 +18,7 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | Path | Contents |
 |---|---|
 | `src/config.h` | Fixed constants: serial baud, buffer sizes, protocol timing. |
-| `src/config_store.*` | Loads the controller config from NVS, keeps its bytes for read replies, and saves new ones. |
+| `src/config_store.*` | Loads the controller config from NVS (namespace `volco`, key `cfg`), keeps its bytes for read replies, and saves new ones; keeps the previous Wi-Fi settings (key `wifi_prev`) and puts them back. |
 | `src/config_session.*` | The config session: read replies, chunked writes, validate, store, reboot (spec §5.3, §5.4, §6.7). |
 | `src/main.cpp` | `setup()` and `loop()`: input reading, the glue between the PC link and the hardware. |
 | `src/transport.*` | USB serial (always on) and UDP over Wi-Fi (when enabled). |
@@ -32,6 +32,7 @@ It still knows nothing about what a button *means*. Single, double and long pres
 | `lib/volco_slider_ends/` | One slider's learned travel ends, and the mapping of its readings onto 0-4095 (the reverse direction is applied after it, last, in `volco_runtime.h`). |
 | `lib/volco_calibration/` | One slider's calibration: Auto-calibrate, the Re-calibrate sweep (Done, Cancel, the 60 s timeout, host lost), when a Calibration report is due; and the stored entries, `{pin, auto-calibrate, low, high}`, looked up by pin. |
 | `lib/volco_pin_helpers/` | The rules of the wiring helpers, pure: the pins in use, the pins a watch samples per role, when a pin is worth reporting (the thresholds), how an I2C scan reaches a pin pair, which pins may be driven. |
+| `lib/volco_wifi_fallback/` | The Wi-Fi fallback's rules, pure: finding and replacing a top-level field of a config blob on the wire level, what a save does with the kept copy of the old Wi-Fi, and the window after a boot on new settings. |
 | `lib/volco_bidi/` | Logical to visual reordering of UTF-8 text, for Hebrew. |
 | `lib/volco_screen_state/` | The state machine of each screen: current, previous and pending content, slide progress, dim, off, pixel shift, wake handling. |
 | `lib/volco_render/` | Volco's own 1-bit canvas and layout 1 renderer, with the generated fonts and icons. U8g2 is only the SSD1306 driver underneath. |
@@ -58,6 +59,8 @@ Volco's Controller page sets the config. For firmware work without the app, use 
 ~/.platformio/penv/bin/python firmware/tools/config_tool.py --port <port> write my-layout.json   # stores it; the board reboots into it
 ~/.platformio/penv/bin/python firmware/tools/config_tool.py --port <port> read                   # prints the stored config as JSON
 ```
+
+A Wi-Fi change written over USB (while the stored Wi-Fi was on) is provisional: without a valid UDP frame from Volco within 30 s of the reboot, the controller restores its previous Wi-Fi settings and reboots (the Wi-Fi fallback, below).
 
 `firmware/tools/hello_check.py --port <port> --sliders N --kinds 1,1,2` resets the board and confirms the Hello matches the layout. Fixed constants (serial baud, buffer sizes, protocol timing) stay in `src/config.h`.
 
@@ -210,6 +213,8 @@ It needs Python 3 and Pillow 10 or newer. It renders Arimo (10 px Regular and 14
 
 `transport.cpp` runs USB serial always, and UDP over Wi-Fi when the config enables it (spec §5.5, §7). Each transport has its own frame parser. Until the PC is heard, every outgoing frame goes to every transport that is up; the first valid frame latches its transport (before the link replies), a frame on the other transport moves the latch, and a host timeout clears it. UDP is accepted only from the configured PC IP. `transport_maintain()` runs every pass: it re-joins a failed Wi-Fi at most every `WIFI_RETRY_MS`, and each time Wi-Fi connects the firmware sends a Hello on UDP.
 
+**The Wi-Fi fallback** (`docs/design/hardware-page.md` §10.3). A config write that changes the Wi-Fi settings while the stored ones have Wi-Fi on first stores the old `Udp` section under NVS key `wifi_prev` (namespace `volco`), then the new config. A boot that finds `wifi_prev` runs the new settings provisionally: the first valid frame from the PC over UDP confirms them and drops the key (USB says nothing about the network). If none comes within `WIFI_FALLBACK_MS` (30 s) of boot, the old section is spliced back into the stored config, the rest unchanged, and the board checks it, stores it, drops the key and reboots; if any of that fails it keeps running on the settings it booted with, without a restart (a key left behind would restore again after every boot). A boot that finds the key next to a config that isn't stored or has Wi-Fi off (a power cut between a Wi-Fi-off save and the key's drop) drops it and runs normally. A write that turns Wi-Fi off, or one made while it was off, keeps no copy. The copy is always settings a PC has answered on: a write while the settings are still provisional leaves the copy as it is, unless it turns Wi-Fi off or goes back to the copy, which drops it (`wifiCopyOnSave`).
+
 Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to USB serial only. They share the port with protocol frames; that is safe because the app's parser only acts on bytes that form a valid `0xAA` frame.
 
 ### Main loop
@@ -221,11 +226,11 @@ Debug output uses `DEBUG_LOG`, which prints `[DBG] ...` lines to USB serial only
 3. **Receive**: drain each transport, feeding each byte to its parser; each valid frame latches its transport, then goes to the link.
 4. **Link tick**: keepalive, host timeout and the Commit fallback.
 5. **Screens tick**: power state (dim, off, pixel shift), then at most **one panel redraw** per pass, so a redraw never starves input for long.
-6. **Wi-Fi**: `transport_maintain()`; on a connect, a Hello on UDP.
+6. **Wi-Fi**: `transport_maintain()`; on a connect, a Hello on UDP. Then the fallback: confirm new settings, or put the old ones back and reboot.
 
 ## Tests
 
-`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_slider_ends`, `volco_calibration`, `volco_pin_helpers`, `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
+`pio test -e native` (from `firmware/`) runs the library tests for `volco_protocol`, `volco_config` (decode, validation, receiver, `RuntimeConfig`), `volco_slider_ends`, `volco_calibration`, `volco_pin_helpers`, `volco_wifi_fallback`, `volco_bidi`, `volco_screen_state` and `volco_render`. CI runs it too, checks the firmware id and the config vectors, and builds the `esp32` environment. The golden frames in `test/golden/frames.txt` and the config vectors in `test/golden/config.txt` are shared with the C# tests, so both ends agree on the bytes.
 
 ## Developing the firmware
 

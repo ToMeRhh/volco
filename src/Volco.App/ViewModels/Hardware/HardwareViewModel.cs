@@ -45,6 +45,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _runtime.CalibrationChanged += OnCalibrationChanged;
         _runtime.PinActivity += OnPinActivity;
         Status = new ControllerStatusViewModel(controller, this);
+        Status.Progress.PropertyChanged += OnProgressChanged;
         SaveCommand = new RelayCommand(() => _controller.SaveCommand.Execute(null), () => _controller.CanSave && _controller.Problems.Count == 0);
         Chooser = new SetupChooserViewModel(controller, OnChooserPicked, CancelStartOver);
         Refresh();
@@ -61,8 +62,13 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The Connection dialog (spec §10) is open.</summary>
     [ObservableProperty] private bool _isConnectionDialogOpen;
 
-    /// <summary>The Connection dialog opens on its Wi-Fi tab, else on USB.</summary>
+    /// <summary>The Connection dialog opened on its Wi-Fi card (Controller settings › Wi-Fi), else
+    /// on the card in use.</summary>
     [ObservableProperty] private bool _connectionDialogOnWifi;
+
+    /// <summary>This PC's addresses for the Wi-Fi card, read each time the dialog opens (tests
+    /// replace it).</summary>
+    internal Func<IReadOnlyList<LocalAddress>> ReadAddresses { get; set; } = LocalAddresses.Read;
 
     /// <summary>The open Connection dialog's view model, or null.</summary>
     [ObservableProperty] private ConnectionDialogViewModel? _connectionDialog;
@@ -139,15 +145,124 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         Compare = null;
     }
 
-    /// <summary>The status menu's Connection…: the Connection dialog, on the Wi-Fi tab
-    /// when <paramref name="wifi"/>.</summary>
+    /// <summary>The status menu's Connection… (and Controller settings › Wi-Fi, with
+    /// <paramref name="wifi"/>): the Connection dialog, on the card in use or on Wi-Fi. Unsaved
+    /// controller changes are saved or discarded first (spec §10), so every save the dialog makes
+    /// starts from the controller's saved setup.</summary>
     public void OpenConnection(bool wifi)
     {
         if (_disposed) return;
+        if (HasUnsavedControllerChanges)
+        {
+            AskToLeave(() => OpenConnection(wifi), LeaveKind.Connection);
+            return;
+        }
         ConnectionDialogOnWifi = wifi;
         ConnectionDialog?.Dispose();
-        ConnectionDialog = new ConnectionDialogViewModel(_controller, wifi, CloseConnection);
+        var open = wifi ? ConnectionCardKind.Wifi : ConnectionDialogViewModel.KindOf(_controller.Connection.ConnectionType);
+        ConnectionDialog = new ConnectionDialogViewModel(_controller, _controller.Wifi, ReadAddresses, open, CloseConnection, Status.Progress,
+                                                         TurnWifiOff);
         IsConnectionDialogOpen = true;
+    }
+
+    // ── Turning the controller's Wi-Fi off (spec §10.2) ──────────────────────────────────────
+
+    private Task<WifiSwitchOutcome>? _turnOff;
+    private bool _turnOffShown;
+
+    // The turn-off's display waits while the progress dialog shows another operation or its result
+    // (say a firmware update, whose Hello is the USB Hello the turn-off waited for): its latest
+    // step, or its outcome once it ended, shows when that dialog is free.
+    private bool _turnOffQueued;
+    private string? _queuedStep;
+    private WifiSwitchOutcome? _queuedOutcome;
+
+    /// <summary>The Connection dialog's Switch to USB and turn Wi-Fi off, or its Wi-Fi card's Turn
+    /// Wi-Fi off: <see cref="WifiSwitch.TurnOffAsync"/>, watched here rather than by the dialog, so
+    /// its save (at the first USB Hello, whenever that comes) runs in the progress dialog and its
+    /// result shows there whether or not the Connection dialog is still open. The save never takes
+    /// the progress dialog from another operation: its display waits for it (only the display; the
+    /// save runs).</summary>
+    internal void TurnWifiOff()
+    {
+        if (_disposed || _turnOff is not null || _controller.Wifi is not { } wifi) return;
+        _turnOffShown = false;
+        _turnOffQueued = false;
+        _queuedStep = null;
+        _queuedOutcome = null;
+        var progress = new WifiStepProgress(_ui, (_, text) =>
+        {
+            if (_disposed) return;
+            if (_turnOffShown) Status.Progress.WifiStep(text);
+            else if (_turnOffQueued || Status.Progress.IsOpen)
+            {
+                _turnOffQueued = true;
+                _queuedStep = text;
+            }
+            else
+            {
+                _turnOffShown = true;
+                Status.Progress.BeginWifi(WifiOutcomes.TurnOffTitle, text);
+            }
+        });
+        var run = wifi.TurnOffAsync(progress);
+        _turnOff = run;
+        WifiOutcomes.OnEnd(run, _ui, TurnedWifiOff);
+    }
+
+    private void TurnedWifiOff(WifiSwitchOutcome outcome)
+    {
+        _turnOff = null;
+        if (_disposed) return;
+        var shown = _turnOffShown;
+        _turnOffShown = false;
+        var failure = WifiOutcomes.FailureText(outcome, overWifi: false);
+        if (!shown && (_turnOffQueued || (failure is not null && Status.Progress.IsOpen)))
+        {
+            _turnOffQueued = true;
+            _queuedOutcome = outcome;   // shown once the progress dialog is free
+        }
+        else if (outcome == WifiSwitchOutcome.BackOnUsb)
+        {
+            if (shown) Status.Progress.EndWifi(WifiOutcomes.TurnedOffText);
+        }
+        else if (failure is not null)
+        {
+            if (shown) Status.Progress.EndWifi(failure, LinkTone.Danger);
+            else Status.Progress.ShowWifiFailure(WifiOutcomes.TurnOffTitle, failure);
+        }
+        else if (shown) Status.Progress.EndWifi(null);   // dropped mid-save
+        ConnectionDialog?.TransportEdited();
+    }
+
+    private void OnProgressChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // Posted: whatever closed the dialog (Next's Try again) may open it again at once.
+        if (e.PropertyName == nameof(ProgressDialogViewModel.IsOpen) && _turnOffQueued && !Status.Progress.IsOpen)
+            _ui.Post(ShowQueuedTurnOff);
+    }
+
+    /// <summary>The progress dialog is free: the waiting turn-off shows its step, or its result.</summary>
+    private void ShowQueuedTurnOff()
+    {
+        if (_disposed || !_turnOffQueued || Status.Progress.IsOpen) return;
+        _turnOffQueued = false;
+        var step = _queuedStep;
+        _queuedStep = null;
+        if (_queuedOutcome is not { } outcome)
+        {
+            _turnOffShown = true;   // still running: the rest of its steps follow here
+            Status.Progress.BeginWifi(WifiOutcomes.TurnOffTitle, step ?? "");
+            return;
+        }
+        _queuedOutcome = null;
+        if (outcome == WifiSwitchOutcome.BackOnUsb)
+        {
+            Status.Progress.BeginWifi(WifiOutcomes.TurnOffTitle, "");
+            Status.Progress.EndWifi(WifiOutcomes.TurnedOffText);
+        }
+        else if (WifiOutcomes.FailureText(outcome, overWifi: false) is { } failure)
+            Status.Progress.ShowWifiFailure(WifiOutcomes.TurnOffTitle, failure);
     }
 
     /// <summary>Closes the Connection dialog (Done, Escape, or a click outside).</summary>
@@ -245,15 +360,15 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
     /// <summary>The open leave prompt, or null.</summary>
     [ObservableProperty] private LeavePromptViewModel? _leavePrompt;
 
-    /// <summary>Asks before leaving Hardware (or, with <paramref name="closing"/>, closing the
-    /// window) with unsaved changes; <paramref name="proceed"/> goes on once the draft was saved
-    /// (and confirmed) or discarded. While a prompt is open it stays (a save it runs goes on) and
-    /// only where it continues to changes.</summary>
-    public void AskToLeave(Action proceed, bool closing = false)
+    /// <summary>Asks before leaving Hardware (or, by <paramref name="kind"/>, closing the window or
+    /// opening Connection) with unsaved changes; <paramref name="proceed"/> goes on once the draft
+    /// was saved (and confirmed) or discarded. While a prompt is open it stays (a save it runs goes
+    /// on) and only where it continues to changes.</summary>
+    public void AskToLeave(Action proceed, LeaveKind kind = LeaveKind.Leave)
     {
         if (_disposed) return;
-        if (LeavePrompt is { } open) open.Retarget(proceed, closing);
-        else LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt, closing);
+        if (LeavePrompt is { } open) open.Retarget(proceed, kind);
+        else LeavePrompt = new LeavePromptViewModel(_controller, proceed, CloseLeavePrompt, kind);
     }
 
     /// <summary>Closes the leave prompt: the user stays on Hardware.</summary>
@@ -939,6 +1054,7 @@ public sealed partial class HardwareViewModel : ObservableObject, IDisposable
         _runtime.CalibrationChanged -= OnCalibrationChanged;
         _runtime.PinActivity -= OnPinActivity;
         ClosePinDialog();
+        Status.Progress.PropertyChanged -= OnProgressChanged;
         Status.Dispose();
         CloseCalibration();
         CloseBuses();

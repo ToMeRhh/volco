@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Volco.App.ViewModels"
              xmlns:hw="using:Volco.App.ViewModels.Hardware"
              xmlns:conv="using:Volco.App.Converters"
              x:Class="Volco.App.Views.Hardware.ProgressDialog"
@@ -18,6 +19,15 @@
                    IsIndeterminate="{Binding !HasMeasure}"/>
       <TextBlock Name="ProgressWarning" Classes="Secondary" Text="{Binding Warning}" TextWrapping="Wrap"/>
     </StackPanel>
+    <ItemsControl Name="ProgressPorts" ItemsSource="{Binding PortChoices}" IsVisible="{Binding IsAskingPort}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:PortChoice">
+          <Button Content="{Binding Label}" HorizontalAlignment="Stretch" Margin="0,0,0,6"
+                  Command="{Binding $parent[UserControl].((hw:ProgressDialogViewModel)DataContext).ChoosePortCommand}"
+                  CommandParameter="{Binding}"/>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
     <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding IsDone}">
       <Ellipse Width="8" Height="8" Margin="0,5,10,0" VerticalAlignment="Top"
                Fill="{Binding ResultTone, Converter={StaticResource ToneToBrush}}"/>

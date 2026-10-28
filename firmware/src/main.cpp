@@ -12,12 +12,14 @@
 #include "volco_calibration.h"
 #include "volco_protocol.h"
 #include "volco_runtime.h"
+#include "volco_wifi_fallback.h"
 
 // The firmware build id Hello reports (spec §9.2); CI sets it, local builds are "dev".
 #ifndef VOLCO_FW_VERSION
 #define VOLCO_FW_VERSION "dev"
 #endif
 static_assert(sizeof(VOLCO_FW_VERSION) - 1 <= volco::kMaxFirmwareId, "VOLCO_FW_VERSION is longer than 32 bytes");
+static_assert(TRANSPORT_UDP == 1, "volco_wifi_fallback.cpp's kTransportUdp must match TRANSPORT_UDP");
 
 // ============================================================
 // State. Everything about the hardware comes from the stored config (config_store).
@@ -45,6 +47,7 @@ static uint8_t ledValues[volco::kMaxButtons];
 
 static volco::ActiveTransport active;  // spec §5.5
 static volco::FrameParser parsers[2];  // one per transport, so their bytes never mix
+static volco::WifiFallback fallback;   // new Wi-Fi settings: confirmed by the PC over UDP, or the old ones return
 
 static volco::Link* pcLink = nullptr;
 
@@ -158,6 +161,30 @@ static void sendHelloOnUdp() {
     transport_send(TRANSPORT_UDP, f, volco::encodeSlider(i, sink.sliderValue(i), f));
 }
 
+// New Wi-Fi settings (docs/design/hardware-page.md §10.3): a UDP frame from the PC confirms them;
+// none within WIFI_FALLBACK_MS of boot puts the kept ones back, stored, and reboots on them.
+static void runFallback(uint32_t now) {
+  switch (fallback.tick(now)) {
+    case volco::WifiFallback::CONFIRM:
+      if (config_store_drop_wifi()) DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP");
+      else DEBUG_LOG("[DBG] Wi-Fi: new settings confirmed over UDP, but the kept copy could not be dropped");
+      break;
+    case volco::WifiFallback::RESTORE:
+      if (config_store_restore_wifi()) {
+        DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, restored the previous settings, restarting");
+        Serial.flush();
+        delay(200);
+        ESP.restart();
+      }
+      // Not restarted: a copy that couldn't be dropped would restore again after the next boot.
+      DEBUG_LOG("[DBG] Wi-Fi: no PC over UDP, the previous settings could not be restored (or the kept copy "
+                "dropped); keeping these, no restart");
+      break;
+    case volco::WifiFallback::NONE:
+      break;
+  }
+}
+
 // ============================================================
 // Setup (spec §7 order): serial, config, pins, transports, screens, link.
 // ============================================================
@@ -204,6 +231,16 @@ void setup() {
                           sink);
   pcLink = &link;
   config_session_begin(link);
+  // A kept copy is only valid next to a stored config with Wi-Fi on: a power cut between a Wi-Fi-off
+  // save and the copy's drop leaves one behind, which must not splice the old Wi-Fi back in later.
+  bool provisional = config_store_wifi_provisional();
+  if (provisional && (loaded.state != CONFIG_STORED || !config_store_wifi_enabled())) {
+    DEBUG_LOG(config_store_drop_wifi() ? "[DBG] Wi-Fi: dropped a kept copy left by an interrupted save"
+                                       : "[DBG] Wi-Fi: a kept copy left by an interrupted save could not be dropped");
+    provisional = false;
+  }
+  fallback.begin(provisional, millis(), WIFI_FALLBACK_MS);
+  if (fallback.provisional()) DEBUG_LOG("[DBG] Wi-Fi: new settings, waiting for the PC over UDP");
   pcLink->begin(millis());  // Hello: the ESP32 may have just reset because the PC opened the port
   DEBUG_LOG("[DBG] Setup complete");
 }
@@ -286,6 +323,8 @@ void loop() {
       for (int i = 0; i < n; i++)
         if (parsers[t].feed(buf[i])) {
           active.onValidFrame(t);
+          fallback.onValidFrame(t);
+          runFallback(now);  // confirmed before the payload: a config write in it sees proven settings
           pcLink->onPayload(parsers[t].payload(), parsers[t].length(), now, t);
         }
   }
@@ -297,6 +336,7 @@ void loop() {
   // 5. Screens: power state, then redraw at most one panel.
   screens_tick(now);
 
-  // 6. Wi-Fi: retry, and Hello on UDP each time it connects.
+  // 6. Wi-Fi: retry, and Hello on UDP each time it connects. Then the fallback's window.
   if (transport_maintain(now)) sendHelloOnUdp();
+  runFallback(now);
 }

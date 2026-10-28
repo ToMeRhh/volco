@@ -1,6 +1,10 @@
+using Microsoft.Extensions.Time.Testing;
 using Volco.App.ViewModels;
+using Volco.App.ViewModels.Hardware;
 using Volco.Core.Communication;
 using Volco.Core.Config;
+using Volco.Core.Runtime;
+using Volco.Core.Tests.Runtime;
 using Xunit;
 
 namespace Volco.App.Tests.ViewModels;
@@ -103,5 +107,114 @@ public sealed class ConnectionViewModelTests : IDisposable
         Assert.NotSame(old, _rig.Connection);
         Assert.Equal("Looking for your controller", Connection.StatusText);
         Assert.False(Connection.IsUserDisconnected);
+    }
+
+    private sealed class Ports(params SerialPortDescription[] ports) : ISerialPortInfo
+    {
+        public IReadOnlyList<SerialPortDescription> List() => ports;
+    }
+
+    [Fact]
+    public void AutomaticFirstWithFoundPort()
+    {
+        var time = new FakeTimeProvider();
+        var options = new VolcoRuntimeOptions
+        {
+            Time = time,
+            ConnectGrace = TimeSpan.Zero,
+            SerialFactory = name => new FakeControllerConnection(new ConnectionConfig { Serial = { ComPort = name } })
+            { StatusOnConnect = TransportStatus.Open },
+        };
+        using var rig = new TestRig(options: options, serialPorts: new Ports(new SerialPortDescription("COM7", "USB-SERIAL CH340", 0x1A86, 0x7523)),
+                                    realTransports: true);
+        var ui = new RecordingDispatcher();
+        using var vm = rig.CreateSettings(ui);
+        Assert.Equal("Automatic", vm.Connection.PortChoices[0].Label);
+
+        for (int i = 0; i < 7; i++) time.Advance(TimeSpan.FromSeconds(1));   // the round ends on the only candidate
+        ui.RunAll();
+
+        Assert.Equal("COM7", vm.Connection.UsbPort);
+        Assert.Equal("Automatic (COM7)", vm.Connection.PortChoices[0].Label);
+        Assert.Null(vm.Connection.PortChoices[0].Port);
+        Assert.Same(vm.Connection.PortChoices[0], vm.Connection.SelectedPort);
+
+        // Named, but nothing answered there: the USB card doesn't say it found the controller.
+        vm.Hardware.OpenConnection(false);
+        Assert.Equal("Automatic", vm.Hardware.ConnectionDialog!.UsbCard.Summary);
+    }
+
+    [Fact]
+    public void DescriptionsWithSeam()
+    {
+        using var rig = new TestRig(serialPorts: new Ports(new SerialPortDescription("COM3", "USB-SERIAL CH340", 0x1A86, 0x7523)));
+        using var vm = rig.CreateSettings(new RecordingDispatcher());
+        Assert.Equal("COM3 · USB-SERIAL CH340", vm.Connection.PortChoices.Single(p => p.Port == "COM3").Label);
+    }
+
+    [Fact]
+    public void NamesOnlyWithoutSeam()
+    {
+        using var rig = new TestRig();
+        rig.Config.Config.Connection.Serial.ComPort = "COM3";
+        using var vm = rig.CreateSettings(new RecordingDispatcher());
+        Assert.Equal("COM3", vm.Connection.PortChoices.Single(p => p.Port == "COM3").Label);
+    }
+
+    [Fact]
+    public void SelectingAutomaticClearsComPort()
+    {
+        using var rig = new TestRig(serialPorts: new Ports(new SerialPortDescription("COM3", "USB Serial Device", 0x10C4, 0xEA60)));
+        rig.Config.Config.Connection.Serial.ComPort = "COM3";
+        using var vm = rig.CreateSettings(new RecordingDispatcher());
+        Assert.Equal("COM3", vm.Connection.SelectedPort!.Port);
+
+        vm.Connection.SelectedPort = vm.Connection.PortChoices[0];
+
+        Assert.Equal("", rig.Config.Config.Connection.Serial.ComPort);
+        Assert.Equal("", vm.Connection.ComPort);
+        Assert.Null(vm.Connection.SelectedPort!.Port);
+        rig.Config.FlushPendingSave();
+
+        // The ComboBox clearing the list during a refresh is no choice.
+        vm.Connection.SelectedPort = null;
+        Assert.Equal("", rig.Config.Config.Connection.Serial.ComPort);
+    }
+
+    [Fact]
+    public void HeadlineNamesFoundPort()
+    {
+        FakeControllerConnection? opened = null;
+        var options = TestRig.NoGrace with
+        {
+            SerialFactory = name => opened = new FakeControllerConnection(new ConnectionConfig { Serial = { ComPort = name } })
+            { StatusOnConnect = TransportStatus.Open },
+        };
+        using var rig = new TestRig(options: options, serialPorts: new Ports(new SerialPortDescription("COM3", "USB-SERIAL CH340", 0x1A86, 0x7523)),
+                                    realTransports: true);
+        var ui = new RecordingDispatcher();
+        using var vm = rig.CreateSettings(ui);
+
+        opened!.RaiseMessage(new HelloMessage(ProtocolVersion.Current, 2, new[] { IndicatorKind.Led }));
+        ui.RunAll();
+
+        Assert.Equal("Connected", vm.Connection.StatusText);
+        vm.Hardware.OpenConnection(false);
+        Assert.Equal("Automatic · found the controller on COM3", vm.Hardware.ConnectionDialog!.UsbCard.Summary);
+        // The banner (not set up yet) is the controller's business; the port the status VM feeds the card is the found one.
+        var inputs = vm.Hardware.Status.Inputs() with { Banner = Volco.Core.Controller.ControllerBanner.Empty };
+        Assert.Equal("Connected over USB (COM3)", DeviceCard.From(inputs).Status);
+    }
+
+    [Fact]
+    public void NoAnswerWithoutPort()
+    {
+        var link = new Volco.Core.Runtime.LinkStatus(Volco.Core.Runtime.LinkState.NoAnswer);
+        var c = new ConnectionConfig { Type = ConnectionType.Serial };
+        Assert.Equal("No controller answers", LinkText.Headline(link, c, null));
+        Assert.Equal("Something is plugged in, but nothing answers as a Volco controller. It may not have Volco's firmware yet: check it on the Controller page.",
+                     LinkText.Explanation(link, c, null));
+        Assert.Equal("USB cable · looking for the controller", LinkText.Transport(c, null, null));
+        Assert.Equal("COM3 · USB cable", LinkText.Transport(c, null, "COM3"));
     }
 }

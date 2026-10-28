@@ -33,3 +33,9 @@ PropVariantClear
 PKEY_Device_FriendlyName
 PKEY_AudioEndpoint_FormFactor
 AudioSessionDisconnectReason
+SetupDiGetClassDevs
+SetupDiEnumDeviceInfo
+SetupDiGetDeviceRegistryProperty
+SetupDiOpenDevRegKey
+SetupDiDestroyDeviceInfoList
+GUID_DEVCLASS_PORTS

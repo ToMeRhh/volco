@@ -1,5 +1,7 @@
 #pragma once
-// The controller config in NVS (spec §6.6): namespace "volco", key "cfg", the exact bytes.
+// The controller config in NVS (spec §6.6): namespace "volco", key "cfg", the exact bytes. Next to it,
+// key "wifi_prev": the previous Udp sub-message while the stored Wi-Fi settings are unproven
+// (docs/design/hardware-page.md §10.3).
 #include <stddef.h>
 #include <stdint.h>
 
@@ -23,3 +25,27 @@ const uint8_t* config_store_blob(uint16_t& len);
 
 // Stores a new blob (already decoded and validated). True when NVS took every byte (spec §6.6).
 bool config_store_save(const uint8_t* blob, size_t len);
+
+// Whether the config loaded at boot has Wi-Fi on (false for the built-in defaults).
+bool config_store_wifi_enabled();
+
+// Keeps the old Wi-Fi settings (the Udp sub-message bytes, as in the stored blob) before a save that
+// changes them. True when NVS took every byte.
+bool config_store_keep_wifi(const uint8_t* udp, size_t len);
+
+// Drops the kept copy: the new settings were confirmed, or a save kept none. True when no copy is
+// left in NVS (none was there, or it was removed).
+bool config_store_drop_wifi();
+
+// The kept copy's bytes (valid until the next call), or null when there is none or it can't be read.
+const uint8_t* config_store_kept_wifi(size_t& len);
+
+// The stored Wi-Fi settings are provisional: a kept copy exists.
+bool config_store_wifi_provisional();
+
+// Puts the kept copy back as the stored config's udp section (the rest unchanged), checks the result
+// decodes and validates, saves it and drops the copy. True only when the save and the drop both
+// worked: a copy left in NVS would make the restored boot provisional again and restore it again,
+// a reboot every 30 s. On any failure it still tries to drop the copy and returns false: the
+// controller keeps running the config it booted on, without restarting.
+bool config_store_restore_wifi();
