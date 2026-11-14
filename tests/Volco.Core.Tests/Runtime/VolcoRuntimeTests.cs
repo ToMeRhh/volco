@@ -688,7 +688,7 @@ public sealed class VolcoRuntimeTests : IDisposable
         runtime.VolumeChanged += osd.Handler;
 
         Press(Connection(0), 0);
-        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "press never executed");
+        Assert.True(WaitUntil(() => runtime.FeedbackFor(0) is not null), "press never handled");
 
         // The headset is plugged in later and becomes default by some other means.
         var headset = new AudioDevice("absent-id", "Unplugged Headset", AudioFlow.Render, false);
@@ -698,7 +698,7 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         // Prove the path can fire with a present target.
         Press(Connection(0), 2);
-        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 1), "second press never executed");
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "second press never executed");
         _engine.RaiseDeviceChanged(DeviceChangeKind.DefaultChanged, DeviceById(Headphones));
         Assert.Single(osd.Items);
     }
@@ -1640,6 +1640,46 @@ public sealed class VolcoRuntimeTests : IDisposable
 
         Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "no SetDefaultDevice call");
         Assert.Contains(Snapshot(_engine.SetDefaultCalls), c => c.EndpointId == Headphones);
+    }
+
+    [Fact]
+    public void SwitchPress_TargetNotConnected_ShowsNotConnected_AndLeavesWindowsAlone()
+    {
+        var config = NewConfig(c => c.Buttons[2].Default().SinglePress = SetDevice("absent-id", "Unplugged Headset"));
+        var runtime = StartRuntime(config);
+
+        Press(Connection(0), 2);
+
+        Assert.True(WaitUntil(() => runtime.FeedbackFor(2)?.Error == ControllerDisplay.NotConnected),
+                    "no NOT CONNECTED feedback");
+        Assert.Empty(Snapshot(_engine.SetDefaultCalls));
+        Assert.Equal("absent-id", config.Config.Buttons[2].Default().SinglePress.Device!.Id);   // unplugged keeps its id
+    }
+
+    [Fact]
+    public void SwitchPress_StaleIdWithAPresentNamesake_HealsAndSwitchesToTheNewId()
+    {
+        var config = NewConfig(c => c.Buttons[2].Default().SinglePress = SetDevice("old-hp", "Headphones"));
+        StartRuntime(config);
+        // While Volco runs, Windows gives the headphones a new id (a driver reinstall).
+        _engine.StaleIds.Add("old-hp");
+
+        Press(Connection(0), 2);
+
+        Assert.True(WaitUntil(() => _engine.SetDefaultCalls.Count > 0), "no SetDefaultDevice call");
+        Assert.Equal(Headphones, Assert.Single(Snapshot(_engine.SetDefaultCalls)).EndpointId);
+        Assert.Equal(Headphones, config.Config.Buttons[2].Default().SinglePress.Device!.Id);
+    }
+
+    [Fact]
+    public void Start_HealsAStaleOutputDeviceId_ByName()
+    {
+        _engine.StaleIds.Add("old-hp");
+        var config = NewConfig(c => c.Buttons[2].Default().SinglePress = ToggleWithA("old-hp", "Headphones"));
+
+        StartRuntime(config);
+
+        Assert.Equal(Headphones, ToggleA(config).Id);
     }
 
     // ---- Fix D: GetSliderLevel ---------------------------------------------------------------

@@ -55,6 +55,7 @@ public static class ControllerDisplay
     public const string UsbOnly = "USB ONLY";
     public const string CantOpen = "CAN'T OPEN";
     public const string NoFile = "NO FILE";
+    public const string NotConnected = "NOT CONNECTED";
 
     /// <summary>How long one step of a press's feedback lasts: an error flashes on and off every
     /// step, an OK blinks for 3 steps on, 3 off.</summary>

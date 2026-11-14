@@ -32,6 +32,9 @@ public sealed class FakeAudioEngine : IAudioEngine
     /// <summary>Endpoint id -> (level, muted). Seed this to drive TryGetDeviceState.</summary>
     public Dictionary<string, (float Level, bool Muted)> DeviceStates { get; } = new();
 
+    /// <summary>The endpoint ids <see cref="IsStaleDeviceId"/> reports as stale.</summary>
+    public HashSet<string> StaleIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Session instance id -> peak. Seed this to drive GetSessionPeak.</summary>
     public Dictionary<string, float> Peaks { get; } = new();
 
@@ -98,6 +101,8 @@ public sealed class FakeAudioEngine : IAudioEngine
         muted = false;
         return false;
     }
+
+    public bool IsStaleDeviceId(string endpointId) => StaleIds.Contains(endpointId);
 
     public void RaiseSessionCreated(AudioSessionInfo session)
         => SessionsChanged?.Invoke(this, new SessionsChangedEventArgs(SessionChangeKind.Created, session));

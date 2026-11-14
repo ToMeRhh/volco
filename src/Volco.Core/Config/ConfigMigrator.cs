@@ -305,17 +305,20 @@ public static class ConfigMigrator
     /// this can run at any later point in the app's life, against whatever devices happen to be
     /// plugged in right now, so a loose match binding output switching to the wrong endpoint would
     /// be a worse outcome than leaving the reference unhealed for another day. Never touches a
-    /// reference that already has a non-empty id. For the same reason, a friendly name matched by
+    /// reference with a non-empty id, unless <paramref name="isStale"/> says the system no longer
+    /// has that id in any state (a driver reinstall or a Bluetooth re-pair gave the device a new
+    /// one): an unplugged device keeps its id. For the same reason, a friendly name matched by
     /// MORE than one present device is left unhealed too — an ambiguous name is exactly the case
     /// where guessing which endpoint was meant risks binding to the wrong one.
     /// </summary>
     /// <returns>True if anything changed.</returns>
-    public static bool HealDeviceIds(AppConfig config, IReadOnlyList<AudioDevice> devices)
+    public static bool HealDeviceIds(AppConfig config, IReadOnlyList<AudioDevice> devices,
+        Func<string, bool>? isStale = null)
     {
         var changed = false;
 
         foreach (var slider in config.Sliders)
-            changed |= Heal(slider.Device, devices);
+            changed |= Heal(slider.Device, devices, isStale);
 
         foreach (var button in config.Buttons)
             foreach (var binding in button.Actions.Values)
@@ -323,18 +326,18 @@ public static class ConfigMigrator
                 if (binding == null) continue;
                 foreach (var action in binding.All())
                 {
-                    changed |= Heal(action.Device, devices);
-                    changed |= Heal(action.DeviceB, devices);
+                    changed |= Heal(action.Device, devices, isStale);
+                    changed |= Heal(action.DeviceB, devices, isStale);
                 }
             }
 
         return changed;
     }
 
-    private static bool Heal(DeviceRefConfig? cfg, IReadOnlyList<AudioDevice> devices)
+    private static bool Heal(DeviceRefConfig? cfg, IReadOnlyList<AudioDevice> devices, Func<string, bool>? isStale)
     {
         if (cfg == null) return false;
-        if (!string.IsNullOrEmpty(cfg.Id)) return false;
+        if (!string.IsNullOrEmpty(cfg.Id) && !(isStale?.Invoke(cfg.Id) ?? false)) return false;
         if (string.IsNullOrEmpty(cfg.FriendlyName)) return false;
 
         var matches = devices.Where(d =>
@@ -353,6 +356,8 @@ public static class ConfigMigrator
         }
 
         var match = matches[0];
+        if (cfg.Id.Length > 0)
+            AppLog.Info($"Device id heal: \"{cfg.FriendlyName}\" had a stale id '{cfg.Id}'; now '{match.Id}'.");
         cfg.Id = match.Id;
         cfg.FriendlyName = match.FriendlyName; // normalise to the device's own casing
         return true;

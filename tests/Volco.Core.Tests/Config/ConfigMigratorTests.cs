@@ -243,6 +243,44 @@ public class ConfigMigratorTests
     }
 
     [Fact]
+    public void HealDeviceIds_ReplacesAStaleId_ByExactName()
+    {
+        var config = AppConfig.CreateDefault();
+        var a = (config.Buttons[0].Default().SinglePress = Toggle(new DeviceRefConfig { Id = "old-2", FriendlyName = "Headphones (USB Audio Device)" })).Device!;
+
+        var changed = ConfigMigrator.HealDeviceIds(config, Devices, id => id == "old-2");
+
+        Assert.True(changed);
+        Assert.Equal("dev-2", a.Id);
+    }
+
+    [Fact]
+    public void HealDeviceIds_KeepsAnIdThatIsOnlyUnplugged()
+    {
+        var config = AppConfig.CreateDefault();
+        // Not present, but not stale either: the system still has it, so it may come back.
+        var a = (config.Buttons[0].Default().SinglePress = Toggle(new DeviceRefConfig { Id = "away", FriendlyName = "Headphones (USB Audio Device)" })).Device!;
+
+        Assert.False(ConfigMigrator.HealDeviceIds(config, Devices, _ => false));
+        Assert.Equal("away", a.Id);
+    }
+
+    [Fact]
+    public void HealDeviceIds_StaleIdWithAnAmbiguousName_IsLeftAlone()
+    {
+        var config = AppConfig.CreateDefault();
+        var a = (config.Buttons[0].Default().SinglePress = Toggle(new DeviceRefConfig { Id = "old", FriendlyName = "Speakers" })).Device!;
+        var twins = new List<AudioDevice>
+        {
+            new("dev-a", "Speakers", AudioFlow.Render, true),
+            new("dev-b", "Speakers", AudioFlow.Render, false),
+        };
+
+        Assert.False(ConfigMigrator.HealDeviceIds(config, twins, _ => true));
+        Assert.Equal("old", a.Id);
+    }
+
+    [Fact]
     public void HealDeviceIds_IgnoresPartialNameMatches()
     {
         var config = AppConfig.CreateDefault();
