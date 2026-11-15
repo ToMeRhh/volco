@@ -205,6 +205,9 @@ public sealed class AudioEngine : IAudioEngine
     /// COM call, never posted to the audio thread. This is what makes it safe to call from the UI
     /// thread and from <c>ControllerStateReporter</c> (task requirement 4 / spec).
     /// </summary>
+    public bool IsStaleDeviceId(string endpointId)
+        => _deviceRegistry?.IsStale(endpointId) ?? false;
+
     public bool TryGetDeviceState(DeviceRef device, out float level, out bool muted)
     {
         var handle = _deviceRegistry?.Resolve(device);

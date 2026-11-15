@@ -209,6 +209,12 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     private readonly Dictionary<string, DeviceHandle> _devices = new(StringComparer.Ordinal);
     private readonly Dictionary<(AudioFlow Flow, AudioRole Role), string> _defaults = new();
 
+    // Every endpoint id Windows has in any state (active, disabled, not present, unplugged), for
+    // IsStale. Its own lock: the notification callbacks keep it current as they arrive, and they
+    // never take _lock. Null until Start has read it.
+    private readonly object _knownLock = new();
+    private HashSet<string>? _knownIds;
+
     private IMMDeviceEnumerator? _enumerator;
     private bool _started;
     private bool _disposed;
@@ -250,6 +256,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
 
         EnumerateFlow(EDataFlow.eRender);
         EnumerateFlow(EDataFlow.eCapture);
+        ReadKnownIds();
 
         CacheDefault(AudioFlow.Render, AudioRole.Console, EDataFlow.eRender, ERole.eConsole);
         CacheDefault(AudioFlow.Render, AudioRole.Multimedia, EDataFlow.eRender, ERole.eMultimedia);
@@ -304,6 +311,19 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         lock (_lock)
         {
             return _devices.Values.Where(h => h.Flow == flow).Select(ToAudioDeviceLocked).ToList();
+        }
+    }
+
+    /// <summary>
+    /// True only for an id Windows has in no state at all: a stale id, the endpoint gone (a
+    /// driver reinstall, a Bluetooth re-pair). An unplugged or disabled device is not stale.
+    /// False before <see cref="Start"/> has read the ids. Callable from any thread.
+    /// </summary>
+    public bool IsStale(string id)
+    {
+        lock (_knownLock)
+        {
+            return _knownIds is not null && !_knownIds.Contains(id);
         }
     }
 
@@ -438,6 +458,48 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         finally
         {
             ReleaseIfComObject(collection);
+        }
+    }
+
+    /// <summary>Reads the id of every endpoint in any state, for <see cref="IsStale"/>. Its
+    /// failure leaves every id unknown-to-be-stale rather than all of them stale.</summary>
+    private void ReadKnownIds()
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        IMMDeviceCollection? collection = null;
+        try
+        {
+            _enumerator!.EnumAudioEndpoints(EDataFlow.eAll,
+                DEVICE_STATE.DEVICE_STATE_ACTIVE | DEVICE_STATE.DEVICE_STATE_DISABLED
+                | DEVICE_STATE.DEVICE_STATE_NOTPRESENT | DEVICE_STATE.DEVICE_STATE_UNPLUGGED,
+                out collection);
+            collection.GetCount(out uint count);
+            for (uint i = 0; i < count; i++)
+            {
+                collection.Item(i, out IMMDevice device);
+                try
+                {
+                    ids.Add(GetDeviceId(device));
+                }
+                finally
+                {
+                    ReleaseIfComObject(device);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
+        {
+            Volco.Core.Diagnostics.AppLog.Error($"DeviceRegistry: could not list every endpoint: {ex.Message}");
+            return;
+        }
+        finally
+        {
+            ReleaseIfComObject(collection);
+        }
+
+        lock (_knownLock)
+        {
+            _knownIds = ids;
         }
     }
 
@@ -640,6 +702,7 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
     void IMMNotificationClient.OnDeviceStateChanged(PCWSTR pwstrDeviceId, DEVICE_STATE dwNewState)
     {
         string id = pwstrDeviceId.ToString() ?? string.Empty;
+        SetKnown(id, true);
         Enqueue(dwNewState == DEVICE_STATE.DEVICE_STATE_ACTIVE
             ? PendingChange.Activated(id)
             : PendingChange.RemovedOrInactive(id));
@@ -647,12 +710,16 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
 
     void IMMNotificationClient.OnDeviceAdded(PCWSTR pwstrDeviceId)
     {
-        Enqueue(PendingChange.Activated(pwstrDeviceId.ToString() ?? string.Empty));
+        string id = pwstrDeviceId.ToString() ?? string.Empty;
+        SetKnown(id, true);
+        Enqueue(PendingChange.Activated(id));
     }
 
     void IMMNotificationClient.OnDeviceRemoved(PCWSTR pwstrDeviceId)
     {
-        Enqueue(PendingChange.RemovedOrInactive(pwstrDeviceId.ToString() ?? string.Empty));
+        string id = pwstrDeviceId.ToString() ?? string.Empty;
+        SetKnown(id, false);
+        Enqueue(PendingChange.RemovedOrInactive(id));
     }
 
     unsafe void IMMNotificationClient.OnDefaultDeviceChanged(EDataFlow flow, ERole role, PCWSTR pwstrDefaultDeviceId)
@@ -670,6 +737,18 @@ internal sealed class DeviceRegistry : IDisposable, IMMNotificationClient
         // change re-reads the name on the audio thread, which raises a change only when the name
         // differs (ApplyNameChanged).
         Enqueue(PendingChange.NameChanged(pwstrDeviceId.ToString() ?? string.Empty));
+    }
+
+    /// <summary>Keeps <see cref="IsStale"/>'s ids current: a set operation under its own lock, so
+    /// a callback may do it at once.</summary>
+    private void SetKnown(string id, bool known)
+    {
+        lock (_knownLock)
+        {
+            if (_knownIds is null) return;
+            if (known) _knownIds.Add(id);
+            else _knownIds.Remove(id);
+        }
     }
 
     private void Enqueue(PendingChange change)

@@ -19,6 +19,11 @@ public interface IAudioEngine : IDisposable
 
     bool TryGetDeviceState(DeviceRef device, out float level, out bool muted);
 
+    /// <summary>True only for an endpoint id the system no longer has in any state (not merely
+    /// unplugged or disabled): a stale id, e.g. after a driver reinstall or a Bluetooth re-pair
+    /// gave the device a new one. False while unsure (the engine not started).</summary>
+    bool IsStaleDeviceId(string endpointId);
+
     /// <summary>Sets the Windows default endpoint for all three roles.</summary>
     void SetDefaultDevice(string endpointId, AudioFlow flow);
 

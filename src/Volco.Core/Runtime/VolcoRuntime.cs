@@ -1019,7 +1019,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         // migration when the device was absent, or a v2 config with an id manually removed) now
         // that the device list is available. Same audioReady guard as migration above, for the
         // same reason (GetDevices() would race DeviceRegistry.Start() otherwise).
-        if (_audioReady && ConfigMigrator.HealDeviceIds(Config.Config, Audio.GetDevices(AudioFlow.Render)))
+        if (_audioReady && HealDeviceIds())
         {
             AppLog.Info("Healed device id(s) from a friendly-name match at startup");
             Config.Save();
@@ -1418,8 +1418,15 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
         // (afterwards the default may already have moved). Any press replaces the pending record.
         PendingDeviceOsd? pendingSwitch = null;
         AudioDevice? alreadyCurrent = null;
+        string? notConnected = null;
         if (actionConfig.Action is ButtonActionType.SetOutputDevice or ButtonActionType.ToggleOutputDevice)
         {
+            // A stale id (the device has a new one) heals by its name before the target is chosen.
+            if (HealDeviceIds())
+            {
+                AppLog.Info("Healed device id(s) at a press");
+                Config.RequestSave();
+            }
             var current = Audio.GetDefaultDevice(AudioFlow.Render);
             var targetId = actionConfig.Action == ButtonActionType.SetOutputDevice
                 ? SetOutputDeviceAction.ResolveTargetId(actionConfig.Device)
@@ -1435,9 +1442,21 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
                     // would leave the record dangling and claim a later external switch.
                     pendingSwitch = new PendingDeviceOsd(
                         targetId, Environment.TickCount64 + (long)_options.PendingSwitchTimeout.TotalMilliseconds);
+                else
+                    notConnected = DeviceDisplay.NameOf(Config.Config, Audio,
+                        string.Equals(actionConfig.DeviceB?.Id, targetId, StringComparison.OrdinalIgnoreCase)
+                            ? actionConfig.DeviceB : actionConfig.Device, targetId);
             }
         }
         Interlocked.Exchange(ref _pendingDeviceOsd, pendingSwitch);
+
+        // Windows refuses a switch to a device that is not plugged in: say so instead of trying.
+        if (notConnected is not null)
+        {
+            AppLog.Info($"Button {button + 1}: {e.PressType} not run: {notConnected} is not connected");
+            StartFeedback(button, binding, actionConfig, ControllerDisplay.NotConnected);
+            return;
+        }
 
         // Feedback first: an error the action reports (at once, or later) replaces it.
         if (action is null && actionConfig.Action != ButtonActionType.None)
@@ -1545,7 +1564,7 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
             // list so output switching recovers without a restart. GetDevices/HealDeviceIds only
             // touch config in memory here; RequestSave() debounces the write, and no runtime lock
             // is held across it.
-            if (ConfigMigrator.HealDeviceIds(Config.Config, Audio.GetDevices(AudioFlow.Render)))
+            if (HealDeviceIds())
             {
                 AppLog.Info("Healed device id(s) after a device change");
                 Config.RequestSave();
@@ -1581,6 +1600,12 @@ public sealed class VolcoRuntime : IDisposable, IModeController, IConfigSessionL
     /// (spec §5.1): each customized device's, and each slider's and action's device reference,
     /// whose name the settings UI shows and falls back to. A device renamed in Windows is then
     /// named anew everywhere a nickname does not override it.</summary>
+    /// <summary>Fills a blank device id, or replaces one the system no longer has, from a
+    /// present device of the same name (<see cref="ConfigMigrator.HealDeviceIds"/>); true if any
+    /// changed. The caller saves.</summary>
+    private bool HealDeviceIds()
+        => ConfigMigrator.HealDeviceIds(Config.Config, Audio.GetDevices(AudioFlow.Render), Audio.IsStaleDeviceId);
+
     private bool RefreshStoredDeviceNames()
     {
         var changed = false;
